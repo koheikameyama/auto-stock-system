@@ -59,6 +59,17 @@
 | 直近購入保護 | 購入から7日未満 | sell をブロック（isCriticalChange時のみ許可） |
 | 相対強度保護 | 市場比+3%以上のアウトパフォーム | 地合い要因として sell をブロック |
 
+**投資スタイル別分析（styleAnalyses）**:
+
+AIの出力に対して、非スタイル依存の安全補正（上記テーブルの大半）を適用した後、3つの投資スタイル（慎重派/バランス型/積極派）ごとにスタイル依存の補正を適用し、スタイル別の分析結果を生成します。
+
+| スタイル依存補正 | 条件（スタイルにより閾値が異なる） | 動作 |
+|------------------|--------------------------------------|------|
+| 急騰銘柄の買い増し抑制 | `isSurgeStock(weekChangeRate, style)` | buy → hold に変更 |
+| 戻り売りステータス | statusType === "戻り売り" | sellTiming を "rebound" に強制設定 |
+
+スタイル別の結果は `StockAnalysis.styleAnalyses` に JSON として保存され、フロントエンドでタブ切り替えにより比較表示できます。ユーザーの設定した投資スタイルがデフォルトタブとして表示されます。
+
 ### 2. ポートフォリオ総評分析
 
 ポートフォリオ全体を俯瞰的に評価します。
@@ -253,5 +264,6 @@ PortfolioSnapshot テーブルからの時系列データ。
 - `app/api/portfolio/history/route.ts` - 資産推移 API
 - `lib/portfolio-analysis-core.ts` - 個別分析ロジック
 - `lib/portfolio-calculator.ts` - 計算ロジック
+- `lib/style-analysis.ts` - 投資スタイル別補正ロジック
 - `lib/prompts/portfolio-analysis-prompt.ts` - 個別分析プロンプト
 - `lib/prompts/portfolio-overall-analysis-prompt.ts` - 総評プロンプト

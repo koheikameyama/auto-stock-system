@@ -87,6 +87,20 @@
     "date": "上場廃止日"
   },
   "priceUnavailable": "価格情報を取得できません",
+  "styleAnalysis": {
+    "tabs": {
+      "CONSERVATIVE": "慎重",
+      "BALANCED": "バランス",
+      "AGGRESSIVE": "積極"
+    },
+    "labels": {
+      "buy": "買い",
+      "stay": "様子見",
+      "hold": "保有",
+      "avoid": "見送り",
+      "sell": "売却"
+    }
+  },
   "featured": {
     "title": "今日の注目銘柄",
     "buyOpportunity": "今日の買いチャンス",

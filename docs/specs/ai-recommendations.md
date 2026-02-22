@@ -104,6 +104,18 @@ Stock Buddyの中核機能であるAI推奨システムです。3種類の推奨
 - `dip`（押し目買い）: RSI > 70 or MA乖離 > 15% → 下がるまで待つ
 - `market`（成り行き）: 上記以外 → すぐ購入OK
 
+**投資スタイル別分析（styleAnalyses）**:
+
+非スタイル依存の安全補正を適用した後、3つの投資スタイル（慎重派/バランス型/積極派）ごとにスタイル依存の補正を適用し、スタイル別の分析結果を生成。結果は `PurchaseRecommendation.styleAnalyses` と `StockAnalysis.styleAnalyses` に JSON として保存。
+
+| スタイル依存補正 | 条件（スタイルにより閾値が異なる） | 動作 |
+|------------------|--------------------------------------|------|
+| 下落トレンドロック | `isInDecline(weekChangeRate, style)` | buy → stay |
+| 急騰ロック | `isSurgeStock(weekChangeRate, style)` | buy → stay |
+| 過熱チェック | `isOverheated(deviationRate, style)` | buy → stay |
+
+フロントエンドでタブ切り替えにより3スタイルの結果を比較表示できます。
+
 **API**: `POST /api/stocks/[stockId]/purchase-recommendation`
 
 ### 3. ポートフォリオ分析（StockAnalysis）
@@ -169,6 +181,7 @@ Stock Buddyの中核機能であるAI推奨システムです。3種類の推奨
 - `app/api/recommendations/generate-daily/route.ts` - 日次おすすめ生成
 - `app/api/featured-stocks/route.ts` - おすすめ銘柄取得
 - `lib/purchase-recommendation-core.ts` - 購入判断ロジック
+- `lib/style-analysis.ts` - 投資スタイル別補正ロジック
 - `lib/recommendation-scoring.ts` - スコアリング
 - `lib/stock-safety-rules.ts` - 安全ルール
 - `lib/outcome-utils.ts` - 結果追跡ユーティリティ

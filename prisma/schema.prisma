@@ -276,6 +276,9 @@ model StockAnalysis {
   // 売却条件
   sellCondition String? @db.Text // 売却判断の条件テキスト
 
+  // 投資スタイル別分析 { CONSERVATIVE: {...}, BALANCED: {...}, AGGRESSIVE: {...} }
+  styleAnalyses Json?
+
   analyzedAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
@@ -474,6 +477,9 @@ model PurchaseRecommendation {
 
   // 将来拡張用
   analysisData Json?
+
+  // 投資スタイル別分析 { CONSERVATIVE: {...}, BALANCED: {...}, AGGRESSIVE: {...} }
+  styleAnalyses Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -29,6 +29,7 @@ import {
 import { getTodayForDB } from "@/lib/date-utils";
 import { insertRecommendationOutcome, Prediction } from "@/lib/outcome-utils";
 import { getNikkei225Data, MarketIndexData } from "@/lib/market-index";
+import { applyPurchaseStyleCorrections, type StyleAnalysesMap, type PurchaseStyleAnalysis } from "@/lib/style-analysis";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
 import {
   isSurgeStock,
@@ -81,6 +82,7 @@ export interface PurchaseRecommendationResult {
   riskFit: boolean | null;
   personalizedReason: string | null;
   analyzedAt: string;
+  styleAnalyses: StyleAnalysesMap<PurchaseStyleAnalysis> | null;
 }
 
 /**
@@ -514,33 +516,7 @@ export async function executePurchaseRecommendation(
   // （AIがおすすめと判断したのに「気になる」に入れたら即「見送り」になるのを防ぐため）
   const skipSafetyRules = !!isRecommendedToday;
 
-  // 下落トレンドの強制補正（投資スタイル別）
-  if (
-    !skipSafetyRules &&
-    isInDecline(weekChangeRate, investmentStyle) &&
-    result.recommendation === "buy"
-  ) {
-    result.recommendation = "stay";
-    result.confidence = Math.max(
-      0,
-      result.confidence + MOMENTUM.DECLINE_CONFIDENCE_PENALTY,
-    );
-    result.caution = `週間${weekChangeRate!.toFixed(0)}%の下落トレンドのため、様子見を推奨します。${result.caution}`;
-    result.buyCondition =
-      result.buyCondition || "下落トレンドが落ち着いてから検討してください";
-  }
-
-  // 急騰銘柄の強制補正（投資スタイル別）
-  if (
-    !skipSafetyRules &&
-    isSurgeStock(weekChangeRate, investmentStyle) &&
-    result.recommendation === "buy"
-  ) {
-    result.recommendation = "stay";
-    result.caution = `週間+${weekChangeRate!.toFixed(0)}%の急騰銘柄のため、様子見を推奨します。${result.caution}`;
-  }
-
-  // 危険銘柄の強制補正
+  // 危険銘柄の強制補正（スタイル非依存）
   const volatility = stock.volatility ? Number(stock.volatility) : null;
   if (
     !skipSafetyRules &&
@@ -551,7 +527,7 @@ export async function executePurchaseRecommendation(
     result.caution = `業績が赤字かつボラティリティが${volatility?.toFixed(0)}%と高いため、様子見を推奨します。${result.caution}`;
   }
 
-  // 市場急落時の強制補正
+  // 市場急落時の強制補正（スタイル非依存）
   if (marketData?.isMarketCrash && result.recommendation === "buy") {
     result.recommendation = "stay";
     result.reason = `市場全体が急落しているため、様子見をおすすめします。${result.reason}`;
@@ -559,26 +535,13 @@ export async function executePurchaseRecommendation(
       result.buyCondition || "市場が落ち着いてから検討してください";
   }
 
-  // 移動平均乖離率による補正（短期投資は過熱圏ルールをスキップ）
+  // 移動平均乖離率の計算
   const deviationRate = calculateDeviationRate(
     pricesNewestFirst,
     MA_DEVIATION.PERIOD,
   );
 
-  if (
-    !skipSafetyRules &&
-    isOverheated(deviationRate, investmentStyle) &&
-    result.recommendation === "buy"
-  ) {
-    result.recommendation = "stay";
-    result.confidence = Math.max(
-      0,
-      result.confidence + MA_DEVIATION.CONFIDENCE_PENALTY,
-    );
-    result.caution = `25日移動平均線から+${deviationRate!.toFixed(1)}%乖離しており過熱圏のため、様子見を推奨します。${result.caution}`;
-  }
-
-  // 下方乖離ボーナス
+  // 下方乖離ボーナス（スタイル非依存）
   const isLowVolatility =
     volatility !== null && volatility <= MA_DEVIATION.LOW_VOLATILITY_THRESHOLD;
   if (
@@ -593,7 +556,7 @@ export async function executePurchaseRecommendation(
     );
   }
 
-  // パニック売り防止（avoid→stay）
+  // パニック売り防止（avoid→stay）（スタイル非依存）
   if (
     deviationRate !== null &&
     deviationRate <= SELL_TIMING.PANIC_SELL_THRESHOLD &&
@@ -603,47 +566,49 @@ export async function executePurchaseRecommendation(
     result.caution = `25日移動平均線から${deviationRate.toFixed(1)}%下方乖離しており売られすぎです。大底で見送るのはもったいないため、様子見を推奨します。${result.caution}`;
   }
 
-  // 購入タイミング判断
-  let buyTiming: string | null = null;
-  let dipTargetPrice: number | null = null;
+  // --- 投資スタイル別の補正を全3スタイル分生成 ---
+  const rsiForTiming = calculateRSI(pricesNewestFirst, 14);
+  const sma25ForTiming = calculateSMA(pricesNewestFirst, MA_DEVIATION.PERIOD);
 
-  if (result.recommendation === "buy") {
-    const rsi = calculateRSI(pricesNewestFirst, 14);
-    const sma25 = calculateSMA(pricesNewestFirst, MA_DEVIATION.PERIOD);
+  const styleAnalyses = applyPurchaseStyleCorrections({
+    baseResult: {
+      recommendation: result.recommendation,
+      confidence: result.confidence,
+      statusType: result.statusType,
+      marketSignal: result.marketSignal,
+      advice: result.advice,
+      reason: result.reason,
+      caution: result.caution,
+      buyCondition: result.buyCondition || null,
+    },
+    weekChangeRate,
+    deviationRate,
+    buyTimingParams: {
+      deviationRate,
+      rsi: rsiForTiming,
+      sma25: sma25ForTiming,
+    },
+    sellTimingParams: {
+      deviationRate,
+      rsi: rsiForTiming,
+      sma25: sma25ForTiming,
+    },
+    skipSafetyRules,
+  });
 
-    const isHighDeviation =
-      deviationRate !== null && deviationRate > MA_DEVIATION.DIP_BUY_THRESHOLD;
-    const isOverboughtRSI =
-      rsi !== null && rsi > MA_DEVIATION.RSI_OVERBOUGHT_THRESHOLD;
+  // ユーザーの選択スタイルの結果をメインのresultに反映
+  const userStyle = (investmentStyle || "BALANCED") as "CONSERVATIVE" | "BALANCED" | "AGGRESSIVE";
+  const userStyleResult = styleAnalyses[userStyle];
+  result.recommendation = userStyleResult.recommendation;
+  result.confidence = userStyleResult.confidence;
+  result.caution = userStyleResult.caution;
+  result.buyCondition = userStyleResult.buyCondition;
 
-    if (isHighDeviation || isOverboughtRSI) {
-      buyTiming = "dip";
-      dipTargetPrice = sma25;
-    } else {
-      buyTiming = "market";
-    }
-  }
-
-  // 売りタイミング判定（avoid推奨時のみ）
-  let sellTiming: string | null = null;
-  let sellTargetPrice: number | null = null;
-
-  if (result.recommendation === "avoid") {
-    const rsi = calculateRSI(pricesNewestFirst, 14);
-    const sma25 = calculateSMA(pricesNewestFirst, MA_DEVIATION.PERIOD);
-
-    const isDeviationOk =
-      deviationRate === null ||
-      deviationRate >= SELL_TIMING.DEVIATION_LOWER_THRESHOLD;
-    const isRsiOk = rsi === null || rsi >= SELL_TIMING.RSI_OVERSOLD_THRESHOLD;
-
-    if (isDeviationOk && isRsiOk) {
-      sellTiming = "market";
-    } else {
-      sellTiming = "rebound";
-      sellTargetPrice = sma25;
-    }
-  }
+  // 購入タイミング・売りタイミングはユーザースタイルの結果を使用
+  const buyTiming = userStyleResult.buyTiming;
+  const dipTargetPrice = userStyleResult.dipTargetPrice;
+  const sellTiming = userStyleResult.sellTiming;
+  const sellTargetPrice = userStyleResult.sellTargetPrice;
 
   // データベースに保存
   const today = getTodayForDB();
@@ -675,6 +640,7 @@ export async function executePurchaseRecommendation(
       periodFit: result.periodFit ?? null,
       riskFit: result.riskFit ?? null,
       personalizedReason: result.personalizedReason || null,
+      styleAnalyses: styleAnalyses ? JSON.parse(JSON.stringify(styleAnalyses)) : undefined,
       updatedAt: new Date(),
     },
     create: {
@@ -699,6 +665,7 @@ export async function executePurchaseRecommendation(
       periodFit: result.periodFit ?? null,
       riskFit: result.riskFit ?? null,
       personalizedReason: result.personalizedReason || null,
+      styleAnalyses: styleAnalyses ? JSON.parse(JSON.stringify(styleAnalyses)) : undefined,
     },
   });
 
@@ -736,6 +703,7 @@ export async function executePurchaseRecommendation(
       confidence: result.confidence || 0.7,
       limitPrice: null,
       stopLossPrice: null,
+      styleAnalyses: styleAnalyses ? JSON.parse(JSON.stringify(styleAnalyses)) : undefined,
       analyzedAt: now,
     },
   });
@@ -801,5 +769,6 @@ export async function executePurchaseRecommendation(
     riskFit: result.riskFit ?? null,
     personalizedReason: result.personalizedReason || null,
     analyzedAt: today.toISOString(),
+    styleAnalyses,
   };
 }

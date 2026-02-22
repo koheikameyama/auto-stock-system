@@ -168,6 +168,8 @@ export async function GET(
           limitPrice: null,
           stopLossPrice: null,
           analyzedAt: null,
+          // 投資スタイル別分析
+          styleAnalyses: null,
         },
         { status: 200 }
       )
@@ -224,6 +226,8 @@ export async function GET(
       limitPrice: stockAnalysis?.limitPrice ? Number(stockAnalysis.limitPrice) : null,
       stopLossPrice: stockAnalysis?.stopLossPrice ? Number(stockAnalysis.stopLossPrice) : null,
       analyzedAt: stockAnalysis?.analyzedAt?.toISOString() ?? null,
+      // 投資スタイル別分析
+      styleAnalyses: stockAnalysis?.styleAnalyses ?? null,
     }
 
     return NextResponse.json(response, { status: 200 })

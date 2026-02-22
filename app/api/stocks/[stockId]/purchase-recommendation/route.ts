@@ -110,6 +110,8 @@ export async function GET(
       // AI推奨価格（StockAnalysisから）
       limitPrice: analysis?.limitPrice ? Number(analysis.limitPrice) : null,
       stopLossPrice: analysis?.stopLossPrice ? Number(analysis.stopLossPrice) : null,
+      // 投資スタイル別分析
+      styleAnalyses: recommendation.styleAnalyses ?? analysis?.styleAnalyses ?? null,
     }
 
     return NextResponse.json(response, { status: 200 })

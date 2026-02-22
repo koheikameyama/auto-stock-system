@@ -37,6 +37,7 @@ import {
 import { getDaysAgoForDB } from "@/lib/date-utils";
 import { isSurgeStock, isDangerousStock } from "@/lib/stock-safety-rules";
 import { insertRecommendationOutcome, Prediction } from "@/lib/outcome-utils";
+import { applyPortfolioStyleCorrections, type StyleAnalysesMap, type PortfolioStyleAnalysis } from "@/lib/style-analysis";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -75,6 +76,7 @@ export interface PortfolioAnalysisResult {
   recommendation: string | null;
   lastAnalysis: string;
   isToday: true;
+  styleAnalyses?: StyleAnalysesMap<PortfolioStyleAnalysis> | null;
 }
 
 /**
@@ -467,17 +469,7 @@ export async function executePortfolioAnalysis(
     result.shortTerm = `この銘柄は上場廃止されています。保有している場合は証券会社に確認してください。${result.shortTerm}`;
   }
 
-  // 急騰銘柄の買い増し抑制
-  const investmentStyle = userSettings?.investmentStyle ?? null;
-  if (
-    isSurgeStock(weekChangeRate, investmentStyle) &&
-    result.recommendation === "buy"
-  ) {
-    result.recommendation = "hold";
-    result.shortTerm = `週間+${weekChangeRate!.toFixed(0)}%の急騰後のため、買い増しは高値掴みのリスクがあります。${result.shortTerm}`;
-  }
-
-  // 危険銘柄の買い増し抑制
+  // 危険銘柄の買い増し抑制（スタイル非依存）
   const volatility = stock.volatility ? Number(stock.volatility) : null;
   if (
     isDangerousStock(stock.isProfitable, volatility) &&
@@ -487,7 +479,7 @@ export async function executePortfolioAnalysis(
     result.shortTerm = `業績が赤字かつボラティリティが${volatility?.toFixed(0)}%と高いため、買い増しは慎重に検討してください。${result.shortTerm}`;
   }
 
-  // 中長期トレンドによる売り保護（重大な変化がない場合のみ）
+  // 中長期トレンドによる売り保護（重大な変化がない場合のみ）（スタイル非依存）
   if (
     result.recommendation === "sell" &&
     !result.isCriticalChange &&
@@ -508,7 +500,7 @@ export async function executePortfolioAnalysis(
     result.advice = `${trendInfo}のトレンドは依然として良好です。短期的な変動に惑わされず、中長期での回復を待つ方針を優先しましょう。`;
   }
 
-  // 購入直後の保護（重大な変化がない場合のみ）
+  // 購入直後の保護（重大な変化がない場合のみ）（スタイル非依存）
   if (
     isRecentlyPurchased &&
     result.recommendation === "sell" &&
@@ -524,7 +516,7 @@ export async function executePortfolioAnalysis(
     result.advice = `購入直後の小幅な変動です。当初の投資ストーリーに変更がない限り、目先の動きで売却せず、しばらく様子を見るのが健全です。`;
   }
 
-  // 相対強度による売り保護
+  // 相対強度による売り保護（スタイル非依存）
   if (
     result.recommendation === "sell" &&
     weekChangeRate !== null &&
@@ -544,7 +536,7 @@ export async function executePortfolioAnalysis(
     }
   }
 
-  // statusType（AIの出力を優先）
+  // statusType（AIの出力を優先、スタイル非依存補正後の値を使用）
   const statusType =
     result.statusType ||
     (result.recommendation === "sell"
@@ -553,7 +545,7 @@ export async function executePortfolioAnalysis(
         ? "押し目買い"
         : "ホールド");
 
-  // 売りタイミング判定
+  // 売りタイミング判定（スタイル非依存）
   let sellTiming: string | null = null;
   let sellTargetPrice: number | null = null;
 
@@ -594,6 +586,38 @@ export async function executePortfolioAnalysis(
     if (!sellTargetPrice && sma25 !== null) {
       sellTargetPrice = sma25;
     }
+  }
+
+  // --- 投資スタイル別の補正を全3スタイル分生成 ---
+  const styleAnalyses = applyPortfolioStyleCorrections({
+    baseResult: {
+      recommendation: result.recommendation,
+      confidence: result.confidence || 0.7,
+      statusType,
+      marketSignal: result.marketSignal || "neutral",
+      advice: result.advice || "",
+      shortTerm: result.shortTerm || "",
+      sellReason: result.sellReason || null,
+      sellCondition: result.sellCondition || null,
+      suggestedSellPercent: result.suggestedSellPercent || null,
+    },
+    weekChangeRate,
+    isProfitable: stock.isProfitable,
+    volatility,
+    sma25,
+    sellTimingBase: sellTiming,
+    sellTargetPriceBase: sellTargetPrice,
+  });
+
+  // ユーザーの選択スタイルの結果をメインのresultに反映
+  const investmentStyle = userSettings?.investmentStyle ?? null;
+  const userStyle = (investmentStyle || "BALANCED") as "CONSERVATIVE" | "BALANCED" | "AGGRESSIVE";
+  const userStyleResult = styleAnalyses[userStyle];
+
+  // 急騰銘柄補正はスタイル依存のため、userStyleResultから反映
+  if (userStyleResult.recommendation !== result.recommendation) {
+    result.recommendation = userStyleResult.recommendation;
+    result.shortTerm = userStyleResult.shortTerm;
   }
 
   // 保存
@@ -640,6 +664,7 @@ export async function executePortfolioAnalysis(
         stopLossPrice: result.suggestedStopLossPrice || null,
         statusType: statusType || null,
         sellCondition: result.sellCondition || null,
+        styleAnalyses: styleAnalyses ? JSON.parse(JSON.stringify(styleAnalyses)) : undefined,
         analyzedAt: now,
       },
     }),
@@ -686,6 +711,7 @@ export async function executePortfolioAnalysis(
     recommendation: result.recommendation || null,
     lastAnalysis: now.toISOString(),
     isToday: true,
+    styleAnalyses,
   };
 }
 

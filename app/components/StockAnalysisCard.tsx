@@ -7,7 +7,9 @@ import {
   PORTFOLIO_STATUS_CONFIG,
   MARKET_SIGNAL_CONFIG,
   SELL_TIMING,
+  INVESTMENT_STYLE_CONFIG,
 } from "@/lib/constants";
+import { useTranslations } from "next-intl";
 
 interface StockAnalysisCardProps {
   stockId: string;
@@ -59,7 +61,30 @@ interface AnalysisData {
   longTermPriceLow: number | null;
   longTermPriceHigh: number | null;
   longTermText: string | null;
+  // 投資スタイル別分析
+  styleAnalyses: Record<string, StyleAnalysisData> | null;
 }
+
+interface StyleAnalysisData {
+  recommendation: string;
+  confidence: number;
+  statusType: string;
+  marketSignal: string;
+  advice: string;
+  reason?: string;
+  caution?: string;
+  buyCondition?: string | null;
+  buyTiming?: string | null;
+  dipTargetPrice?: number | null;
+  sellTiming?: string | null;
+  sellTargetPrice?: number | null;
+  shortTerm?: string;
+  sellReason?: string | null;
+  sellCondition?: string | null;
+  suggestedSellPercent?: number | null;
+}
+
+const STYLE_KEYS = ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"] as const;
 
 export default function StockAnalysisCard({
   stockId,
@@ -71,11 +96,14 @@ export default function StockAnalysisCard({
   isSimulation = false,
   autoGenerate = false,
 }: StockAnalysisCardProps) {
+  const t = useTranslations("stocks.styleAnalysis");
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [noData, setNoData] = useState(false);
   const [error, setError] = useState("");
+  const [userInvestmentStyle, setUserInvestmentStyle] = useState<string>("BALANCED");
+  const [selectedStyle, setSelectedStyle] = useState<string>("BALANCED");
 
   async function fetchData() {
     setLoading(true);
@@ -166,6 +194,17 @@ export default function StockAnalysisCard({
   }
 
   useEffect(() => {
+    // ユーザーの投資スタイル設定を取得
+    fetch("/api/settings")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.settings?.investmentStyle) {
+          setUserInvestmentStyle(data.settings.investmentStyle);
+          setSelectedStyle(data.settings.investmentStyle);
+        }
+      })
+      .catch(() => {});
+
     if (isSimulation && autoGenerate) {
       // シミュレーションかつ自動分析の場合は、GETをスキップして直接生成
       generateAnalysis();
@@ -301,12 +340,84 @@ export default function StockAnalysisCard({
   // 分析日時（より新しい方を表示）
   const analysisDate = analysis?.analyzedAt || analysis?.lastAnalysis;
 
+  // 選択中のスタイルのデータを取得（スタイル別データがある場合はオーバーレイ）
+  const styleData = analysis?.styleAnalyses?.[selectedStyle] ?? null;
+  const isUserStyle = selectedStyle === userInvestmentStyle;
+  const hasStyleAnalyses = analysis?.styleAnalyses && Object.keys(analysis.styleAnalyses).length > 0;
+
+  // スタイル別データがある場合、分析データにマージ
+  const effectiveAnalysis = analysis
+    ? {
+        ...analysis,
+        ...(styleData && !isUserStyle
+          ? {
+              recommendation: styleData.recommendation,
+              confidence: styleData.confidence,
+              statusType: styleData.statusType,
+              marketSignal: styleData.marketSignal,
+              advice: styleData.advice,
+              ...(styleData.sellReason !== undefined ? { sellReason: styleData.sellReason } : {}),
+              ...(styleData.sellCondition !== undefined ? { sellCondition: styleData.sellCondition } : {}),
+              ...(styleData.suggestedSellPercent !== undefined ? { suggestedSellPercent: styleData.suggestedSellPercent } : {}),
+              ...(styleData.sellTiming !== undefined ? { sellTiming: styleData.sellTiming } : {}),
+              ...(styleData.sellTargetPrice !== undefined ? { sellTargetPrice: styleData.sellTargetPrice } : {}),
+              ...(styleData.buyTiming !== undefined ? { buyTiming: styleData.buyTiming } : {}),
+            }
+          : {}),
+      }
+    : null;
+
   return (
     <div className="space-y-4">
       {/* シミュレーションバッジ */}
       {isSimulation && (
         <div className="bg-amber-100 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2">
           <span>🧪 シミュレーションモード: 100株保有として分析</span>
+        </div>
+      )}
+
+      {/* 投資スタイル切り替えタブ */}
+      {hasStyleAnalyses && (
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {STYLE_KEYS.map((style) => {
+            const config = INVESTMENT_STYLE_CONFIG[style];
+            const isSelected = selectedStyle === style;
+            const isDefault = userInvestmentStyle === style;
+            const styleResult = analysis?.styleAnalyses?.[style];
+            return (
+              <button
+                key={style}
+                onClick={() => setSelectedStyle(style)}
+                className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  isSelected
+                    ? "bg-white shadow-sm text-gray-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <span>{config.icon}</span>
+                <span className="hidden sm:inline">{config.text}</span>
+                <span className="sm:hidden">{t(`tabs.${style}`)}</span>
+                {isDefault && (
+                  <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                )}
+                {styleResult && (
+                  <span className={`ml-0.5 text-[10px] font-bold ${
+                    styleResult.recommendation === "buy"
+                      ? "text-green-600"
+                      : styleResult.recommendation === "stay" || styleResult.recommendation === "hold"
+                        ? "text-yellow-600"
+                        : "text-red-600"
+                  }`}>
+                    {styleResult.recommendation === "buy" ? t("labels.buy") :
+                     styleResult.recommendation === "stay" ? t("labels.stay") :
+                     styleResult.recommendation === "hold" ? t("labels.hold") :
+                     styleResult.recommendation === "avoid" ? t("labels.avoid") :
+                     styleResult.recommendation === "sell" ? t("labels.sell") : ""}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -350,9 +461,9 @@ export default function StockAnalysisCard({
 
       {/* 損切りアラート（ユーザーが損切りラインを設定している場合のみ表示） */}
       {(() => {
-        const currentPrice = analysis?.currentPrice;
-        const avgPrice = analysis?.averagePurchasePrice;
-        const stopLossRate = analysis?.stopLossRate;
+        const currentPrice = effectiveAnalysis?.currentPrice;
+        const avgPrice = effectiveAnalysis?.averagePurchasePrice;
+        const stopLossRate = effectiveAnalysis?.stopLossRate;
 
         // 損切りラインが未設定の場合は表示しない
         if (
@@ -408,33 +519,33 @@ export default function StockAnalysisCard({
       })()}
 
       {/* AIアドバイス */}
-      {analysis?.recommendation && (
+      {effectiveAnalysis?.recommendation && (
         <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
           <div className="mb-2">
             <p className="font-semibold text-gray-800 mb-1.5">
               💡 AIアドバイス
             </p>
             <div className="flex items-center gap-2">
-              {getStatusBadge(analysis.statusType)}
-              {getMarketSignalBadge(analysis.marketSignal)}
+              {getStatusBadge(effectiveAnalysis.statusType)}
+              {getMarketSignalBadge(effectiveAnalysis.marketSignal)}
             </div>
           </div>
           <p className="text-sm text-gray-700 leading-relaxed mb-3">
-            {analysis.advice}
+            {effectiveAnalysis.advice}
           </p>
           {/* 指値・逆指値（推奨に応じて表示を切り替え） */}
           {(() => {
             // sell推奨時は「AI推奨価格」セクションを非表示（「売却検討」セクションに統合）
-            if (analysis.recommendation === "sell") return null;
+            if (effectiveAnalysis.recommendation === "sell") return null;
 
             // buy → 指値 + 逆指値、hold → 利確目標 + 逆指値
             const showLimitPrice =
-              analysis.recommendation === "buy" ||
-              analysis.recommendation === "hold";
+              effectiveAnalysis.recommendation === "buy" ||
+              effectiveAnalysis.recommendation === "hold";
             const showStopLossPrice = true; // buy/holdで逆指値を表示
             const hasPrice =
-              (showLimitPrice && analysis.limitPrice) ||
-              (showStopLossPrice && analysis.stopLossPrice);
+              (showLimitPrice && effectiveAnalysis.limitPrice) ||
+              (showStopLossPrice && effectiveAnalysis.stopLossPrice);
 
             if (!hasPrice) return null;
 
@@ -444,20 +555,20 @@ export default function StockAnalysisCard({
                   🎯 AI推奨価格
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  {showLimitPrice && analysis.limitPrice && (
+                  {showLimitPrice && effectiveAnalysis.limitPrice && (
                     <div>
                       {(() => {
-                        const limitPriceNum = analysis.limitPrice;
-                        const currentPrice = analysis.currentPrice;
-                        const isBuy = analysis.recommendation === "buy";
+                        const limitPriceNum = effectiveAnalysis.limitPrice;
+                        const currentPrice = effectiveAnalysis.currentPrice;
+                        const isBuy = effectiveAnalysis.recommendation === "buy";
 
                         if (isBuy) {
                           // buy推奨時: 現在価格と比較
                           // buyTimingがある場合はmarketの時のみ、ない場合（古いデータ等）は既存のロジックを維持
                           const isNowBuyTime =
                             currentPrice &&
-                            (!analysis.buyTiming ||
-                              analysis.buyTiming === "market") &&
+                            (!effectiveAnalysis.buyTiming ||
+                              effectiveAnalysis.buyTiming === "market") &&
                             Math.abs(limitPriceNum - currentPrice) /
                               currentPrice <
                               0.01; // 1%以内なら「今が買い時」
@@ -491,7 +602,7 @@ export default function StockAnalysisCard({
                         } else {
                           // hold推奨時: 利確目標
                           // 含み損がある場合は「成行で売却OK」を表示しない（利確は含み益があってこそ意味がある）
-                          const avgPrice = analysis.averagePurchasePrice;
+                          const avgPrice = effectiveAnalysis.averagePurchasePrice;
                           const hasLoss =
                             avgPrice && currentPrice && currentPrice < avgPrice;
                           const priceDiff = currentPrice
@@ -540,11 +651,11 @@ export default function StockAnalysisCard({
                       })()}
                     </div>
                   )}
-                  {showStopLossPrice && analysis.stopLossPrice && (
+                  {showStopLossPrice && effectiveAnalysis.stopLossPrice && (
                     <div>
                       {(() => {
-                        const stopLossPriceNum = analysis.stopLossPrice;
-                        const currentPrice = analysis.currentPrice;
+                        const stopLossPriceNum = effectiveAnalysis.stopLossPrice;
+                        const currentPrice = effectiveAnalysis.currentPrice;
                         const priceDiff = currentPrice
                           ? stopLossPriceNum - currentPrice
                           : 0;
@@ -582,23 +693,23 @@ export default function StockAnalysisCard({
             );
           })()}
           {/* 買増・全力買い検討（好調時） */}
-          {(analysis.statusType === "押し目買い" ||
-            analysis.statusType === "全力買い") &&
-            (analysis.recommendation === "buy" ||
-              analysis.recommendation === "hold") && (
+          {(effectiveAnalysis.statusType === "押し目買い" ||
+            effectiveAnalysis.statusType === "全力買い") &&
+            (effectiveAnalysis.recommendation === "buy" ||
+              effectiveAnalysis.recommendation === "hold") && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
                 <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                  📈 {analysis.statusType}
+                  📈 {effectiveAnalysis.statusType}
                 </p>
                 <p className="text-sm text-gray-700">
-                  {analysis.statusType === "全力買い"
+                  {effectiveAnalysis.statusType === "全力買い"
                     ? "非常に強い上昇シグナルが出ています。積極的な投資を検討できるタイミングです。"
                     : "上昇トレンド中の健全な調整です。押し目でのサポートを確認しながらの買い増しを検討しましょう。"}
                 </p>
               </div>
             )}
           {/* ホールド（様子見） */}
-          {analysis.statusType === "ホールド" && (
+          {effectiveAnalysis.statusType === "ホールド" && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
                 👀 ホールド
@@ -609,40 +720,40 @@ export default function StockAnalysisCard({
             </div>
           )}
           {/* 売却検討（即時売却・戻り売り） */}
-          {(analysis.statusType === "即時売却" ||
-            analysis.statusType === "戻り売り") && (
+          {(effectiveAnalysis.statusType === "即時売却" ||
+            effectiveAnalysis.statusType === "戻り売り") && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                ⚠️ {analysis.statusType}
+                ⚠️ {effectiveAnalysis.statusType}
               </p>
               <div className="space-y-2">
-                {analysis.suggestedSellPercent && (
+                {effectiveAnalysis.suggestedSellPercent && (
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500">推奨売却:</span>
                       <span
                         className={`font-bold ${
-                          analysis.suggestedSellPercent === 100
+                          effectiveAnalysis.suggestedSellPercent === 100
                             ? "text-red-600"
                             : "text-amber-600"
                         }`}
                       >
-                        {analysis.suggestedSellPercent}%
+                        {effectiveAnalysis.suggestedSellPercent}%
                       </span>
                     </div>
                     {quantity && quantity > 0 && (
                       <p className="text-xs text-gray-500 mt-0.5">
                         {quantity}株中{" "}
                         {Math.round(
-                          (quantity * analysis.suggestedSellPercent) / 100,
+                          (quantity * effectiveAnalysis.suggestedSellPercent) / 100,
                         )}
                         株
                       </p>
                     )}
                   </div>
                 )}
-                {analysis.recommendation === "sell" ? (
-                  analysis.sellTiming === "rebound" ? (
+                {effectiveAnalysis.recommendation === "sell" ? (
+                  effectiveAnalysis.sellTiming === "rebound" ? (
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">売却方法:</span>
@@ -650,22 +761,22 @@ export default function StockAnalysisCard({
                           戻り売り推奨
                         </span>
                       </div>
-                      {analysis.sellTargetPrice ? (
+                      {effectiveAnalysis.sellTargetPrice ? (
                         <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-amber-700">
                               戻り売りの目安（25日移動平均線）
                             </span>
                             <span className="text-base font-bold text-amber-800">
-                              {analysis.sellTargetPrice.toLocaleString()}円
+                              {effectiveAnalysis.sellTargetPrice.toLocaleString()}円
                             </span>
                           </div>
-                          {analysis.currentPrice && (
+                          {effectiveAnalysis.currentPrice && (
                             <p className="text-xs text-amber-600 mt-1">
                               現在価格から
-                              {analysis.sellTargetPrice > analysis.currentPrice
-                                ? `+${(analysis.sellTargetPrice - analysis.currentPrice).toLocaleString()}円（+${(((analysis.sellTargetPrice - analysis.currentPrice) / analysis.currentPrice) * 100).toFixed(1)}%）`
-                                : `${(analysis.sellTargetPrice - analysis.currentPrice).toLocaleString()}円（${(((analysis.sellTargetPrice - analysis.currentPrice) / analysis.currentPrice) * 100).toFixed(1)}%）`}
+                              {effectiveAnalysis.sellTargetPrice > effectiveAnalysis.currentPrice
+                                ? `+${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}円（+${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`
+                                : `${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}円（${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`}
                               で到達
                             </p>
                           )}
@@ -689,8 +800,8 @@ export default function StockAnalysisCard({
                         </span>
                       </div>
                       {(() => {
-                        const currentPrice = analysis.currentPrice;
-                        const avgPrice = analysis.averagePurchasePrice;
+                        const currentPrice = effectiveAnalysis.currentPrice;
+                        const avgPrice = effectiveAnalysis.averagePurchasePrice;
                         if (currentPrice && avgPrice) {
                           const diffPercent =
                             ((currentPrice - avgPrice) / avgPrice) * 100;
@@ -721,42 +832,42 @@ export default function StockAnalysisCard({
                     </div>
                   )
                 ) : (
-                  analysis.suggestedSellPrice && (
+                  effectiveAnalysis.suggestedSellPrice && (
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">売却価格:</span>
                         <span className="font-bold text-gray-800">
-                          {analysis.suggestedSellPrice.toLocaleString()}円
+                          {effectiveAnalysis.suggestedSellPrice.toLocaleString()}円
                         </span>
                       </div>
-                      {analysis.currentPrice && (
+                      {effectiveAnalysis.currentPrice && (
                         <p className="text-xs text-gray-500 mt-0.5">
-                          現在価格: {analysis.currentPrice.toLocaleString()}円
+                          現在価格: {effectiveAnalysis.currentPrice.toLocaleString()}円
                         </p>
                       )}
                     </div>
                   )
                 )}
-                {analysis.sellReason && (
+                {effectiveAnalysis.sellReason && (
                   <div className="mt-2 p-2 bg-white rounded border border-gray-100">
                     <p className="text-xs text-gray-500 mb-1">理由:</p>
                     <p className="text-sm text-gray-700">
-                      {analysis.sellReason}
+                      {effectiveAnalysis.sellReason}
                     </p>
                   </div>
                 )}
-                {analysis.sellCondition && (
+                {effectiveAnalysis.sellCondition && (
                   <div className="text-xs text-gray-500 mt-1">
-                    💡 {analysis.sellCondition}
+                    💡 {effectiveAnalysis.sellCondition}
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {analysis.confidence !== null &&
+          {effectiveAnalysis.confidence !== null &&
             (() => {
-              const pct = Math.round(analysis.confidence * 100);
+              const pct = Math.round(effectiveAnalysis.confidence * 100);
               const color =
                 pct >= 75
                   ? "bg-green-500"
