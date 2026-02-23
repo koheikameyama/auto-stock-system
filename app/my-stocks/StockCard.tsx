@@ -103,6 +103,20 @@ interface PurchaseRecommendation {
   styleAnalyses?: Record<string, PurchaseStyleAnalysis> | null;
 }
 
+interface PortfolioStyleAnalysis {
+  recommendation: string;
+  confidence: number;
+  statusType: string;
+  marketSignal: string;
+  advice: string;
+  shortTerm: string;
+  sellReason: string | null;
+  sellCondition: string | null;
+  suggestedSellPercent: number | null;
+  sellTiming: string | null;
+  sellTargetPrice: number | null;
+}
+
 interface StockCardProps {
   stock: UserStock;
   price?: StockPrice;
@@ -111,6 +125,7 @@ interface StockCardProps {
   recommendation?: PurchaseRecommendation;
   userInvestmentStyle?: string;
   portfolioRecommendation?: "buy" | "sell" | "hold" | null;
+  portfolioStyleAnalyses?: Record<string, PortfolioStyleAnalysis> | null;
   analyzedAt?: string | null;
   onAdditionalPurchase?: () => void;
   onSell?: () => void;
@@ -130,6 +145,7 @@ export default function StockCard({
   recommendation,
   userInvestmentStyle = "BALANCED",
   portfolioRecommendation,
+  portfolioStyleAnalyses,
   analyzedAt,
   onAdditionalPurchase,
   onSell,
@@ -168,8 +184,10 @@ export default function StockCard({
 
   // スタイル別分析データの存在チェックとマージ
   const hasStyleAnalyses = isWatchlist && recommendation?.styleAnalyses && Object.keys(recommendation.styleAnalyses).length > 0;
+  const hasPortfolioStyleAnalyses = isHolding && portfolioStyleAnalyses && Object.keys(portfolioStyleAnalyses).length > 0;
   const isUserStyle = selectedStyle === userInvestmentStyle;
   const styleData = hasStyleAnalyses ? recommendation?.styleAnalyses?.[selectedStyle] ?? null : null;
+  const portfolioStyleData = hasPortfolioStyleAnalyses ? portfolioStyleAnalyses?.[selectedStyle] ?? null : null;
 
   // 選択中のスタイルに基づいて表示用recommendationを算出
   const effectiveRecommendation = recommendation
@@ -194,12 +212,20 @@ export default function StockCard({
 
   // AI Status Badge using statusType (for portfolio)
   const getAIStatusBadge = () => {
-    const statusType = stock.statusType;
+    // スタイル別分析がある場合、選択中スタイルのstatusTypeを使用
+    const statusType = (portfolioStyleData && !isUserStyle)
+      ? portfolioStyleData.statusType
+      : stock.statusType;
     if (!statusType) return null;
     return PORTFOLIO_STATUS_CONFIG[statusType] || null;
   };
 
   const aiJudgment = isWatchlist ? getAIPurchaseJudgment() : getAIStatusBadge();
+
+  // ポートフォリオのスタイル別shortTermテキスト
+  const effectiveShortTerm = (portfolioStyleData && !isUserStyle)
+    ? portfolioStyleData.shortTerm
+    : stock.shortTerm;
 
   // 決算発表日バッジを計算
   const getEarningsBadge = (nextEarningsDate: string | null | undefined) => {
@@ -422,14 +448,56 @@ export default function StockCard({
                       </p>
                     </div>
                   </div>
+                  {/* 投資スタイル切り替えタブ（ポートフォリオ） */}
+                  {hasPortfolioStyleAnalyses && (
+                    <div className="flex gap-1 bg-white/60 rounded-lg p-1 mt-2">
+                      {STYLE_KEYS.map((style) => {
+                        const config = INVESTMENT_STYLE_CONFIG[style];
+                        const isSelected = selectedStyle === style;
+                        const isDefault = userInvestmentStyle === style;
+                        const pStyleResult = portfolioStyleAnalyses?.[style];
+                        return (
+                          <button
+                            key={style}
+                            onClick={() => setSelectedStyle(style)}
+                            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+                              isSelected
+                                ? "bg-white shadow-sm text-gray-900"
+                                : "text-gray-500 hover:text-gray-700"
+                            }`}
+                          >
+                            <span>{config.icon}</span>
+                            <span className="hidden sm:inline">{config.text}</span>
+                            <span className="sm:hidden">{t(`tabs.${style}`)}</span>
+                            {isDefault && (
+                              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                            )}
+                            {pStyleResult && (
+                              <span className={`ml-0.5 text-[10px] font-bold ${
+                                pStyleResult.recommendation === "buy"
+                                  ? "text-green-600"
+                                  : pStyleResult.recommendation === "hold"
+                                    ? "text-yellow-600"
+                                    : "text-red-600"
+                              }`}>
+                                {pStyleResult.recommendation === "buy" ? t("labels.buy") :
+                                 pStyleResult.recommendation === "hold" ? t("labels.hold") :
+                                 pStyleResult.recommendation === "sell" ? t("labels.sell") : ""}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {/* AI Analysis for Portfolio */}
-                  {stock.shortTerm && (
+                  {effectiveShortTerm && (
                     <div className="mt-2 pt-2 border-t border-gray-200">
                       <p className="text-xs sm:text-sm text-gray-700">
                         <span className="font-semibold text-blue-700">
                           💡 AI分析:{" "}
                         </span>
-                        {stock.shortTerm}
+                        {effectiveShortTerm}
                       </p>
                     </div>
                   )}
@@ -463,14 +531,56 @@ export default function StockCard({
                       </p>
                     </div>
                   </div>
+                  {/* 投資スタイル切り替えタブ（ポートフォリオ・価格未取得時） */}
+                  {hasPortfolioStyleAnalyses && (
+                    <div className="flex gap-1 bg-white/60 rounded-lg p-1 mt-2">
+                      {STYLE_KEYS.map((style) => {
+                        const config = INVESTMENT_STYLE_CONFIG[style];
+                        const isSelected = selectedStyle === style;
+                        const isDefault = userInvestmentStyle === style;
+                        const pStyleResult = portfolioStyleAnalyses?.[style];
+                        return (
+                          <button
+                            key={style}
+                            onClick={() => setSelectedStyle(style)}
+                            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+                              isSelected
+                                ? "bg-white shadow-sm text-gray-900"
+                                : "text-gray-500 hover:text-gray-700"
+                            }`}
+                          >
+                            <span>{config.icon}</span>
+                            <span className="hidden sm:inline">{config.text}</span>
+                            <span className="sm:hidden">{t(`tabs.${style}`)}</span>
+                            {isDefault && (
+                              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                            )}
+                            {pStyleResult && (
+                              <span className={`ml-0.5 text-[10px] font-bold ${
+                                pStyleResult.recommendation === "buy"
+                                  ? "text-green-600"
+                                  : pStyleResult.recommendation === "hold"
+                                    ? "text-yellow-600"
+                                    : "text-red-600"
+                              }`}>
+                                {pStyleResult.recommendation === "buy" ? t("labels.buy") :
+                                 pStyleResult.recommendation === "hold" ? t("labels.hold") :
+                                 pStyleResult.recommendation === "sell" ? t("labels.sell") : ""}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {/* AI Analysis for Portfolio */}
-                  {stock.shortTerm && (
+                  {effectiveShortTerm && (
                     <div className="mt-2 pt-2 border-t border-gray-200">
                       <p className="text-xs sm:text-sm text-gray-700">
                         <span className="font-semibold text-blue-700">
                           💡 AI分析:{" "}
                         </span>
-                        {stock.shortTerm}
+                        {effectiveShortTerm}
                       </p>
                     </div>
                   )}

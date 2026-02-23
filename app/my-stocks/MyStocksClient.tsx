@@ -52,6 +52,24 @@ interface PurchaseRecommendation {
   styleAnalyses?: Record<string, PurchaseStyleAnalysis> | null;
 }
 
+interface PortfolioStyleAnalysis {
+  recommendation: string;
+  confidence: number;
+  statusType: string;
+  marketSignal: string;
+  advice: string;
+  shortTerm: string;
+  sellReason: string | null;
+  sellCondition: string | null;
+  suggestedSellPercent: number | null;
+  sellTiming: string | null;
+  sellTargetPrice: number | null;
+}
+
+interface PortfolioAnalysisData {
+  styleAnalyses: Record<string, PortfolioStyleAnalysis> | null;
+}
+
 type TabType = "portfolio" | "watchlist" | "tracked" | "sold";
 
 export default function MyStocksClient() {
@@ -81,6 +99,9 @@ export default function MyStocksClient() {
   const [pricesLoaded, setPricesLoaded] = useState(false);
   const [recommendations, setRecommendations] = useState<
     Record<string, PurchaseRecommendation>
+  >({});
+  const [portfolioAnalyses, setPortfolioAnalyses] = useState<
+    Record<string, PortfolioAnalysisData>
   >({});
   const [userInvestmentStyle, setUserInvestmentStyle] = useState<string>("BALANCED");
   const [trackedStaleTickers, setTrackedStaleTickers] = useState<Set<string>>(
@@ -256,6 +277,42 @@ export default function MyStocksClient() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, trackedStocks.length]);
+
+  // Fetch portfolio style analyses for portfolio stocks
+  useEffect(() => {
+    async function fetchPortfolioAnalyses() {
+      const holdings = userStocks.filter(
+        (s) => s.type === "portfolio" && (s.quantity ?? 0) > 0,
+      );
+      if (holdings.length === 0) return;
+
+      try {
+        const results = await Promise.allSettled(
+          holdings.map((stock) =>
+            fetch(`/api/stocks/${stock.stockId}/portfolio-analysis`)
+              .then((res) => (res.ok ? res.json() : null))
+              .then((data) => ({ stockId: stock.stockId, data })),
+          ),
+        );
+
+        const analysisMap: Record<string, PortfolioAnalysisData> = {};
+        results.forEach((result) => {
+          if (result.status === "fulfilled" && result.value.data?.styleAnalyses) {
+            analysisMap[result.value.stockId] = {
+              styleAnalyses: result.value.data.styleAnalyses,
+            };
+          }
+        });
+        setPortfolioAnalyses(analysisMap);
+      } catch (err) {
+        console.error("Error fetching portfolio analyses:", err);
+      }
+    }
+
+    if (userStocks.length > 0) {
+      fetchPortfolioAnalyses();
+    }
+  }, [userStocks]);
 
   // Fetch purchase recommendations for watchlist stocks
   useEffect(() => {
@@ -999,6 +1056,11 @@ export default function MyStocksClient() {
                     portfolioRecommendation={
                       stock.type === "portfolio"
                         ? stock.recommendation
+                        : undefined
+                    }
+                    portfolioStyleAnalyses={
+                      stock.type === "portfolio"
+                        ? portfolioAnalyses[stock.stockId]?.styleAnalyses
                         : undefined
                     }
                     analyzedAt={
