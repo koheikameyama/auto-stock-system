@@ -26,6 +26,21 @@ import type {
 import { MyStocksSkeleton } from "@/components/skeletons/my-stocks-skeleton";
 import { useTranslations } from 'next-intl';
 
+interface PurchaseStyleAnalysis {
+  recommendation: string;
+  confidence: number;
+  statusType: string;
+  marketSignal: string;
+  advice: string;
+  reason: string;
+  caution: string;
+  buyCondition: string | null;
+  buyTiming: string | null;
+  dipTargetPrice: number | null;
+  sellTiming: string | null;
+  sellTargetPrice: number | null;
+}
+
 interface PurchaseRecommendation {
   recommendation: "buy" | "stay" | "avoid";
   confidence: number;
@@ -34,6 +49,7 @@ interface PurchaseRecommendation {
   analyzedAt?: string;
   buyTiming?: "market" | "dip" | null;
   sellTiming?: "market" | "rebound" | null;
+  styleAnalyses?: Record<string, PurchaseStyleAnalysis> | null;
 }
 
 type TabType = "portfolio" | "watchlist" | "tracked" | "sold";
@@ -66,6 +82,7 @@ export default function MyStocksClient() {
   const [recommendations, setRecommendations] = useState<
     Record<string, PurchaseRecommendation>
   >({});
+  const [userInvestmentStyle, setUserInvestmentStyle] = useState<string>("BALANCED");
   const [trackedStaleTickers, setTrackedStaleTickers] = useState<Set<string>>(
     new Set(),
   );
@@ -129,6 +146,18 @@ export default function MyStocksClient() {
 
     fetchData();
   }, [fetchUserStocks, fetchTrackedStocks, fetchSoldStocks]);
+
+  // Fetch user's investment style setting
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.settings?.investmentStyle) {
+          setUserInvestmentStyle(data.settings.investmentStyle);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch stock prices for active tab only
   useEffect(() => {
@@ -255,6 +284,7 @@ export default function MyStocksClient() {
               analyzedAt: result.value.data.analyzedAt,
               buyTiming: result.value.data.buyTiming,
               sellTiming: result.value.data.sellTiming,
+              styleAnalyses: result.value.data.styleAnalyses ?? null,
             };
           }
         });
@@ -965,6 +995,7 @@ export default function MyStocksClient() {
                     priceLoaded={pricesLoaded}
                     isStale={staleTickers.has(stock.stock.tickerCode)}
                     recommendation={recommendations[stock.stockId]}
+                    userInvestmentStyle={userInvestmentStyle}
                     portfolioRecommendation={
                       stock.type === "portfolio"
                         ? stock.recommendation

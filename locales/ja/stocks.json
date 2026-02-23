@@ -99,7 +99,9 @@
       "hold": "保有",
       "avoid": "見送り",
       "sell": "売却"
-    }
+    },
+    "simulation": "購入シミュレーション",
+    "simulationTitle": "購入後分析シミュレーション"
   },
   "featured": {
     "title": "今日の注目銘柄",
