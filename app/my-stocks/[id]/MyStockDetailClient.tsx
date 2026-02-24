@@ -442,14 +442,14 @@ export default function MyStockDetailClient({
               onApplyAIPrices={async ({ takeProfitPrice, stopLossPrice, averagePurchasePrice: avgPrice }) => {
                 const updates: { takeProfitRate?: number | null; stopLossRate?: number | null } = {};
 
-                if (takeProfitPrice && avgPrice > 0) {
+                if (takeProfitPrice != null && avgPrice > 0) {
                   updates.takeProfitRate = Math.round(((takeProfitPrice - avgPrice) / avgPrice) * 1000) / 10;
                 }
-                if (stopLossPrice && avgPrice > 0) {
+                if (stopLossPrice != null && avgPrice > 0) {
                   updates.stopLossRate = Math.round(((stopLossPrice - avgPrice) / avgPrice) * 1000) / 10;
                 }
 
-                if (!updates.takeProfitRate && !updates.stopLossRate) return;
+                if (updates.takeProfitRate === undefined && updates.stopLossRate === undefined) return;
 
                 try {
                   const response = await fetch(`/api/user-stocks/${stock.id}`, {
