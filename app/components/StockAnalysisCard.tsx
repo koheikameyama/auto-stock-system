@@ -849,6 +849,9 @@ export default function StockAnalysisCard({
                 )}
                 {onApplyAIPrices && effectiveAnalysis.averagePurchasePrice && (
                   (() => {
+                    // rebound → sellTargetPrice
+                    // 即時売却 → suggestedSellPrice（AIの推奨売却価格）
+                    // それ以外 → suggestedSellPrice
                     const sellPrice = effectiveAnalysis.sellTiming === "rebound"
                       ? effectiveAnalysis.sellTargetPrice
                       : effectiveAnalysis.suggestedSellPrice;
