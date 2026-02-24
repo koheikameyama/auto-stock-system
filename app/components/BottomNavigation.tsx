@@ -1,29 +1,34 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useBadges } from "@/app/contexts/BadgeContext"
-import { useTranslations } from 'next-intl'
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useBadges } from "@/app/contexts/BadgeContext";
+import { useTranslations } from "next-intl";
 
-type BadgeKey = "dashboard" | "my-stocks" | "news" | "menu"
+type BadgeKey = "dashboard" | "my-stocks" | "news" | "menu";
 
 export default function BottomNavigation() {
-  const pathname = usePathname()
-  const { badges } = useBadges()
-  const t = useTranslations('common.navigation')
+  const pathname = usePathname();
+  const { badges } = useBadges();
+  const t = useTranslations("common.navigation");
 
   const navItems: {
-    href: string
-    label: string
-    badgeKey: BadgeKey
-    icon: JSX.Element
+    href: string;
+    label: string;
+    badgeKey: BadgeKey;
+    icon: JSX.Element;
   }[] = [
     {
       href: "/dashboard",
-      label: t('home'),
+      label: t("dashboard"),
       badgeKey: "dashboard",
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -35,10 +40,15 @@ export default function BottomNavigation() {
     },
     {
       href: "/my-stocks",
-      label: t('portfolio'),
+      label: t("myStocks"),
       badgeKey: "my-stocks",
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -50,10 +60,15 @@ export default function BottomNavigation() {
     },
     {
       href: "/news",
-      label: t('news'),
+      label: t("news"),
       badgeKey: "news",
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -65,10 +80,15 @@ export default function BottomNavigation() {
     },
     {
       href: "/menu",
-      label: t('menu'),
+      label: t("menu"),
       badgeKey: "menu",
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -78,18 +98,18 @@ export default function BottomNavigation() {
         </svg>
       ),
     },
-  ]
+  ];
 
   // アクティブ状態の判定
   const isActive = (href: string) => {
     if (href === "/dashboard") {
-      return pathname === "/dashboard"
+      return pathname === "/dashboard";
     }
     if (href === "/my-stocks") {
-      return pathname.startsWith("/my-stocks")
+      return pathname.startsWith("/my-stocks");
     }
     if (href === "/news") {
-      return pathname === "/news"
+      return pathname === "/news";
     }
     if (href === "/menu") {
       // その他メニュー配下のページもアクティブにする
@@ -98,17 +118,17 @@ export default function BottomNavigation() {
         pathname.startsWith("/settings") ||
         pathname.startsWith("/ai-report") ||
         pathname.startsWith("/portfolio-analysis")
-      )
+      );
     }
-    return false
-  }
+    return false;
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
       <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-2 pb-[env(safe-area-inset-bottom)]">
         {navItems.map((item) => {
-          const active = isActive(item.href)
-          const hasBadge = badges[item.badgeKey]
+          const active = isActive(item.href);
+          const hasBadge = badges[item.badgeKey];
           return (
             <Link
               key={item.href}
@@ -125,9 +145,9 @@ export default function BottomNavigation() {
               </div>
               <span className="text-[10px] font-medium">{item.label}</span>
             </Link>
-          )
+          );
         })}
       </div>
     </nav>
-  )
+  );
 }

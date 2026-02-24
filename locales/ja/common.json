@@ -44,15 +44,10 @@
     "all": "すべて"
   },
   "navigation": {
-    "home": "ホーム",
-    "dashboard": "ダッシュボード",
-    "portfolio": "ポートフォリオ",
-    "watchlist": "ウォッチリスト",
-    "analysis": "分析",
+    "dashboard": "ホーム",
+    "myStocks": "マイ銘柄",
     "news": "ニュース",
-    "settings": "設定",
-    "menu": "メニュー",
-    "notifications": "通知"
+    "menu": "メニュー"
   },
   "badge": {
     "tokyoStockExchange": "東証限定"
