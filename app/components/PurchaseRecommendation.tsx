@@ -9,6 +9,8 @@ import InvestmentStyleTabs from "./InvestmentStyleTabs";
 interface PurchaseRecommendationProps {
   stockId: string;
   onAnalysisDateLoaded?: (date: string | null) => void;
+  onSetBuyAlert?: (price: number) => void;
+  currentTargetBuyPrice?: number | null;
 }
 
 interface StyleAnalysisData {
@@ -124,6 +126,8 @@ function AvoidSellTimingSection({
 export default function PurchaseRecommendation({
   stockId,
   onAnalysisDateLoaded,
+  onSetBuyAlert,
+  currentTargetBuyPrice,
 }: PurchaseRecommendationProps) {
   const t = useTranslations("stocks.styleAnalysis");
   const [data, setData] = useState<RecommendationData | null>(null);
@@ -647,6 +651,27 @@ export default function PurchaseRecommendation({
     );
   };
 
+  // 通知設定ボタン（dipTargetPrice用）
+  const BuyAlertButton = ({ price }: { price: number }) => {
+    if (!onSetBuyAlert) return null;
+    const isAlreadySet = currentTargetBuyPrice === price;
+    return (
+      <button
+        onClick={() => onSetBuyAlert(price)}
+        disabled={isAlreadySet}
+        className={`mt-2 text-xs font-medium rounded-full px-3 py-1 transition-colors ${
+          isAlreadySet
+            ? "text-amber-700 bg-amber-100 cursor-default"
+            : "text-amber-600 bg-amber-50 hover:bg-amber-100"
+        }`}
+      >
+        {isAlreadySet
+          ? t("buyAlertAlreadySet", { price: formatPrice(price) })
+          : t("setDipBuyAlert", { price: formatPrice(price) })}
+      </button>
+    );
+  };
+
   // 購入タイミングセクション（buy推奨時のみ）
   const BuyTimingSection = () => {
     if (effectiveData?.recommendation !== "buy" || !effectiveData?.buyTiming) return null;
@@ -663,13 +688,16 @@ export default function PurchaseRecommendation({
             移動平均線に近く、過熱感もありません。現在の価格帯での購入が検討できます。
           </p>
           {effectiveData.dipTargetPrice && (
-            <p className="text-sm text-gray-600 mt-2">
-              💡 指値で狙うなら
-              <span className="font-bold">
-                ¥{formatPrice(effectiveData.dipTargetPrice)}
-              </span>
-              付近がおすすめです。
-            </p>
+            <>
+              <p className="text-sm text-gray-600 mt-2">
+                💡 指値で狙うなら
+                <span className="font-bold">
+                  ¥{formatPrice(effectiveData.dipTargetPrice)}
+                </span>
+                付近がおすすめです。
+              </p>
+              <BuyAlertButton price={effectiveData.dipTargetPrice} />
+            </>
           )}
         </div>
       );
@@ -684,15 +712,18 @@ export default function PurchaseRecommendation({
             </span>
           </div>
           {effectiveData.dipTargetPrice && (
-            <p className="text-sm text-gray-700 mb-2">
-              AI推奨価格の
-              <span className="font-bold">
-                ¥{formatPrice(effectiveData.dipTargetPrice)}
-              </span>
-              付近まで待つとより有利です。
-            </p>
+            <>
+              <p className="text-sm text-gray-700 mb-2">
+                AI推奨価格の
+                <span className="font-bold">
+                  ¥{formatPrice(effectiveData.dipTargetPrice)}
+                </span>
+                付近まで待つとより有利です。
+              </p>
+              <BuyAlertButton price={effectiveData.dipTargetPrice} />
+            </>
           )}
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 mt-2">
             💡
             押し目買いとは、上昇トレンドの銘柄が一時的に下落したタイミングで購入する戦略です。サポートライン（支持線）や移動平均線などを参考に、AIが推奨価格を算出しています。
           </p>

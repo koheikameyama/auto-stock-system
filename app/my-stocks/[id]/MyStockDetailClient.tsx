@@ -238,6 +238,28 @@ export default function MyStockDetailClient({
     }
   };
 
+  const handleSetDipBuyAlert = async (price: number) => {
+    try {
+      const response = await fetch(`/api/user-stocks/${stock.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetBuyPrice: price }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || t("dipBuyAlertError"));
+      }
+
+      setCurrentTargetBuyPrice(price);
+      setTargetBuyPrice(String(price));
+      toast.success(t("dipBuyAlertSet", { price: price.toLocaleString() }));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t("dipBuyAlertError");
+      toast.error(message);
+    }
+  };
+
   return (
     <StockDetailLayout
       name={stock.stock.name}
@@ -730,6 +752,8 @@ export default function MyStockDetailClient({
                   <PurchaseRecommendation
                     stockId={stock.stockId}
                     onAnalysisDateLoaded={setAnalysisDate}
+                    onSetBuyAlert={handleSetDipBuyAlert}
+                    currentTargetBuyPrice={currentTargetBuyPrice}
                   />
                 </>
               )}

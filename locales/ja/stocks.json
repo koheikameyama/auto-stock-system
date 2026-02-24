@@ -101,7 +101,9 @@
       "sell": "売却"
     },
     "simulation": "購入シミュレーション",
-    "simulationTitle": "購入後分析シミュレーション"
+    "simulationTitle": "購入後分析シミュレーション",
+    "setDipBuyAlert": "🔔 ¥{price} で通知を設定",
+    "buyAlertAlreadySet": "🔔 ¥{price} で通知設定済み"
   },
   "featured": {
     "title": "今日の注目銘柄",
@@ -165,6 +167,8 @@
     "save": "保存",
     "saving": "保存中...",
     "buyAlertNote": "※ 取引時間中に15分間隔でチェック",
+    "dipBuyAlertSet": "¥{price} で買い時通知を設定しました",
+    "dipBuyAlertError": "通知設定に失敗しました",
     "confirmDelete": "{name}を削除しますか？",
     "confirmDeleteTransaction": "この取引履歴を削除しますか？保有数量と平均単価が再計算されます。",
     "purchaseSimulation": {
