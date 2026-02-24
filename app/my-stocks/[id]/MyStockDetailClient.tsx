@@ -113,8 +113,8 @@ export default function MyStockDetailClient({
   purchaseSimulationData,
 }: Props) {
   const router = useRouter();
-  const t = useTranslations('stocks.detail');
-  const tTabs = useTranslations('stocks.tabs');
+  const t = useTranslations("stocks.detail");
+  const tTabs = useTranslations("stocks.tabs");
   const { setStockContext } = useChatContext();
   const { price, loading, isStale } = useStockPrice(stock.stock.tickerCode);
   const [selectedTransaction, setSelectedTransaction] =
@@ -193,7 +193,7 @@ export default function MyStockDetailClient({
   ]);
 
   const handleDelete = async () => {
-    if (!confirm(t('confirmDelete', { name: stock.stock.name }))) {
+    if (!confirm(t("confirmDelete", { name: stock.stock.name }))) {
       return;
     }
 
@@ -216,11 +216,7 @@ export default function MyStockDetailClient({
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
-    if (
-      !confirm(
-        t('confirmDeleteTransaction'),
-      )
-    ) {
+    if (!confirm(t("confirmDeleteTransaction"))) {
       return;
     }
 
@@ -264,7 +260,7 @@ export default function MyStockDetailClient({
           <section className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                {t('currentStatus')}
+                {t("currentStatus")}
               </h2>
               <div className="flex gap-2">
                 <button
@@ -274,7 +270,7 @@ export default function MyStockDetailClient({
                   }}
                   className="px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
                 >
-                  {t('addPurchase')}
+                  {t("addPurchase")}
                 </button>
                 <button
                   onClick={() => {
@@ -284,7 +280,7 @@ export default function MyStockDetailClient({
                   disabled={quantity === 0}
                   className="px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 rounded transition-colors disabled:text-gray-400 disabled:hover:bg-transparent"
                 >
-                  {t('sell')}
+                  {t("sell")}
                 </button>
               </div>
             </div>
@@ -293,10 +289,10 @@ export default function MyStockDetailClient({
               {/* Current Price */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">
-                  {stock.stock.isDelisted ? t('finalPrice') : t('currentPrice')}
+                  {stock.stock.isDelisted ? t("finalPrice") : t("currentPrice")}
                 </span>
                 {loading ? (
-                  <span className="text-sm text-gray-400">{t('loading')}</span>
+                  <span className="text-sm text-gray-400">{t("loading")}</span>
                 ) : price ? (
                   <div className="text-right">
                     <p
@@ -325,38 +321,41 @@ export default function MyStockDetailClient({
                             minute: "2-digit",
                           },
                         )}
-                        {t('asOf')}
+                        {t("asOf")}
                       </p>
                     )}
                   </div>
                 ) : isStale ? (
                   <span className="text-xs text-amber-600">
-                    {t('priceDataUnavailable')}
+                    {t("priceDataUnavailable")}
                     <br />
-                    {t('delistedOrSuspendedWarning')}
+                    {t("delistedOrSuspendedWarning")}
                   </span>
                 ) : (
-                  <span className="text-sm text-gray-400">{t('noPriceInfo')}</span>
+                  <span className="text-sm text-gray-400">
+                    {t("noPriceInfo")}
+                  </span>
                 )}
               </div>
 
               {/* Holdings Info */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{t('quantity')}</span>
+                <span className="text-gray-600">{t("quantity")}</span>
                 <span className="font-semibold text-gray-900">
-                  {quantity}{t('shares')}
+                  {quantity}
+                  {t("shares")}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{t('averagePrice')}</span>
+                <span className="text-gray-600">{t("averagePrice")}</span>
                 <span className="font-semibold text-gray-900">
                   ¥{averagePrice.toLocaleString()}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{t('currentValue')}</span>
+                <span className="text-gray-600">{t("currentValue")}</span>
                 <span className="font-semibold text-gray-900">
                   ¥{currentValue.toLocaleString()}
                 </span>
@@ -372,7 +371,9 @@ export default function MyStockDetailClient({
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">{t('unrealizedPL')}</span>
+                    <span className="text-sm text-gray-600">
+                      {t("unrealizedPL")}
+                    </span>
                     <div className="text-right">
                       <p
                         className={`text-2xl font-bold ${
@@ -398,34 +399,34 @@ export default function MyStockDetailClient({
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-bold text-gray-700">
-                    {t('individualSettings')}
+                    {t("individualSettings")}
                   </h3>
                   <button
                     onClick={() => setShowSettingsModal(true)}
                     className="text-xs text-blue-600 font-semibold hover:underline"
                   >
-                    {t('changeSettings')}
+                    {t("changeSettings")}
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-green-50 rounded-lg p-2.5 border border-green-100">
                     <p className="text-[10px] text-green-700 font-bold mb-0.5">
-                      {t('takeProfitLine')}
+                      {t("takeProfitLine")}
                     </p>
                     <p className="text-sm font-bold text-green-800">
                       {currentTpRate && averagePrice
                         ? `¥${Math.round(averagePrice * (1 + currentTpRate / 100)).toLocaleString()}`
-                        : t('notSet')}
+                        : t("notSet")}
                     </p>
                   </div>
                   <div className="bg-red-50 rounded-lg p-2.5 border border-red-100">
                     <p className="text-[10px] text-red-700 font-bold mb-0.5">
-                      {t('stopLossLine')}
+                      {t("stopLossLine")}
                     </p>
                     <p className="text-sm font-bold text-red-800">
                       {currentSlRate && averagePrice
                         ? `¥${Math.round(averagePrice * (1 + currentSlRate / 100)).toLocaleString()}`
-                        : t('notSet')}
+                        : t("notSet")}
                     </p>
                   </div>
                 </div>
@@ -439,21 +440,40 @@ export default function MyStockDetailClient({
               stockId={stock.stockId}
               quantity={quantity}
               onAnalysisDateLoaded={setAnalysisDate}
-              onApplyAIPrices={async ({ takeProfitPrice, stopLossPrice, averagePurchasePrice: avgPrice }) => {
-                const updates: { takeProfitRate?: number | null; stopLossRate?: number | null } = {};
+              onApplyAIPrices={async ({
+                takeProfitPrice,
+                stopLossPrice,
+                averagePurchasePrice: avgPrice,
+              }) => {
+                const updates: {
+                  takeProfitRate?: number | null;
+                  stopLossRate?: number | null;
+                } = {};
 
                 // 利確: suggestedSellPriceがない or avgPrice以下なら現在価格→それもダメなら平均取得単価(rate=0)
-                const effectiveTpPrice = takeProfitPrice != null && takeProfitPrice > avgPrice
-                  ? takeProfitPrice
-                  : currentPrice > avgPrice ? currentPrice : avgPrice;
+                const effectiveTpPrice =
+                  takeProfitPrice != null && takeProfitPrice > avgPrice
+                    ? takeProfitPrice
+                    : currentPrice > avgPrice
+                      ? currentPrice
+                      : avgPrice;
                 if (avgPrice > 0) {
-                  updates.takeProfitRate = Math.round(((effectiveTpPrice - avgPrice) / avgPrice) * 1000) / 10;
+                  updates.takeProfitRate =
+                    Math.round(
+                      ((effectiveTpPrice - avgPrice) / avgPrice) * 1000,
+                    ) / 10;
                 }
                 if (stopLossPrice != null && avgPrice > 0) {
-                  updates.stopLossRate = Math.round(((stopLossPrice - avgPrice) / avgPrice) * 1000) / 10;
+                  updates.stopLossRate =
+                    Math.round(((stopLossPrice - avgPrice) / avgPrice) * 1000) /
+                    10;
                 }
 
-                if (updates.takeProfitRate === undefined && updates.stopLossRate === undefined) return;
+                if (
+                  updates.takeProfitRate === undefined &&
+                  updates.stopLossRate === undefined
+                )
+                  return;
 
                 try {
                   const response = await fetch(`/api/user-stocks/${stock.id}`, {
@@ -464,12 +484,14 @@ export default function MyStockDetailClient({
 
                   if (!response.ok) throw new Error();
 
-                  if (updates.takeProfitRate !== undefined) setCurrentTpRate(updates.takeProfitRate);
-                  if (updates.stopLossRate !== undefined) setCurrentSlRate(updates.stopLossRate);
-                  toast.success(t('aiPriceApplied'));
+                  if (updates.takeProfitRate !== undefined)
+                    setCurrentTpRate(updates.takeProfitRate);
+                  if (updates.stopLossRate !== undefined)
+                    setCurrentSlRate(updates.stopLossRate);
+                  toast.success(t("aiPriceApplied"));
                   router.refresh();
                 } catch {
-                  toast.error(t('aiPriceApplyFailed'));
+                  toast.error(t("aiPriceApplyFailed"));
                 }
               }}
             />
@@ -479,10 +501,10 @@ export default function MyStockDetailClient({
           <section className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6">
             <Tabs
               tabs={[
-                { id: "chart", label: tTabs('chart') },
-                { id: "analysis", label: tTabs('technical') },
-                { id: "news", label: tTabs('news') },
-                { id: "details", label: tTabs('details') },
+                { id: "chart", label: tTabs("chart") },
+                { id: "analysis", label: tTabs("technical") },
+                { id: "news", label: tTabs("news") },
+                { id: "details", label: tTabs("details") },
               ]}
               defaultTab="chart"
             >
@@ -515,7 +537,7 @@ export default function MyStockDetailClient({
           {stock.transactions && stock.transactions.length > 0 && (
             <section className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6">
               <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">
-                {t('transactionHistory')}
+                {t("transactionHistory")}
               </h2>
 
               <div className="space-y-3">
@@ -532,7 +554,9 @@ export default function MyStockDetailClient({
                             : "bg-orange-100 text-orange-700"
                         }`}
                       >
-                        {transaction.type === "buy" ? t('buy') : t('sellButton')}
+                        {transaction.type === "buy"
+                          ? t("buy")
+                          : t("sellButton")}
                       </span>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
@@ -545,8 +569,8 @@ export default function MyStockDetailClient({
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-sm font-semibold text-gray-900">
-                          {transaction.quantity}{t('shares')} @ ¥
-                          {transaction.price.toLocaleString()}
+                          {transaction.quantity}
+                          {t("shares")} @ ¥{transaction.price.toLocaleString()}
                         </p>
                         <p className="text-xs text-gray-500">
                           ¥{transaction.totalAmount.toLocaleString()}
@@ -562,7 +586,7 @@ export default function MyStockDetailClient({
                             )
                           }
                           className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                          title={t('menu')}
+                          title={t("menu")}
                         >
                           <svg
                             className="w-4 h-4"
@@ -588,7 +612,7 @@ export default function MyStockDetailClient({
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                               >
-                                {t('edit')}
+                                {t("edit")}
                               </button>
                               <button
                                 onClick={() => {
@@ -597,7 +621,7 @@ export default function MyStockDetailClient({
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                               >
-                                {t('delete')}
+                                {t("delete")}
                               </button>
                             </div>
                           </>
@@ -629,14 +653,14 @@ export default function MyStockDetailClient({
                   onClick={() => setShowPurchaseDialog(true)}
                   className="px-2 py-1 text-xs font-medium text-green-600 hover:bg-green-50 rounded transition-colors"
                 >
-                  {t('purchase')}
+                  {t("purchase")}
                 </button>
                 <button
                   onClick={() => setShowTrackingModal(true)}
                   disabled={trackingStock}
                   className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
                 >
-                  {t('skip')}
+                  {t("skip")}
                 </button>
               </>
             }
@@ -655,18 +679,32 @@ export default function MyStockDetailClient({
                 }`}
               >
                 {currentTargetBuyPrice
-                  ? t('alertSet', { price: currentTargetBuyPrice.toLocaleString() })
-                  : t('setBuyAlert')}
+                  ? t("alertSet", {
+                      price: currentTargetBuyPrice.toLocaleString(),
+                    })
+                  : t("setBuyAlert")}
               </button>
             }
           />
+
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={() => setIsSimulating(true)}
+              className="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-full font-bold flex items-center gap-1.5 transition-colors"
+            >
+              {t("postPurchaseSimulation")}
+            </button>
+          </div>
 
           {/* AI Purchase Judgment & Purchase Simulation Tabs */}
           <section className="bg-white rounded-xl shadow-md mb-6">
             {/* Tab Headers */}
             <div className="flex border-b border-gray-200">
               {[
-                { id: "ai-judgment", label: t("watchlistTabs.aiPurchaseJudgment") },
+                {
+                  id: "ai-judgment",
+                  label: t("watchlistTabs.aiPurchaseJudgment"),
+                },
                 ...(purchaseSimulationData && currentPrice > 0
                   ? [{ id: "how-to-buy", label: t("watchlistTabs.howToBuy") }]
                   : []),
@@ -689,30 +727,26 @@ export default function MyStockDetailClient({
             <div className="p-4 sm:p-6">
               {watchlistTab === "ai-judgment" && (
                 <>
-                  <div className="flex justify-end mb-2">
-                    <button
-                      onClick={() => setIsSimulating(true)}
-                      className="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-full font-bold flex items-center gap-1.5 transition-colors"
-                    >
-                      {t('postPurchaseSimulation')}
-                    </button>
-                  </div>
                   <PurchaseRecommendation
                     stockId={stock.stockId}
                     onAnalysisDateLoaded={setAnalysisDate}
                   />
                 </>
               )}
-              {watchlistTab === "how-to-buy" && purchaseSimulationData && currentPrice > 0 && (
-                <PurchaseSimulation
-                  currentPrice={currentPrice}
-                  stockSector={stock.stock.sector}
-                  holdingsWithGains={purchaseSimulationData.holdingsWithGains}
-                  currentSectors={purchaseSimulationData.currentSectors}
-                  totalPortfolioValue={purchaseSimulationData.totalPortfolioValue}
-                  remainingBudget={purchaseSimulationData.remainingBudget}
-                />
-              )}
+              {watchlistTab === "how-to-buy" &&
+                purchaseSimulationData &&
+                currentPrice > 0 && (
+                  <PurchaseSimulation
+                    currentPrice={currentPrice}
+                    stockSector={stock.stock.sector}
+                    holdingsWithGains={purchaseSimulationData.holdingsWithGains}
+                    currentSectors={purchaseSimulationData.currentSectors}
+                    totalPortfolioValue={
+                      purchaseSimulationData.totalPortfolioValue
+                    }
+                    remainingBudget={purchaseSimulationData.remainingBudget}
+                  />
+                )}
             </div>
           </section>
 
@@ -764,10 +798,10 @@ export default function MyStockDetailClient({
           <section className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6">
             <Tabs
               tabs={[
-                { id: "chart", label: tTabs('chart') },
-                { id: "analysis", label: tTabs('technical') },
-                { id: "news", label: tTabs('news') },
-                { id: "details", label: tTabs('details') },
+                { id: "chart", label: tTabs("chart") },
+                { id: "analysis", label: tTabs("technical") },
+                { id: "news", label: tTabs("news") },
+                { id: "details", label: tTabs("details") },
               ]}
               defaultTab="chart"
             >
@@ -847,7 +881,7 @@ export default function MyStockDetailClient({
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-lg font-bold text-gray-900">
-                {t('trackThisStock')}
+                {t("trackThisStock")}
               </h3>
               <button
                 onClick={() => setShowTrackingModal(false)}
@@ -872,7 +906,7 @@ export default function MyStockDetailClient({
               <span className="font-semibold">{stock.stock.name}</span>
             </p>
             <p className="text-sm text-gray-500 mb-6">
-              {t('trackingDescription')}
+              {t("trackingDescription")}
             </p>
             <div className="flex gap-2">
               <button
@@ -894,7 +928,7 @@ export default function MyStockDetailClient({
                 disabled={trackingStock}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
               >
-                {trackingStock ? t('processing') : t('passForNow')}
+                {trackingStock ? t("processing") : t("passForNow")}
               </button>
               <button
                 onClick={async () => {
@@ -926,7 +960,7 @@ export default function MyStockDetailClient({
                 disabled={trackingStock}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                {trackingStock ? t('processing') : t('track')}
+                {trackingStock ? t("processing") : t("track")}
               </button>
             </div>
           </div>
@@ -938,7 +972,9 @@ export default function MyStockDetailClient({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-lg font-bold text-gray-900">{t('buyAlertTitle')}</h3>
+              <h3 className="text-lg font-bold text-gray-900">
+                {t("buyAlertTitle")}
+              </h3>
               <button
                 onClick={() => setShowBuyAlertModal(false)}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -959,12 +995,12 @@ export default function MyStockDetailClient({
               </button>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              {t('buyAlertDescription')}
+              {t("buyAlertDescription")}
             </p>
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('targetBuyPrice')}
+                {t("targetBuyPrice")}
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
@@ -987,7 +1023,7 @@ export default function MyStockDetailClient({
                 onClick={() => setShowBuyAlertModal(false)}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
               >
-                {t('cancel')}
+                {t("cancel")}
               </button>
               <button
                 onClick={async () => {
@@ -1020,13 +1056,11 @@ export default function MyStockDetailClient({
                 disabled={savingTargetPrice}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                {savingTargetPrice ? t('saving') : t('save')}
+                {savingTargetPrice ? t("saving") : t("save")}
               </button>
             </div>
 
-            <p className="text-xs text-gray-500 mt-3">
-              {t('buyAlertNote')}
-            </p>
+            <p className="text-xs text-gray-500 mt-3">{t("buyAlertNote")}</p>
           </div>
         </div>
       )}
