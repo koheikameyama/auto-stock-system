@@ -6,7 +6,6 @@ import {
   UPDATE_SCHEDULES,
   PORTFOLIO_STATUS_CONFIG,
   MARKET_SIGNAL_CONFIG,
-  SELL_TIMING,
 } from "@/lib/constants";
 import InvestmentStyleTabs from "./InvestmentStyleTabs";
 
@@ -785,44 +784,16 @@ export default function StockAnalysisCard({
                           成行での売却を検討
                         </span>
                       </div>
-                      {effectiveAnalysis.suggestedSellPrice && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-gray-500">AI推奨売却価格:</span>
-                          <span className="font-bold text-gray-800">
-                            {effectiveAnalysis.suggestedSellPrice.toLocaleString()}円
-                          </span>
-                        </div>
-                      )}
-                      {(() => {
-                        const currentPrice = effectiveAnalysis.currentPrice;
-                        const avgPrice = effectiveAnalysis.averagePurchasePrice;
-                        if (currentPrice && avgPrice) {
-                          const diffPercent =
-                            ((currentPrice - avgPrice) / avgPrice) * 100;
-                          if (
-                            diffPercent >= 0 &&
-                            diffPercent <=
-                              SELL_TIMING.NEAR_AVERAGE_PRICE_THRESHOLD
-                          ) {
-                            const suggestedLimitPrice = Math.round(
-                              avgPrice * 1.01,
-                            );
-                            return (
-                              <p className="text-xs text-blue-600 mt-0.5">
-                                💡 平均購入価格（{avgPrice.toLocaleString()}
-                                円）付近のため、
-                                {suggestedLimitPrice.toLocaleString()}
-                                円の指値注文で少し利益を確保する方法もあります
-                              </p>
-                            );
-                          }
-                        }
-                        return currentPrice ? (
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            現在価格: {currentPrice.toLocaleString()}円
-                          </p>
-                        ) : null;
-                      })()}
+                      {effectiveAnalysis.suggestedSellPrice ? (
+                        <p className="text-xs text-blue-600 mt-0.5">
+                          💡 {effectiveAnalysis.suggestedSellPrice.toLocaleString()}
+                          円の指値注文で利益を確保する方法もあります
+                        </p>
+                      ) : effectiveAnalysis.currentPrice ? (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          現在価格: {effectiveAnalysis.currentPrice.toLocaleString()}円
+                        </p>
+                      ) : null}
                     </div>
                   )
                 ) : (
