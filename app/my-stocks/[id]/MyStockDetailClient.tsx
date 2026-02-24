@@ -439,6 +439,35 @@ export default function MyStockDetailClient({
               stockId={stock.stockId}
               quantity={quantity}
               onAnalysisDateLoaded={setAnalysisDate}
+              onApplyAIPrices={async ({ takeProfitPrice, stopLossPrice, averagePurchasePrice: avgPrice }) => {
+                const updates: { takeProfitRate?: number | null; stopLossRate?: number | null } = {};
+
+                if (takeProfitPrice && avgPrice > 0) {
+                  updates.takeProfitRate = Math.round(((takeProfitPrice - avgPrice) / avgPrice) * 1000) / 10;
+                }
+                if (stopLossPrice && avgPrice > 0) {
+                  updates.stopLossRate = Math.round(((stopLossPrice - avgPrice) / avgPrice) * 1000) / 10;
+                }
+
+                if (!updates.takeProfitRate && !updates.stopLossRate) return;
+
+                try {
+                  const response = await fetch(`/api/user-stocks/${stock.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updates),
+                  });
+
+                  if (!response.ok) throw new Error();
+
+                  if (updates.takeProfitRate !== undefined) setCurrentTpRate(updates.takeProfitRate);
+                  if (updates.stopLossRate !== undefined) setCurrentSlRate(updates.stopLossRate);
+                  toast.success(t('aiPriceApplied'));
+                  router.refresh();
+                } catch {
+                  toast.error(t('aiPriceApplyFailed'));
+                }
+              }}
             />
           </section>
 

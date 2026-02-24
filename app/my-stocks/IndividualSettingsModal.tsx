@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 interface IndividualSettingsModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export default function IndividualSettingsModal({
   isNewAddition = false,
 }: IndividualSettingsModalProps) {
   const router = useRouter();
+  const t = useTranslations('stocks.detail');
 
   // ユーザー入力（％）
   const [tpRate, setTpRate] = useState<string>("");
@@ -38,6 +40,7 @@ export default function IndividualSettingsModal({
   const [slPriceHint, setSlPriceHint] = useState<number | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [loadingDefaults, setLoadingDefaults] = useState(false);
 
   // 初期値のセット
   useEffect(() => {
@@ -104,6 +107,25 @@ export default function IndividualSettingsModal({
     }
   };
 
+  const handleResetToDefault = async () => {
+    setLoadingDefaults(true);
+    try {
+      const response = await fetch("/api/settings");
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      const settings = data.settings;
+
+      setTpRate(settings.targetReturnRate != null ? String(settings.targetReturnRate) : "");
+      setSlRate(settings.stopLossRate != null ? String(Math.abs(settings.stopLossRate)) : "");
+
+      toast.success(t('defaultsLoaded'));
+    } catch {
+      toast.error(t('defaultsLoadFailed'));
+    } finally {
+      setLoadingDefaults(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
@@ -146,6 +168,18 @@ export default function IndividualSettingsModal({
               : "この銘柄固有の売却ラインを％で設定します。"}
           </p>
         </div>
+
+        {!isNewAddition && (
+          <div className="mb-4 text-right">
+            <button
+              onClick={handleResetToDefault}
+              disabled={loadingDefaults}
+              className="text-xs text-gray-500 hover:text-blue-600 underline disabled:text-gray-300 transition-colors"
+            >
+              {loadingDefaults ? t('loadingDefaults') : t('resetToDefault')}
+            </button>
+          </div>
+        )}
 
         <div className="space-y-5 mb-6">
           {/* 利確設定 */}
