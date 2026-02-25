@@ -750,7 +750,7 @@ export default function StockAnalysisCard({
                         <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-amber-700">
-                              戻り売りの目安（25日移動平均線）
+                              戻り売りの目安
                             </span>
                             <span className="text-base font-bold text-amber-800">
                               {effectiveAnalysis.sellTargetPrice.toLocaleString()}円

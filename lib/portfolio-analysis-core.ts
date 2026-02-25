@@ -625,6 +625,11 @@ export async function executePortfolioAnalysis(
     }
   }
 
+  // SMA25がない場合のフォールバック: suggestedSellPriceを使用
+  if (!sellTargetPrice && sellTiming === "rebound" && result.suggestedSellPrice) {
+    sellTargetPrice = result.suggestedSellPrice;
+  }
+
   // --- 投資スタイル別のセーフティルールを適用 ---
   const styleAnalyses = applyPortfolioStyleSafetyRules({
     styleAnalyses: Object.fromEntries(
@@ -1140,6 +1145,11 @@ export async function executeSimulatedPortfolioAnalysis(
     if (!sellTargetPrice && sma25 !== null) {
       sellTargetPrice = sma25;
     }
+  }
+
+  // SMA25がない場合のフォールバック: suggestedSellPriceを使用
+  if (!sellTargetPrice && sellTiming === "rebound" && result.suggestedSellPrice) {
+    sellTargetPrice = result.suggestedSellPrice;
   }
 
   // --- 投資スタイル別のセーフティルールを適用 ---
