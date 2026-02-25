@@ -620,12 +620,20 @@ export default function StockAnalysisCard({
                             !isTargetReached &&
                             Math.abs(priceDiff / currentPrice) < 0.01;
 
+                          const takeProfitRate = effectiveAnalysis?.suggestedTakeProfitRate;
+                          const takeProfitPercent = takeProfitRate ? Math.round(takeProfitRate * 100) : null;
+
                           return (
                             <>
                               <p className="text-xs text-gray-500">売却目標</p>
                               <p className="text-base font-bold text-green-600">
                                 {`${formatPrice(limitPriceNum)}円`}
                               </p>
+                              {takeProfitPercent && (
+                                <p className="text-xs text-gray-400">
+                                  +{takeProfitPercent}%目安
+                                </p>
+                              )}
                               {currentPrice &&
                                 priceDiff > 0 &&
                                 !isNearTarget && (
@@ -665,6 +673,9 @@ export default function StockAnalysisCard({
                           currentPrice &&
                           Math.abs(priceDiff / currentPrice) < 0.03; // 3%以内なら注意
 
+                        const stopLossRate = effectiveAnalysis?.suggestedStopLossRate;
+                        const stopLossRatePercent = stopLossRate ? Math.round(stopLossRate * 100) : null;
+
                         return (
                           <>
                             <p className="text-xs text-gray-500">
@@ -673,6 +684,11 @@ export default function StockAnalysisCard({
                             <p className="text-base font-bold text-red-600">
                               {formatPrice(stopLossPriceNum)}円
                             </p>
+                            {stopLossRatePercent && (
+                              <p className="text-xs text-gray-400">
+                                -{stopLossRatePercent}%目安
+                              </p>
+                            )}
                             {currentPrice && priceDiff < 0 && (
                               <p
                                 className={`text-xs ${isNearStopLoss ? "text-red-600 font-semibold" : "text-gray-500"}`}
@@ -704,46 +720,6 @@ export default function StockAnalysisCard({
                     AI売却目標を利確・損切りラインに反映
                   </button>
                 )}
-              </div>
-            );
-          })()}
-          {/* リスク管理目安（撤退ライン率・利確率） */}
-          {(() => {
-            const stopLoss = effectiveAnalysis?.suggestedStopLossRate;
-            const takeProfit = effectiveAnalysis?.suggestedTakeProfitRate;
-            if (!stopLoss && !takeProfit) return null;
-
-            const stopLossPercent = stopLoss ? Math.round(stopLoss * 100) : null;
-            const takeProfitPercent = takeProfit ? Math.round(takeProfit * 100) : null;
-
-            return (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
-                <p className="text-sm font-semibold text-gray-800 mb-2">
-                  💡 リスク管理目安
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {stopLossPercent && (
-                    <div>
-                      <p className="text-xs text-gray-500">撤退ライン</p>
-                      <p className="text-base font-bold text-red-600">-{stopLossPercent}%</p>
-                      <p className="text-xs text-gray-400">
-                        現在価格から{stopLossPercent}%下落が撤退目安
-                      </p>
-                    </div>
-                  )}
-                  {takeProfitPercent && (
-                    <div>
-                      <p className="text-xs text-gray-500">利確目標</p>
-                      <p className="text-base font-bold text-green-600">+{takeProfitPercent}%</p>
-                      <p className="text-xs text-gray-400">
-                        現在価格から{takeProfitPercent}%上昇が利確目安
-                      </p>
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  あなたの投資スタイルとこの銘柄のボラティリティに基づくAI推奨値です
-                </p>
               </div>
             );
           })()}
