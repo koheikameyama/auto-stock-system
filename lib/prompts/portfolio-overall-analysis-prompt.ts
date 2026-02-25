@@ -193,7 +193,7 @@ ${upcomingEarningsText}
 }
 
 【日次コメンタリーの指針】
-- stockHighlightsは保有銘柄すべてについて記載する（値動きが大きい順に並べる）
+- stockHighlightsは保有銘柄すべてと本日全売却した銘柄（【本日全売却】マーク付き）について記載する（値動きが大きい順に並べる）
 - soldStocksAnalysisは本日の売却取引がある場合のみ記載（なければ空配列）
 - sectorHighlightsはポートフォリオに関連するセクターのみ記載
 - tomorrowWatchpointsは決算予定、テクニカル指標のシグナル、セクター動向から注目ポイントを2-4個程度

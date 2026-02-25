@@ -735,19 +735,7 @@ export async function generatePortfolioOverallAnalysis(userId: string): Promise<
 
   // === 日次コメンタリー用データ収集 ===
 
-  // 銘柄別の日次値動きテキスト
-  const stockDailyMovementsText = portfolioStocksData
-    .map(s => {
-      const daily = s.dailyChangeRate != null ? `前日比 ${s.dailyChangeRate >= 0 ? "+" : ""}${s.dailyChangeRate.toFixed(1)}%` : "前日比 データなし"
-      const weekly = s.weekChangeRate != null ? `週間 ${s.weekChangeRate >= 0 ? "+" : ""}${s.weekChangeRate.toFixed(1)}%` : ""
-      const ma = s.maDeviationRate != null ? `MA乖離 ${s.maDeviationRate >= 0 ? "+" : ""}${s.maDeviationRate.toFixed(1)}%` : ""
-      const vol = s.volumeRatio != null ? `出来高比 ${s.volumeRatio.toFixed(1)}倍` : ""
-      const parts = [daily, weekly, ma, vol].filter(Boolean).join(", ")
-      return `- ${s.name}（${s.tickerCode}）: ${parts}`
-    })
-    .join("\n")
-
-  // 本日の売却取引を取得
+  // 本日の売却取引を取得（日次値動きテキストで全売却銘柄も含めるため先に取得）
   const todayForDB = getTodayForDB()
   const tomorrowForDB = new Date(todayForDB.getTime() + 86400000)
 
@@ -771,6 +759,38 @@ export async function generatePortfolioOverallAnalysis(userId: string): Promise<
       },
     },
   })
+
+  // 今日全売却した銘柄のstockIdを特定
+  const todaySoldStockIds = new Set(todaySellTransactions.map(tx => tx.stockId))
+
+  // 今日全売却した銘柄の日次データを収集（portfolioStocksDataに含まれないもの）
+  const portfolioStockIds = new Set(portfolioStocksData.map(s => s.stockId))
+  const fullySoldTodayMovements = user.portfolioStocks
+    .filter(ps => {
+      const { quantity } = calculatePortfolioFromTransactions(ps.transactions)
+      return quantity <= 0 && todaySoldStockIds.has(ps.stockId) && !portfolioStockIds.has(ps.stockId)
+    })
+    .map(ps => {
+      const stock = ps.stock
+      const daily = stock.dailyChangeRate != null ? `前日比 ${Number(stock.dailyChangeRate) >= 0 ? "+" : ""}${Number(stock.dailyChangeRate).toFixed(1)}%` : "前日比 データなし"
+      const weekly = stock.weekChangeRate != null ? `週間 ${Number(stock.weekChangeRate) >= 0 ? "+" : ""}${Number(stock.weekChangeRate).toFixed(1)}%` : ""
+      const ma = stock.maDeviationRate != null ? `MA乖離 ${Number(stock.maDeviationRate) >= 0 ? "+" : ""}${Number(stock.maDeviationRate).toFixed(1)}%` : ""
+      const vol = stock.volumeRatio != null ? `出来高比 ${Number(stock.volumeRatio).toFixed(1)}倍` : ""
+      const parts = [daily, weekly, ma, vol].filter(Boolean).join(", ")
+      return `- ${stock.name}（${stock.tickerCode}）【本日全売却】: ${parts}`
+    })
+
+  // 銘柄別の日次値動きテキスト（保有中 + 今日全売却した銘柄）
+  const holdingMovements = portfolioStocksData
+    .map(s => {
+      const daily = s.dailyChangeRate != null ? `前日比 ${s.dailyChangeRate >= 0 ? "+" : ""}${s.dailyChangeRate.toFixed(1)}%` : "前日比 データなし"
+      const weekly = s.weekChangeRate != null ? `週間 ${s.weekChangeRate >= 0 ? "+" : ""}${s.weekChangeRate.toFixed(1)}%` : ""
+      const ma = s.maDeviationRate != null ? `MA乖離 ${s.maDeviationRate >= 0 ? "+" : ""}${s.maDeviationRate.toFixed(1)}%` : ""
+      const vol = s.volumeRatio != null ? `出来高比 ${s.volumeRatio.toFixed(1)}倍` : ""
+      const parts = [daily, weekly, ma, vol].filter(Boolean).join(", ")
+      return `- ${s.name}（${s.tickerCode}）: ${parts}`
+    })
+  const stockDailyMovementsText = [...holdingMovements, ...fullySoldTodayMovements].join("\n")
 
   const soldStocksText = todaySellTransactions.length > 0
     ? todaySellTransactions.map(tx => {
