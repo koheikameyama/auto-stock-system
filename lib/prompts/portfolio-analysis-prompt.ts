@@ -138,8 +138,6 @@ ${newsContext}${marketContext}${sectorTrendContext}
   "shortTerm": "【必須】テクニカル指標・ニュース等の具体的な根拠を1-2文で述べた後、今週の判断を1文で結論づける。合計2-3文。感情的な励ましは書かない。",
   "mediumTerm": "【必須】ファンダメンタル・中期トレンドの根拠を1-2文で述べた後、今月の判断を1文で結論づける。合計2-3文。感情的な励ましは書かない。",
   "longTerm": "【必須】事業展望・財務状況の根拠を1-2文で述べた後、長期継続の判断を1文で結論づける。合計2-3文。感情的な励ましは書かない。",
-  "suggestedSellPrice": 売却目標価格（数値のみ、円単位、現在価格・平均取得単価・市場分析を総合的に考慮）,
-  "suggestedStopLossPrice": 損切りライン価格（数値のみ、円単位、現在価格と平均取得単価を考慮した適切な水準）,
   "shortTermTrend": "up" | "neutral" | "down",
   "shortTermPriceLow": 短期予測の下限価格（数値のみ）,
   "shortTermPriceHigh": 短期予測の上限価格（数値のみ）,
@@ -158,7 +156,9 @@ ${newsContext}${marketContext}${sectorTrendContext}
       "shortTerm": "慎重派視点での今週の判断（2-3文）",
       "sellReason": "売却理由（sellの場合のみ、holdやbuyの場合はnull）",
       "sellCondition": "売却条件（sellの場合のみ、holdやbuyの場合はnull）",
-      "suggestedSellPercent": 推奨売却割合（25, 50, 75, 100のいずれか。sellの場合のみ、holdやbuyの場合はnull）
+      "suggestedSellPercent": 推奨売却割合（25, 50, 75, 100のいずれか。sellの場合のみ、holdやbuyの場合はnull）,
+      "suggestedSellPrice": 売却目標価格（慎重派: 早めの利確水準。数値のみ、円単位）,
+      "suggestedStopLossPrice": 損切りライン価格（慎重派: 狭めの損切り水準。数値のみ、円単位）
     },
     "BALANCED": {
       "recommendation": "buy" | "hold" | "sell",
@@ -168,7 +168,9 @@ ${newsContext}${marketContext}${sectorTrendContext}
       "shortTerm": "バランス型視点での今週の判断（2-3文）",
       "sellReason": "売却理由（sellの場合のみ、holdやbuyの場合はnull）",
       "sellCondition": "売却条件（sellの場合のみ、holdやbuyの場合はnull）",
-      "suggestedSellPercent": 推奨売却割合（25, 50, 75, 100のいずれか。sellの場合のみ、holdやbuyの場合はnull）
+      "suggestedSellPercent": 推奨売却割合（25, 50, 75, 100のいずれか。sellの場合のみ、holdやbuyの場合はnull）,
+      "suggestedSellPrice": 売却目標価格（バランス型: 中間的な利確水準。数値のみ、円単位）,
+      "suggestedStopLossPrice": 損切りライン価格（バランス型: 中間的な損切り水準。数値のみ、円単位）
     },
     "AGGRESSIVE": {
       "recommendation": "buy" | "hold" | "sell",
@@ -178,7 +180,9 @@ ${newsContext}${marketContext}${sectorTrendContext}
       "shortTerm": "積極派視点での今週の判断（2-3文）",
       "sellReason": "売却理由（sellの場合のみ、holdやbuyの場合はnull）",
       "sellCondition": "売却条件（sellの場合のみ、holdやbuyの場合はnull）",
-      "suggestedSellPercent": 推奨売却割合（25, 50, 75, 100のいずれか。sellの場合のみ、holdやbuyの場合はnull）
+      "suggestedSellPercent": 推奨売却割合（25, 50, 75, 100のいずれか。sellの場合のみ、holdやbuyの場合はnull）,
+      "suggestedSellPrice": 売却目標価格（積極派: 高めの利確目標。数値のみ、円単位）,
+      "suggestedStopLossPrice": 損切りライン価格（積極派: 広めの損切り水準。数値のみ、円単位）
     }
   }
 }
@@ -215,18 +219,26 @@ ${PROMPT_NEWS_CONSTRAINTS}
 - shortTerm: 主にテクニカル指標を根拠として、「様子見」「買い増し検討」「売却検討」のいずれかの判断を必ず結論に含める
 - mediumTerm: 主にファンダメンタルとトレンドを根拠として、今月の見通しと推奨行動を必ず結論に含める
 - longTerm: 主に事業展望・財務状況を根拠として、長期継続の判断を必ず結論に含める
-- suggestedSellPrice: 現在価格と平均取得単価の両方を考慮し、適切な売却目標価格を提案
-- suggestedStopLossPrice: 平均取得単価を基準に、現在の含み益/含み損を考慮した適切な損切りラインを提案
-- sellCondition: どの指標がどの水準になったら売るかを具体的に記述する。価格に言及する場合はsuggestedStopLossPriceと同じ値を使い、整合性を保つこと
+- suggestedSellPrice / suggestedStopLossPrice: 各スタイルごとに異なる水準を設定すること
+  - 慎重派: 早めの利確（控えめな目標）、狭い損切り（損失を最小化）
+  - バランス型: 中間的な水準
+  - 積極派: 高めの利確目標、広い損切り（変動に耐える余地を持たせる）
+- sellCondition: どの指標がどの水準になったら売るかを具体的に記述する。価格に言及する場合は同じスタイルのsuggestedStopLossPriceと必ず同じ値を使い、整合性を保つこと
 - 損切りも重要な選択肢: 損失が大きく、回復の見込みが薄い場合は損切りを提案する
 
-【利確・損切りラインの指針】
+【利確・損切りラインの指針（スタイルごとに設定）】
 - 利確目標（suggestedSellPrice）:
   - 含み益がある場合: 現在の利益を確保しつつ、さらなる上昇余地を考慮した目標価格
   - 含み損がある場合: 平均取得単価への回復を目標とするか、市場分析に基づく現実的な水準
+  - 慎重派: 控えめな利確目標（例: +5〜10%程度の利益で確定）
+  - バランス型: 中間的な利確目標
+  - 積極派: 高めの利確目標（例: +15〜20%以上を狙う）
 - 損切りライン（suggestedStopLossPrice）:
   - 含み益がある場合: 利益が消えないライン（例：平均取得単価の少し上）
-  - 含み損がある場合: これ以上の損失拡大を防ぐライン（例：現在価格から-5%〜-10%）
+  - 含み損がある場合: これ以上の損失拡大を防ぐライン
+  - 慎重派: 狭い損切りライン（例: 現在価格から-3〜-5%）
+  - バランス型: 中間的な損切りライン（例: 現在価格から-5〜-8%）
+  - 積極派: 広い損切りライン（例: 現在価格から-8〜-12%）
 
 【売却割合の判断指針】
 - suggestedSellPercent: 市場状況と損益に応じて適切な売却割合を判断

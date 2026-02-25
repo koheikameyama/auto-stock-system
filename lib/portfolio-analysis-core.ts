@@ -372,8 +372,6 @@ export async function executePortfolioAnalysis(
             shortTerm: { type: "string" },
             mediumTerm: { type: "string" },
             longTerm: { type: "string" },
-            suggestedSellPrice: { type: ["number", "null"] },
-            suggestedStopLossPrice: { type: ["number", "null"] },
             shortTermTrend: { type: "string", enum: ["up", "neutral", "down"] },
             shortTermPriceLow: { type: "number" },
             shortTermPriceHigh: { type: "number" },
@@ -407,8 +405,10 @@ export async function executePortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
+                    suggestedSellPrice: { type: ["number", "null"] },
+                    suggestedStopLossPrice: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
                   additionalProperties: false,
                 },
                 BALANCED: {
@@ -422,8 +422,10 @@ export async function executePortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
+                    suggestedSellPrice: { type: ["number", "null"] },
+                    suggestedStopLossPrice: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
                   additionalProperties: false,
                 },
                 AGGRESSIVE: {
@@ -437,8 +439,10 @@ export async function executePortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
+                    suggestedSellPrice: { type: ["number", "null"] },
+                    suggestedStopLossPrice: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
                   additionalProperties: false,
                 },
               },
@@ -451,8 +455,6 @@ export async function executePortfolioAnalysis(
             "shortTerm",
             "mediumTerm",
             "longTerm",
-            "suggestedSellPrice",
-            "suggestedStopLossPrice",
             "shortTermTrend",
             "shortTermPriceLow",
             "shortTermPriceHigh",
@@ -626,8 +628,8 @@ export async function executePortfolioAnalysis(
   }
 
   // SMA25がない場合のフォールバック: suggestedSellPriceを使用
-  if (!sellTargetPrice && sellTiming === "rebound" && result.suggestedSellPrice) {
-    sellTargetPrice = result.suggestedSellPrice;
+  if (!sellTargetPrice && sellTiming === "rebound" && userStyleResult.suggestedSellPrice) {
+    sellTargetPrice = userStyleResult.suggestedSellPrice;
   }
 
   // --- 投資スタイル別のセーフティルールを適用 ---
@@ -658,7 +660,7 @@ export async function executePortfolioAnalysis(
         longTerm: result.longTerm,
         statusType,
         marketSignal: result.marketSignal || null,
-        suggestedSellPrice: result.suggestedSellPrice || null,
+        suggestedSellPrice: userStyleResult.suggestedSellPrice || null,
         suggestedSellPercent: userStyleResult.suggestedSellPercent || null,
         sellReason: userStyleResult.sellReason || null,
         sellCondition: userStyleResult.sellCondition || null,
@@ -686,8 +688,8 @@ export async function executePortfolioAnalysis(
         recommendation: userStyleResult.recommendation,
         advice: userStyleResult.advice || userStyleResult.shortTerm || "",
         confidence: userStyleResult.confidence || 0.7,
-        limitPrice: result.suggestedSellPrice || null,
-        stopLossPrice: result.suggestedStopLossPrice || null,
+        limitPrice: userStyleResult.suggestedSellPrice || null,
+        stopLossPrice: userStyleResult.suggestedStopLossPrice || null,
         statusType: statusType || null,
         sellCondition: userStyleResult.sellCondition || null,
         styleAnalyses: styleAnalyses ? JSON.parse(JSON.stringify(styleAnalyses)) : undefined,
@@ -728,7 +730,7 @@ export async function executePortfolioAnalysis(
     longTermText: result.longTerm,
     statusType,
     marketSignal: result.marketSignal || null,
-    suggestedSellPrice: result.suggestedSellPrice || null,
+    suggestedSellPrice: userStyleResult.suggestedSellPrice || null,
     suggestedSellPercent: userStyleResult.suggestedSellPercent || null,
     sellReason: userStyleResult.sellReason || null,
     sellCondition: userStyleResult.sellCondition || null,
@@ -908,8 +910,6 @@ export async function executeSimulatedPortfolioAnalysis(
             shortTerm: { type: "string" },
             mediumTerm: { type: "string" },
             longTerm: { type: "string" },
-            suggestedSellPrice: { type: ["number", "null"] },
-            suggestedStopLossPrice: { type: ["number", "null"] },
             shortTermTrend: { type: "string", enum: ["up", "neutral", "down"] },
             shortTermPriceLow: { type: "number" },
             shortTermPriceHigh: { type: "number" },
@@ -935,8 +935,10 @@ export async function executeSimulatedPortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
+                    suggestedSellPrice: { type: ["number", "null"] },
+                    suggestedStopLossPrice: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
                   additionalProperties: false,
                 },
                 BALANCED: {
@@ -950,8 +952,10 @@ export async function executeSimulatedPortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
+                    suggestedSellPrice: { type: ["number", "null"] },
+                    suggestedStopLossPrice: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
                   additionalProperties: false,
                 },
                 AGGRESSIVE: {
@@ -965,8 +969,10 @@ export async function executeSimulatedPortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
+                    suggestedSellPrice: { type: ["number", "null"] },
+                    suggestedStopLossPrice: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
                   additionalProperties: false,
                 },
               },
@@ -979,8 +985,6 @@ export async function executeSimulatedPortfolioAnalysis(
             "shortTerm",
             "mediumTerm",
             "longTerm",
-            "suggestedSellPrice",
-            "suggestedStopLossPrice",
             "shortTermTrend",
             "shortTermPriceLow",
             "shortTermPriceHigh",
@@ -1148,8 +1152,8 @@ export async function executeSimulatedPortfolioAnalysis(
   }
 
   // SMA25がない場合のフォールバック: suggestedSellPriceを使用
-  if (!sellTargetPrice && sellTiming === "rebound" && result.suggestedSellPrice) {
-    sellTargetPrice = result.suggestedSellPrice;
+  if (!sellTargetPrice && sellTiming === "rebound" && userStyleResult.suggestedSellPrice) {
+    sellTargetPrice = userStyleResult.suggestedSellPrice;
   }
 
   // --- 投資スタイル別のセーフティルールを適用 ---
@@ -1179,7 +1183,7 @@ export async function executeSimulatedPortfolioAnalysis(
     longTermText: result.longTerm,
     statusType,
     marketSignal: result.marketSignal || null,
-    suggestedSellPrice: result.suggestedSellPrice || null,
+    suggestedSellPrice: userStyleResult.suggestedSellPrice || null,
     suggestedSellPercent: userStyleResult.suggestedSellPercent || null,
     sellReason: userStyleResult.sellReason || null,
     sellCondition: userStyleResult.sellCondition || null,
@@ -1211,8 +1215,8 @@ export async function executeSimulatedPortfolioAnalysis(
     longTermPriceHigh: result.longTermPriceHigh,
     advice: userStyleResult.advice,
     confidence: userStyleResult.confidence,
-    limitPrice: result.suggestedSellPrice,
-    stopLossPrice: result.suggestedStopLossPrice,
+    limitPrice: userStyleResult.suggestedSellPrice,
+    stopLossPrice: userStyleResult.suggestedStopLossPrice,
     analyzedAt: now.toISOString(),
     styleAnalyses,
   };

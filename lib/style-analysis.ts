@@ -41,6 +41,8 @@ export interface PortfolioStyleAnalysis {
   suggestedSellPercent: number | null;
   sellTiming: string | null;
   sellTargetPrice: number | null;
+  suggestedSellPrice: number | null;
+  suggestedStopLossPrice: number | null;
 }
 
 /** 全3スタイルの分析結果マップ */

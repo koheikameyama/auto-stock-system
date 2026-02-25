@@ -82,6 +82,8 @@ interface StyleAnalysisData {
   sellReason?: string | null;
   sellCondition?: string | null;
   suggestedSellPercent?: number | null;
+  suggestedSellPrice?: number | null;
+  suggestedStopLossPrice?: number | null;
 }
 
 
@@ -366,6 +368,12 @@ export default function StockAnalysisCard({
               ...(styleData.sellTiming !== undefined ? { sellTiming: styleData.sellTiming } : {}),
               ...(styleData.sellTargetPrice !== undefined ? { sellTargetPrice: styleData.sellTargetPrice } : {}),
               ...(styleData.buyTiming !== undefined ? { buyTiming: styleData.buyTiming } : {}),
+              ...(styleData.suggestedSellPrice !== undefined
+                ? { suggestedSellPrice: styleData.suggestedSellPrice, limitPrice: styleData.suggestedSellPrice }
+                : {}),
+              ...(styleData.suggestedStopLossPrice !== undefined
+                ? { stopLossPrice: styleData.suggestedStopLossPrice }
+                : {}),
             }
           : {}),
       }
@@ -787,7 +795,7 @@ export default function StockAnalysisCard({
                       {effectiveAnalysis.suggestedSellPrice && effectiveAnalysis.averagePurchasePrice && effectiveAnalysis.suggestedSellPrice > effectiveAnalysis.averagePurchasePrice ? (
                         <p className="text-xs text-blue-600 mt-0.5">
                           💡 {effectiveAnalysis.suggestedSellPrice.toLocaleString()}
-                          円の指値注文で利益を確保する方法もあります
+                          円の指値注文で+{(effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice).toLocaleString()}円（+{((effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice) / effectiveAnalysis.averagePurchasePrice * 100).toFixed(1)}%）の利益を確定できます
                         </p>
                       ) : effectiveAnalysis.currentPrice ? (
                         <p className="text-xs text-gray-500 mt-0.5">
