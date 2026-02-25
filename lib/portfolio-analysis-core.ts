@@ -57,6 +57,38 @@ export class AnalysisError extends Error {
   }
 }
 
+/**
+ * AIが出力した率（rate）から売却目標価格・撤退ライン価格を決定論的に算出する。
+ * トレーリングストップ: 含み益がある場合、撤退ラインの下限は平均取得単価とする。
+ */
+function calculatePricesFromRates(params: {
+  currentPrice: number;
+  averagePrice: number;
+  takeProfitRate: number | null;
+  stopLossRate: number | null;
+}): {
+  suggestedSellPrice: number | null;
+  suggestedStopLossPrice: number | null;
+} {
+  const { currentPrice, averagePrice, takeProfitRate, stopLossRate } = params;
+
+  const suggestedSellPrice =
+    takeProfitRate != null
+      ? Math.round(currentPrice * (1 + takeProfitRate))
+      : null;
+
+  let suggestedStopLossPrice: number | null = null;
+  if (stopLossRate != null) {
+    const rawStopLoss = Math.round(currentPrice * (1 - stopLossRate));
+    const hasUnrealizedGain = currentPrice > averagePrice;
+    suggestedStopLossPrice = hasUnrealizedGain
+      ? Math.max(rawStopLoss, Math.round(averagePrice))
+      : rawStopLoss;
+  }
+
+  return { suggestedSellPrice, suggestedStopLossPrice };
+}
+
 export interface PortfolioAnalysisResult {
   shortTerm: string;
   shortTermText: string;
@@ -356,7 +388,7 @@ export async function executePortfolioAnalysis(
       { role: "user", content: prompt },
     ],
     temperature: 0.3,
-    max_tokens: 1400,
+    max_tokens: 1600,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -405,10 +437,10 @@ export async function executePortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
-                    suggestedSellPrice: { type: ["number", "null"] },
-                    suggestedStopLossPrice: { type: ["number", "null"] },
+                    suggestedStopLossRate: { type: ["number", "null"] },
+                    suggestedTakeProfitRate: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedStopLossRate", "suggestedTakeProfitRate"],
                   additionalProperties: false,
                 },
                 BALANCED: {
@@ -422,10 +454,10 @@ export async function executePortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
-                    suggestedSellPrice: { type: ["number", "null"] },
-                    suggestedStopLossPrice: { type: ["number", "null"] },
+                    suggestedStopLossRate: { type: ["number", "null"] },
+                    suggestedTakeProfitRate: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedStopLossRate", "suggestedTakeProfitRate"],
                   additionalProperties: false,
                 },
                 AGGRESSIVE: {
@@ -439,10 +471,10 @@ export async function executePortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
-                    suggestedSellPrice: { type: ["number", "null"] },
-                    suggestedStopLossPrice: { type: ["number", "null"] },
+                    suggestedStopLossRate: { type: ["number", "null"] },
+                    suggestedTakeProfitRate: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedStopLossRate", "suggestedTakeProfitRate"],
                   additionalProperties: false,
                 },
               },
@@ -567,6 +599,22 @@ export async function executePortfolioAnalysis(
         sa.shortTerm = `【様子見を推奨】市場全体が${marketData.weekChangeRate.toFixed(1)}%下落する中、この銘柄は相対的に+${relVsMarket.toFixed(1)}%強く、地合い要因による下落と判断しました。AIの短期分析: ${sa.shortTerm}`;
         sa.advice = `市場全体の下落（日経平均${marketData.weekChangeRate.toFixed(1)}%）に対してアウトパフォームしており、地合い要因の下落とみられます。様子見を推奨します。`;
       }
+    }
+  }
+
+  // --- 率から絶対価格を決定論的に算出（トレーリングストップ付き） ---
+  if (currentPrice && averagePrice > 0) {
+    for (const styleKey of ALL_STYLE_KEYS) {
+      const sa = result.styleAnalyses[styleKey];
+      const { suggestedSellPrice, suggestedStopLossPrice } =
+        calculatePricesFromRates({
+          currentPrice,
+          averagePrice,
+          takeProfitRate: sa.suggestedTakeProfitRate,
+          stopLossRate: sa.suggestedStopLossRate,
+        });
+      sa.suggestedSellPrice = suggestedSellPrice;
+      sa.suggestedStopLossPrice = suggestedStopLossPrice;
     }
   }
 
@@ -894,7 +942,7 @@ export async function executeSimulatedPortfolioAnalysis(
       { role: "user", content: prompt },
     ],
     temperature: 0.3,
-    max_tokens: 1400,
+    max_tokens: 1600,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -935,10 +983,10 @@ export async function executeSimulatedPortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
-                    suggestedSellPrice: { type: ["number", "null"] },
-                    suggestedStopLossPrice: { type: ["number", "null"] },
+                    suggestedStopLossRate: { type: ["number", "null"] },
+                    suggestedTakeProfitRate: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedStopLossRate", "suggestedTakeProfitRate"],
                   additionalProperties: false,
                 },
                 BALANCED: {
@@ -952,10 +1000,10 @@ export async function executeSimulatedPortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
-                    suggestedSellPrice: { type: ["number", "null"] },
-                    suggestedStopLossPrice: { type: ["number", "null"] },
+                    suggestedStopLossRate: { type: ["number", "null"] },
+                    suggestedTakeProfitRate: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedStopLossRate", "suggestedTakeProfitRate"],
                   additionalProperties: false,
                 },
                 AGGRESSIVE: {
@@ -969,10 +1017,10 @@ export async function executeSimulatedPortfolioAnalysis(
                     sellReason: { type: ["string", "null"] },
                     sellCondition: { type: ["string", "null"] },
                     suggestedSellPercent: { type: ["integer", "null"], enum: [25, 50, 75, 100, null] },
-                    suggestedSellPrice: { type: ["number", "null"] },
-                    suggestedStopLossPrice: { type: ["number", "null"] },
+                    suggestedStopLossRate: { type: ["number", "null"] },
+                    suggestedTakeProfitRate: { type: ["number", "null"] },
                   },
-                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedSellPrice", "suggestedStopLossPrice"],
+                  required: ["recommendation", "confidence", "statusType", "advice", "shortTerm", "sellReason", "sellCondition", "suggestedSellPercent", "suggestedStopLossRate", "suggestedTakeProfitRate"],
                   additionalProperties: false,
                 },
               },
@@ -1096,6 +1144,22 @@ export async function executeSimulatedPortfolioAnalysis(
         sa.shortTerm = `【様子見を推奨】市場全体が${marketData.weekChangeRate.toFixed(1)}%下落する中、この銘柄は相対的に+${relVsMarket.toFixed(1)}%強く、地合い要因による下落と判断しました。AIの短期分析: ${sa.shortTerm}`;
         sa.advice = `市場全体の下落（日経平均${marketData.weekChangeRate.toFixed(1)}%）に対してアウトパフォームしており、地合い要因の下落とみられます。様子見を推奨します。`;
       }
+    }
+  }
+
+  // --- 率から絶対価格を決定論的に算出（トレーリングストップ付き） ---
+  if (currentPrice && averagePrice > 0) {
+    for (const styleKey of ALL_STYLE_KEYS_SIM) {
+      const sa = result.styleAnalyses[styleKey];
+      const { suggestedSellPrice, suggestedStopLossPrice } =
+        calculatePricesFromRates({
+          currentPrice,
+          averagePrice,
+          takeProfitRate: sa.suggestedTakeProfitRate,
+          stopLossRate: sa.suggestedStopLossRate,
+        });
+      sa.suggestedSellPrice = suggestedSellPrice;
+      sa.suggestedStopLossPrice = suggestedStopLossPrice;
     }
   }
 

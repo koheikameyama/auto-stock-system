@@ -63,6 +63,9 @@ interface AnalysisData {
   longTermText: string | null;
   // 投資スタイル別分析
   styleAnalyses: Record<string, StyleAnalysisData> | null;
+  // リスク管理率（スタイル別）
+  suggestedStopLossRate?: number | null;
+  suggestedTakeProfitRate?: number | null;
 }
 
 interface StyleAnalysisData {
@@ -84,6 +87,8 @@ interface StyleAnalysisData {
   suggestedSellPercent?: number | null;
   suggestedSellPrice?: number | null;
   suggestedStopLossPrice?: number | null;
+  suggestedStopLossRate?: number | null;
+  suggestedTakeProfitRate?: number | null;
 }
 
 
@@ -374,6 +379,23 @@ export default function StockAnalysisCard({
               ...(styleData.suggestedStopLossPrice !== undefined
                 ? { stopLossPrice: styleData.suggestedStopLossPrice }
                 : {}),
+              ...(styleData.suggestedStopLossRate !== undefined
+                ? { suggestedStopLossRate: styleData.suggestedStopLossRate }
+                : {}),
+              ...(styleData.suggestedTakeProfitRate !== undefined
+                ? { suggestedTakeProfitRate: styleData.suggestedTakeProfitRate }
+                : {}),
+            }
+          : {}),
+        // ユーザースタイルの場合もstyleDataからrateを取得
+        ...(styleData && isUserStyle
+          ? {
+              ...(styleData.suggestedStopLossRate !== undefined
+                ? { suggestedStopLossRate: styleData.suggestedStopLossRate }
+                : {}),
+              ...(styleData.suggestedTakeProfitRate !== undefined
+                ? { suggestedTakeProfitRate: styleData.suggestedTakeProfitRate }
+                : {}),
             }
           : {}),
       }
@@ -598,12 +620,20 @@ export default function StockAnalysisCard({
                             !isTargetReached &&
                             Math.abs(priceDiff / currentPrice) < 0.01;
 
+                          const takeProfitRate = effectiveAnalysis?.suggestedTakeProfitRate;
+                          const takeProfitPercent = takeProfitRate ? Math.round(takeProfitRate * 100) : null;
+
                           return (
                             <>
                               <p className="text-xs text-gray-500">売却目標</p>
                               <p className="text-base font-bold text-green-600">
                                 {`${formatPrice(limitPriceNum)}円`}
                               </p>
+                              {takeProfitPercent && (
+                                <p className="text-xs text-gray-400">
+                                  +{takeProfitPercent}%目安
+                                </p>
+                              )}
                               {currentPrice &&
                                 priceDiff > 0 &&
                                 !isNearTarget && (
@@ -643,6 +673,9 @@ export default function StockAnalysisCard({
                           currentPrice &&
                           Math.abs(priceDiff / currentPrice) < 0.03; // 3%以内なら注意
 
+                        const stopLossRate = effectiveAnalysis?.suggestedStopLossRate;
+                        const stopLossRatePercent = stopLossRate ? Math.round(stopLossRate * 100) : null;
+
                         return (
                           <>
                             <p className="text-xs text-gray-500">
@@ -651,6 +684,11 @@ export default function StockAnalysisCard({
                             <p className="text-base font-bold text-red-600">
                               {formatPrice(stopLossPriceNum)}円
                             </p>
+                            {stopLossRatePercent && (
+                              <p className="text-xs text-gray-400">
+                                -{stopLossRatePercent}%目安
+                              </p>
+                            )}
                             {currentPrice && priceDiff < 0 && (
                               <p
                                 className={`text-xs ${isNearStopLoss ? "text-red-600 font-semibold" : "text-gray-500"}`}
