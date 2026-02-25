@@ -436,7 +436,7 @@ export default function MyStockDetailClient({
                       {t("takeProfitLine")}
                     </p>
                     <p className="text-sm font-bold text-green-800">
-                      {currentTpRate && averagePrice
+                      {currentTpRate != null && averagePrice
                         ? `¥${Math.round(averagePrice * (1 + currentTpRate / 100)).toLocaleString()}`
                         : t("notSet")}
                     </p>
@@ -446,7 +446,7 @@ export default function MyStockDetailClient({
                       {t("stopLossLine")}
                     </p>
                     <p className="text-sm font-bold text-red-800">
-                      {currentSlRate && averagePrice
+                      {currentSlRate != null && averagePrice
                         ? `¥${Math.round(averagePrice * (1 + currentSlRate / 100)).toLocaleString()}`
                         : t("notSet")}
                     </p>
