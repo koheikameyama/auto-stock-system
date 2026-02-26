@@ -175,6 +175,20 @@ AI生成後、非スタイル依存の安全補正（テクニカルブレーキ
 | 急騰ロック | `isSurgeStock(weekChangeRate, style)` | buy → stay |
 | 過熱チェック | `isOverheated(deviationRate, style)` | buy → stay |
 
+**積極派リバウンド狙い逆転ロジック**:
+
+上記のセーフティルールで積極派が `stay` に補正された場合でも、以下の条件を満たす銘柄は積極派のみ `buy`（押し目買い）に再昇格する:
+
+| 条件 | 閾値 |
+|------|------|
+| 引けにかけて強い | ローソク足が買いシグナル かつ 強度 ≥ 55% |
+| 出来高が伴っている | 出来高急増率（20日平均比）≥ 1.5倍 |
+
+- 上記のいずれかを満たせばリバウンド昇格の対象
+- 両方が揃った場合は confidence をより高く設定（0.65）
+- ハードセーフティ（危険銘柄、赤字×急騰、市場暴落、仕手株リスク）は逆転しない
+- 既に `buy` の積極派に対しても、引け強い/出来高ありの場合は confidence を +0.05 ブースト
+
 結果は `PurchaseRecommendation.styleAnalyses` と `StockAnalysis.styleAnalyses` に JSON として保存。フロントエンドでタブ切り替えにより3スタイルの結果を比較表示できます。
 
 **API**: `POST /api/stocks/[stockId]/purchase-recommendation`

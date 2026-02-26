@@ -459,6 +459,22 @@ export const TIMING_INDICATORS = {
   TURNOVER_OKU_THRESHOLD: 100_000_000, // 1億円（億円単位表示の閾値）
 } as const;
 
+// 積極派リバウンド狙いロジック
+// 慎重派・バランス型がstayでも、引けにかけて強い/出来高が伴う銘柄は
+// 積極派のみ短期リバウンド狙いでbuyに昇格する
+export const AGGRESSIVE_REBOUND = {
+  // 引けにかけて強い判定の閾値（ローソク足分析の強度%）
+  CLOSING_STRENGTH_THRESHOLD: 55,
+  // 出来高を伴う判定の閾値（20日平均比の倍率）
+  VOLUME_SPIKE_THRESHOLD: 1.5,
+  // リバウンド判定時のconfidence
+  REBOUND_CONFIDENCE: 0.60,
+  // 出来高+引け強い両方が揃った場合のconfidence
+  REBOUND_CONFIDENCE_WITH_VOLUME: 0.65,
+  // 既にbuyの積極派に対する引け強い/出来高ありのconfidenceブースト
+  CONFIDENCE_BOOST: 0.05,
+} as const;
+
 // テクニカルブレーキの閾値（投資スタイル別）
 // combinedTechnical.strength がこの値以上で buy → stay
 export const TECHNICAL_BRAKE = {

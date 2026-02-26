@@ -20,7 +20,7 @@ import {
   buildTimingIndicatorsContext,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
-import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS } from "@/lib/constants";
+import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND } from "@/lib/constants";
 import {
   calculateDeviationRate,
   calculateSMA,
@@ -684,6 +684,61 @@ export async function executePurchaseRecommendation(
     },
     skipSafetyRules,
   });
+
+  // --- 積極派リバウンド狙い逆転ロジック ---
+  // 慎重派・バランス型がstayでも、引けにかけて強い値動きや出来高が伴う銘柄は
+  // 積極派のみ短期リバウンド狙いでbuyに昇格させる
+  const aggressiveStyle = styleAnalyses.AGGRESSIVE;
+  const latestCandleForRebound = latestCandle ? analyzeSingleCandle(latestCandle) : null;
+  const isClosingStrong = latestCandleForRebound !== null &&
+    latestCandleForRebound.signal === "buy" &&
+    latestCandleForRebound.strength >= AGGRESSIVE_REBOUND.CLOSING_STRENGTH_THRESHOLD;
+  const reboundVolumeSpikeRate = stock.volumeSpikeRate ? Number(stock.volumeSpikeRate) : null;
+  const hasVolumeSupport = reboundVolumeSpikeRate !== null &&
+    reboundVolumeSpikeRate >= AGGRESSIVE_REBOUND.VOLUME_SPIKE_THRESHOLD;
+
+  if (aggressiveStyle.recommendation === "stay" && !skipSafetyRules) {
+    const reboundGapUpRate = stock.gapUpRate ? Number(stock.gapUpRate) : null;
+    // ハードセーフティ条件はリバウンドでも逆転しない
+    const isHardBlocked =
+      isDangerousStock(stock.isProfitable, volatility) ||
+      isUnprofitableSurge(stock.isProfitable, weekChangeRate) ||
+      marketData?.isMarketCrash === true ||
+      (reboundVolumeSpikeRate !== null && reboundGapUpRate !== null &&
+        reboundVolumeSpikeRate >= TIMING_INDICATORS.VOLUME_SPIKE_EXTREME_THRESHOLD &&
+        reboundGapUpRate >= TIMING_INDICATORS.GAP_UP_WARNING_THRESHOLD);
+
+    if (!isHardBlocked && (isClosingStrong || hasVolumeSupport)) {
+      aggressiveStyle.recommendation = "buy";
+      aggressiveStyle.statusType = "押し目買い";
+      aggressiveStyle.buyCondition = null;
+      aggressiveStyle.buyTiming = "market";
+      aggressiveStyle.dipTargetPrice = null;
+      aggressiveStyle.confidence = isClosingStrong && hasVolumeSupport
+        ? Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE_WITH_VOLUME)
+        : Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE);
+
+      const boostReasons: string[] = [];
+      if (isClosingStrong) {
+        boostReasons.push(`引けにかけて強い値動き（${latestCandleForRebound!.description}、強度${latestCandleForRebound!.strength}%）`);
+      }
+      if (hasVolumeSupport) {
+        boostReasons.push(`出来高が通常の${reboundVolumeSpikeRate!.toFixed(1)}倍と活発で実需の裏付けあり`);
+      }
+
+      aggressiveStyle.reason = `【短期リバウンド狙い】${boostReasons.join("、")}。慎重派は様子見ですが、短期的な反発を狙える局面です。${aggressiveStyle.reason}`;
+      aggressiveStyle.advice = `リバウンドの兆候があります。短期で利益を狙えるチャンスですが、利確は早めに設定しましょう。`;
+      aggressiveStyle.caution = `短期リバウンド狙いのポジションです。想定と逆に動いたら早めの撤退を。${aggressiveStyle.caution}`;
+    }
+  }
+
+  // 引け強い・出来高ありの積極派買い推奨は、confidenceを一段ブースト
+  if (aggressiveStyle.recommendation === "buy" && (isClosingStrong || hasVolumeSupport)) {
+    aggressiveStyle.confidence = Math.min(
+      1.0,
+      aggressiveStyle.confidence + AGGRESSIVE_REBOUND.CONFIDENCE_BOOST,
+    );
+  }
 
   // ユーザーの選択スタイルの結果を取得
   const userStyle = (investmentStyle || "BALANCED") as "CONSERVATIVE" | "BALANCED" | "AGGRESSIVE";
