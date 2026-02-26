@@ -7,7 +7,7 @@ GitHub Actionsで定期実行されるバッチ処理群です。株価データ
 ## 日次データフロー
 
 ```
-SESSION (09:00 / 12:30 / 15:30 JST) ── stock-predictions.yml
+SESSION (09:00 / 12:30 / 15:30 JST) ── session-batch.yml
 
   Phase 1: データ取得（並列）
   ├─ fetch-news（朝: JP+US / 昼・引け: JP）
@@ -48,13 +48,13 @@ MONTHLY
 
 | JST | ワークフロー | 入力 |
 |-----|------------|------|
-| 09:00 | stock-predictions | session=morning |
-| 12:30 | stock-predictions | session=noon |
-| 15:30 | stock-predictions | session=close |
+| 09:00 | session-batch | session=morning |
+| 12:30 | session-batch | session=noon |
+| 15:30 | session-batch | session=close |
 
 ## ワークフロー一覧
 
-### 1. 株価分析オーケストレーター（stock-predictions.yml）
+### 1. 株価分析オーケストレーター（session-batch.yml）
 
 cron-job.org から `workflow_dispatch` でセッション（morning/noon/close）を指定してトリガー。
 
@@ -242,7 +242,7 @@ fetch-news + fetch-stock-prices（並列）
 
 | ワークフロー | 操作テーブル |
 |-------------|-------------|
-| stock-predictions（統合） | Stock（価格）, MarketNews, SectorTrend, PurchaseRecommendation, StockAnalysis, UserDailyRecommendation, DailyMarketMover, PortfolioSnapshot, PortfolioOverallAnalysis |
+| session-batch（統合） | Stock（価格）, MarketNews, SectorTrend, PurchaseRecommendation, StockAnalysis, UserDailyRecommendation, DailyMarketMover, PortfolioSnapshot, PortfolioOverallAnalysis |
 | 業績データ | Stock（業績カラム群） |
 | 事業内容 | Stock.businessDescription |
 | クリーンアップ | StockAnalysis, PurchaseRecommendation, UserDailyRecommendation, MarketNews, SectorTrend |

@@ -23,7 +23,7 @@
   ↓ DailyMarketMover         ↓ UserDailyRecommendation  ↓ PortfolioSnapshot
 ```
 
-**全て stock-predictions.yml 内で `needs` により順序保証。**
+**全て session-batch.yml 内で `needs` により順序保証。**
 
 ## テーブル別の依存関係
 
@@ -40,7 +40,7 @@
 | **PortfolioOverallAnalysis** | daily-market-navigator | フロント表示 |
 | **PortfolioSnapshot** | portfolio-snapshots | ポートフォリオ履歴 |
 
-## 実行順序（stock-predictions.yml 内）
+## 実行順序（session-batch.yml 内）
 
 ```
 Phase 1（並列）: fetch-stock-prices + fetch-news
@@ -58,7 +58,7 @@ Phase 4: notify
 
 ## cron-job.org スケジュール
 
-### セッション（stock-predictions.yml）
+### セッション（session-batch.yml）
 
 | JST | 入力 | 実行ジョブ |
 |-----|------|-----------|

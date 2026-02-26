@@ -1,4 +1,4 @@
-name: Stock Predictions & Analysis
+name: Session Batch
 
 on:
   workflow_dispatch:
