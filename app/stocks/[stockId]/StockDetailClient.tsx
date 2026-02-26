@@ -48,6 +48,9 @@ interface StockData {
   latestNetIncome: number | null;
   volatility: number | null;
   weekChangeRate: number | null;
+  gapUpRate: number | null;
+  volumeSpikeRate: number | null;
+  turnoverValue: number | null;
   fetchFailCount: number;
   isDelisted: boolean;
   nextEarningsDate: string | null;
