@@ -10,32 +10,20 @@ on:
         default: true
 
 jobs:
-  calculate-sector-trends:
-    uses: ./.github/workflows/calculate-sector-trends.yml
-    secrets: inherit
-
   purchase-recommendations:
-    needs: calculate-sector-trends
     uses: ./.github/workflows/purchase-recommendations.yml
     secrets: inherit
 
   portfolio-analysis:
-    needs: calculate-sector-trends
     uses: ./.github/workflows/portfolio-analysis.yml
     secrets: inherit
 
   gainers-losers:
-    needs: calculate-sector-trends
     uses: ./.github/workflows/gainers-losers.yml
     secrets: inherit
 
-  portfolio-snapshots:
-    needs: calculate-sector-trends
-    uses: ./.github/workflows/portfolio-snapshots.yml
-    secrets: inherit
-
   notify:
-    needs: [purchase-recommendations, portfolio-analysis, gainers-losers, portfolio-snapshots]
+    needs: [purchase-recommendations, portfolio-analysis, gainers-losers]
     if: always()
     runs-on: ubuntu-latest
     steps:
