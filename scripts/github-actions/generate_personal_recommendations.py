@@ -8,8 +8,56 @@ TypeScript API を呼び出すだけのシンプルなスクリプト。
 
 import os
 import sys
+import time
 import requests
 from datetime import datetime
+
+# リトライ設定
+MAX_RETRIES = 3
+RETRY_WAIT_SECONDS = [5, 15, 30]
+
+
+def call_api(app_url: str, cron_secret: str, session: str) -> dict:
+    """APIを呼び出し、レスポンスを返す。失敗時はリトライする。"""
+    last_error = None
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            if attempt > 0:
+                wait = RETRY_WAIT_SECONDS[attempt - 1]
+                print(f"\nRetry {attempt}/{MAX_RETRIES - 1} after {wait}s...")
+                time.sleep(wait)
+
+            response = requests.post(
+                f"{app_url}/api/recommendations/generate-daily",
+                headers={
+                    "Authorization": f"Bearer {cron_secret}",
+                    "Content-Type": "application/json",
+                },
+                json={"session": session},
+                timeout=300,  # 5分タイムアウト
+            )
+
+            if response.status_code not in [200, 201]:
+                last_error = f"API returned status {response.status_code}: {response.text}"
+                print(f"Error (attempt {attempt + 1}): {last_error}")
+                # 4xx エラーはリトライしない（認証エラーなど）
+                if 400 <= response.status_code < 500:
+                    print("Client error - not retrying")
+                    sys.exit(1)
+                continue
+
+            return response.json()
+
+        except requests.exceptions.Timeout:
+            last_error = "Request timed out"
+            print(f"Error (attempt {attempt + 1}): {last_error}")
+        except requests.exceptions.RequestException as e:
+            last_error = str(e)
+            print(f"Error (attempt {attempt + 1}): {last_error}")
+
+    print(f"\nAll {MAX_RETRIES} attempts failed. Last error: {last_error}")
+    sys.exit(1)
 
 
 def main():
@@ -34,41 +82,27 @@ def main():
     print()
 
     try:
-        response = requests.post(
-            f"{app_url}/api/recommendations/generate-daily",
-            headers={
-                "Authorization": f"Bearer {cron_secret}",
-                "Content-Type": "application/json",
-            },
-            json={"session": session},
-            timeout=300,  # 5分タイムアウト
-        )
-
-        if response.status_code not in [200, 201]:
-            print(f"Error: API returned status {response.status_code}")
-            print(f"Response: {response.text}")
-            sys.exit(1)
-
-        result = response.json()
+        result = call_api(app_url, cron_secret, session)
         processed = result.get('processed', 0)
         failed = result.get('failed', 0)
-        print(f"Success: {processed} users processed")
-        print(f"Failed: {failed} users failed")
+        total = processed + failed
+
+        print(f"✅ Processed: {processed} users")
+        print(f"❌ Failed: {failed} users")
 
         # 失敗したユーザーの詳細を出力
         for r in result.get('results', []):
             if not r.get('success'):
                 print(f"  - User {r.get('userId', 'unknown')}: {r.get('error', 'unknown error')}")
 
-        if failed > 0:
+        # 全ユーザー失敗、またはユーザーが存在するのに1人も成功しなかった場合のみ失敗
+        if total > 0 and processed == 0:
+            print(f"\n❌ All {failed} users failed - marking as failure")
             sys.exit(1)
 
-    except requests.exceptions.Timeout:
-        print("Error: Request timed out")
-        sys.exit(1)
-    except requests.exceptions.RequestException as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+        if failed > 0:
+            print(f"\n⚠️ {failed}/{total} users failed (partial failure) - marking as success")
+
     except Exception as e:
         print(f"Unexpected error: {e}")
         sys.exit(1)
