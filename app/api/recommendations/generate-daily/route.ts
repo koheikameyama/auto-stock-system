@@ -206,21 +206,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const registeredByUser = new Map<string, Set<string>>();
+    // ウォッチリスト銘柄のみ除外対象（保有銘柄は追加購入の候補として残す）
+    const watchlistByUser = new Map<string, Set<string>>();
+    for (const ws of watchlistStocks) {
+      if (!watchlistByUser.has(ws.userId)) {
+        watchlistByUser.set(ws.userId, new Set());
+      }
+      watchlistByUser.get(ws.userId)!.add(ws.stockId);
+    }
+
+    // 保有銘柄IDセット（AIプロンプトで追加購入の文脈を付与するため）
+    const ownedByUser = new Map<string, Set<string>>();
     for (const ps of portfolioStocks) {
       const { quantity } = calculatePortfolioFromTransactions(ps.transactions);
       if (quantity > 0) {
-        if (!registeredByUser.has(ps.userId)) {
-          registeredByUser.set(ps.userId, new Set());
+        if (!ownedByUser.has(ps.userId)) {
+          ownedByUser.set(ps.userId, new Set());
         }
-        registeredByUser.get(ps.userId)!.add(ps.stockId);
+        ownedByUser.get(ps.userId)!.add(ps.stockId);
       }
-    }
-    for (const ws of watchlistStocks) {
-      if (!registeredByUser.has(ws.userId)) {
-        registeredByUser.set(ws.userId, new Set());
-      }
-      registeredByUser.get(ws.userId)!.add(ws.stockId);
     }
 
     let marketData = null;
@@ -257,7 +261,8 @@ export async function POST(request: NextRequest) {
           const result = await processUser(
             user,
             allStocks,
-            registeredByUser.get(user.userId) || new Set(),
+            watchlistByUser.get(user.userId) || new Set(),
+            ownedByUser.get(user.userId) || new Set(),
             session,
             marketContext,
             remainingBudget,
@@ -332,7 +337,8 @@ async function processUser(
     isDelisted: boolean;
     fetchFailCount: number;
   }>,
-  registeredStockIds: Set<string>,
+  watchlistStockIds: Set<string>,
+  ownedStockIds: Set<string>,
   session: string,
   marketContext: string,
   remainingBudget: number | null,
@@ -388,11 +394,16 @@ async function processUser(
   let diversified = applySectorDiversification(scored);
   console.log(`  After sector diversification: ${diversified.length} stocks`);
 
-  if (registeredStockIds.size > 0) {
-    const candidates = diversified.filter((s) => !registeredStockIds.has(s.id));
+  // ウォッチリスト銘柄のみ除外（保有銘柄は追加購入候補として残す）
+  if (watchlistStockIds.size > 0) {
+    const candidates = diversified.filter(
+      (s) => !watchlistStockIds.has(s.id),
+    );
     if (candidates.length > 5) {
       diversified = candidates;
-      console.log(`  After excluding registered: ${diversified.length} stocks`);
+      console.log(
+        `  After excluding watchlist: ${diversified.length} stocks`,
+      );
     }
   }
 
@@ -414,6 +425,13 @@ async function processUser(
     investmentStyle,
   );
 
+  // 候補の中で保有中の銘柄を特定（AIプロンプトに渡す）
+  const ownedTickerCodes = new Set(
+    topCandidates
+      .filter((s) => ownedStockIds.has(s.id))
+      .map((s) => s.tickerCode),
+  );
+
   const recommendations = await selectWithAI(
     userId,
     investmentStyle,
@@ -425,6 +443,7 @@ async function processUser(
     newsContext,
     sectorTrendContext,
     isBudgetExceeded,
+    ownedTickerCodes,
   );
 
   if (!recommendations || recommendations.length === 0) {
@@ -738,6 +757,7 @@ async function selectWithAI(
   newsContext: string,
   sectorTrendContext: string,
   isBudgetExceeded: boolean = false,
+  ownedTickerCodes: Set<string> = new Set(),
 ): Promise<Array<{
   tickerCode: string;
   reason: string;
@@ -776,6 +796,7 @@ ${ctx.technicalContext}${ctx.candlestickContext}${ctx.chartPatternContext}${ctx.
     marketContext,
     sectorTrendContext,
     newsContext,
+    ownedTickerCodes: Array.from(ownedTickerCodes),
   });
 
   try {

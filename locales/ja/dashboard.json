@@ -47,7 +47,8 @@
     "regenerate": "再生成",
     "regenerating": "再生成中...",
     "regeneratingMessage": "AIがあなたに合った銘柄を選んでいます...",
-    "schedule": "更新 {schedule}（平日）"
+    "schedule": "更新 {schedule}（平日）",
+    "additionalPurchase": "買い増しチャンス"
   },
   "nikkei": {
     "title": "日経平均株価",
