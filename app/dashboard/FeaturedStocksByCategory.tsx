@@ -15,8 +15,6 @@ interface FeaturedStock {
   category: string | null
   investmentTheme: string | null
   reason: string | null
-  sellTargetRate: number | null
-  exitRate: number | null
   purchaseJudgment: string | null
   isOwned: boolean // ポートフォリオにある場合
   isRegistered: boolean // ウォッチリストにある場合
