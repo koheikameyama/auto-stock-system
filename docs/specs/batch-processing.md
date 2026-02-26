@@ -7,7 +7,7 @@ GitHub Actionsで定期実行されるバッチ処理群です。株価データ
 ## 日次データフロー
 
 ```
-SESSION (09:30 / 10:30 / 13:00 / 14:00 / 15:40 JST) ── session-batch.yml
+SESSION (09:10 / 10:10 / 12:40 / 13:40 / 15:40 JST) ── session-batch.yml
 
   Phase 1: データ取得（並列）
   ├─ fetch-news（朝: JP+US / 昼・引け: JP）
@@ -48,10 +48,10 @@ MONTHLY
 
 | JST | ワークフロー | 入力 |
 |-----|------------|------|
-| 09:30 | session-batch | session=morning |
-| 10:30 | session-batch | session=noon |
-| 13:00 | session-batch | session=noon |
-| 14:00 | session-batch | session=noon |
+| 09:10 | session-batch | session=morning |
+| 10:10 | session-batch | session=noon |
+| 12:40 | session-batch | session=noon |
+| 13:40 | session-batch | session=noon |
 | 15:40 | session-batch | session=close |
 
 ## ワークフロー一覧
