@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ウォッチリスト銘柄のみ除外対象（保有銘柄は追加購入の候補として残す）
+    // ウォッチリスト銘柄IDセット（AIプロンプトで購入後押しの文脈を付与するため）
     const watchlistByUser = new Map<string, Set<string>>();
     for (const ws of watchlistStocks) {
       if (!watchlistByUser.has(ws.userId)) {
@@ -261,8 +261,8 @@ export async function POST(request: NextRequest) {
           const result = await processUser(
             user,
             allStocks,
-            watchlistByUser.get(user.userId) || new Set(),
             ownedByUser.get(user.userId) || new Set(),
+            watchlistByUser.get(user.userId) || new Set(),
             session,
             marketContext,
             remainingBudget,
@@ -337,8 +337,8 @@ async function processUser(
     isDelisted: boolean;
     fetchFailCount: number;
   }>,
-  watchlistStockIds: Set<string>,
   ownedStockIds: Set<string>,
+  watchlistStockIds: Set<string>,
   session: string,
   marketContext: string,
   remainingBudget: number | null,
@@ -394,19 +394,6 @@ async function processUser(
   let diversified = applySectorDiversification(scored);
   console.log(`  After sector diversification: ${diversified.length} stocks`);
 
-  // ウォッチリスト銘柄のみ除外（保有銘柄は追加購入候補として残す）
-  if (watchlistStockIds.size > 0) {
-    const candidates = diversified.filter(
-      (s) => !watchlistStockIds.has(s.id),
-    );
-    if (candidates.length > 5) {
-      diversified = candidates;
-      console.log(
-        `  After excluding watchlist: ${diversified.length} stocks`,
-      );
-    }
-  }
-
   // 予算内の銘柄を優先し、5件未満なら予算超も追加
   const budgetResult = narrowByBudget(diversified, remainingBudget);
   const isBudgetExceeded = budgetResult.isBudgetExceeded;
@@ -425,10 +412,15 @@ async function processUser(
     investmentStyle,
   );
 
-  // 候補の中で保有中の銘柄を特定（AIプロンプトに渡す）
+  // 候補の中で保有中・ウォッチリスト中の銘柄を特定（AIプロンプトに渡す）
   const ownedTickerCodes = new Set(
     topCandidates
       .filter((s) => ownedStockIds.has(s.id))
+      .map((s) => s.tickerCode),
+  );
+  const watchlistTickerCodes = new Set(
+    topCandidates
+      .filter((s) => watchlistStockIds.has(s.id))
       .map((s) => s.tickerCode),
   );
 
@@ -444,6 +436,7 @@ async function processUser(
     sectorTrendContext,
     isBudgetExceeded,
     ownedTickerCodes,
+    watchlistTickerCodes,
   );
 
   if (!recommendations || recommendations.length === 0) {
@@ -758,6 +751,7 @@ async function selectWithAI(
   sectorTrendContext: string,
   isBudgetExceeded: boolean = false,
   ownedTickerCodes: Set<string> = new Set(),
+  watchlistTickerCodes: Set<string> = new Set(),
 ): Promise<Array<{
   tickerCode: string;
   reason: string;
@@ -797,6 +791,7 @@ ${ctx.technicalContext}${ctx.candlestickContext}${ctx.chartPatternContext}${ctx.
     sectorTrendContext,
     newsContext,
     ownedTickerCodes: Array.from(ownedTickerCodes),
+    watchlistTickerCodes: Array.from(watchlistTickerCodes),
   });
 
   try {

@@ -14,6 +14,7 @@ export function buildDailyRecommendationPrompt(params: {
   sectorTrendContext: string;
   newsContext: string;
   ownedTickerCodes?: string[];
+  watchlistTickerCodes?: string[];
 }): string {
   const {
     session,
@@ -25,6 +26,7 @@ export function buildDailyRecommendationPrompt(params: {
     sectorTrendContext,
     newsContext,
     ownedTickerCodes = [],
+    watchlistTickerCodes = [],
   } = params;
 
   const prompts = SESSION_PROMPTS[session] || SESSION_PROMPTS.evening;
@@ -95,6 +97,16 @@ ${
 - 保有銘柄でも追加購入のチャンスがあれば積極的に選んでください
 - 保有銘柄を選んだ場合、reason の冒頭に「【追加購入チャンス】」と付けて、なぜ今追加で買い増す価値があるかを説明してください
   例: 「【追加購入チャンス】既にお持ちのこの銘柄は、RSI（売られすぎ・買われすぎの指標）が40付近で押し目の好機です。平均取得単価を下げる絶好のタイミングです。」
+
+`
+    : ""
+}${
+  watchlistTickerCodes.length > 0
+    ? `【ユーザーが気になっている銘柄（ウォッチリスト）】
+以下の銘柄はユーザーが「気になる」に登録しています: ${watchlistTickerCodes.join(", ")}
+- ウォッチリスト銘柄でも条件が合えば積極的に選んでください
+- ウォッチリスト銘柄を選んだ場合、reason の冒頭に「【注目銘柄が買い時】」と付けて、今が購入の好機である理由を説明してください
+  例: 「【注目銘柄が買い時】気になっていたこの銘柄は、MACD（トレンド転換の指標）がゴールデンクロスし、上昇トレンドへの転換が期待できます。」
 
 `
     : ""

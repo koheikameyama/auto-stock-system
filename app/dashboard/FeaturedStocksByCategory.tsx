@@ -190,8 +190,8 @@ export default function FeaturedStocksByCategory() {
               {tRec("additionalPurchase")}
             </span>
           ) : stock.isRegistered ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
-              気になる
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+              {tRec("watchlistBuyTime")}
             </span>
           ) : stock.isTracked ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">
