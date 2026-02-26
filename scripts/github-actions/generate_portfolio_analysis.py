@@ -39,7 +39,7 @@ def get_cron_secret() -> str:
 
 
 def fetch_portfolio_stocks(conn) -> list[dict]:
-    """保有中（quantity > 0）のポートフォリオ銘柄とユーザーIDを取得"""
+    """保有中（quantity > 0）のポートフォリオ銘柄とユーザーIDを取得（チャートデータがある銘柄のみ）"""
     with conn.cursor() as cur:
         cur.execute('''
             SELECT
@@ -49,7 +49,8 @@ def fetch_portfolio_stocks(conn) -> list[dict]:
                 s."tickerCode"
             FROM "PortfolioStock" ps
             JOIN "Stock" s ON ps."stockId" = s.id
-            WHERE COALESCE(
+            WHERE s."hasChartData" = true
+              AND COALESCE(
                 (SELECT SUM(
                     CASE WHEN t.type = 'buy' THEN t.quantity
                          WHEN t.type = 'sell' THEN -t.quantity

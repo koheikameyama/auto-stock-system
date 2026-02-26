@@ -159,6 +159,7 @@ model Stock {
   fetchFailCount    Int       @default(0) // 連続失敗回数
   lastFetchFailedAt DateTime? // 最後に失敗した日時
   isDelisted        Boolean   @default(false) // 上場廃止フラグ
+  hasChartData      Boolean   @default(true) // チャートデータが利用可能か（バッチ更新時に判定）
 
   analyses                 StockAnalysis[]
   featuredStocks           DailyFeaturedStock[]

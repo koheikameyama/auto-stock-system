@@ -27,6 +27,7 @@ from lib.constants import (
     DOWNLOAD_BATCH_SIZE,
     DB_BATCH_SIZE,
     FETCH_FAIL_WARNING_THRESHOLD,
+    MIN_CHART_DATA_POINTS,
     STALE_DATA_DAYS,
     YFINANCE_RATE_LIMIT_MAX_RETRIES,
     YFINANCE_RATE_LIMIT_WAIT_SECONDS,
@@ -288,6 +289,9 @@ def _compute_price_data(hist) -> dict | None:
             return -MAX_RATE
         return val
 
+    # チャート表示・テクニカル分析に十分なデータがあるか判定
+    has_chart_data = len(hist) >= MIN_CHART_DATA_POINTS
+
     return {
         "latestPrice": latest_price,
         "latestPriceDate": latest_date.date(),  # yfinance株価データの実際の日付
@@ -302,6 +306,7 @@ def _compute_price_data(hist) -> dict | None:
         "volumeSpikeRate": clamp_rate(volume_spike_rate),
         "turnoverValue": turnover_value,
         "atr14": atr14,
+        "hasChartData": has_chart_data,
     }
 
 
@@ -327,6 +332,7 @@ def update_stock_prices(conn, updates: list[dict]) -> int:
                 u.get("volumeSpikeRate"),
                 u.get("turnoverValue"),
                 u.get("atr14"),
+                u.get("hasChartData", True),
                 now,
                 u["id"]
             )
@@ -349,6 +355,7 @@ def update_stock_prices(conn, updates: list[dict]) -> int:
                 "volumeSpikeRate" = %s,
                 "turnoverValue" = %s,
                 "atr14" = %s,
+                "hasChartData" = %s,
                 "priceUpdatedAt" = %s
             WHERE id = %s
             ''',
@@ -376,7 +383,7 @@ def reset_fetch_fail_counts(conn, stock_ids: list[str]) -> int:
 
 
 def increment_fetch_fail_counts(conn, stock_ids: list[str]) -> int:
-    """取得失敗した銘柄の失敗カウントをインクリメント"""
+    """取得失敗した銘柄の失敗カウントをインクリメントし、hasChartData を false にする"""
     if not stock_ids:
         return 0
 
@@ -387,7 +394,8 @@ def increment_fetch_fail_counts(conn, stock_ids: list[str]) -> int:
             '''
             UPDATE "Stock"
             SET "fetchFailCount" = "fetchFailCount" + 1,
-                "lastFetchFailedAt" = %s
+                "lastFetchFailedAt" = %s,
+                "hasChartData" = false
             WHERE id = %s
             ''',
             [(now, stock_id) for stock_id in stock_ids],

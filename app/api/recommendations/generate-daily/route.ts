@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
     const allStocks = await prisma.stock.findMany({
       where: {
         isDelisted: false,
+        hasChartData: true,
         latestPriceDate: { not: null, gte: staleThreshold },
         latestPrice: { not: null },
         fetchFailCount: 0,
