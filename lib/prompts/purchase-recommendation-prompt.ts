@@ -23,6 +23,7 @@ export function buildPurchaseRecommendationPrompt(params: {
   volumeAnalysisContext: string;
   relativeStrengthContext: string;
   trendlineContext: string;
+  timingIndicatorsContext: string;
   newsContext: string;
   hasPrediction: boolean;
 }): string {
@@ -46,6 +47,7 @@ export function buildPurchaseRecommendationPrompt(params: {
     volumeAnalysisContext,
     relativeStrengthContext,
     trendlineContext,
+    timingIndicatorsContext,
     newsContext,
     hasPrediction,
   } = params;
@@ -65,7 +67,7 @@ ${financialMetrics}
 ${userContext}${predictionContext}
 【株価データ】
 直近30日の終値: ${pricesCount}件のデータあり
-${delistingContext}${weekChangeContext}${marketContext}${sectorTrendContext}${patternContext}${technicalContext}${chartPatternContext}${deviationRateContext}${volumeAnalysisContext}${relativeStrengthContext}${trendlineContext}${newsContext}
+${delistingContext}${weekChangeContext}${marketContext}${sectorTrendContext}${patternContext}${technicalContext}${chartPatternContext}${deviationRateContext}${volumeAnalysisContext}${timingIndicatorsContext}${relativeStrengthContext}${trendlineContext}${newsContext}
 【投資スタイル別の判断基準 - 最重要】
 短期/中期/長期の予測を先に出した上で、3つの投資スタイルそれぞれの視点で判断を出してください。
 各スタイルは同じデータを見ていますが、「どのトレンドを重視するか」が異なります。
@@ -196,6 +198,11 @@ ${PROMPT_NEWS_CONSTRAINTS}
 - 提供されたテクニカル指標は必ず判断根拠として活用する
 - 複数指標が同方向 → 信頼度を高める
 - 指標間で矛盾 → 慎重な判断とし、cautionで言及する
+
+【タイミング補助指標の活用】
+- ギャップアップ率が高い（>5%）場合、飛びつき買いのリスクを警告し cautionで言及
+- 出来高急増率が高い（>2.0倍）場合、材料の有無を確認し判断に反映
+- 売買代金が小さい銘柄はスリッページリスクを考慮し cautionで言及
 
 【相対強度・出来高の分析 - 最重要】
 ■ 相対強度:

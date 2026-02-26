@@ -493,6 +493,48 @@ export function buildVolumeAnalysisContext(prices: OHLCVData[]): string {
 }
 
 /**
+ * タイミング補助指標コンテキスト文字列を生成する
+ *
+ * DBに保存済みの gapUpRate, volumeSpikeRate, turnoverValue を
+ * AIプロンプト用にフォーマットする。
+ */
+export function buildTimingIndicatorsContext(
+  gapUpRate: number | null,
+  volumeSpikeRate: number | null,
+  turnoverValue: number | null,
+): string {
+  const lines: string[] = [];
+
+  if (gapUpRate !== null) {
+    const sign = gapUpRate >= 0 ? "+" : "";
+    lines.push(
+      `・ギャップアップ率: ${sign}${gapUpRate.toFixed(1)}%（前日引け→当日寄付きで${sign}${gapUpRate.toFixed(1)}%変動）`,
+      `  → ${Math.abs(gapUpRate) >= 5 ? "大きなギャップは過熱感の兆候。飛びつき買いに注意" : "通常範囲の変動"}`,
+    );
+  }
+
+  if (volumeSpikeRate !== null) {
+    lines.push(
+      `・出来高急増率: ${volumeSpikeRate.toFixed(1)}倍（20日平均比）`,
+      `  → ${volumeSpikeRate >= 2.0 ? "出来高急増。材料出現の可能性あり" : volumeSpikeRate >= 1.5 ? "やや活発。注目度上昇中" : "通常範囲"}`,
+    );
+  }
+
+  if (turnoverValue !== null) {
+    const oku = turnoverValue / 100_000_000;
+    const formatted = oku >= 1 ? `${oku.toFixed(1)}億円` : `${(turnoverValue / 10_000).toFixed(0)}万円`;
+    lines.push(
+      `・売買代金: ${formatted}`,
+      `  → 流動性の目安。大きいほど売買しやすい`,
+    );
+  }
+
+  if (lines.length === 0) return "";
+
+  return `\n【タイミング補助指標】\n${lines.join("\n")}\n`;
+}
+
+/**
  * 相対強度コンテキスト文字列を生成する
  *
  * 銘柄の週間変化率を日経平均・セクター平均と比較し、

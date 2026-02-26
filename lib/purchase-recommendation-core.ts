@@ -17,6 +17,7 @@ import {
   buildVolumeAnalysisContext,
   buildRelativeStrengthContext,
   buildTrendlineContext,
+  buildTimingIndicatorsContext,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
 import { MA_DEVIATION, SELL_TIMING } from "@/lib/constants";
@@ -111,6 +112,9 @@ export async function executePurchaseRecommendation(
       fiftyTwoWeekHigh: true,
       fiftyTwoWeekLow: true,
       volatility: true,
+      gapUpRate: true,
+      volumeSpikeRate: true,
+      turnoverValue: true,
       isDelisted: true,
       fetchFailCount: true,
     },
@@ -197,6 +201,13 @@ export async function executePurchaseRecommendation(
 
   // トレンドライン
   const trendlineContext = buildTrendlineContext(prices);
+
+  // タイミング補助指標
+  const timingIndicatorsContext = buildTimingIndicatorsContext(
+    stock.gapUpRate ? Number(stock.gapUpRate) : null,
+    stock.volumeSpikeRate ? Number(stock.volumeSpikeRate) : null,
+    stock.turnoverValue ? Number(stock.turnoverValue) : null,
+  );
 
   // 関連ニュースを取得
   const tickerCode = stock.tickerCode.replace(".T", "");
@@ -327,6 +338,7 @@ export async function executePurchaseRecommendation(
     volumeAnalysisContext,
     relativeStrengthContext,
     trendlineContext,
+    timingIndicatorsContext,
     newsContext,
     hasPrediction,
   });
