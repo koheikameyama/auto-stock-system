@@ -29,7 +29,8 @@ export async function POST() {
       )
     }
 
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+    const port = process.env.PORT || "3000"
+    const baseUrl = `http://localhost:${port}`
 
     // 今日の既存おすすめを削除（再生成で件数が減った場合に古いデータが残らないようにする）
     await prisma.userDailyRecommendation.deleteMany({
