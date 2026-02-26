@@ -64,7 +64,7 @@ model User {
   transactions             Transaction[]
   dailyRecommendations     UserDailyRecommendation[]
   trackedStocks            TrackedStock[]
-  portfolioOverallAnalysis PortfolioOverallAnalysis?
+  portfolioOverallAnalyses PortfolioOverallAnalysis[]
 
   // 通知
   notifications Notification[]
@@ -529,9 +529,10 @@ model UserDailyRecommendation {
 
 // Daily Market Navigator（ユーザーごと）
 model PortfolioOverallAnalysis {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  userId  String
+  session String @default("morning")
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   analyzedAt DateTime
 
@@ -564,6 +565,7 @@ model PortfolioOverallAnalysis {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, session])
   @@index([userId])
   @@index([analyzedAt(sort: Desc)])
 }

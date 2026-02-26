@@ -190,6 +190,8 @@ export const DAILY_MARKET_NAVIGATOR = {
   MIN_STOCKS: 3,
   OPENAI_MODEL: "gpt-4o-mini",
   OPENAI_TEMPERATURE: 0.3,
+  // 夜セッション開始時間（JST）: この時間以降は evening セッション
+  EVENING_SESSION_START_HOUR: 15,
 } as const;
 
 // チャットAI設定

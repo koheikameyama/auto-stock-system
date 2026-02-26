@@ -18,6 +18,7 @@ dayjs.extend(timezone)
 
 export type MarketTone = "bullish" | "bearish" | "neutral" | "sector_rotation"
 export type PortfolioStatus = "healthy" | "caution" | "warning" | "critical"
+export type NavigatorSession = "morning" | "evening"
 
 export interface StockHighlight {
   stockName: string
@@ -40,6 +41,7 @@ export interface MarketNavigatorResult {
   hasAnalysis: boolean
   analyzedAt?: string
   isToday?: boolean
+  session?: NavigatorSession
   market?: {
     headline: string
     tone: MarketTone
@@ -149,9 +151,19 @@ function calculatePortfolioVolatility(stocks: PortfolioStockData[]): number | nu
 }
 
 /**
+ * 現在のセッション（朝/夜）を判定
+ * JST 15時以降は evening、それ以前は morning
+ */
+export function getCurrentSession(): NavigatorSession {
+  const hour = dayjs().tz("Asia/Tokyo").hour()
+  return hour >= DAILY_MARKET_NAVIGATOR.EVENING_SESSION_START_HOUR ? "evening" : "morning"
+}
+
+/**
  * OpenAI APIで Daily Market Navigator 分析を生成
  */
 async function generateAnalysisWithAI(
+  session: NavigatorSession,
   portfolioStocks: PortfolioStockData[],
   sectorBreakdown: SectorBreakdown[],
   totalValue: number,
@@ -206,6 +218,7 @@ async function generateAnalysisWithAI(
   const hasEarningsData = portfolioStocks.some(s => s.isProfitable !== null)
 
   const prompt = buildPortfolioOverallAnalysisPrompt({
+    session,
     portfolioCount: portfolioStocks.length,
     totalValue,
     totalCost,
@@ -260,7 +273,12 @@ async function generateAnalysisWithAI(
     messages: [
       {
         role: "system",
-        content: `あなたはStock Buddyの「Daily Market Navigator」です。
+        content: session === "evening"
+          ? `あなたはStock Buddyの「アナリスト兼コーチ」です。
+投資初心者のパートナーとして、今日の市場を振り返り、ユーザーのポートフォリオを点検し、明日の準備を手伝ってください。
+
+【重要】提供されたデータのみを使用し、ニュースや決算情報など提供されていない情報は創作しないでください。`
+          : `あなたはStock Buddyの「Daily Market Navigator」です。
 投資初心者のパートナーとして、市場の流れとユーザーのポートフォリオを分析し、今日何をすべきかを結論から伝えてください。
 
 【重要】提供されたデータのみを使用し、ニュースや決算情報など提供されていない情報は創作しないでください。`,
@@ -325,7 +343,9 @@ async function generateAnalysisWithAI(
 /**
  * ユーザーのポートフォリオ総評分析を取得
  */
-export async function getPortfolioOverallAnalysis(userId: string): Promise<MarketNavigatorResult> {
+export async function getPortfolioOverallAnalysis(userId: string, session?: NavigatorSession): Promise<MarketNavigatorResult> {
+  const resolvedSession = session ?? getCurrentSession()
+
   // ポートフォリオとウォッチリストを取得
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -343,7 +363,6 @@ export async function getPortfolioOverallAnalysis(userId: string): Promise<Marke
           stock: true,
         },
       },
-      portfolioOverallAnalysis: true,
     },
   })
 
@@ -367,9 +386,12 @@ export async function getPortfolioOverallAnalysis(userId: string): Promise<Marke
     }
   }
 
-  // 既存の分析があるか確認
-  if (user.portfolioOverallAnalysis) {
-    const analysis = user.portfolioOverallAnalysis
+  // 既存の分析があるか確認（複合ユニークキーで直接取得）
+  const analysis = await prisma.portfolioOverallAnalysis.findUnique({
+    where: { userId_session: { userId, session: resolvedSession } },
+  })
+
+  if (analysis) {
     const todayJST = dayjs().tz("Asia/Tokyo").startOf("day")
     const analysisJST = dayjs(analysis.analyzedAt).tz("Asia/Tokyo").startOf("day")
     const isToday = analysisJST.isSame(todayJST, "day")
@@ -378,6 +400,7 @@ export async function getPortfolioOverallAnalysis(userId: string): Promise<Marke
       hasAnalysis: true,
       analyzedAt: analysis.analyzedAt.toISOString(),
       isToday,
+      session: resolvedSession,
       portfolioCount,
       watchlistCount,
       market: {
@@ -418,7 +441,7 @@ export async function getPortfolioOverallAnalysis(userId: string): Promise<Marke
 /**
  * ポートフォリオ総評分析を生成
  */
-export async function generatePortfolioOverallAnalysis(userId: string): Promise<MarketNavigatorResult> {
+export async function generatePortfolioOverallAnalysis(userId: string, session: NavigatorSession = "morning"): Promise<MarketNavigatorResult> {
   // ポートフォリオ、ウォッチリスト、ユーザー設定を取得
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -626,6 +649,7 @@ export async function generatePortfolioOverallAnalysis(userId: string): Promise<
 
   // AI分析を生成
   const aiResult = await generateAnalysisWithAI(
+    session,
     portfolioStocksData,
     sectorBreakdown,
     totalValue,
@@ -664,8 +688,8 @@ export async function generatePortfolioOverallAnalysis(userId: string): Promise<
     sectorHighlights: aiResult.sectorHighlights as unknown as Prisma.InputJsonValue,
   }
   await prisma.portfolioOverallAnalysis.upsert({
-    where: { userId },
-    create: { userId, ...upsertData },
+    where: { userId_session: { userId, session } },
+    create: { userId, session, ...upsertData },
     update: upsertData,
   })
 
@@ -673,6 +697,7 @@ export async function generatePortfolioOverallAnalysis(userId: string): Promise<
     hasAnalysis: true,
     analyzedAt: now.toISOString(),
     isToday: true,
+    session,
     portfolioCount,
     watchlistCount,
     market: {
