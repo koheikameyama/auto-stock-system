@@ -465,6 +465,16 @@ export const AGGRESSIVE_REBOUND = {
   CONFIDENCE_BOOST: 0.05,
 } as const;
 
+// ギャップアップモメンタムシグナル（積極派向け）
+// 小幅ギャップアップ + 引け強い + 出来高 → 正のモメンタムシグナル
+export const GAP_UP_MOMENTUM = {
+  MIN_GAP_UP: 2, // 正シグナルの最小ギャップ率(%)
+  MAX_GAP_UP: 5, // 正シグナルの最大ギャップ率(%)
+  CLOSING_STRENGTH_THRESHOLD: 70, // 引け強い判定(%) - (close-low)/(high-low)*100
+  VOLUME_CONFIRMATION_THRESHOLD: 1.3, // 出来高確認閾値(倍)
+  CONFIDENCE_BOOST: 0.08, // 3条件揃った時のconfidenceブースト
+} as const;
+
 // テクニカルブレーキの閾値（投資スタイル別）
 // combinedTechnical.strength がこの値以上で buy → stay
 export const TECHNICAL_BRAKE = {

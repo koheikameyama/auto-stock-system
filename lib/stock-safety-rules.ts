@@ -4,7 +4,7 @@
  * おすすめ分析・購入判断の両方で共通して使う。
  * 条件判定のみを提供し、アクション（除外 or stay変更）は呼び出し側に委ねる。
  */
-import { MA_DEVIATION, MOMENTUM, TIMING_INDICATORS, TECHNICAL_BRAKE } from "@/lib/constants";
+import { MA_DEVIATION, MOMENTUM, TIMING_INDICATORS, TECHNICAL_BRAKE, GAP_UP_MOMENTUM } from "@/lib/constants";
 
 /** 高ボラティリティの閾値（%） */
 const HIGH_VOLATILITY_THRESHOLD = 50;
@@ -106,6 +106,54 @@ export function getGapUpSurgeThreshold(investmentStyle?: string | null): number 
     default:
       return TIMING_INDICATORS.GAP_UP_SURGE_THRESHOLD;
   }
+}
+
+/**
+ * ギャップアップモメンタム判定（積極派向け）
+ * 小幅ギャップアップ(2-5%) + 引け強い + 出来高 → 正のモメンタムシグナル
+ * 3条件のうち2つ以上を満たす場合に正シグナルと判定
+ */
+export function hasGapUpMomentum(params: {
+  gapUpRate: number | null;
+  closingStrength: number | null;
+  volumeSpikeRate: number | null;
+}): { isMomentum: boolean; reasons: string[] } {
+  const { gapUpRate, closingStrength, volumeSpikeRate } = params;
+  const reasons: string[] = [];
+  let conditionsMet = 0;
+
+  // 条件1: 小幅ギャップアップ(2-5%)
+  if (
+    gapUpRate !== null &&
+    gapUpRate >= GAP_UP_MOMENTUM.MIN_GAP_UP &&
+    gapUpRate <= GAP_UP_MOMENTUM.MAX_GAP_UP
+  ) {
+    conditionsMet++;
+    reasons.push(`ギャップアップ+${gapUpRate.toFixed(1)}%（好材料の兆候）`);
+  }
+
+  // 条件2: 引け強い(70%以上)
+  if (
+    closingStrength !== null &&
+    closingStrength >= GAP_UP_MOMENTUM.CLOSING_STRENGTH_THRESHOLD
+  ) {
+    conditionsMet++;
+    reasons.push(`引け強い（強度${closingStrength.toFixed(0)}%）`);
+  }
+
+  // 条件3: 出来高確認(1.3倍以上)
+  if (
+    volumeSpikeRate !== null &&
+    volumeSpikeRate >= GAP_UP_MOMENTUM.VOLUME_CONFIRMATION_THRESHOLD
+  ) {
+    conditionsMet++;
+    reasons.push(`出来高${volumeSpikeRate.toFixed(1)}倍（実需の裏付け）`);
+  }
+
+  return {
+    isMomentum: conditionsMet >= 2,
+    reasons,
+  };
 }
 
 /** 投資スタイルに応じたテクニカルブレーキ閾値を取得 */

@@ -42,6 +42,17 @@ export interface PatternsResponse {
 }
 
 /**
+ * 引けの強さを計算（0-100%）
+ * (close - low) / (high - low) * 100
+ * 値が高いほど引けにかけて強い（高値圏で引けた）
+ */
+export function calculateClosingStrength(candle: CandlestickData): number {
+  const range = candle.high - candle.low;
+  if (range === 0) return 50; // 値動きなしは中立
+  return ((candle.close - candle.low) / range) * 100;
+}
+
+/**
  * 単一ローソク足のパターンを分析
  */
 export function analyzeSingleCandle(candle: CandlestickData): PatternResult {

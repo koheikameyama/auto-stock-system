@@ -507,9 +507,17 @@ export function buildTimingIndicatorsContext(
 
   if (gapUpRate !== null) {
     const sign = gapUpRate >= 0 ? "+" : "";
+    let gapInterpretation: string;
+    if (Math.abs(gapUpRate) >= 5) {
+      gapInterpretation = "大きなギャップは過熱感の兆候。飛びつき買いに注意";
+    } else if (gapUpRate >= 2 && gapUpRate < 5) {
+      gapInterpretation = "好材料を反映した小幅ギャップ。引け強い+出来高が伴えば積極派にとって正のモメンタムシグナル";
+    } else {
+      gapInterpretation = "通常範囲の変動";
+    }
     lines.push(
       `・ギャップアップ率: ${sign}${gapUpRate.toFixed(1)}%（前日引け→当日寄付きで${sign}${gapUpRate.toFixed(1)}%変動）`,
-      `  → ${Math.abs(gapUpRate) >= 5 ? "大きなギャップは過熱感の兆候。飛びつき買いに注意" : "通常範囲の変動"}`,
+      `  → ${gapInterpretation}`,
     );
   }
 
