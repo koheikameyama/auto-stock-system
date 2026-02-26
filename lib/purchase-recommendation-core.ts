@@ -44,7 +44,6 @@ import {
   isPreEarningsBlock,
   isEarningsNear,
   getDaysUntilEarnings,
-  isPostExDividend,
 } from "@/lib/stock-safety-rules";
 import { generateCorrectionExplanation, getStyleNameJa } from "@/lib/correction-explanation";
 import { getSectorTrend, formatSectorTrendForPrompt } from "@/lib/sector-trend";
