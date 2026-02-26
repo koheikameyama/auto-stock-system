@@ -419,6 +419,19 @@ export const VOLUME_ANALYSIS = {
   ACCUMULATION_THRESHOLD: 0.7, // これ以下 → 出来高を伴わない調整（一時的な下落シグナル）
 } as const;
 
+// タイミング補助指標の閾値
+export const TIMING_INDICATORS = {
+  // ギャップアップ率の閾値
+  GAP_UP_SURGE_THRESHOLD: 10, // ギャップアップ率(%)がこれ以上で buy → stay（飛びつき買い防止）
+  GAP_UP_WARNING_THRESHOLD: 5, // これ以上でAIに警告指示
+  // 出来高急増率の閾値
+  VOLUME_SPIKE_EXTREME_THRESHOLD: 5.0, // 異常な出来高（仕手株リスク判定用）
+  VOLUME_SPIKE_HIGH_THRESHOLD: 2.0, // AIに材料確認を指示する閾値
+  VOLUME_SPIKE_NOTABLE_THRESHOLD: 1.5, // 注目度上昇の目安
+  // 売買代金フォーマット
+  TURNOVER_OKU_THRESHOLD: 100_000_000, // 1億円（億円単位表示の閾値）
+} as const;
+
 // 相対強度分析の閾値（銘柄 vs 市場/セクター）
 export const RELATIVE_STRENGTH = {
   // 銘柄変化率 - 市場変化率（%）: これ以上でアウトパフォーム
