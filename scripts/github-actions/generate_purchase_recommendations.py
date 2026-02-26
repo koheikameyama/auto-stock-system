@@ -46,12 +46,14 @@ def get_cron_secret() -> str:
 
 
 def fetch_watchlist_stocks(conn) -> list[dict]:
-    """ウォッチリストの銘柄IDを取得（重複排除）"""
+    """ウォッチリストの銘柄IDを取得（重複排除、チャートデータがある銘柄のみ）"""
     with conn.cursor() as cur:
         cur.execute('''
             SELECT DISTINCT ws."stockId", s.name, s."tickerCode"
             FROM "WatchlistStock" ws
             JOIN "Stock" s ON ws."stockId" = s.id
+            WHERE s."hasChartData" = true
+              AND s."isDelisted" = false
         ''')
         rows = cur.fetchall()
     return [{"stockId": row[0], "name": row[1], "tickerCode": row[2]} for row in rows]

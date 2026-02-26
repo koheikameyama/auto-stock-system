@@ -155,6 +155,8 @@ export async function POST(request: NextRequest) {
         where: {
           dailyChangeRate: { not: null },
           latestVolume: { gte: 100000 },
+          hasChartData: true,
+          isDelisted: false,
         },
         orderBy: { dailyChangeRate: "desc" },
         take: MOVERS_COUNT,
@@ -176,6 +178,8 @@ export async function POST(request: NextRequest) {
         where: {
           dailyChangeRate: { not: null },
           latestVolume: { gte: 100000 },
+          hasChartData: true,
+          isDelisted: false,
         },
         orderBy: { dailyChangeRate: "asc" },
         take: MOVERS_COUNT,

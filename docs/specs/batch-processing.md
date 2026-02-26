@@ -223,6 +223,18 @@ MONTHLY
 | 出来高急増率 | `volumeSpikeRate` | 当日出来高 / 過去平均出来高 |
 | 売買代金 | `turnoverValue` | 出来高 × 終値 |
 | ATR(14) | `atr` | 14日間の平均真の値幅（Average True Range） |
+| チャートデータ有無 | `hasChartData` | データポイント数 ≥ `MIN_CHART_DATA_POINTS`（20） |
+
+### チャートデータ品質フィルタ
+
+`fetch_stock_prices.py` で株価データ取得時に、ヒストリカルデータのポイント数が `MIN_CHART_DATA_POINTS`（20）未満の銘柄は `hasChartData = false` に設定される。
+取得失敗した銘柄も `hasChartData = false` になる。
+
+`hasChartData = false` の銘柄は以下の処理から除外される:
+- 日次おすすめ生成（`generate-daily`）
+- 市場ランキング生成（`gainers-losers`）
+- 購入判断生成（`generate_purchase_recommendations.py`）
+- ポートフォリオ分析（`generate_portfolio_analysis.py`）
 
 ## Slack通知
 
