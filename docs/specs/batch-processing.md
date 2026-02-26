@@ -7,89 +7,83 @@ GitHub Actionsで定期実行されるバッチ処理群です。株価データ
 ## 日次データフロー
 
 ```
-MORNING (07:00-09:00 JST)
-├─ 07:00: 業績データ取得（7日ローテーション）
+SESSION (09:00 / 12:30 / 15:30 JST) ── stock-predictions.yml
+
+  Phase 1: データ取得（並列）
+  ├─ fetch-news（朝: JP+US / 昼・引け: JP）
+  └─ fetch-stock-prices（全銘柄の株価更新）
+
+  Phase 2: セクタートレンド計算
+  └─ calculate-sector-trends（Phase 1 完了後）
+
+  Phase 3: 分析ジョブ群（並列、Phase 2 完了後）
+  ├─ purchase-recommendations（常に）
+  ├─ portfolio-analysis（常に）
+  ├─ personal-recommendations（常に）
+  ├─ gainers-losers（引けのみ）
+  ├─ portfolio-snapshots（引けのみ）
+  └─ daily-market-navigator（朝・引けのみ）
+
+  Phase 4: 通知
+  └─ notify（プッシュ通知 + Slack）
+
+独立バッチ（セッション外）
+├─ 06:00: 業績データ取得（7日ローテーション）
 ├─ 07:00: 事業内容取得（30日ローテーション）
-├─ 07:30: ニュース取得（JP + US）
-└─ 09:00: 取引開始通知
-
-SESSION 1: 朝 (09:00 JST)
-├─ 株価更新
-├─ セクタートレンド計算
-├─ 購入判断生成（ウォッチリスト）
-├─ ポートフォリオ分析
-└─ 日次おすすめ生成
-
-SESSION 2: 昼 (12:30 JST)
-├─ 株価更新
-├─ セクタートレンド計算
-├─ 購入判断生成（ウォッチリスト）
-├─ ポートフォリオ分析
-└─ 日次おすすめ生成
-
-SESSION 3: 引け (15:30 JST)
-├─ 株価更新
-├─ セクタートレンド計算
-├─ 購入判断生成（ウォッチリスト）
-├─ ポートフォリオ分析
-├─ ポートフォリオ総評（引けのみ）
-├─ 市場ランキング生成（引けのみ）
-├─ 資産スナップショット（引けのみ）
-└─ 日次おすすめ生成
-
-16:00 JST: 推奨結果評価
-18:00 JST: AI精度レポート生成
+├─ 09:00/15:30: 取引時間通知
+├─ 10:00: OpenAI使用量チェック
+├─ 16:00: 推奨結果評価
+└─ 18:00: AI精度レポート生成
 
 WEEKLY
-└─ 日曜 03:00 JST: 古いデータ削除
+└─ 日曜 03:00: 古いデータ削除
 
 MONTHLY
-└─ 1日 09:00 JST: JPX銘柄マスタ同期
+└─ 1日 09:00: JPX銘柄マスタ同期
 ```
+
+## cron-job.org スケジュール
+
+セッション系は3トリガーに集約:
+
+| JST | ワークフロー | 入力 |
+|-----|------------|------|
+| 09:00 | stock-predictions | session=morning |
+| 12:30 | stock-predictions | session=noon |
+| 15:30 | stock-predictions | session=close |
 
 ## ワークフロー一覧
 
-### 1. 注目銘柄生成（featured-stocks.yml）
+### 1. 株価分析オーケストレーター（stock-predictions.yml）
 
-| スケジュール | JST |
-|-------------|-----|
-| `0 0 * * 1-5` | 09:00 |
-| `30 3 * * 1-5` | 12:30 |
-| `35 6 * * 1-5` | 15:35 |
+cron-job.org から `workflow_dispatch` でセッション（morning/noon/close）を指定してトリガー。
 
-**ジョブ構成**:
-1. `determine-session` - JST時刻からセッション判定
-2. `fetch-stock-prices` - 全銘柄の株価更新（yfinance一括）
-3. `personal-recommendations` - ユーザー別おすすめ生成
-4. `notify` - Slack通知
+**実行フロー（`needs` で順序保証）**:
 
-**呼び出しAPI**: `POST /api/recommendations/generate-daily`
+```
+fetch-news + fetch-stock-prices（並列）
+  → calculate-sector-trends
+    → 分析ジョブ群（並列）
+      → notify
+```
 
-### 2. セクタートレンド計算（calculate-sector-trends.yml）
+**子ワークフロー一覧**:
 
-cron-job.org から `workflow_dispatch` でトリガー。他の分析の前提データ。
-
-**ジョブ構成**: `generate` → `notify`
-
-### 3. 株価予測・分析（stock-predictions.yml）
-
-cron-job.org から `workflow_dispatch` でトリガー。3ジョブが並列実行されるオーケストレーター。
-
-**構成**:
-1. `purchase-recommendations` → `purchase-recommendations.yml`（並列）
-2. `portfolio-analysis` → `portfolio-analysis.yml`（並列）
-3. `gainers-losers` → `gainers-losers.yml`（並列）
-4. `notify` - プッシュ通知 + Slack通知
+| ワークフロー | 処理 | セッション条件 |
+|-------------|------|--------------|
+| `fetch-news.yml` | ニュース取得 | 常に（朝: JP+US / 昼・引け: JP） |
+| `fetch-stock-prices.yml` | 株価更新 | 常に |
+| `calculate-sector-trends.yml` | セクタートレンド計算 | 常に |
+| `purchase-recommendations.yml` | 購入判断生成 | 常に |
+| `portfolio-analysis.yml` | ポートフォリオ分析 | 常に |
+| `personal-recommendations.yml` | おすすめ銘柄生成 | 常に |
+| `gainers-losers.yml` | 市場ランキング生成 | close のみ |
+| `portfolio-snapshots.yml` | 資産スナップショット | close のみ |
+| `daily-market-navigator.yml` | ポートフォリオ総評 | morning + close |
 
 各ワークフローは `workflow_dispatch` で単独実行も可能。
 
-### 4. ポートフォリオスナップショット（portfolio-snapshots.yml）
-
-cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
-
-**ジョブ構成**: `generate` → `notify`
-
-### 5. 業績データ取得（fetch-earnings.yml）
+### 2. 業績データ取得（fetch-earnings.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -99,14 +93,7 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **取得項目**: 売上高、純利益、EPS、成長率、黒字/赤字、利益トレンド、次回決算日
 
-### 6. ニュース取得（fetch-news.yml）
-
-| スケジュール | JST | 対象 |
-|-------------|-----|------|
-| `30 22 * * *` | 07:30 | JP + US |
-| `0 3 * * 1-5` | 12:00 | JP のみ |
-
-### 7. 事業内容取得（fetch-business-descriptions.yml）
+### 3. 事業内容取得（fetch-business-descriptions.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -116,7 +103,7 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **処理**: yfinanceで英語取得 → OpenAIで日本語翻訳（Producer-Consumerパイプライン）
 
-### 8. 株価アラート（price-alerts.yml）
+### 4. 株価アラート（price-alerts.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -130,7 +117,7 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **除外**: 昼休み（11:30-12:30）、取引時間外
 
-### 9. 推奨結果評価（evaluate-outcomes.yml）
+### 5. 推奨結果評価（evaluate-outcomes.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -138,7 +125,7 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **評価内容**: 過去の推奨に対して1日/3日/7日/14日後のリターンを計算
 
-### 10. AI精度レポート（recommendation-report.yml）
+### 6. AI精度レポート（recommendation-report.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -146,7 +133,7 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **内容**: 過去7日間の推奨精度を集計、OpenAIで改善提案を生成
 
-### 11. データクリーンアップ（cleanup-old-data.yml）
+### 7. データクリーンアップ（cleanup-old-data.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -163,7 +150,7 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **目的**: Railway DB容量上限（500MB）の管理
 
-### 12. JPX銘柄マスタ更新（jpx-stock-update.yml）
+### 8. JPX銘柄マスタ更新（jpx-stock-update.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -171,13 +158,13 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **内容**: JPXサイトから最新銘柄リストをスクレイピング → 銘柄マスタ更新
 
-### 13. JPX銘柄マスタ月次同期（sync-jpx-master.yml）
+### 9. JPX銘柄マスタ月次同期（sync-jpx-master.yml）
 
 | スケジュール | JST |
 |-------------|-----|
 | `0 0 1 * *` | 毎月1日 09:00 |
 
-### 14. OpenAI使用量チェック（check-openai-usage.yml）
+### 10. OpenAI使用量チェック（check-openai-usage.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -185,14 +172,14 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 **内容**: OpenAI API使用量を確認、予算上限に近づいたらSlackアラート
 
-### 15. 取引時間通知（trading-hours-notification.yml）
+### 11. 取引時間通知（trading-hours-notification.yml）
 
 | スケジュール | JST |
 |-------------|-----|
 | `0 0 * * 1-5` | 09:00（開場通知） |
 | `30 6 * * 1-5` | 15:30（引け通知） |
 
-### 16. CI/CD（ci.yml）
+### 12. CI/CD（ci.yml）
 
 **トリガー**: main/develop ブランチへのプッシュ
 
@@ -255,10 +242,8 @@ cron-job.org から `workflow_dispatch` でトリガー（引けのみ）。
 
 | ワークフロー | 操作テーブル |
 |-------------|-------------|
-| 注目銘柄生成 | UserDailyRecommendation |
-| 株価分析 | PurchaseRecommendation, StockAnalysis, DailyMarketMover, PortfolioSnapshot |
+| stock-predictions（統合） | Stock（価格）, MarketNews, SectorTrend, PurchaseRecommendation, StockAnalysis, UserDailyRecommendation, DailyMarketMover, PortfolioSnapshot, PortfolioOverallAnalysis |
 | 業績データ | Stock（業績カラム群） |
-| ニュース | MarketNews, SectorTrend |
 | 事業内容 | Stock.businessDescription |
 | クリーンアップ | StockAnalysis, PurchaseRecommendation, UserDailyRecommendation, MarketNews, SectorTrend |
 | 精度レポート | DailyAIReport |

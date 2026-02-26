@@ -1,21 +1,23 @@
-name: Daily Market Navigator
+name: Personal Recommendations
 
 on:
   workflow_dispatch:
     inputs:
       session:
-        description: 'セッション (morning / evening)'
+        description: 'Session (morning/afternoon/evening)'
         required: true
+        default: 'evening'
         type: choice
         options:
           - morning
+          - afternoon
           - evening
   workflow_call:
     inputs:
       session:
-        description: 'セッション (morning / evening)'
+        description: 'Session (morning/afternoon/evening)'
         type: string
-        default: 'morning'
+        default: 'evening'
 
 jobs:
   generate:
@@ -30,12 +32,13 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install psycopg2-binary requests
+        run: pip install "yfinance>=1.2.0" psycopg2-binary openai numpy requests
 
-      - name: Generate portfolio overall analysis
+      - name: Generate user recommendations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SESSION: ${{ inputs.session }}
-        run: python scripts/github-actions/generate_portfolio_overall_analysis.py
+        run: python scripts/github-actions/generate_personal_recommendations.py

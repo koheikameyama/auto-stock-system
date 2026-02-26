@@ -3,27 +3,92 @@ name: Stock Predictions & Analysis
 on:
   workflow_dispatch:
     inputs:
+      session:
+        description: 'セッション (morning/noon/close)'
+        required: true
+        default: 'close'
+        type: choice
+        options:
+          - morning
+          - noon
+          - close
       notify:
         description: 'Push通知を送信する'
         required: false
         type: boolean
         default: true
 
+# ──────────────────────────────────────────────
+# 実行フロー:
+#   fetch-news + fetch-stock-prices（並列）
+#     → calculate-sector-trends
+#       → 分析ジョブ群（並列）
+#         → notify
+# ──────────────────────────────────────────────
+
 jobs:
+  # ── Phase 1: データ取得（並列） ──
+
+  fetch-news:
+    uses: ./.github/workflows/fetch-news.yml
+    with:
+      market: ${{ inputs.session == 'morning' && 'both' || 'jp' }}
+    secrets: inherit
+
+  fetch-stock-prices:
+    uses: ./.github/workflows/fetch-stock-prices.yml
+    secrets: inherit
+
+  # ── Phase 2: セクタートレンド計算 ──
+
+  calculate-sector-trends:
+    needs: [fetch-news, fetch-stock-prices]
+    uses: ./.github/workflows/calculate-sector-trends.yml
+    secrets: inherit
+
+  # ── Phase 3: 分析ジョブ群（並列） ──
+
   purchase-recommendations:
+    needs: calculate-sector-trends
     uses: ./.github/workflows/purchase-recommendations.yml
     secrets: inherit
 
   portfolio-analysis:
+    needs: calculate-sector-trends
     uses: ./.github/workflows/portfolio-analysis.yml
     secrets: inherit
 
+  personal-recommendations:
+    needs: calculate-sector-trends
+    uses: ./.github/workflows/personal-recommendations.yml
+    with:
+      session: ${{ inputs.session == 'morning' && 'morning' || inputs.session == 'noon' && 'afternoon' || 'evening' }}
+    secrets: inherit
+
   gainers-losers:
+    if: inputs.session == 'close'
+    needs: calculate-sector-trends
     uses: ./.github/workflows/gainers-losers.yml
     secrets: inherit
 
+  portfolio-snapshots:
+    if: inputs.session == 'close'
+    needs: calculate-sector-trends
+    uses: ./.github/workflows/portfolio-snapshots.yml
+    secrets: inherit
+
+  daily-market-navigator:
+    if: inputs.session == 'morning' || inputs.session == 'close'
+    needs: calculate-sector-trends
+    uses: ./.github/workflows/daily-market-navigator.yml
+    with:
+      session: ${{ inputs.session == 'morning' && 'morning' || 'evening' }}
+    secrets: inherit
+
+  # ── Phase 4: 通知 ──
+
   notify:
-    needs: [purchase-recommendations, portfolio-analysis, gainers-losers]
+    needs: [purchase-recommendations, portfolio-analysis, personal-recommendations, gainers-losers, portfolio-snapshots, daily-market-navigator]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -45,7 +110,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           python scripts/github-actions/send_push_notification.py \
-            --title "今日の株価予測が完了しました" \
+            --title "今日の株価分析が完了しました" \
             --body "ポートフォリオ分析と購入レコメンドを更新しました" \
             --url "/my-stocks"
 
@@ -54,8 +119,8 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "✅ 株価予測の生成に成功しました"
-          SLACK_MESSAGE: "株価予測・ポートフォリオ分析・購入レコメンドを更新しました"
+          SLACK_TITLE: "✅ 株価分析の生成に成功しました (${{ inputs.session }})"
+          SLACK_MESSAGE: "株価分析・ポートフォリオ分析・購入レコメンドを更新しました"
           SLACK_COLOR: good
           SLACK_FOOTER: "Stock Buddy"
 
@@ -64,7 +129,7 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "❌ 株価予測の生成に失敗しました"
+          SLACK_TITLE: "❌ 株価分析の生成に失敗しました (${{ inputs.session }})"
           SLACK_MESSAGE: "詳細はGitHub Actionsログを確認してください"
           SLACK_COLOR: danger
           SLACK_FOOTER: "Stock Buddy"
