@@ -221,7 +221,7 @@ def _compute_price_data(hist) -> dict | None:
             )
             true_ranges.append(tr)
         if len(true_ranges) >= 14:
-            atr14 = round(sum(true_ranges[-14:]) / 14, 2)
+            atr14 = round(float(sum(true_ranges[-14:])) / 14, 2)
 
     # 移動平均乖離率（25日SMA）
     ma_deviation_rate = None
