@@ -433,6 +433,84 @@ export function buildMarketContext(marketData: MarketIndexData | null): string {
 }
 
 /**
+ * 防御モードコンテキスト文字列を生成する
+ * 市場パニック時にAIプロンプトに警告を挿入する
+ */
+export function buildDefensiveModeContext(marketData: MarketIndexData | null): string {
+  if (!marketData?.isMarketPanic) return "";
+
+  return `
+【⚠️ 市場パニック - 防御モード発動中】
+日経平均が週間${marketData.weekChangeRate.toFixed(1)}%と大幅に下落しています。
+全投資スタイルの閾値が引き締められ、より慎重な判断基準が適用されています。
+- 新規購入は特に慎重に判断してください
+- 「落ちるナイフを掴む」リスクを重視してください
+- 市場の安定を確認するまで様子見が安全です
+`;
+}
+
+/**
+ * 決算間近コンテキスト文字列を生成する
+ * @param nextEarningsDate - 次回決算発表予定日
+ */
+export function buildEarningsContext(nextEarningsDate: Date | null): string {
+  if (!nextEarningsDate) return "";
+
+  const now = new Date();
+  const diffMs = nextEarningsDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0 || diffDays > 7) return "";
+
+  if (diffDays <= 3) {
+    return `
+【⚠️ 決算発表まであと${diffDays}日】
+- 決算発表日: ${nextEarningsDate.toISOString().split("T")[0]}
+- 決算直前のため、新規購入は「決算ギャンブル」になります
+- 決算内容次第で大幅な値動きの可能性があります
+- 決算後の値動きを確認してから判断することを推奨します
+`;
+  }
+
+  return `
+【決算発表まであと${diffDays}日】
+- 決算発表日: ${nextEarningsDate.toISOString().split("T")[0]}
+- 決算結果次第で株価が大きく動く可能性があります
+- 新規購入する場合は決算リスクを考慮してください
+`;
+}
+
+/**
+ * 配当権利落ちコンテキスト文字列を生成する
+ * @param exDividendDate - 配当権利落ち日
+ * @param dividendYield - 配当利回り（%）
+ */
+export function buildExDividendContext(
+  exDividendDate: Date | null,
+  dividendYield: number | null,
+): string {
+  if (!exDividendDate) return "";
+
+  const now = new Date();
+  const diffMs = now.getTime() - exDividendDate.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0 || diffDays > 3) return "";
+
+  const yieldInfo = dividendYield
+    ? `配当利回り${dividendYield.toFixed(2)}%分の下落は配当落ちによるものです。`
+    : "配当落ち分の株価下落は正常な調整です。";
+
+  return `
+【配当権利落ち直後（${diffDays}日経過）】
+- 権利落ち日: ${exDividendDate.toISOString().split("T")[0]}
+- ${yieldInfo}
+- この下落は「トレンド転換」ではなく「配当落ちによる自然な調整」です
+- 配当落ち分の下落だけを理由に売却を推奨しないでください
+`;
+}
+
+/**
  * 出来高分析コンテキスト文字列を生成する
  *
  * 下落日と上昇日の平均出来高を比較して「本物の売り圧力」か「出来高を伴わない調整」かを判定する。
@@ -507,9 +585,17 @@ export function buildTimingIndicatorsContext(
 
   if (gapUpRate !== null) {
     const sign = gapUpRate >= 0 ? "+" : "";
+    let gapInterpretation: string;
+    if (Math.abs(gapUpRate) >= 5) {
+      gapInterpretation = "大きなギャップは過熱感の兆候。飛びつき買いに注意";
+    } else if (gapUpRate >= 2 && gapUpRate < 5) {
+      gapInterpretation = "好材料を反映した小幅ギャップ。引け強い+出来高が伴えば積極派にとって正のモメンタムシグナル";
+    } else {
+      gapInterpretation = "通常範囲の変動";
+    }
     lines.push(
       `・ギャップアップ率: ${sign}${gapUpRate.toFixed(1)}%（前日引け→当日寄付きで${sign}${gapUpRate.toFixed(1)}%変動）`,
-      `  → ${Math.abs(gapUpRate) >= 5 ? "大きなギャップは過熱感の兆候。飛びつき買いに注意" : "通常範囲の変動"}`,
+      `  → ${gapInterpretation}`,
     );
   }
 

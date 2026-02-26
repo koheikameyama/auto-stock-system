@@ -12,15 +12,18 @@ import {
   buildChartPatternContext,
   buildWeekChangeContext,
   buildMarketContext,
+  buildDefensiveModeContext,
   buildDeviationRateContext,
   buildDelistingContext,
   buildVolumeAnalysisContext,
   buildRelativeStrengthContext,
   buildTrendlineContext,
   buildTimingIndicatorsContext,
+  buildEarningsContext,
+  buildExDividendContext,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
-import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND } from "@/lib/constants";
+import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND, GAP_UP_MOMENTUM, EARNINGS_SAFETY } from "@/lib/constants";
 import {
   calculateDeviationRate,
   calculateSMA,
@@ -37,12 +40,18 @@ import {
   isUnprofitableSurge,
   getGapUpSurgeThreshold,
   getTechnicalBrakeThreshold,
+  hasGapUpMomentum,
+  isPreEarningsBlock,
+  isEarningsNear,
+  getDaysUntilEarnings,
 } from "@/lib/stock-safety-rules";
+import { generateCorrectionExplanation, getStyleNameJa } from "@/lib/correction-explanation";
 import { getSectorTrend, formatSectorTrendForPrompt } from "@/lib/sector-trend";
 import { AnalysisError } from "@/lib/portfolio-analysis-core";
 import {
   getCombinedSignal,
   analyzeSingleCandle,
+  calculateClosingStrength,
 } from "@/lib/candlestick-patterns";
 import { detectChartPatterns } from "@/lib/chart-patterns";
 
@@ -119,6 +128,8 @@ export async function executePurchaseRecommendation(
       turnoverValue: true,
       isDelisted: true,
       fetchFailCount: true,
+      nextEarningsDate: true,
+      exDividendDate: true,
     },
   });
 
@@ -274,6 +285,7 @@ export async function executePurchaseRecommendation(
 
   // 市場全体の状況コンテキスト
   const marketContext = buildMarketContext(marketData);
+  const defensiveModeContext = buildDefensiveModeContext(marketData);
 
   // セクタートレンド
   let sectorTrendContext = "";
@@ -300,6 +312,13 @@ export async function executePurchaseRecommendation(
   const delistingContext = buildDelistingContext(
     stock.isDelisted,
     stock.fetchFailCount,
+  );
+
+  // 決算・配当落ちコンテキスト
+  const earningsContext = buildEarningsContext(stock.nextEarningsDate);
+  const exDividendContext = buildExDividendContext(
+    stock.exDividendDate,
+    stock.dividendYield ? Number(stock.dividendYield) : null,
   );
 
   // ユーザー設定のコンテキスト
@@ -331,7 +350,7 @@ export async function executePurchaseRecommendation(
     pricesCount: prices.length,
     delistingContext,
     weekChangeContext,
-    marketContext,
+    marketContext: marketContext + defensiveModeContext + earningsContext + exDividendContext,
     sectorTrendContext,
     patternContext,
     technicalContext,
@@ -551,6 +570,9 @@ export async function executePurchaseRecommendation(
   const ALL_STYLE_KEYS = ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"] as const;
   for (const styleKey of ALL_STYLE_KEYS) {
     const sa = result.styleAnalyses[styleKey];
+    const styleName = getStyleNameJa(styleKey);
+    // correctionExplanation を初期化（AI結果にはこのフィールドがないため）
+    sa.correctionExplanation = null;
 
     // テクニカル総合判定ブレーキ（投資スタイル別の閾値）
     const technicalBrakeThreshold = getTechnicalBrakeThreshold(styleKey);
@@ -564,6 +586,14 @@ export async function executePurchaseRecommendation(
         if (styleKey === "CONSERVATIVE") {
             sa.advice = `テクニカル指標が下落シグナルを示しています。シグナルの好転を確認してから購入を検討しましょう。`;
         }
+        sa.correctionExplanation = generateCorrectionExplanation({
+          ruleId: "technical_brake",
+          styleName,
+          originalRecommendation: "buy",
+          correctedRecommendation: "stay",
+          thresholdValue: `${technicalBrakeThreshold}%`,
+          actualValue: `${combinedTechnical.strength}%`,
+        });
       }
     }
 
@@ -579,6 +609,13 @@ export async function executePurchaseRecommendation(
       if (styleKey === "CONSERVATIVE") {
         sa.advice = `業績が赤字かつボラティリティが高いため、業績改善を確認してから購入を検討しましょう。`;
       }
+      sa.correctionExplanation = generateCorrectionExplanation({
+        ruleId: "dangerous_stock",
+        styleName,
+        originalRecommendation: "buy",
+        correctedRecommendation: "stay",
+        actualValue: `${volatility?.toFixed(0)}%`,
+      });
     }
 
     // 赤字×急騰銘柄の強制補正（仕手株・バブルの可能性）
@@ -589,6 +626,13 @@ export async function executePurchaseRecommendation(
       if (styleKey === "CONSERVATIVE") {
         sa.advice = `赤字企業の急騰は投機的な値動きの可能性が高いため、業績改善を確認してから購入を検討しましょう。`;
       }
+      sa.correctionExplanation = generateCorrectionExplanation({
+        ruleId: "unprofitable_surge",
+        styleName,
+        originalRecommendation: "buy",
+        correctedRecommendation: "stay",
+        actualValue: `+${weekChangeRate?.toFixed(0)}%`,
+      });
     }
 
 
@@ -602,6 +646,14 @@ export async function executePurchaseRecommendation(
       if (styleKey === "CONSERVATIVE") {
         sa.advice = `寄付きで${gapUpRate.toFixed(1)}%急騰しています。高値掴みを避けるため、値動きが落ち着いてから購入を検討しましょう。`;
       }
+      sa.correctionExplanation = generateCorrectionExplanation({
+        ruleId: "gap_up_block",
+        styleName,
+        originalRecommendation: "buy",
+        correctedRecommendation: "stay",
+        thresholdValue: `${gapUpThreshold}%`,
+        actualValue: `${gapUpRate.toFixed(1)}%`,
+      });
     }
 
     // 異常出来高+急騰の強制補正（仕手株リスク）
@@ -616,6 +668,14 @@ export async function executePurchaseRecommendation(
       if (styleKey === "CONSERVATIVE") {
         sa.advice = `出来高急増と急騰が同時に発生しており、投機的な値動きの可能性があります。様子見を推奨します。`;
       }
+      sa.correctionExplanation = generateCorrectionExplanation({
+        ruleId: "volume_manipulation",
+        styleName,
+        originalRecommendation: "buy",
+        correctedRecommendation: "stay",
+        actualValue: `通常の${volumeSpikeRate.toFixed(1)}倍`,
+        additionalInfo: `${gapUpRate.toFixed(1)}%`,
+      });
     }
 
     // 市場急落時の強制補正
@@ -626,6 +686,35 @@ export async function executePurchaseRecommendation(
       if (styleKey === "CONSERVATIVE") {
         sa.advice = `市場全体が急落中です。市場の安定を確認してから購入を検討しましょう。`;
       }
+      sa.correctionExplanation = generateCorrectionExplanation({
+        ruleId: "market_crash",
+        styleName,
+        originalRecommendation: "buy",
+        correctedRecommendation: "stay",
+      });
+    }
+
+    // 決算直前ブロック（3日前以内: buy→stay強制）
+    if (isPreEarningsBlock(stock.nextEarningsDate) && sa.recommendation === "buy") {
+      const daysUntil = getDaysUntilEarnings(stock.nextEarningsDate);
+      sa.recommendation = "stay";
+      sa.reason = `決算発表まであと${daysUntil}日のため、決算ギャンブルを避ける様子見を推奨します。${sa.reason}`;
+      sa.buyCondition = "決算発表後の値動きを確認してから購入を検討してください";
+      if (styleKey === "CONSERVATIVE") {
+        sa.advice = `決算発表が間近（あと${daysUntil}日）のため、結果を確認してから購入を検討しましょう。`;
+      }
+      sa.correctionExplanation = generateCorrectionExplanation({
+        ruleId: "pre_earnings_block",
+        styleName,
+        originalRecommendation: "buy",
+        correctedRecommendation: "stay",
+        actualValue: `${daysUntil}日`,
+      });
+    }
+
+    // 決算間近のconfidenceペナルティ（7日前以内）
+    if (isEarningsNear(stock.nextEarningsDate) && sa.recommendation === "buy") {
+      sa.confidence = Math.max(0.3, sa.confidence + EARNINGS_SAFETY.EARNINGS_NEAR_CONFIDENCE_PENALTY);
     }
 
     // 下方乖離ボーナス
@@ -637,6 +726,13 @@ export async function executePurchaseRecommendation(
     if (deviationRate !== null && deviationRate <= SELL_TIMING.PANIC_SELL_THRESHOLD && sa.recommendation === "avoid") {
       sa.recommendation = "stay";
       sa.caution = `25日移動平均線から${deviationRate.toFixed(1)}%下方乖離しており売られすぎです。大底で見送るのはもったいないため、様子見を推奨します。${sa.caution}`;
+      sa.correctionExplanation = generateCorrectionExplanation({
+        ruleId: "panic_sell_prevention",
+        styleName,
+        originalRecommendation: "avoid",
+        correctedRecommendation: "stay",
+        actualValue: `${deviationRate.toFixed(1)}%`,
+      });
     }
   }
 
@@ -660,6 +756,7 @@ export async function executePurchaseRecommendation(
       sma25: sma25ForTiming,
     },
     skipSafetyRules,
+    isMarketPanic: marketData?.isMarketPanic === true,
   });
 
   // --- 積極派リバウンド狙い逆転ロジック ---
@@ -674,8 +771,16 @@ export async function executePurchaseRecommendation(
   const hasVolumeSupport = reboundVolumeSpikeRate !== null &&
     reboundVolumeSpikeRate >= AGGRESSIVE_REBOUND.VOLUME_SPIKE_THRESHOLD;
 
+  // ギャップアップモメンタム判定（積極派向け）
+  const reboundGapUpRate = stock.gapUpRate ? Number(stock.gapUpRate) : null;
+  const closingStrength = latestCandle ? calculateClosingStrength(latestCandle) : null;
+  const gapUpMomentum = hasGapUpMomentum({
+    gapUpRate: reboundGapUpRate,
+    closingStrength,
+    volumeSpikeRate: reboundVolumeSpikeRate,
+  });
+
   if (aggressiveStyle.recommendation === "stay" && !skipSafetyRules) {
-    const reboundGapUpRate = stock.gapUpRate ? Number(stock.gapUpRate) : null;
     // ハードセーフティ条件はリバウンドでも逆転しない
     const isHardBlocked =
       isDangerousStock(stock.isProfitable, volatility) ||
@@ -685,7 +790,7 @@ export async function executePurchaseRecommendation(
         reboundVolumeSpikeRate >= TIMING_INDICATORS.VOLUME_SPIKE_EXTREME_THRESHOLD &&
         reboundGapUpRate >= TIMING_INDICATORS.GAP_UP_WARNING_THRESHOLD);
 
-    if (!isHardBlocked && (isClosingStrong || hasVolumeSupport)) {
+    if (!isHardBlocked && (isClosingStrong || hasVolumeSupport || gapUpMomentum.isMomentum)) {
       aggressiveStyle.recommendation = "buy";
       aggressiveStyle.buyCondition = null;
       aggressiveStyle.buyTiming = "market";
@@ -701,6 +806,9 @@ export async function executePurchaseRecommendation(
       if (hasVolumeSupport) {
         boostReasons.push(`出来高が通常の${reboundVolumeSpikeRate!.toFixed(1)}倍と活発で実需の裏付けあり`);
       }
+      if (gapUpMomentum.isMomentum) {
+        boostReasons.push(`ギャップアップモメンタム（${gapUpMomentum.reasons.join("、")}）`);
+      }
 
       aggressiveStyle.reason = `【短期リバウンド狙い】${boostReasons.join("、")}。慎重派は様子見ですが、短期的な反発を狙える局面です。${aggressiveStyle.reason}`;
       aggressiveStyle.advice = `リバウンドの兆候があります。短期で利益を狙えるチャンスですが、利確は早めに設定しましょう。`;
@@ -708,11 +816,18 @@ export async function executePurchaseRecommendation(
     }
   }
 
-  // 引け強い・出来高ありの積極派買い推奨は、confidenceを一段ブースト
+  // 引け強い・出来高あり・ギャップアップモメンタムの積極派買い推奨は、confidenceを一段ブースト
   if (aggressiveStyle.recommendation === "buy" && (isClosingStrong || hasVolumeSupport)) {
     aggressiveStyle.confidence = Math.min(
       1.0,
       aggressiveStyle.confidence + AGGRESSIVE_REBOUND.CONFIDENCE_BOOST,
+    );
+  }
+  // ギャップアップモメンタム3条件揃いの追加ブースト
+  if (aggressiveStyle.recommendation === "buy" && gapUpMomentum.isMomentum) {
+    aggressiveStyle.confidence = Math.min(
+      1.0,
+      aggressiveStyle.confidence + GAP_UP_MOMENTUM.CONFIDENCE_BOOST,
     );
   }
 

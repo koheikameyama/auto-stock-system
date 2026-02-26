@@ -4,7 +4,7 @@
  * Pythonスクリプト (generate_personal_recommendations.py) から移植
  */
 
-import { MA_DEVIATION, MOMENTUM } from "@/lib/constants"
+import { MA_DEVIATION, MOMENTUM, MARKET_DEFENSIVE_MODE, EARNINGS_SAFETY } from "@/lib/constants"
 import { getSectorScoreBonus, type SectorTrendData } from "@/lib/sector-trend"
 import {
   isDangerousStock,
@@ -72,6 +72,7 @@ export interface StockForScoring {
   marketCap: number | null
   isProfitable: boolean | null
   maDeviationRate: number | null
+  nextEarningsDate: Date | null
 }
 
 export interface ScoredStock extends StockForScoring {
@@ -122,7 +123,8 @@ function normalizeValues(
 export function calculateStockScores(
   stocks: StockForScoring[],
   investmentStyle: string | null,
-  sectorTrends?: Record<string, SectorTrendData>
+  sectorTrends?: Record<string, SectorTrendData>,
+  isMarketPanic?: boolean,
 ): ScoredStock[] {
   const style = investmentStyle || "BALANCED"
   const weights = SCORE_WEIGHTS[style] || SCORE_WEIGHTS["BALANCED"]
@@ -160,6 +162,16 @@ export function calculateStockScores(
       isOverheated(maDeviation, style)
     ) {
       continue
+    }
+
+    // 決算3日前以内の銘柄を除外（決算ギャンブル防止）
+    if (stock.nextEarningsDate) {
+      const now = new Date()
+      const diffMs = new Date(stock.nextEarningsDate).getTime() - now.getTime()
+      const diffDays = diffMs / (1000 * 60 * 60 * 24)
+      if (diffDays >= 0 && diffDays <= EARNINGS_SAFETY.PRE_EARNINGS_BLOCK_DAYS) {
+        continue
+      }
     }
 
     let totalScore = 0
@@ -247,6 +259,12 @@ export function calculateStockScores(
         totalScore += bonus
         scoreBreakdown["sectorTrendBonus"] = bonus
       }
+    }
+
+    // 市場パニック時の一律ペナルティ
+    if (isMarketPanic) {
+      totalScore += MARKET_DEFENSIVE_MODE.SCORE_PENALTY
+      scoreBreakdown["marketPanicPenalty"] = MARKET_DEFENSIVE_MODE.SCORE_PENALTY
     }
 
     scoredStocks.push({

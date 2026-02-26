@@ -224,6 +224,19 @@ export const MARKET_INDEX = {
   CRASH_THRESHOLD: -5, // 急落判定（週間変化率%）
   UP_TREND_THRESHOLD: 3, // 上昇トレンド判定（週間変化率%）
   DOWN_TREND_THRESHOLD: -3, // 下落トレンド判定（週間変化率%）
+  PANIC_THRESHOLD: -7, // パニック閾値（週間-7%以下で防御モード発動）
+} as const;
+
+// 市場パニック時の防御モード
+// 日経平均の週間変化率がPANIC_THRESHOLDを下回った場合、
+// 全スタイルの閾値を引き締めて慎重な判断に切り替える
+export const MARKET_DEFENSIVE_MODE = {
+  SURGE_TIGHTENING_FACTOR: 0.7, // 急騰閾値を70%に引き締め
+  DECLINE_LOOSENING_FACTOR: 0.7, // 下落閾値を70%に引き締め（絶対値）
+  CONFIDENCE_REDUCTION: 0.1, // 全体confidence低下
+  OVERHEAT_TIGHTENING_FACTOR: 0.75, // 過熱閾値を75%に引き締め
+  GAP_UP_TIGHTENING_FACTOR: 0.7, // ギャップアップ閾値を70%に引き締め
+  SCORE_PENALTY: -10, // おすすめスコアリングの一律ペナルティ
 } as const;
 
 // バッジ表示設定
@@ -465,6 +478,16 @@ export const AGGRESSIVE_REBOUND = {
   CONFIDENCE_BOOST: 0.05,
 } as const;
 
+// ギャップアップモメンタムシグナル（積極派向け）
+// 小幅ギャップアップ + 引け強い + 出来高 → 正のモメンタムシグナル
+export const GAP_UP_MOMENTUM = {
+  MIN_GAP_UP: 2, // 正シグナルの最小ギャップ率(%)
+  MAX_GAP_UP: 5, // 正シグナルの最大ギャップ率(%)
+  CLOSING_STRENGTH_THRESHOLD: 70, // 引け強い判定(%) - (close-low)/(high-low)*100
+  VOLUME_CONFIRMATION_THRESHOLD: 1.3, // 出来高確認閾値(倍)
+  CONFIDENCE_BOOST: 0.08, // 3条件揃った時のconfidenceブースト
+} as const;
+
 // テクニカルブレーキの閾値（投資スタイル別）
 // combinedTechnical.strength がこの値以上で buy → stay
 export const TECHNICAL_BRAKE = {
@@ -510,6 +533,14 @@ export const EARNINGS_DATE_BADGE = {
   URGENT_DAYS: 3, // 3日以内: 赤
   WARNING_DAYS: 7, // 7日以内: 黄
   INFO_DAYS: 14, // 14日以内: グレー（14日超は非表示）
+} as const;
+
+// 決算・配当権利落ちのセーフティルール
+export const EARNINGS_SAFETY = {
+  PRE_EARNINGS_BLOCK_DAYS: 3, // 決算3日前から買いブロック
+  EARNINGS_NEAR_WARNING_DAYS: 7, // 7日前から警告
+  EARNINGS_NEAR_CONFIDENCE_PENALTY: -0.1, // 決算近接時のconfidenceペナルティ
+  POST_EX_DIVIDEND_DAYS: 3, // 権利落ち後3日間は配当落ち保護
 } as const;
 
 // 10セクターの定義

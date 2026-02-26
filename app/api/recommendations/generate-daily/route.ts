@@ -19,6 +19,7 @@ import {
   buildChartPatternContext,
   buildWeekChangeContext,
   buildMarketContext,
+  buildDefensiveModeContext,
   buildDeviationRateContext,
   buildTrendlineContext,
 } from "@/lib/stock-analysis-context";
@@ -164,6 +165,7 @@ export async function POST(request: NextRequest) {
         fiftyTwoWeekLow: true,
         isDelisted: true,
         fetchFailCount: true,
+        nextEarningsDate: true,
       },
     });
 
@@ -234,7 +236,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error("市場データ取得失敗:", error);
     }
-    const marketContext = buildMarketContext(marketData);
+    const marketContext = buildMarketContext(marketData) + buildDefensiveModeContext(marketData);
 
     // セクタートレンドを一括取得（全ユーザー共通）
     const { trends: sectorTrends } = await getAllSectorTrends();
@@ -269,6 +271,7 @@ export async function POST(request: NextRequest) {
             remainingBudget,
             sectorTrendMap,
             sectorTrendContext,
+            marketData?.isMarketPanic === true,
           );
           return result;
         } catch (error) {
@@ -337,6 +340,7 @@ async function processUser(
     fiftyTwoWeekLow: unknown;
     isDelisted: boolean;
     fetchFailCount: number;
+    nextEarningsDate: Date | null;
   }>,
   ownedStockIds: Set<string>,
   watchlistStockIds: Set<string>,
@@ -345,6 +349,7 @@ async function processUser(
   remainingBudget: number | null,
   sectorTrendMap: Record<string, SectorTrendData>,
   sectorTrendContext: string,
+  isMarketPanic: boolean = false,
 ): Promise<UserResult> {
   const { userId, investmentStyle, investmentBudget } = user;
 
@@ -364,6 +369,7 @@ async function processUser(
     marketCap: s.marketCap ? Number(s.marketCap) : null,
     isProfitable: s.isProfitable,
     maDeviationRate: s.maDeviationRate ? Number(s.maDeviationRate) : null,
+    nextEarningsDate: s.nextEarningsDate ?? null,
   }));
 
   // 予算の1.5倍までの緩いフィルタ（候補を広めに取る）
@@ -384,6 +390,7 @@ async function processUser(
     looseFiltered,
     investmentStyle,
     sectorTrendMap,
+    isMarketPanic,
   );
   console.log(
     `  Top 3 scores: ${scored
