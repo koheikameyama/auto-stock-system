@@ -211,6 +211,18 @@ MONTHLY
 | `generate_recommendation_report.py` | AI精度レポート | ThreadPool |
 | `check_openai_usage.py` | API使用量チェック | HTTP呼び出し |
 
+
+### 補助指標（タイミング判断用）
+
+`fetch_stock_prices.py` で株価取得時に以下の補助指標を算出・保存する。
+
+| 指標 | DBカラム | 計算式 |
+|------|---------|--------|
+| 始値 | `latestOpen` | yfinance Open値 |
+| ギャップアップ率 | `gapUpRate` | (当日始値 - 前日終値) / 前日終値 × 100 |
+| 出来高急増率 | `volumeSpikeRate` | 当日出来高 / 過去平均出来高 |
+| 売買代金 | `turnoverValue` | 出来高 × 終値 |
+
 ## Slack通知
 
 全ワークフローに成功/失敗のSlack通知を設定。
