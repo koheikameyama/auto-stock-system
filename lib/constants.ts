@@ -22,6 +22,10 @@ export const FETCH_FAIL_WARNING_THRESHOLD = 3;
 // 株価データの鮮度チェック（日数）: これより古いデータは無視
 export const STALE_DATA_DAYS = 14;
 
+// チャートデータの最小データ点数: これ未満の銘柄はおすすめ・分析から除外
+// チャートパターン検出(15点)・トレンドライン検出(15点)に必要な最低限の点数
+export const MIN_CHART_DATA_POINTS = 15;
+
 // デフォルト値
 export const DEFAULT_INVESTMENT_BUDGET = 100000;
 

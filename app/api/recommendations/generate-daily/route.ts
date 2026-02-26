@@ -34,6 +34,7 @@ import {
   MA_DEVIATION,
   STALE_DATA_DAYS,
   INVESTMENT_THEMES,
+  MIN_CHART_DATA_POINTS,
   getStyleLabel,
 } from "@/lib/constants";
 import {
@@ -54,6 +55,7 @@ import {
 import { insertRecommendationOutcome } from "@/lib/outcome-utils";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
 import { executePurchaseRecommendation } from "@/lib/purchase-recommendation-core";
+import { AnalysisError } from "@/lib/portfolio-analysis-core";
 
 interface GenerateRequest {
   session?: "morning" | "afternoon" | "evening";
@@ -497,6 +499,14 @@ async function filterByPurchaseRecommendation(
           );
           return { rec, keep, judgment: result.recommendation };
         } catch (error) {
+          // チャートデータ関連のエラーは除外（おすすめに含めない）
+          if (error instanceof AnalysisError && (error.code === "NO_PRICE_DATA" || error.code === "STALE_DATA")) {
+            console.warn(
+              `  ❌ ${rec.tickerCode}: PurchaseRec failed (${error.code}), excluding`,
+            );
+            return { rec, keep: false, judgment: "stay" };
+          }
+          // その他の予期しないエラーは安全のため保持
           console.warn(
             `  ⚠️ ${rec.tickerCode}: PurchaseRec check failed, keeping`,
             error,
@@ -637,6 +647,15 @@ async function buildStockContexts(
   for (const candidate of candidates) {
     const stockData = stockDataMap.get(candidate.id);
     const prices = pricesMap.get(candidate.id) || [];
+
+    // チャートデータが不足する銘柄はおすすめから除外
+    if (prices.length < MIN_CHART_DATA_POINTS) {
+      console.log(
+        `  ⏭️ ${candidate.tickerCode}: skipped (chart data: ${prices.length}/${MIN_CHART_DATA_POINTS} points)`,
+      );
+      continue;
+    }
+
     const currentPrice =
       currentPrices.get(candidate.tickerCode) || candidate.latestPrice || 0;
 
