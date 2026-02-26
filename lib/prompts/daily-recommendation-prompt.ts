@@ -13,6 +13,7 @@ export function buildDailyRecommendationPrompt(params: {
   marketContext: string;
   sectorTrendContext: string;
   newsContext: string;
+  ownedTickerCodes?: string[];
 }): string {
   const {
     session,
@@ -23,6 +24,7 @@ export function buildDailyRecommendationPrompt(params: {
     marketContext,
     sectorTrendContext,
     newsContext,
+    ownedTickerCodes = [],
   } = params;
 
   const prompts = SESSION_PROMPTS[session] || SESSION_PROMPTS.evening;
@@ -86,7 +88,17 @@ ${
 - 週間変化率がマイナスの銘柄を選ぶ場合、下落の原因（地合い/材料/需給）をreasonで推測してください
 - 週間変化率が+10%以上の銘柄を選ぶ場合、上昇の原因をreasonで推測してください
 
-【回答ルール】
+${
+  ownedTickerCodes.length > 0
+    ? `【ユーザーが既に保有している銘柄】
+以下の銘柄はユーザーが既に保有しています: ${ownedTickerCodes.join(", ")}
+- 保有銘柄でも追加購入のチャンスがあれば積極的に選んでください
+- 保有銘柄を選んだ場合、reason の冒頭に「【追加購入チャンス】」と付けて、なぜ今追加で買い増す価値があるかを説明してください
+  例: 「【追加購入チャンス】既にお持ちのこの銘柄は、RSI（売られすぎ・買われすぎの指標）が40付近で押し目の好機です。平均取得単価を下げる絶好のタイミングです。」
+
+`
+    : ""
+}【回答ルール】
 - 必ず7銘柄を選んでください（候補が7未満なら全て選ぶ）
 - 7銘柄中、同一セクター（業種）は最大2銘柄までとしてください
 - バリュー株（割安）とグロース株（成長）の比率は投資スタイルに応じて調整してください

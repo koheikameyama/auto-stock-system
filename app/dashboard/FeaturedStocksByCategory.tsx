@@ -186,8 +186,8 @@ export default function FeaturedStocksByCategory() {
         {/* バッジ - 右上 */}
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
           {stock.isOwned ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-              保有中
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              {tRec("additionalPurchase")}
             </span>
           ) : stock.isRegistered ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
