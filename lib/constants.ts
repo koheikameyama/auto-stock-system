@@ -236,6 +236,7 @@ export const PORTFOLIO_STATUS_CONFIG: Record<
   },
   ホールド: { text: "ホールド", color: "text-blue-700", bg: "bg-blue-50" },
   戻り売り: { text: "戻り売り", color: "text-amber-700", bg: "bg-amber-50" },
+  売却検討: { text: "売却検討", color: "text-red-700", bg: "bg-red-50" },
   即時売却: { text: "即時売却", color: "text-red-700", bg: "bg-red-50" },
   // 互換性維持のためのエイリアス
   good: { text: "押し目買い", color: "text-green-700", bg: "bg-green-50" },

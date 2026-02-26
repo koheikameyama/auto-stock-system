@@ -237,17 +237,11 @@ export function applyPortfolioStyleSafetyRules(params: {
       styleResult.shortTerm = `週間+${weekChangeRate!.toFixed(0)}%の急騰後のため、買い増しは高値掴みのリスクがあります。${styleResult.shortTerm}`;
     }
 
-    // statusTypeとsellTimingの双方向整合性チェック
+    // 戻り売りステータスの場合、sellTimingとsellTargetPriceを強制設定
     if (styleResult.statusType === "戻り売り") {
       if (styleResult.sellTiming !== "rebound") {
         styleResult.sellTiming = "rebound";
       }
-      if (!styleResult.sellTargetPrice && sma25 !== null) {
-        styleResult.sellTargetPrice = sma25;
-      }
-    }
-    if (styleResult.sellTiming === "rebound" && styleResult.statusType === "即時売却") {
-      styleResult.statusType = "戻り売り";
       if (!styleResult.sellTargetPrice && sma25 !== null) {
         styleResult.sellTargetPrice = sma25;
       }

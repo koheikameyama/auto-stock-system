@@ -750,8 +750,9 @@ export default function StockAnalysisCard({
               </p>
             </div>
           )}
-          {/* 売却検討（即時売却・戻り売り） */}
+          {/* 売却検討（即時売却・戻り売り・売却検討） */}
           {(effectiveAnalysis.statusType === "即時売却" ||
+            effectiveAnalysis.statusType === "売却検討" ||
             effectiveAnalysis.statusType === "戻り売り") && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
