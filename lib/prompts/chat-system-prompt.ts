@@ -60,7 +60,6 @@ export interface StockPreloadedData {
     recommendation: string | null;
     advice: string | null;
     confidence: number | null;
-    statusType: string | null;
     analyzedAt: Date;
     daysAgo: number;
   } | null;
@@ -75,7 +74,6 @@ export interface StockPreloadedData {
     shortTerm: string | null;
     mediumTerm: string | null;
     longTerm: string | null;
-    statusType: string | null;
     suggestedSellPrice: number | null;
     suggestedSellPercent: number | null;
     sellCondition: string | null;
@@ -249,7 +247,6 @@ export async function buildChatSystemPrompt(
           `推奨: ${a.recommendation}${a.confidence ? `（信頼度: ${a.confidence}%）` : ""}`,
         );
       }
-      if (a.statusType) anaLines.push(`状態: ${a.statusType}`);
       anaLines.push(
         `- 短期見通し（1-3ヶ月）: ${trendLabel(a.shortTermTrend)} ¥${a.shortTermPriceLow.toLocaleString()}〜¥${a.shortTermPriceHigh.toLocaleString()}`,
       );

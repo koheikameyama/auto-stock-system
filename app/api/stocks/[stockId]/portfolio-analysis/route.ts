@@ -48,7 +48,7 @@ export async function GET(
           mediumTerm: true,
           longTerm: true,
           lastAnalysis: true,
-          statusType: true,
+          recommendation: true,
           marketSignal: true,
           suggestedSellPrice: true,
           suggestedSellPercent: true,
@@ -143,7 +143,6 @@ export async function GET(
           longTerm: null,
           lastAnalysis: null,
           isToday: false,
-          statusType: null,
           marketSignal: null,
           suggestedSellPrice: null,
           suggestedSellPercent: null,
@@ -196,7 +195,6 @@ export async function GET(
       longTerm: portfolioStock.longTerm,
       lastAnalysis: portfolioStock.lastAnalysis.toISOString(),
       isToday,
-      statusType: portfolioStock.statusType,
       marketSignal: portfolioStock.marketSignal,
       suggestedSellPrice: portfolioStock.suggestedSellPrice ? Number(portfolioStock.suggestedSellPrice) : null,
       suggestedSellPercent: portfolioStock.suggestedSellPercent,
@@ -204,12 +202,7 @@ export async function GET(
       sellCondition: portfolioStock.sellCondition,
       sellTiming: portfolioStock.sellTiming,
       sellTargetPrice: portfolioStock.sellTargetPrice ? Number(portfolioStock.sellTargetPrice) : null,
-      recommendation: stockAnalysis?.recommendation ?? (
-        // StockAnalysisがない古いデータ用フォールバック: statusTypeから導出
-        portfolioStock.statusType === "warning" ? "sell" :
-        portfolioStock.statusType === "good" ? "buy" :
-        portfolioStock.statusType ? "hold" : null
-      ),
+      recommendation: stockAnalysis?.recommendation ?? portfolioStock.recommendation ?? null,
       // 損切りアラート用
       averagePurchasePrice,
       stopLossRate,

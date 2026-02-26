@@ -32,8 +32,6 @@ export interface UserStockResponse {
   recommendation?: "buy" | "sell" | "hold" | null;
   // 分析日時（StockAnalysisから取得）
   analyzedAt?: string | null;
-  // ステータス（Portfolio only）
-  statusType?: string | null;
   // 売却提案（Portfolio only）
   suggestedSellPrice?: number | null;
   sellCondition?: string | null;
@@ -264,8 +262,6 @@ export async function GET(request: NextRequest) {
         stopLossRate: ps.stopLossRate != null ? Number(ps.stopLossRate) : null,
         recommendation,
         analyzedAt,
-        // ステータス
-        statusType: ps.statusType,
         // 売却提案
         suggestedSellPrice: ps.suggestedSellPrice
           ? Number(ps.suggestedSellPrice)
@@ -583,7 +579,6 @@ export async function POST(request: NextRequest) {
         portfolioStock: Awaited<
           ReturnType<typeof createPortfolioStockWithTransaction>
         >["portfolioStock"] & {
-          statusType?: string | null;
           suggestedSellPrice?: Decimal | null;
           sellCondition?: string | null;
         };

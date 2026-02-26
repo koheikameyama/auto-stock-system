@@ -10,7 +10,7 @@ import {
   CARD_FOOTER_STYLES,
 } from "@/lib/ui-config";
 import {
-  PORTFOLIO_STATUS_CONFIG,
+  PORTFOLIO_RECOMMENDATION_CONFIG,
   PURCHASE_JUDGMENT_CONFIG,
   FETCH_FAIL_WARNING_THRESHOLD,
   INVESTMENT_THEME_CONFIG,
@@ -43,8 +43,8 @@ interface UserStock {
   quantity?: number;
   averagePurchasePrice?: number;
   purchaseDate?: string;
-  // ステータス
-  statusType?: string | null;
+  // AI推奨アクション
+  recommendation?: string | null;
   // AI分析テキスト（Portfolio）
   shortTerm?: string | null;
   // おすすめ経由の情報（Watchlist only）
@@ -146,11 +146,11 @@ export default function StockCard({
     return PURCHASE_JUDGMENT_CONFIG[recommendation.recommendation] || null;
   };
 
-  // AI Status Badge using statusType (for portfolio)
+  // AI Status Badge using recommendation (for portfolio)
   const getAIStatusBadge = () => {
-    const statusType = stock.statusType;
-    if (!statusType) return null;
-    return PORTFOLIO_STATUS_CONFIG[statusType] || null;
+    const rec = stock.recommendation || portfolioRecommendation;
+    if (!rec) return null;
+    return PORTFOLIO_RECOMMENDATION_CONFIG[rec] || null;
   };
 
   const aiJudgment = isWatchlist ? getAIPurchaseJudgment() : getAIStatusBadge();

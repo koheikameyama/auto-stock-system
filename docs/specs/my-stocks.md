@@ -294,7 +294,7 @@ AI分析なしで株価だけ追いたい銘柄。上限10銘柄。
 | shortTerm | Text? | 短期分析テキスト |
 | mediumTerm | Text? | 中期分析テキスト |
 | longTerm | Text? | 長期分析テキスト |
-| statusType | String? | AI推奨ステータス |
+| recommendation | String? | 推奨アクション（buy / hold / sell） |
 | marketSignal | String? | bullish / neutral / bearish |
 | suggestedSellPrice | Decimal? | 提案売却価格 |
 | suggestedSellPercent | Int? | 推奨売却割合（25/50/75/100） |

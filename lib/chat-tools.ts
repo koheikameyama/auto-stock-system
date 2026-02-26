@@ -73,7 +73,6 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
             currentPrice,
             profit: Math.round(profit),
             profitPercent: Number(profitPercent.toFixed(2)),
-            statusType: ps.statusType,
           }
         })
 
@@ -221,7 +220,6 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
           recommendation: analysis.recommendation,
           advice: analysis.advice,
           confidence: analysis.confidence,
-          statusType: analysis.statusType,
           analyzedAt: analysis.analyzedAt.toISOString(),
           daysAgo,
           freshness:
@@ -320,7 +318,6 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
           shortTerm: portfolioStock.shortTerm,
           mediumTerm: portfolioStock.mediumTerm,
           longTerm: portfolioStock.longTerm,
-          statusType: portfolioStock.statusType,
           marketSignal: portfolioStock.marketSignal,
           suggestedSellPrice: portfolioStock.suggestedSellPrice
             ? Number(portfolioStock.suggestedSellPrice)

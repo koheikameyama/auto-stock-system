@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import AnalysisTimestamp from "./AnalysisTimestamp";
 import {
   UPDATE_SCHEDULES,
-  PORTFOLIO_STATUS_CONFIG,
+  PORTFOLIO_RECOMMENDATION_CONFIG,
   MARKET_SIGNAL_CONFIG,
 } from "@/lib/constants";
 import InvestmentStyleTabs from "./InvestmentStyleTabs";
@@ -27,7 +27,6 @@ interface StockAnalysisCardProps {
 interface AnalysisData {
   // PortfolioStock
   lastAnalysis: string | null;
-  statusType: string | null;
   marketSignal: string | null;
   suggestedSellPrice: number | null;
   suggestedSellPercent: number | null;
@@ -71,7 +70,6 @@ interface AnalysisData {
 interface StyleAnalysisData {
   recommendation: string;
   confidence: number;
-  statusType: string;
   marketSignal: string;
   advice: string;
   reason?: string;
@@ -251,9 +249,9 @@ export default function StockAnalysisCard({
     }
   };
 
-  const getStatusBadge = (statusType: string | null | undefined) => {
-    if (!statusType) return null;
-    const config = PORTFOLIO_STATUS_CONFIG[statusType];
+  const getStatusBadge = (recommendation: string | null | undefined) => {
+    if (!recommendation) return null;
+    const config = PORTFOLIO_RECOMMENDATION_CONFIG[recommendation];
     if (!config) return null;
 
     return (
@@ -364,7 +362,6 @@ export default function StockAnalysisCard({
           ? {
               recommendation: styleData.recommendation,
               confidence: styleData.confidence,
-              statusType: styleData.statusType,
               marketSignal: styleData.marketSignal,
               advice: styleData.advice,
               ...(styleData.sellReason !== undefined ? { sellReason: styleData.sellReason } : {}),
@@ -525,7 +522,7 @@ export default function StockAnalysisCard({
               💡 AIアドバイス
             </p>
             <div className="flex items-center gap-2">
-              {getStatusBadge(effectiveAnalysis.statusType)}
+              {getStatusBadge(effectiveAnalysis.recommendation)}
               {getMarketSignalBadge(effectiveAnalysis.marketSignal)}
             </div>
           </div>
@@ -723,24 +720,21 @@ export default function StockAnalysisCard({
               </div>
             );
           })()}
-          {/* 買増・全力買い検討（好調時） */}
-          {(effectiveAnalysis.statusType === "押し目買い" ||
-            effectiveAnalysis.statusType === "全力買い") &&
-            (effectiveAnalysis.recommendation === "buy" ||
-              effectiveAnalysis.recommendation === "hold") && (
+          {/* 買い推奨（好調時） */}
+          {effectiveAnalysis.recommendation === "buy" && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
                 <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                  📈 {effectiveAnalysis.statusType}
+                  📈 買い推奨
                 </p>
                 <p className="text-sm text-gray-700">
-                  {effectiveAnalysis.statusType === "全力買い"
-                    ? "非常に強い上昇シグナルが出ています。積極的な投資を検討できるタイミングです。"
-                    : "上昇トレンド中の健全な調整です。押し目でのサポートを確認しながらの買い増しを検討しましょう。"}
+                  {effectiveAnalysis.buyTiming === "dip"
+                    ? "上昇トレンド中の健全な調整です。押し目でのサポートを確認しながらの買い増しを検討しましょう。"
+                    : "強い上昇シグナルが出ています。積極的な投資を検討できるタイミングです。"}
                 </p>
               </div>
             )}
           {/* ホールド（様子見） */}
-          {effectiveAnalysis.statusType === "ホールド" && (
+          {effectiveAnalysis.recommendation === "hold" && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
                 👀 ホールド
@@ -750,13 +744,11 @@ export default function StockAnalysisCard({
               </p>
             </div>
           )}
-          {/* 売却検討（即時売却・戻り売り・売却検討） */}
-          {(effectiveAnalysis.statusType === "即時売却" ||
-            effectiveAnalysis.statusType === "売却検討" ||
-            effectiveAnalysis.statusType === "戻り売り") && (
+          {/* 売却検討 */}
+          {effectiveAnalysis.recommendation === "sell" && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                ⚠️ {effectiveAnalysis.statusType}
+                ⚠️ 売却検討
               </p>
               <div className="space-y-2">
                 {effectiveAnalysis.suggestedSellPercent && (

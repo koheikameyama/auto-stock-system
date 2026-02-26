@@ -19,7 +19,6 @@ export interface UserStock {
   longTerm?: string | null;
   recommendation?: "buy" | "sell" | "hold" | null;
   analyzedAt?: string | null;
-  statusType?: string | null;
   takeProfitPrice?: number | null; // 旧形式（価格）
   stopLossPrice?: number | null; // 旧形式（価格）
   takeProfitRate?: number | null; // 新形式（%）

@@ -87,7 +87,7 @@ export function buildPortfolioAnalysisPrompt(params: {
 - すべての判断に具体的な根拠（テクニカル指標・ニュース・市場環境・財務指標）を必ず1つ以上挙げる
 - 文章は必ず「〇〇な理由で → △△な判断」の順番で書く
 - 専門用語を使う場合は必ず括弧内に解説を添える（例: RSI（売られすぎ・買われすぎの指標））
-- 各スタイルのステータス（statusType）は、現在の地合いとテクニカルを総合し、後述の5つから必ず1つ選択してください。
+- 各スタイルの recommendation は、現在の地合いとテクニカルを総合し、"buy" / "hold" / "sell" から必ず1つ選択してください。
 
 【銘柄情報】${isSimulation ? "（※これは購入を検討しているユーザーのシミュレーションデータです）" : ""}
 - 名前: ${stockName}
@@ -176,7 +176,6 @@ ${newsContext}${marketContext}${sectorTrendContext}
     "CONSERVATIVE": {
       "recommendation": "buy" | "hold" | "sell",
       "confidence": 0.0〜1.0の信頼度,
-      "statusType": "即時売却" | "戻り売り" | "ホールド" | "押し目買い" | "全力買い",
       "advice": "慎重派視点でのアドバイス（100文字以内）",
       "shortTerm": "慎重派視点での今週の判断（2-3文）",
       "sellReason": "売却理由（sellの場合のみ、holdやbuyの場合はnull）",
@@ -188,7 +187,6 @@ ${newsContext}${marketContext}${sectorTrendContext}
     "BALANCED": {
       "recommendation": "buy" | "hold" | "sell",
       "confidence": 0.0〜1.0の信頼度,
-      "statusType": "即時売却" | "戻り売り" | "ホールド" | "押し目買い" | "全力買い",
       "advice": "バランス型視点でのアドバイス（100文字以内）",
       "shortTerm": "バランス型視点での今週の判断（2-3文）",
       "sellReason": "売却理由（sellの場合のみ、holdやbuyの場合はnull）",
@@ -200,7 +198,6 @@ ${newsContext}${marketContext}${sectorTrendContext}
     "AGGRESSIVE": {
       "recommendation": "buy" | "hold" | "sell",
       "confidence": 0.0〜1.0の信頼度,
-      "statusType": "即時売却" | "戻り売り" | "ホールド" | "押し目買い" | "全力買い",
       "advice": "積極派視点でのアドバイス（100文字以内）",
       "shortTerm": "積極派視点での今週の判断（2-3文）",
       "sellReason": "売却理由（sellの場合のみ、holdやbuyの場合はnull）",
@@ -289,7 +286,6 @@ ${PROMPT_NEWS_CONSTRAINTS}
   - 75%: 大部分を利確、少量残して様子見
   - 100%: 全売却推奨
 - sellReason: テクニカル・ファンダメンタルに基づく具体的な売却理由を記載（指標名と数値を必ず含める）
-- 各スタイルの statusType はシステムが recommendation から自動決定するため、気にしなくてよい
 - 各スタイルの recommendation が "sell" の場合は sellReason に理由を記載する
 - 各スタイルの recommendation が "hold" または "buy" の場合は sellReason と suggestedSellPercent は null にする
 
@@ -325,13 +321,6 @@ ${PROMPT_NEWS_CONSTRAINTS}
   - 需給: 買い戻し、レジスタンスライン突破による買い加速
 - 例（下落）: 「市場全体で大型株への資金シフトが進んでおり、中小型株は売られやすい地合いです」
 - 例（上昇）: 「好決算を受けて買いが集中し、レジスタンスラインを突破しました」
-
-【ステータス（statusType）の選択指針】
-1. 【即時売却】: 撤退ライン到達、または致命的なトレンド崩壊（長期トレンド転換）。
-2. 【戻り売り】: 下落トレンドだが、一時的な反発（リバウンド）が見込めるため、戻ったところでの利益確定・損切りを推奨。
-3. 【ホールド】: 短期的なノイズや窓埋めはあるが、支持線（サポート）で止まる可能性が高く、静観が妥当。
-4. 【押し目買い】: 上昇トレンド中の健全な調整。支持線付近での追加購入の好機。
-5. 【全力買い】: 強い上昇シグナル（逆三尊完成など）と良好なファンダメンタルが合致。
 
 【表現の指針】
 - 専門用語を使う場合は必ず括弧内に解説を添える（例: RSI（売られすぎ・買われすぎの指標）、窓（前日の価格帯と重ならない隙間））

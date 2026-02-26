@@ -16,7 +16,6 @@ import { MA_DEVIATION, MOMENTUM } from "@/lib/constants";
 export interface PurchaseStyleAnalysis {
   recommendation: string; // "buy" | "stay" | "avoid"
   confidence: number;
-  statusType: string;
   marketSignal: string;
   advice: string;
   reason: string;
@@ -34,7 +33,6 @@ export interface PurchaseStyleAnalysis {
 export interface PortfolioStyleAnalysis {
   recommendation: string; // "buy" | "hold" | "sell"
   confidence: number;
-  statusType: string;
   marketSignal: string;
   advice: string;
   shortTerm: string;
@@ -115,7 +113,6 @@ export function applyPurchaseStyleSafetyRules(params: {
         styleResult.recommendation === "buy"
       ) {
         styleResult.recommendation = "stay";
-        styleResult.statusType = "ホールド";
         styleResult.confidence = Math.max(
           0,
           styleResult.confidence + MOMENTUM.DECLINE_CONFIDENCE_PENALTY,
@@ -124,8 +121,7 @@ export function applyPurchaseStyleSafetyRules(params: {
         styleResult.buyCondition =
           styleResult.buyCondition || "下落トレンドが落ち着いてから検討してください";
         if (style === INVESTMENT_STYLES.CONSERVATIVE) {
-          styleResult.statusType = "ホールド";
-          styleResult.advice = `週間${weekChangeRate!.toFixed(0)}%の下落トレンド中です。下げ止まりを確認してから購入を検討しましょう。`;
+            styleResult.advice = `週間${weekChangeRate!.toFixed(0)}%の下落トレンド中です。下げ止まりを確認してから購入を検討しましょう。`;
         }
       }
 
@@ -135,11 +131,9 @@ export function applyPurchaseStyleSafetyRules(params: {
         styleResult.recommendation === "buy"
       ) {
         styleResult.recommendation = "stay";
-        styleResult.statusType = "ホールド";
         styleResult.caution = `週間+${weekChangeRate!.toFixed(0)}%の急騰銘柄のため、様子見を推奨します。${styleResult.caution}`;
         if (style === INVESTMENT_STYLES.CONSERVATIVE) {
-          styleResult.statusType = "ホールド";
-          styleResult.advice = `週間+${weekChangeRate!.toFixed(0)}%の急騰後です。高値掴みを避けるため、調整を待ってから購入を検討しましょう。`;
+            styleResult.advice = `週間+${weekChangeRate!.toFixed(0)}%の急騰後です。高値掴みを避けるため、調整を待ってから購入を検討しましょう。`;
         }
       }
 
@@ -149,15 +143,13 @@ export function applyPurchaseStyleSafetyRules(params: {
         styleResult.recommendation === "buy"
       ) {
         styleResult.recommendation = "stay";
-        styleResult.statusType = "ホールド";
         styleResult.confidence = Math.max(
           0,
           styleResult.confidence + MA_DEVIATION.CONFIDENCE_PENALTY,
         );
         styleResult.caution = `25日移動平均線から+${deviationRate!.toFixed(1)}%乖離しており過熱圏のため、様子見を推奨します。${styleResult.caution}`;
         if (style === INVESTMENT_STYLES.CONSERVATIVE) {
-          styleResult.statusType = "ホールド";
-          styleResult.advice = `移動平均線から+${deviationRate!.toFixed(1)}%乖離しており過熱圏です。平均線への回帰を待ってから購入を検討しましょう。`;
+            styleResult.advice = `移動平均線から+${deviationRate!.toFixed(1)}%乖離しており過熱圏です。平均線への回帰を待ってから購入を検討しましょう。`;
         }
       }
     }
@@ -233,18 +225,7 @@ export function applyPortfolioStyleSafetyRules(params: {
       styleResult.recommendation === "buy"
     ) {
       styleResult.recommendation = "hold";
-      styleResult.statusType = "ホールド";
       styleResult.shortTerm = `週間+${weekChangeRate!.toFixed(0)}%の急騰後のため、買い増しは高値掴みのリスクがあります。${styleResult.shortTerm}`;
-    }
-
-    // 戻り売りステータスの場合、sellTimingとsellTargetPriceを強制設定
-    if (styleResult.statusType === "戻り売り") {
-      if (styleResult.sellTiming !== "rebound") {
-        styleResult.sellTiming = "rebound";
-      }
-      if (!styleResult.sellTargetPrice && sma25 !== null) {
-        styleResult.sellTargetPrice = sma25;
-      }
     }
 
     result[style] = styleResult;

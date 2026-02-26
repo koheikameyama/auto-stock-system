@@ -134,7 +134,6 @@ Stock Buddyの中核機能であるAI推奨システムです。3種類の推奨
 ```json
 {
   "marketSignal": "bullish | neutral | bearish",
-  "statusType": "即時売却 | 戻り売り | ホールド | 押し目買い | 全力買い",
   "recommendation": "buy | stay | avoid",
   "confidence": 0.85,
   "reason": "推奨理由",
@@ -171,7 +170,7 @@ Stock Buddyの中核機能であるAI推奨システムです。3種類の推奨
 
 **投資スタイル別分析（styleAnalyses）**:
 
-AIが1回のAPIコールで3つの投資スタイル（慎重派/バランス型/積極派）ごとに異なる判断（recommendation/confidence/advice/reason/caution/statusType）を直接生成します。各スタイルは短期/中期/長期の予測トレンドに対する重み付けとGO条件が異なります:
+AIが1回のAPIコールで3つの投資スタイル（慎重派/バランス型/積極派）ごとに異なる判断（recommendation/confidence/advice/reason/caution）を直接生成します。各スタイルは短期/中期/長期の予測トレンドに対する重み付けとGO条件が異なります:
 
 | スタイル | 重視するトレンド | GOを出す条件 | 判断傾向 | アドバイスのトーン |
 |----------|------------------|--------------|----------|-------------------|

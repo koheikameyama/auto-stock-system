@@ -276,9 +276,6 @@ model StockAnalysis {
   midTermText   String? @db.Text // 中期予測テキスト
   longTermText  String? @db.Text // 長期予測テキスト
 
-  // ステータス情報
-  statusType String? // "即時売却" | "戻り売り" | "ホールド" | "押し目買い" | "全力買い"
-
   // 売却条件
   sellCondition String? @db.Text // 売却判断の条件テキスト
 
@@ -388,8 +385,8 @@ model PortfolioStock {
   mediumTerm   String?   @db.Text
   longTerm     String?   @db.Text
 
-  // ステータス
-  statusType String? // 即時売却/戻り売り/ホールド/押し目買い/全力買い
+  // 推奨アクション
+  recommendation String? // "buy" | "hold" | "sell"
 
   // 市場シグナル（評価軸の統一）
   marketSignal String? // "bullish" | "neutral" | "bearish"

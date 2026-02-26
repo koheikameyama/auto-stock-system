@@ -220,7 +220,8 @@ export const MARKET_INDEX = {
 // 各種ステータスの英語キーから表示テキスト・色を一元管理
 
 // ポートフォリオ個別銘柄ステータス
-export const PORTFOLIO_STATUS_CONFIG: Record<
+// ポートフォリオ推奨アクション表示設定（recommendationベース）
+export const PORTFOLIO_RECOMMENDATION_CONFIG: Record<
   string,
   {
     text: string;
@@ -228,21 +229,9 @@ export const PORTFOLIO_STATUS_CONFIG: Record<
     bg: string;
   }
 > = {
-  全力買い: { text: "全力買い", color: "text-purple-700", bg: "bg-purple-50" },
-  押し目買い: {
-    text: "押し目買い",
-    color: "text-green-700",
-    bg: "bg-green-50",
-  },
-  ホールド: { text: "ホールド", color: "text-blue-700", bg: "bg-blue-50" },
-  戻り売り: { text: "戻り売り", color: "text-amber-700", bg: "bg-amber-50" },
-  売却検討: { text: "売却検討", color: "text-red-700", bg: "bg-red-50" },
-  即時売却: { text: "即時売却", color: "text-red-700", bg: "bg-red-50" },
-  // 互換性維持のためのエイリアス
-  good: { text: "押し目買い", color: "text-green-700", bg: "bg-green-50" },
-  neutral: { text: "ホールド", color: "text-blue-700", bg: "bg-blue-50" },
-  warning: { text: "戻り売り", color: "text-amber-700", bg: "bg-amber-50" },
-  caution: { text: "戻り売り", color: "text-amber-700", bg: "bg-amber-50" },
+  buy: { text: "買い推奨", color: "text-green-700", bg: "bg-green-50" },
+  hold: { text: "ホールド", color: "text-blue-700", bg: "bg-blue-50" },
+  sell: { text: "売却検討", color: "text-red-700", bg: "bg-red-50" },
 };
 
 // ウォッチリスト購入判断

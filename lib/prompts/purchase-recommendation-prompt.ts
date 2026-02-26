@@ -135,7 +135,6 @@ ${delistingContext}${weekChangeContext}${marketContext}${sectorTrendContext}${pa
   // C. 投資スタイル別の判断（3スタイル共通フィールド）
   //   recommendation: "buy" | "stay" | "avoid"
   //   confidence: 0.0〜1.0（小数点2桁）
-  //   statusType: "即時売却" | "戻り売り" | "ホールド" | "押し目買い" | "全力買い"
   //   advice: スタイル向けアドバイス（100文字以内）
   //   reason: スタイル視点の理由（1-2文）
   //   caution: 注意点（1-2文）

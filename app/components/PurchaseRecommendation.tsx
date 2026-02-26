@@ -16,7 +16,6 @@ interface PurchaseRecommendationProps {
 interface StyleAnalysisData {
   recommendation: string;
   confidence: number;
-  statusType?: string;
   marketSignal?: string;
   advice?: string;
   reason?: string;

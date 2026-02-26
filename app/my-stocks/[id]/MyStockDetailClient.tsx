@@ -42,7 +42,6 @@ interface Stock {
   quantity?: number;
   averagePurchasePrice?: number;
   purchaseDate?: string;
-  statusType?: string | null;
   suggestedSellPrice?: number | null;
   sellCondition?: string | null;
   // Individual TP/SL settings (rates in %)

@@ -111,7 +111,6 @@ export async function POST(request: Request) {
                   shortTerm: true,
                   mediumTerm: true,
                   longTerm: true,
-                  statusType: true,
                   suggestedSellPrice: true,
                   suggestedSellPercent: true,
                   sellCondition: true,
@@ -191,7 +190,6 @@ export async function POST(request: Request) {
               recommendation: analysisData.recommendation,
               advice: analysisData.advice,
               confidence: analysisData.confidence,
-              statusType: analysisData.statusType,
               analyzedAt: analysisData.analyzedAt,
               daysAgo: Math.floor(
                 (Date.now() - analysisData.analyzedAt.getTime()) /
@@ -211,7 +209,6 @@ export async function POST(request: Request) {
               shortTerm: portfolioData.shortTerm,
               mediumTerm: portfolioData.mediumTerm,
               longTerm: portfolioData.longTerm,
-              statusType: portfolioData.statusType,
               suggestedSellPrice: portfolioData.suggestedSellPrice
                 ? Number(portfolioData.suggestedSellPrice)
                 : null,

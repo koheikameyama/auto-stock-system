@@ -120,7 +120,7 @@ def main():
                 error_count += 1
                 continue
 
-            print(f"  Generated: {result.get('simpleStatus', 'N/A')} ({result.get('statusType', 'N/A')})")
+            print(f"  Generated: {result.get('recommendation', 'N/A')}")
             print(f"  Short-term: {result.get('shortTerm', 'N/A')[:60]}...")
             success_count += 1
 

@@ -28,7 +28,6 @@
 ```json
 {
   "marketSignal": "bullish | neutral | bearish",
-  "statusType": "即時売却 | 戻り売り | ホールド | 押し目買い | 全力買い",
   "shortTerm": "短期分析テキスト",
   "mediumTerm": "中期分析テキスト",
   "longTerm": "長期分析テキスト",
@@ -62,7 +61,7 @@
 
 **投資スタイル別分析（styleAnalyses）**:
 
-AIが1回のAPIコールで3つの投資スタイル（慎重派/バランス型/積極派）ごとに異なる判断（recommendation/confidence/advice/shortTerm/statusType/sellReason/sellCondition/suggestedSellPercent）を直接生成します。各スタイルの判断傾向:
+AIが1回のAPIコールで3つの投資スタイル（慎重派/バランス型/積極派）ごとに異なる判断（recommendation/confidence/advice/shortTerm/sellReason/sellCondition/suggestedSellPercent）を直接生成します。各スタイルの判断傾向:
 
 | スタイル | 判断傾向 | アドバイスのトーン |
 |----------|----------|-------------------|
@@ -80,7 +79,6 @@ AI生成後、非スタイル依存の安全補正（上記テーブルの大半
 | スタイル依存補正 | 条件（スタイルにより閾値が異なる） | 動作 |
 |------------------|--------------------------------------|------|
 | 急騰銘柄の買い増し抑制 | `isSurgeStock(weekChangeRate, style)` | buy → hold に変更 |
-| 戻り売りステータス | statusType === "戻り売り" | sellTiming を "rebound" に強制設定 |
 
 スタイル別の結果は `StockAnalysis.styleAnalyses` に JSON として保存され、フロントエンドでタブ切り替えにより比較表示できます。ユーザーの設定した投資スタイルがデフォルトタブとして表示されます。
 
