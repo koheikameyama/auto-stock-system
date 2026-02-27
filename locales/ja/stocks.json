@@ -105,6 +105,9 @@
       "title": "セーフティルールによる補正",
       "description": "AIの判断がセーフティルールにより補正されました"
     },
+    "divergence": {
+      "title": "トレンドのねじれ検出"
+    },
     "simulation": "購入シミュレーション",
     "simulationTitle": "購入後分析シミュレーション",
     "setDipBuyAlert": "🔔 ¥{price} で通知を設定",

@@ -28,6 +28,9 @@ interface StyleAnalysisData {
   suggestedExitRate?: number | null;
   suggestedSellTargetRate?: number | null;
   correctionExplanation?: string | null;
+  divergenceType?: string | null;
+  divergenceLabel?: string | null;
+  divergenceExplanation?: string | null;
 }
 
 interface RecommendationData {
@@ -435,16 +438,16 @@ export default function PurchaseRecommendation({
     return (
       <div className="space-y-3 mb-4">
         {/* 短期予測 */}
-        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-3 sm:p-4">
+        <div className={`bg-gradient-to-br ${styleData?.divergenceLabel ? "from-amber-50 to-orange-50" : "from-purple-50 to-indigo-50"} rounded-lg p-3 sm:p-4`}>
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg">{getTrendIcon(data.shortTermTrend)}</span>
+            <span className="text-lg">{styleData?.divergenceLabel ? "⚡" : getTrendIcon(data.shortTermTrend)}</span>
             <div className="flex-1">
-              <p className="text-sm font-bold text-purple-800">
+              <p className={`text-sm font-bold ${styleData?.divergenceLabel ? "text-amber-800" : "text-purple-800"}`}>
                 短期予測（今週）
               </p>
               {data.shortTermPriceLow && data.shortTermPriceHigh && (
-                <p className="text-xs text-purple-600">
-                  {getTrendText(data.shortTermTrend)} ¥
+                <p className={`text-xs ${styleData?.divergenceLabel ? "text-amber-600" : "text-purple-600"}`}>
+                  {styleData?.divergenceLabel || getTrendText(data.shortTermTrend)} ¥
                   {formatPrice(data.shortTermPriceLow)}〜¥
                   {formatPrice(data.shortTermPriceHigh)}
                 </p>
@@ -507,6 +510,18 @@ export default function PurchaseRecommendation({
               💡 予測まとめ
             </p>
             <p className="text-sm text-gray-700">{data.advice}</p>
+          </div>
+        )}
+
+        {/* トレンド乖離の解説 */}
+        {styleData?.divergenceExplanation && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-amber-700 mb-1">
+              {t("divergence.title")}
+            </p>
+            <p className="text-xs text-amber-600 leading-relaxed">
+              {styleData.divergenceExplanation}
+            </p>
           </div>
         )}
       </div>
