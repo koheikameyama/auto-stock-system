@@ -93,14 +93,14 @@ export default function AdminStocksClient() {
   const filterButtons: { key: FilterType; label: string }[] = [
     { key: "all", label: "すべて" },
     { key: "failed", label: "取得失敗あり" },
-    { key: "delisted", label: "上場廃止マーク済み" },
+    { key: "delisted", label: "データ取得不可" },
   ]
 
   const getStatusBadge = (stock: Stock, isWarning: boolean) => {
     if (stock.isDelisted) {
       return (
         <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-          上場廃止
+          データ取得不可
         </span>
       )
     }
@@ -249,7 +249,7 @@ export default function AdminStocksClient() {
                       ? "更新中..."
                       : stock.isDelisted
                         ? "解除"
-                        : "廃止"}
+                        : "停止"}
                   </button>
                 </div>
               </div>
@@ -344,7 +344,7 @@ export default function AdminStocksClient() {
                           ? "更新中..."
                           : stock.isDelisted
                             ? "解除"
-                            : "廃止"}
+                            : "停止"}
                       </button>
                     </td>
                   </tr>

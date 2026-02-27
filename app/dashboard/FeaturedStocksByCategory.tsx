@@ -223,7 +223,7 @@ export default function FeaturedStocksByCategory() {
               {stock.stock.currentPrice != null ? (
                 `¥${stock.stock.currentPrice.toLocaleString()}`
               ) : stock.stock.isStale ? (
-                <span className="text-amber-600 text-xs">株価データが取得できませんでした。<br />上場廃止、取引停止の銘柄の可能性があります。</span>
+                <span className="text-amber-600 text-xs">株価データが取得できませんでした。<br />データ取得不可、または取引停止の銘柄の可能性があります。</span>
               ) : (
                 <span className="text-gray-400 text-sm">取得中...</span>
               )}

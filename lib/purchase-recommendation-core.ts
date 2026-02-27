@@ -308,7 +308,7 @@ export async function executePurchaseRecommendation(
   // 財務指標のフォーマット
   const financialMetrics = buildFinancialMetrics(stock, currentPrice);
 
-  // 上場廃止コンテキスト
+  // データ取得不可コンテキスト
   const delistingContext = buildDelistingContext(
     stock.isDelisted,
     stock.fetchFailCount,

@@ -21,7 +21,7 @@ AI_CONCURRENCY_LIMIT = 3
 # 株価データ取得（※TS側 lib/constants.ts と同じ値）
 # =============================================================================
 
-# 株価取得失敗の警告閾値（上場廃止の可能性）
+# 株価取得失敗の警告閾値（データ取得不可の可能性）
 # → TS: FETCH_FAIL_WARNING_THRESHOLD
 FETCH_FAIL_WARNING_THRESHOLD = 3
 

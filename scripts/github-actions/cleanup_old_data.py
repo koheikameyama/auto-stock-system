@@ -44,7 +44,7 @@ def cleanup_old_data():
             # 1. StockAnalysis（ポートフォリオ分析）
             cur.execute('SELECT COUNT(*) FROM "StockAnalysis" WHERE "analyzedAt" < %s', (cutoff_date,))
             count = cur.fetchone()[0]
-            print(f"\n[1/5] StockAnalysis: {count} records to delete")
+            print(f"\n[1/6] StockAnalysis: {count} records to delete")
             if count > 0:
                 cur.execute('DELETE FROM "StockAnalysis" WHERE "analyzedAt" < %s', (cutoff_date,))
                 print(f"  Deleted: {cur.rowcount}")
@@ -53,7 +53,7 @@ def cleanup_old_data():
             # 2. PurchaseRecommendation（ウォッチリスト購入推奨）
             cur.execute('SELECT COUNT(*) FROM "PurchaseRecommendation" WHERE date < %s', (cutoff_date.date(),))
             count = cur.fetchone()[0]
-            print(f"\n[2/5] PurchaseRecommendation: {count} records to delete")
+            print(f"\n[2/6] PurchaseRecommendation: {count} records to delete")
             if count > 0:
                 cur.execute('DELETE FROM "PurchaseRecommendation" WHERE date < %s', (cutoff_date.date(),))
                 print(f"  Deleted: {cur.rowcount}")
@@ -62,7 +62,7 @@ def cleanup_old_data():
             # 3. UserDailyRecommendation（あなたへのおすすめ）
             cur.execute('SELECT COUNT(*) FROM "UserDailyRecommendation" WHERE date < %s', (cutoff_date.date(),))
             count = cur.fetchone()[0]
-            print(f"\n[3/5] UserDailyRecommendation: {count} records to delete")
+            print(f"\n[3/6] UserDailyRecommendation: {count} records to delete")
             if count > 0:
                 cur.execute('DELETE FROM "UserDailyRecommendation" WHERE date < %s', (cutoff_date.date(),))
                 print(f"  Deleted: {cur.rowcount}")
@@ -71,7 +71,7 @@ def cleanup_old_data():
             # 4. MarketNews（マーケットニュース）
             cur.execute('SELECT COUNT(*) FROM "MarketNews" WHERE "publishedAt" < %s', (cutoff_date,))
             count = cur.fetchone()[0]
-            print(f"\n[4/5] MarketNews: {count} records to delete")
+            print(f"\n[4/6] MarketNews: {count} records to delete")
             if count > 0:
                 cur.execute('DELETE FROM "MarketNews" WHERE "publishedAt" < %s', (cutoff_date,))
                 print(f"  Deleted: {cur.rowcount}")
@@ -80,9 +80,27 @@ def cleanup_old_data():
             # 5. SectorTrend（セクタートレンド）
             cur.execute('SELECT COUNT(*) FROM "SectorTrend" WHERE date < %s', (cutoff_date.date(),))
             count = cur.fetchone()[0]
-            print(f"\n[5/5] SectorTrend: {count} records to delete")
+            print(f"\n[5/6] SectorTrend: {count} records to delete")
             if count > 0:
                 cur.execute('DELETE FROM "SectorTrend" WHERE date < %s', (cutoff_date.date(),))
+                print(f"  Deleted: {cur.rowcount}")
+                total_deleted += cur.rowcount
+
+            # 6. データ取得不可銘柄（1ヶ月以上 isDelisted=true）
+            # 全リレーションが onDelete: Cascade なので関連データも自動削除される
+            cur.execute('''
+                SELECT COUNT(*) FROM "Stock"
+                WHERE "isDelisted" = true
+                  AND "lastFetchFailedAt" < %s
+            ''', (cutoff_date,))
+            count = cur.fetchone()[0]
+            print(f"\n[6/6] Data unavailable stocks ({RETENTION_DAYS}+ days): {count} records to delete")
+            if count > 0:
+                cur.execute('''
+                    DELETE FROM "Stock"
+                    WHERE "isDelisted" = true
+                      AND "lastFetchFailedAt" < %s
+                ''', (cutoff_date,))
                 print(f"  Deleted: {cur.rowcount}")
                 total_deleted += cur.rowcount
 
@@ -100,6 +118,7 @@ def cleanup_old_data():
                 cur.execute('VACUUM ANALYZE "UserDailyRecommendation"')
                 cur.execute('VACUUM ANALYZE "MarketNews"')
                 cur.execute('VACUUM ANALYZE "SectorTrend"')
+                cur.execute('VACUUM ANALYZE "Stock"')
             print("VACUUM completed!")
 
     except Exception as e:

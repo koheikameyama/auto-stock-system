@@ -11,14 +11,14 @@ export default function DelistedWarning({ isDelisted, fetchFailCount, compact = 
     if (compact) {
       return (
         <p className="text-xs text-red-700">
-          この銘柄は上場廃止されています
+          この銘柄はデータを正常に取得できません
         </p>
       )
     }
     return (
       <div className="bg-red-50 border-l-4 border-red-400 p-3 mb-4">
         <p className="text-xs text-red-800">
-          この銘柄は上場廃止されています。最新の情報をご確認ください。
+          この銘柄はデータを正常に取得できません。最新の情報をご確認ください。
         </p>
       </div>
     )
@@ -28,14 +28,14 @@ export default function DelistedWarning({ isDelisted, fetchFailCount, compact = 
     if (compact) {
       return (
         <p className="text-xs text-amber-700">
-          上場廃止の可能性があります
+          データ取得不可の可能性があります
         </p>
       )
     }
     return (
       <div className="bg-amber-50 border-l-4 border-amber-400 p-3 mb-4">
         <p className="text-xs text-amber-800">
-          この銘柄は株価データの取得に連続して失敗しています。上場廃止の可能性があります。
+          この銘柄は株価データの取得に連続して失敗しています。データ取得不可の可能性があります。
         </p>
       </div>
     )

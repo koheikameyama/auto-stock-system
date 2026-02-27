@@ -165,7 +165,7 @@ def download_batch(symbols: list[str], retry_count: int = 0) -> dict:
 
 
 def _is_zombie_data(hist) -> bool:
-    """出来高がすべて0のゾンビデータを検出（上場廃止同等扱い）"""
+    """出来高がすべて0のゾンビデータを検出（データ取得不可扱い）"""
     if len(hist) < 2:
         return False
     volumes = hist["Volume"].values.astype(float)
@@ -368,6 +368,7 @@ def update_stock_prices(conn, updates: list[dict]) -> int:
                 "turnoverValue" = %s,
                 "atr14" = %s,
                 "hasChartData" = %s,
+                "isDelisted" = false,
                 "priceUpdatedAt" = %s
             WHERE id = %s
             ''',
@@ -394,6 +395,7 @@ def reset_fetch_fail_counts(conn, stock_ids: list[str]) -> int:
     return len(stock_ids)
 
 
+
 def increment_fetch_fail_counts(conn, stock_ids: list[str]) -> int:
     """取得失敗した銘柄の失敗カウントをインクリメントし、hasChartData を false にする"""
     if not stock_ids:
@@ -418,7 +420,7 @@ def increment_fetch_fail_counts(conn, stock_ids: list[str]) -> int:
 
 
 def mark_delisted_stocks(conn) -> list[dict]:
-    """fetchFailCount >= FETCH_FAIL_WARNING_THRESHOLD の銘柄を isDelisted = true に設定"""
+    """fetchFailCount >= FETCH_FAIL_WARNING_THRESHOLD の銘柄をデータ取得不可に設定"""
     with conn.cursor() as cur:
         cur.execute('''
             UPDATE "Stock"
@@ -437,7 +439,7 @@ def mark_delisted_stocks(conn) -> list[dict]:
 
 
 def mark_zombie_stocks(conn, stock_ids: list[str]) -> list[dict]:
-    """ゾンビデータ（出来高0）の銘柄を isDelisted = true に設定"""
+    """ゾンビデータ（出来高0）の銘柄をデータ取得不可に設定"""
     if not stock_ids:
         return []
 
@@ -611,19 +613,19 @@ def main():
         increment_fetch_fail_counts(conn, all_failed_ids)
         print(f"  - Incremented {len(all_failed_ids)} failed stocks")
 
-        # 連続失敗した銘柄を自動で上場廃止マーク
+        # 連続失敗した銘柄を自動でデータ取得不可マーク
         marked = mark_delisted_stocks(conn)
         if marked:
             print()
-            print(f"Marked {len(marked)} stocks as delisted ({FETCH_FAIL_WARNING_THRESHOLD}+ consecutive failures):")
+            print(f"Marked {len(marked)} stocks as data unavailable ({FETCH_FAIL_WARNING_THRESHOLD}+ consecutive failures):")
             for stock in marked:
                 print(f"  - {stock['tickerCode']} ({stock['name']}) - {stock['failCount']} failures")
 
-        # ゾンビデータの銘柄を上場廃止扱いに
+        # ゾンビデータの銘柄をデータ取得不可扱いに
         zombie_marked = mark_zombie_stocks(conn, all_zombie_ids)
         if zombie_marked:
             print()
-            print(f"Marked {len(zombie_marked)} stocks as delisted (zombie data - zero volume):")
+            print(f"Marked {len(zombie_marked)} stocks as data unavailable (zombie data - zero volume):")
             for stock in zombie_marked:
                 print(f"  - {stock['tickerCode']} ({stock['name']})")
 

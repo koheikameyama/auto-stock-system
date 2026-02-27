@@ -56,7 +56,7 @@ def get_openai_client() -> OpenAI:
 
 
 def get_total_stock_count(conn) -> int:
-    """全銘柄数を取得（上場廃止除く）"""
+    """全銘柄数を取得（データ取得不可銘柄を除く）"""
     with conn.cursor() as cur:
         cur.execute('SELECT COUNT(*) FROM "Stock" WHERE "isDelisted" = false')
         return cur.fetchone()[0]

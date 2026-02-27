@@ -223,7 +223,7 @@ export async function buildChatSystemPrompt(
         finLines.push(
           `- 純利益成長率: ${f.netIncomeGrowth >= 0 ? "+" : ""}${f.netIncomeGrowth.toFixed(1)}%`,
         );
-      if (f.isDelisted) finLines.push("- ⚠️ 上場廃止済み");
+      if (f.isDelisted) finLines.push("- ⚠️ データ取得不可");
       dataLines.push(finLines.join("\n"));
     }
 
@@ -368,7 +368,7 @@ export async function buildChatSystemPrompt(
 • ニュースタイトル
   URL
 
-9. 上場廃止情報がある場合は必ず言及する
+9. データ取得不可の情報がある場合は必ず言及する
 10. 必要なデータだけをツールで取得する（すべてのツールを呼ぶ必要はない）`);
 
   return sections.join("\n");

@@ -83,8 +83,8 @@
     "untrack": "追跡を解除"
   },
   "delisted": {
-    "warning": "この銘柄は上場廃止になりました",
-    "date": "上場廃止日"
+    "warning": "この銘柄はデータを正常に取得できません",
+    "date": "データ取得不可日"
   },
   "priceUnavailable": "価格情報を取得できません",
   "styleAnalysis": {
@@ -138,7 +138,7 @@
     "loading": "読み込み中...",
     "asOf": "時点",
     "priceDataUnavailable": "株価データが取得できませんでした。",
-    "delistedOrSuspendedWarning": "上場廃止、取引停止の銘柄の可能性があります。",
+    "delistedOrSuspendedWarning": "データ取得不可、または取引停止の銘柄の可能性があります。",
     "noPriceInfo": "価格情報なし",
     "quantity": "保有数",
     "shares": "株",

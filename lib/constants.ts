@@ -16,7 +16,7 @@ export const STOCK_PRICE_BATCH_SIZE = 10;
 // 単元株数（日本株の最小取引単位）
 export const UNIT_SHARES = 100;
 
-// 株価取得失敗の警告閾値（上場廃止の可能性）
+// 株価取得失敗の警告閾値（データ取得不可の可能性）
 export const FETCH_FAIL_WARNING_THRESHOLD = 3;
 
 // 株価データの鮮度チェック（日数）: これより古いデータは無視

@@ -4,7 +4,7 @@ import { verifyAdmin } from "@/lib/admin-auth"
 
 /**
  * PATCH /api/admin/stocks/[stockId]
- * 銘柄の isDelisted フラグを更新（管理者用）
+ * 銘柄のデータ取得不可フラグ（isDelisted）を更新（管理者用）
  */
 export async function PATCH(
   request: NextRequest,
@@ -26,7 +26,7 @@ export async function PATCH(
     )
   }
 
-  // isDelistedをfalseにする場合はfetchFailCountもリセット
+  // データ取得不可を解除する場合はfetchFailCountもリセット
   const data: Record<string, unknown> = { isDelisted }
   if (!isDelisted) {
     data.fetchFailCount = 0

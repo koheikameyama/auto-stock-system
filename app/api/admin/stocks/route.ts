@@ -8,7 +8,7 @@ import { FETCH_FAIL_WARNING_THRESHOLD } from "@/lib/constants"
  * 銘柄マスタ一覧取得（管理者用）
  *
  * Query params:
- * - filter: "all" | "failed" | "delisted" (default: "all")
+ * - filter: "all" | "failed" | "delisted"(データ取得不可) (default: "all")
  * - search: 銘柄コードまたは名前で検索
  * - page: ページ番号 (default: 1)
  * - limit: 1ページあたりの件数 (default: 50)

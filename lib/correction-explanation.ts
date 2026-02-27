@@ -61,7 +61,7 @@ const RULE_NAMES: Record<CorrectionRuleId, string> = {
   trend_protection: "中長期トレンド保護",
   relative_strength_protection: "相対強度保護",
   profit_taking_promotion: "利確促進ルール",
-  delisted_stock: "上場廃止銘柄ルール",
+  delisted_stock: "データ取得不可銘柄ルール",
   dangerous_stock_buy_suppression: "危険銘柄買い増し抑制",
 };
 
@@ -135,7 +135,7 @@ export function generateCorrectionExplanation(ctx: CorrectionContext): string {
       return `含み益${ctx.actualValue}の状態で短期的に下落の予兆があるため、「${ruleName}」が発動しました。${ctx.additionalInfo}`;
 
     case "delisted_stock":
-      return `この銘柄は上場廃止されているため、「${ruleName}」が適用されました。`;
+      return `この銘柄はデータを正常に取得できないため、「${ruleName}」が適用されました。`;
 
     case "dangerous_stock_buy_suppression":
       return `業績が赤字かつボラティリティが${ctx.actualValue}と高いため、「${ruleName}」が適用され、買い増しは控える判断になりました。`;

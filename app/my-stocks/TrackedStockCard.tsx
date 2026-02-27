@@ -88,7 +88,7 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
     return { text: `${daysUntil}日後に決算`, color: "text-gray-600", bg: "bg-gray-100", border: "border-gray-200" }
   }
 
-  // staleまたは上場廃止の銘柄は詳細遷移・バッジを無効化
+  // staleまたはデータ取得不可の銘柄は詳細遷移・バッジを無効化
   const isDisabled = isStale || stock.isDelisted === true
   // 価格未取得時もリンクを無効化（stale判定が終わるまで遷移させない）
   const linkDisabled = isDisabled || !priceLoaded

@@ -69,7 +69,7 @@ export class AnalysisError extends Error {
  * ポートフォリオ分析のAI結果に対する共通ポストプロセス
  * executePortfolioAnalysis / executeSimulatedPortfolioAnalysis 両方から呼ばれる。
  *
- * 1. 安全補正ループ（パニック売り防止、上場廃止、危険銘柄、トレンド保護、相対強度保護）
+ * 1. 安全補正ループ（パニック売り防止、データ取得不可、危険銘柄、トレンド保護、相対強度保護）
  * 2. 率→絶対価格の算出（ATRベース損切り＋トレーリングストップ）
  * 3. 売りタイミング判定
  * 4. 投資スタイル別のセーフティルール適用
@@ -139,10 +139,10 @@ function postProcessPortfolioAnalysis(params: {
       });
     }
 
-    // 上場廃止銘柄の強制補正
+    // データ取得不可銘柄の強制補正
     if (stock.isDelisted) {
       sa.recommendation = "sell";
-      sa.shortTerm = `この銘柄は上場廃止されています。保有している場合は証券会社に確認してください。${sa.shortTerm}`;
+      sa.shortTerm = `この銘柄はデータを正常に取得できません。保有している場合は証券会社に確認してください。${sa.shortTerm}`;
       sa.correctionExplanation = generateCorrectionExplanation({
         ruleId: "delisted_stock",
         styleName,
