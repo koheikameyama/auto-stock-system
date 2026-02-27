@@ -303,26 +303,26 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
         >
           株価
         </button>
-        <button
-          onClick={() => setActiveTab("rsi")}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+        <span
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center ${
             activeTab === "rsi"
               ? "border-b-2 border-blue-600 text-blue-600"
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          RSI
-        </button>
-        <button
-          onClick={() => setActiveTab("macd")}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+          <button onClick={() => setActiveTab("rsi")}>RSI</button>
+          <TermTooltip id="chart-tab-rsi" text={tTooltip('rsi')} />
+        </span>
+        <span
+          className={`px-4 py-2 text-sm font-medium transition-colors flex items-center ${
             activeTab === "macd"
               ? "border-b-2 border-blue-600 text-blue-600"
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          MACD
-        </button>
+          <button onClick={() => setActiveTab("macd")}>MACD</button>
+          <TermTooltip id="chart-tab-macd" text={tTooltip('macd')} />
+        </span>
       </div>
 
       {/* Price Chart - Candlestick */}
@@ -763,9 +763,8 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
           <div className="mb-3 p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-sm text-gray-600 flex items-center">
+                <span className="text-sm text-gray-600">
                   RSI (14日)
-                  <TermTooltip id="chart-rsi" text={tTooltip('rsi')} />
                 </span>
                 <p className="text-xl font-bold text-gray-900">
                   {summary?.rsi?.toFixed(1) ?? "-"}
@@ -822,9 +821,8 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
           <div className="mb-3 p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-sm text-gray-600 flex items-center">
+                <span className="text-sm text-gray-600">
                   MACD
-                  <TermTooltip id="chart-macd" text={tTooltip('macd')} />
                 </span>
                 <p className="text-xl font-bold text-gray-900">
                   {summary?.macd?.toFixed(2) ?? "-"}

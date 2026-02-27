@@ -387,9 +387,8 @@ export default function TechnicalAnalysis({ stockId, embedded = false, gapUpRate
          (volumeSpikeRate !== null && volumeSpikeRate !== undefined) ||
          (turnoverValue !== null && turnoverValue !== undefined) ? (
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 flex items-center">
+            <h3 className="text-sm font-semibold text-gray-900">
               {t('timingIndicators.label')}
-              <TermTooltip id="ta-timing-indicators" text={tTooltip('timingIndicators')} />
             </h3>
             <div className="mt-2 space-y-2">
               {/* ギャップアップ率 */}

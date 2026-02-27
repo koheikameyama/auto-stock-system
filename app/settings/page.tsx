@@ -724,7 +724,6 @@ export default function SettingsPage() {
                       <span className="text-lg">📉</span>
                       <span className="flex items-center">
                         {tStopLoss('title')}
-                        <TermTooltip id="stop-loss" text={tTooltip('stopLossLine')} />
                         <TermTooltip id="reverse-stop" text={tTooltip('reverseStopOrder')} />
                       </span>
                     </h3>

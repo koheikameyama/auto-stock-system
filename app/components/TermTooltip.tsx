@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 
 interface TermTooltipProps {
@@ -11,6 +11,7 @@ interface TermTooltipProps {
 export default function TermTooltip({ text, id }: TermTooltipProps) {
   const t = useTranslations("common.tooltip");
   const [isOpen, setIsOpen] = useState(false);
+  const [align, setAlign] = useState<"left" | "center" | "right">("left");
   const tooltipRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -32,6 +33,16 @@ export default function TermTooltip({ text, id }: TermTooltipProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
+  const handleToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const ratio = rect.left / window.innerWidth;
+      setAlign(ratio < 0.33 ? "left" : ratio > 0.66 ? "right" : "center");
+    }
+    setIsOpen(!isOpen);
+  }, [isOpen]);
+
   const tooltipId = `tooltip-${id}`;
 
   return (
@@ -39,10 +50,7 @@ export default function TermTooltip({ text, id }: TermTooltipProps) {
       <button
         ref={buttonRef}
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
+        onClick={handleToggle}
         aria-expanded={isOpen}
         aria-describedby={isOpen ? tooltipId : undefined}
         className="ml-1 inline-flex items-center justify-center w-5 h-5 text-gray-400 hover:text-gray-600 active:text-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 rounded-full"
@@ -65,9 +73,15 @@ export default function TermTooltip({ text, id }: TermTooltipProps) {
           ref={tooltipRef}
           id={tooltipId}
           role="tooltip"
-          className="absolute left-0 top-full mt-1 z-50 w-64 max-w-[calc(100vw-3rem)] p-3 bg-gray-800 text-white text-xs leading-relaxed rounded-lg shadow-lg animate-fade-in"
+          className={`absolute top-full mt-1 z-50 w-64 max-w-[calc(100vw-3rem)] p-3 bg-gray-800 text-white text-xs leading-relaxed rounded-lg shadow-lg animate-fade-in ${
+            align === "left" ? "left-0" : align === "right" ? "right-0" : "left-1/2 -translate-x-1/2"
+          }`}
         >
-          <div className="absolute -top-1 left-3 w-2 h-2 bg-gray-800 rotate-45" />
+          <div
+            className={`absolute -top-1 w-2 h-2 bg-gray-800 rotate-45 ${
+              align === "left" ? "left-3" : align === "right" ? "right-3" : "left-1/2 -translate-x-1/2"
+            }`}
+          />
           {text}
         </div>
       )}
