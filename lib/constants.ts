@@ -10,6 +10,9 @@ export const MAX_TRACKED_STOCKS = 100;
 // データ取得の制限
 export const MAX_PASSED_STOCKS_RETRIEVE = 20;
 
+// ダッシュボード「注目の高評価銘柄」表示件数
+export const MAX_TOP_STOCKS_DISPLAY = 10;
+
 // 株価取得のバッチサイズ（1リクエストあたりの銘柄数）
 export const STOCK_PRICE_BATCH_SIZE = 10;
 

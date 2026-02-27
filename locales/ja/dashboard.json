@@ -61,6 +61,25 @@
     "interested": "気になる",
     "tracked": "追跡中"
   },
+  "topStocks": {
+    "title": "注目の高評価銘柄",
+    "subtitle": "分析済み銘柄の中から、あなたのスタイルに合った買い推奨銘柄",
+    "loading": "読み込み中...",
+    "schedule": "更新 {schedule}（平日）",
+    "confidence": "確信度 {value}%",
+    "owned": "保有中",
+    "interested": "気になる",
+    "tracked": "追跡中",
+    "viewDetail": "詳細を見る",
+    "priceUnavailable": "株価データが取得できませんでした。データ取得不可、または取引停止の銘柄の可能性があります。",
+    "priceFetching": "取得中...",
+    "asOf": "時点",
+    "delisted": "この銘柄は上場廃止されています",
+    "possiblyDelisted": "上場廃止の可能性があります",
+    "riskUnprofitable": "赤字銘柄",
+    "riskHighVolatility": "高ボラティリティ（{value}%）",
+    "riskWeekDecline": "直近1週間で{value}%下落"
+  },
   "nikkei": {
     "title": "日経平均株価",
     "period1m": "1ヶ月",

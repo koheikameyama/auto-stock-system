@@ -157,7 +157,59 @@
 }
 ```
 
-### 10. 市場ランキング（上昇/下落）
+### 10. 注目の高評価銘柄（投資スタイル別）
+
+- 分析済み全銘柄（PurchaseRecommendation）の中から、ユーザーの投資スタイルで「買い推奨」の銘柄を横スクロールカードで表示
+- confidence（確信度）の高い順に最大10件表示
+- 投資スタイル未設定の場合は非表示
+- 各カード表示項目:
+  - 銘柄名、証券コード、セクター
+  - 現在価格（リアルタイム取得）
+  - 買い推奨バッジ + 確信度（%）
+  - 市場シグナルバッジ（bullish / neutral / bearish）
+  - 投資スタイル別の推奨理由
+  - リスク表示（赤字企業、高ボラティリティ、直近下落）
+  - 保有状態バッジ（ポートフォリオ / ウォッチリスト / 追跡中）
+- 古いデータの場合は警告表示
+
+**前提条件**: 投資スタイルが設定済み、かつ PurchaseRecommendation に styleAnalyses データがあること
+
+**API**: `GET /api/top-stocks`
+
+**レスポンス**:
+```json
+{
+  "stocks": [
+    {
+      "id": "xxx",
+      "stockId": "xxx",
+      "confidence": 0.85,
+      "reason": "安定した収益基盤と成長性...",
+      "caution": "決算前の注意...",
+      "advice": "現在の水準は...",
+      "marketSignal": "bullish",
+      "isOwned": false,
+      "isRegistered": true,
+      "isTracked": false,
+      "userStockId": "xxx",
+      "stock": {
+        "id": "xxx",
+        "tickerCode": "8306.T",
+        "name": "三菱UFJ",
+        "sector": "銀行業",
+        "currentPrice": null,
+        "isProfitable": true,
+        "volatility": 25.3,
+        "weekChangeRate": 2.5
+      }
+    }
+  ],
+  "investmentStyle": "BALANCED",
+  "date": "2026-02-27"
+}
+```
+
+### 11. 市場ランキング（上昇/下落）
 
 - 上昇TOP5、下落TOP5を表示
 - 各銘柄の変化率とAI原因分析
@@ -184,6 +236,7 @@ page.tsx（Server Component）
 ├─ PortfolioCompositionChart → GET /api/portfolio/composition
 ├─ SectorTrendHeatmap → GET /api/sector-trends
 ├─ FeaturedStocksByCategory → GET /api/featured-stocks
+├─ TopStocksByStyle  → GET /api/top-stocks
 └─ MarketMovers      → GET /api/market-analysis/gainers-losers
 ```
 
@@ -200,6 +253,7 @@ page.tsx（Server Component）
 | PortfolioCompositionChart | `PortfolioCompositionChart.tsx` | 構成比率円グラフ |
 | SectorTrendHeatmap | `SectorTrendHeatmap.tsx` | セクタートレンドヒートマップ |
 | FeaturedStocksByCategory | `FeaturedStocksByCategory.tsx` | おすすめ銘柄カード群 |
+| TopStocksByStyle | `TopStocksByStyle.tsx` | 投資スタイル別高評価銘柄 |
 
 ## 関連ファイル
 
@@ -214,4 +268,6 @@ page.tsx（Server Component）
 - `app/api/budget/summary/route.ts` - 予算サマリー API
 - `app/api/sector-trends/route.ts` - セクタートレンド API
 - `app/api/featured-stocks/route.ts` - おすすめ銘柄 API
+- `app/dashboard/TopStocksByStyle.tsx` - 投資スタイル別高評価銘柄コンポーネント
+- `app/api/top-stocks/route.ts` - 高評価銘柄 API
 - `app/api/market-analysis/gainers-losers/route.ts` - 市場ランキング API

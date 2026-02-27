@@ -6,6 +6,7 @@ import Header from "@/app/components/Header";
 import BottomNavigation from "@/app/components/BottomNavigation";
 import DashboardClient from "./DashboardClient";
 import FeaturedStocksByCategory from "./FeaturedStocksByCategory";
+import TopStocksByStyle from "./TopStocksByStyle";
 import PortfolioSummary from "./PortfolioSummary";
 import PortfolioHistoryChart from "./PortfolioHistoryChart";
 import PortfolioCompositionChart from "./PortfolioCompositionChart";
@@ -228,6 +229,13 @@ export default async function DashboardPage() {
           <div className="mt-4 sm:mt-6">
             <FeaturedStocksByCategory />
           </div>
+
+          {/* 注目の高評価銘柄（投資スタイル別） */}
+          {user.settings && (
+            <div className="mt-4 sm:mt-6">
+              <TopStocksByStyle />
+            </div>
+          )}
         </div>
       </main>
       <BottomNavigation />
