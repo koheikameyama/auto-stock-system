@@ -82,7 +82,7 @@ export default function TermTooltip({ text, id }: TermTooltipProps) {
               align === "left" ? "left-3" : align === "right" ? "right-3" : "left-1/2 -translate-x-1/2"
             }`}
           />
-          {text}
+          <span className="whitespace-pre-line">{text}</span>
         </div>
       )}
     </span>
