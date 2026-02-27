@@ -46,6 +46,8 @@ import {
   getDaysUntilEarnings,
 } from "@/lib/stock-safety-rules";
 import { generateCorrectionExplanation, getStyleNameJa } from "@/lib/correction-explanation";
+import { detectTrendDivergence, generateDivergenceExplanation } from "@/lib/trend-divergence";
+import { findSupportResistance } from "@/lib/technical-indicators";
 import { getSectorTrend, formatSectorTrendForPrompt } from "@/lib/sector-trend";
 import { AnalysisError } from "@/lib/portfolio-analysis-core";
 import {
@@ -853,6 +855,40 @@ export async function executePurchaseRecommendation(
       if (predictionExitRate !== null) {
         sa.suggestedExitRate = predictionExitRate;
       }
+    }
+  }
+
+  // --- トレンド乖離（ねじれ）検出 ---
+  const { resistances } = findSupportResistance(pricesNewestFirst);
+  const resistancePrice = resistances.length > 0 ? resistances[0] : null;
+
+  for (const styleKey of ALL_STYLE_KEYS) {
+    const sa = styleAnalyses[styleKey];
+    const divergence = detectTrendDivergence({
+      shortTermTrend: result.shortTermTrend,
+      longTermTrend: result.longTermTrend,
+      weekChangeRate,
+      rsiValue,
+      deviationRate,
+    });
+    if (divergence.type) {
+      sa.divergenceType = divergence.type;
+      sa.divergenceLabel = divergence.label;
+      sa.divergenceExplanation = generateDivergenceExplanation({
+        type: divergence.type,
+        weekChangeRate,
+        rsiValue,
+        deviationRate,
+        resistancePrice,
+        shortTermTrend: result.shortTermTrend,
+        longTermTrend: result.longTermTrend,
+        investmentStyle: styleKey,
+        currentPrice,
+        shortTermPriceLow: result.shortTermPriceLow,
+        shortTermPriceHigh: result.shortTermPriceHigh,
+        longTermPriceLow: result.longTermPriceLow,
+        longTermPriceHigh: result.longTermPriceHigh,
+      });
     }
   }
 

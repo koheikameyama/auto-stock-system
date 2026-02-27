@@ -89,6 +89,9 @@ interface StyleAnalysisData {
   suggestedExitRate?: number | null;
   suggestedSellTargetRate?: number | null;
   correctionExplanation?: string | null;
+  divergenceType?: string | null;
+  divergenceLabel?: string | null;
+  divergenceExplanation?: string | null;
 }
 
 
@@ -546,6 +549,17 @@ export default function StockAnalysisCard({
               </p>
             </div>
           )}
+          {/* トレンド乖離の解説 */}
+          {styleData?.divergenceExplanation && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+              <p className="text-xs font-semibold text-amber-700 mb-1">
+                トレンドのねじれ検出
+              </p>
+              <p className="text-xs text-amber-600 leading-relaxed">
+                {styleData.divergenceExplanation}
+              </p>
+            </div>
+          )}
           {/* 指値・逆指値（推奨に応じて表示を切り替え） */}
           {(() => {
             // sell推奨時は「AI推奨価格」セクションを非表示（「売却検討」セクションに統合）
@@ -951,17 +965,17 @@ export default function StockAnalysisCard({
       {analysis?.shortTermTrend && (
         <>
           {/* 短期予測 */}
-          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow-md p-4">
+          <div className={`bg-gradient-to-br ${styleData?.divergenceLabel ? "from-amber-50 to-orange-50" : "from-purple-50 to-indigo-50"} rounded-lg shadow-md p-4`}>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-xl">
-                {getTrendIcon(analysis.shortTermTrend)}
+                {styleData?.divergenceLabel ? "⚡" : getTrendIcon(analysis.shortTermTrend)}
               </span>
               <div className="flex-1">
-                <h4 className="text-sm font-bold text-purple-800">
+                <h4 className={`text-sm font-bold ${styleData?.divergenceLabel ? "text-amber-800" : "text-purple-800"}`}>
                   短期予測（今週）
                 </h4>
-                <p className="text-xs text-purple-600">
-                  {getTrendText(analysis.shortTermTrend)}{" "}
+                <p className={`text-xs ${styleData?.divergenceLabel ? "text-amber-600" : "text-purple-600"}`}>
+                  {styleData?.divergenceLabel || getTrendText(analysis.shortTermTrend)}{" "}
                   {analysis.shortTermPriceLow &&
                     analysis.shortTermPriceHigh &&
                     `¥${formatPrice(analysis.shortTermPriceLow)}〜¥${formatPrice(analysis.shortTermPriceHigh)}`}

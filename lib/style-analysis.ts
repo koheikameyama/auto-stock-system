@@ -30,6 +30,10 @@ export interface PurchaseStyleAnalysis {
   suggestedSellTargetRate: number | null;
   /** セーフティルール補正時の解説テキスト */
   correctionExplanation: string | null;
+  /** トレンド乖離（ねじれ）検出結果 */
+  divergenceType?: string | null;
+  divergenceLabel?: string | null;
+  divergenceExplanation?: string | null;
 }
 
 /** 投資スタイル別のポートフォリオ分析結果 */
@@ -51,6 +55,10 @@ export interface PortfolioStyleAnalysis {
   suggestedSellTargetRate: number | null;
   /** セーフティルール補正時の解説テキスト */
   correctionExplanation: string | null;
+  /** トレンド乖離（ねじれ）検出結果 */
+  divergenceType?: string | null;
+  divergenceLabel?: string | null;
+  divergenceExplanation?: string | null;
 }
 
 /** 全3スタイルの分析結果マップ */

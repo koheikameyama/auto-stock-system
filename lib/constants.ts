@@ -391,6 +391,15 @@ export const MA_DEVIATION = {
   RSI_OVERBOUGHT_THRESHOLD: 70, // RSIがこれを超えたら押し目買い推奨
 } as const;
 
+// トレンドねじれ（Divergence）検出の閾値
+export const TREND_DIVERGENCE = {
+  // パターン1: 上昇中の下落予測（スピード調整）
+  SPEED_CORRECTION_RSI: 65, // RSI > 65 で過熱判定
+  SPEED_CORRECTION_DEVIATION: 5, // 乖離率 > +5% で過熱判定
+  // パターン2: 下落中の上昇予測（リバウンド警戒）
+  REBOUND_WARNING_RSI: 35, // RSI < 35 で売られすぎ判定
+} as const;
+
 // モメンタム（トレンドフォロー）の閾値
 export const MOMENTUM = {
   // 下落トレンド検出（週間変化率 %）: これ以下で buy → stay

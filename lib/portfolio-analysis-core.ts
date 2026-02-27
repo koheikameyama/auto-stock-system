@@ -45,6 +45,8 @@ import { isDangerousStock, isPostExDividend } from "@/lib/stock-safety-rules";
 import { insertRecommendationOutcome, Prediction } from "@/lib/outcome-utils";
 import { applyPortfolioStyleSafetyRules, type StyleAnalysesMap, type PortfolioStyleAnalysis } from "@/lib/style-analysis";
 import { generateCorrectionExplanation, getStyleNameJa } from "@/lib/correction-explanation";
+import { detectTrendDivergence, generateDivergenceExplanation } from "@/lib/trend-divergence";
+import { findSupportResistance } from "@/lib/technical-indicators";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -369,6 +371,45 @@ function postProcessPortfolioAnalysis(params: {
         });
       sa.suggestedSellPrice = suggestedSellPrice;
       sa.suggestedStopLossPrice = suggestedStopLossPrice;
+    }
+  }
+
+  // --- トレンド乖離（ねじれ）検出 ---
+  const pricesNewestFirstFull = [...prices].reverse().map((p) => ({
+    close: p.close,
+    high: p.high,
+    low: p.low,
+  }));
+  const { resistances } = findSupportResistance(pricesNewestFirstFull);
+  const resistancePrice = resistances.length > 0 ? resistances[0] : null;
+
+  for (const styleKey of ALL_STYLE_KEYS_SHARED) {
+    const sa = result.styleAnalyses[styleKey];
+    const divergence = detectTrendDivergence({
+      shortTermTrend: result.shortTermTrend,
+      longTermTrend: result.longTermTrend,
+      weekChangeRate,
+      rsiValue,
+      deviationRate,
+    });
+    if (divergence.type) {
+      sa.divergenceType = divergence.type;
+      sa.divergenceLabel = divergence.label;
+      sa.divergenceExplanation = generateDivergenceExplanation({
+        type: divergence.type,
+        weekChangeRate,
+        rsiValue,
+        deviationRate,
+        resistancePrice,
+        shortTermTrend: result.shortTermTrend,
+        longTermTrend: result.longTermTrend,
+        investmentStyle: styleKey,
+        currentPrice,
+        shortTermPriceLow: result.shortTermPriceLow,
+        shortTermPriceHigh: result.shortTermPriceHigh,
+        longTermPriceLow: result.longTermPriceLow,
+        longTermPriceHigh: result.longTermPriceHigh,
+      });
     }
   }
 
