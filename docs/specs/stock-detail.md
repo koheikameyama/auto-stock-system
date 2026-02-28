@@ -217,7 +217,7 @@ OHLCV + RSI + MACD データ。
 
 #### `POST /api/stocks/[stockId]/simulated-portfolio-analysis`
 
-仮保有（100株）での分析シミュレーション。投資スタイル別分析（慎重派/バランス型/積極派）も生成し、`styleAnalyses` として返却。
+仮保有（100株）での分析シミュレーション。投資スタイル別分析（安定配当型/成長投資型/アクティブ型）も生成し、`styleAnalyses` として返却。
 
 #### `POST /api/stocks/[stockId]/mover-analysis`
 

@@ -89,9 +89,9 @@
   "priceUnavailable": "価格情報を取得できません",
   "styleAnalysis": {
     "tabs": {
-      "CONSERVATIVE": "慎重",
-      "BALANCED": "バランス",
-      "AGGRESSIVE": "積極"
+      "CONSERVATIVE": "安定配当",
+      "BALANCED": "成長",
+      "AGGRESSIVE": "アクティブ"
     },
     "labels": {
       "buy": "買い",

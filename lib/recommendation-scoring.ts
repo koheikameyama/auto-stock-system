@@ -4,7 +4,7 @@
  * Pythonスクリプト (generate_personal_recommendations.py) から移植
  */
 
-import { MA_DEVIATION, MOMENTUM, MARKET_DEFENSIVE_MODE, EARNINGS_SAFETY } from "@/lib/constants"
+import { MA_DEVIATION, MOMENTUM, MARKET_DEFENSIVE_MODE, EARNINGS_SAFETY, PERSPECTIVE_BONUS } from "@/lib/constants"
 import { getSectorScoreBonus, type SectorTrendData } from "@/lib/sector-trend"
 import {
   isDangerousStock,
@@ -22,9 +22,9 @@ export const SCORING_CONFIG = {
 
 // 赤字 AND 高ボラティリティ銘柄へのスコアペナルティ（投資スタイル別）
 export const RISK_PENALTY: Record<string, number> = {
-  AGGRESSIVE: -10,  // 積極派: ペナルティ小（リスク許容度高）
-  BALANCED: -20,    // バランス型: 標準ペナルティ
-  CONSERVATIVE: -30, // 慎重派: ペナルティ大（リスク回避）
+  AGGRESSIVE: -10,  // アクティブ型: ペナルティ小（リスク許容度高）
+  BALANCED: -20,    // 成長投資型: 標準ペナルティ
+  CONSERVATIVE: -30, // 安定配当型: ペナルティ大（リスク回避）
 }
 
 // 投資スタイル別のスコア配分
@@ -36,11 +36,11 @@ type ScoreWeights = {
 }
 
 export const SCORE_WEIGHTS: Record<string, ScoreWeights> = {
-  // 積極派: モメンタム重視、ボラティリティ許容
+  // アクティブ型: モメンタム重視、ボラティリティ許容
   AGGRESSIVE: { weekChangeRate: 35, volumeRatio: 30, volatility: 20, marketCap: 15 },
-  // バランス型: 全要素バランス
+  // 成長投資型: 全要素バランス
   BALANCED: { weekChangeRate: 25, volumeRatio: 25, volatility: 25, marketCap: 25 },
-  // 慎重派: 安定性重視、時価総額（大型株）優先
+  // 安定配当型: 安定性重視、時価総額（大型株）優先
   CONSERVATIVE: { weekChangeRate: 15, volumeRatio: 15, volatility: 30, marketCap: 40 },
 }
 
@@ -73,6 +73,11 @@ export interface StockForScoring {
   isProfitable: boolean | null
   maDeviationRate: number | null
   nextEarningsDate: Date | null
+  dividendYield: number | null
+  pbr: number | null
+  per: number | null
+  roe: number | null
+  revenueGrowth: number | null
 }
 
 export interface ScoredStock extends StockForScoring {
@@ -129,7 +134,7 @@ export function calculateStockScores(
   const style = investmentStyle || "BALANCED"
   const weights = SCORE_WEIGHTS[style] || SCORE_WEIGHTS["BALANCED"]
 
-  // 慎重派の場合はvolatilityを反転（低い方が良い）
+  // 安定配当型の場合はvolatilityを反転（低い方が良い）
   const isLowRisk = investmentStyle === "CONSERVATIVE"
 
   const normalized = {
@@ -145,7 +150,7 @@ export function calculateStockScores(
   const isAggressive = investmentStyle === "AGGRESSIVE"
 
   for (const stock of stocks) {
-    // 異常な急騰（週間+50%超）は除外（積極派は+80%超のみ除外）
+    // 異常な急騰（週間+50%超）は除外（アクティブ型は+80%超のみ除外）
     const extremeSurgeLimit = isAggressive ? 80 : 50
     if (stock.weekChangeRate !== null && stock.weekChangeRate > extremeSurgeLimit) {
       continue
@@ -200,7 +205,7 @@ export function calculateStockScores(
     // 急騰銘柄へのペナルティ（投資スタイル別）
     if (stock.weekChangeRate !== null) {
       if (isAggressive) {
-        // 積極派: 急騰ペナルティなし（モメンタム重視）
+        // アクティブ型: 急騰ペナルティなし（モメンタム重視）
       } else if (stock.weekChangeRate >= 30) {
         totalScore -= 20
         scoreBreakdown["surgePenalty"] = -20
@@ -238,7 +243,7 @@ export function calculateStockScores(
     // 移動平均乖離率によるペナルティ/ボーナス
     if (stock.maDeviationRate !== null) {
       if (stock.maDeviationRate >= MA_DEVIATION.UPPER_THRESHOLD && !isAggressive) {
-        // 積極派は過熱圏ペナルティをスキップ（モメンタム重視）
+        // アクティブ型は過熱圏ペナルティをスキップ（モメンタム重視）
         totalScore += MA_DEVIATION.SCORE_PENALTY
         scoreBreakdown["maDeviationPenalty"] = MA_DEVIATION.SCORE_PENALTY
       } else if (
@@ -265,6 +270,88 @@ export function calculateStockScores(
     if (isMarketPanic) {
       totalScore += MARKET_DEFENSIVE_MODE.SCORE_PENALTY
       scoreBreakdown["marketPanicPenalty"] = MARKET_DEFENSIVE_MODE.SCORE_PENALTY
+    }
+
+    // 投資観点に基づくボーナス/ペナルティ
+    if (style === "CONSERVATIVE") {
+      const pb = PERSPECTIVE_BONUS.CONSERVATIVE
+      // 安定配当型: 配当 + バリュー + ディフェンシブ
+      if (stock.dividendYield !== null) {
+        if (stock.dividendYield >= 4) {
+          totalScore += pb.HIGH_DIVIDEND
+          scoreBreakdown["dividendBonus"] = pb.HIGH_DIVIDEND
+        } else if (stock.dividendYield >= 2) {
+          totalScore += pb.NORMAL_DIVIDEND
+          scoreBreakdown["dividendBonus"] = pb.NORMAL_DIVIDEND
+        } else {
+          totalScore += pb.NO_DIVIDEND
+          scoreBreakdown["dividendPenalty"] = pb.NO_DIVIDEND
+        }
+      }
+      if (stock.pbr !== null) {
+        if (stock.pbr < 1) {
+          totalScore += pb.LOW_PBR
+          scoreBreakdown["pbrBonus"] = pb.LOW_PBR
+        } else if (stock.pbr < 1.5) {
+          totalScore += pb.FAIR_PBR
+          scoreBreakdown["pbrBonus"] = pb.FAIR_PBR
+        } else if (stock.pbr > 3) {
+          totalScore += pb.HIGH_PBR
+          scoreBreakdown["pbrPenalty"] = pb.HIGH_PBR
+        }
+      }
+      if (stock.per !== null && stock.per > 0 && stock.per < 15) {
+        totalScore += pb.LOW_PER
+        scoreBreakdown["perBonus"] = pb.LOW_PER
+      }
+      if (stock.isProfitable === true) {
+        totalScore += pb.PROFITABLE
+        scoreBreakdown["profitableBonus"] = pb.PROFITABLE
+      }
+    } else if (style === "BALANCED") {
+      const pb = PERSPECTIVE_BONUS.BALANCED
+      // 成長投資型: グロース + バリュー
+      if (stock.revenueGrowth !== null) {
+        if (stock.revenueGrowth >= 20) {
+          totalScore += pb.HIGH_GROWTH
+          scoreBreakdown["growthBonus"] = pb.HIGH_GROWTH
+        } else if (stock.revenueGrowth >= 10) {
+          totalScore += pb.MODERATE_GROWTH
+          scoreBreakdown["growthBonus"] = pb.MODERATE_GROWTH
+        } else if (stock.revenueGrowth < 0) {
+          totalScore += pb.NEGATIVE_GROWTH
+          scoreBreakdown["growthPenalty"] = pb.NEGATIVE_GROWTH
+        }
+      }
+      if (stock.roe !== null) {
+        if (stock.roe >= 15) {
+          totalScore += pb.HIGH_ROE
+          scoreBreakdown["roeBonus"] = pb.HIGH_ROE
+        } else if (stock.roe >= 10) {
+          totalScore += pb.GOOD_ROE
+          scoreBreakdown["roeBonus"] = pb.GOOD_ROE
+        }
+      }
+      if (stock.pbr !== null && stock.pbr < 1) {
+        totalScore += pb.LOW_PBR
+        scoreBreakdown["pbrBonus"] = pb.LOW_PBR
+      }
+      if (stock.per !== null && stock.per >= 15 && stock.per <= 30) {
+        totalScore += pb.GROWTH_PER
+        scoreBreakdown["perBonus"] = pb.GROWTH_PER
+      }
+    } else if (style === "AGGRESSIVE") {
+      const pb = PERSPECTIVE_BONUS.AGGRESSIVE
+      // アクティブ型: グロース + モメンタム
+      if (stock.revenueGrowth !== null) {
+        if (stock.revenueGrowth >= 20) {
+          totalScore += pb.HIGH_GROWTH
+          scoreBreakdown["growthBonus"] = pb.HIGH_GROWTH
+        } else if (stock.revenueGrowth >= 10) {
+          totalScore += pb.MODERATE_GROWTH
+          scoreBreakdown["growthBonus"] = pb.MODERATE_GROWTH
+        }
+      }
     }
 
     scoredStocks.push({

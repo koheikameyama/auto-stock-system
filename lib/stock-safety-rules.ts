@@ -16,7 +16,7 @@ export function isSurgeStock(
 ): boolean {
   if (weekChangeRate === null) return false;
   const threshold = getSurgeThreshold(investmentStyle);
-  if (threshold === null) return false; // 積極派は制限なし
+  if (threshold === null) return false; // アクティブ型は制限なし
   return weekChangeRate >= threshold;
 }
 
@@ -58,7 +58,7 @@ export function isUnprofitableSurge(
   );
 }
 
-/** 過熱圏か（移動平均乖離率+20%以上、積極派はスキップ） */
+/** 過熱圏か（移動平均乖離率+20%以上、アクティブ型はスキップ） */
 export function isOverheated(
   deviationRate: number | null,
   investmentStyle?: string | null,
@@ -109,7 +109,7 @@ export function getGapUpSurgeThreshold(investmentStyle?: string | null): number 
 }
 
 /**
- * ギャップアップモメンタム判定（積極派向け）
+ * ギャップアップモメンタム判定（アクティブ型向け）
  * 小幅ギャップアップ(2-5%) + 引け強い + 出来高 → 正のモメンタムシグナル
  * 3条件のうち2つ以上を満たす場合に正シグナルと判定
  */

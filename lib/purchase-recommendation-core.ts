@@ -325,9 +325,9 @@ export async function executePurchaseRecommendation(
 
   // ユーザー設定のコンテキスト
   const styleMap: Record<string, string> = {
-    CONSERVATIVE: "慎重派（守り） - 資産保護を最優先",
-    BALANCED: "バランス型 - リスクとリワードのバランス",
-    AGGRESSIVE: "積極派（攻め） - 利益の最大化を優先",
+    CONSERVATIVE: "安定配当型（守り） - 資産保護を最優先",
+    BALANCED: "成長投資型 - リスクとリワードのバランス",
+    AGGRESSIVE: "アクティブ型（攻め） - 利益の最大化を優先",
   };
 
   const userContext = userSettings
@@ -761,9 +761,9 @@ export async function executePurchaseRecommendation(
     isMarketPanic: marketData?.isMarketPanic === true,
   });
 
-  // --- 積極派リバウンド狙い逆転ロジック ---
-  // 慎重派・バランス型がstayでも、引けにかけて強い値動きや出来高が伴う銘柄は
-  // 積極派のみ短期リバウンド狙いでbuyに昇格させる
+  // --- アクティブ型リバウンド狙い逆転ロジック ---
+  // 安定配当型・成長投資型がstayでも、引けにかけて強い値動きや出来高が伴う銘柄は
+  // アクティブ型のみ短期リバウンド狙いでbuyに昇格させる
   const aggressiveStyle = styleAnalyses.AGGRESSIVE;
   const latestCandleForRebound = latestCandle ? analyzeSingleCandle(latestCandle) : null;
   const isClosingStrong = latestCandleForRebound !== null &&
@@ -773,7 +773,7 @@ export async function executePurchaseRecommendation(
   const hasVolumeSupport = reboundVolumeSpikeRate !== null &&
     reboundVolumeSpikeRate >= AGGRESSIVE_REBOUND.VOLUME_SPIKE_THRESHOLD;
 
-  // ギャップアップモメンタム判定（積極派向け）
+  // ギャップアップモメンタム判定（アクティブ型向け）
   const reboundGapUpRate = stock.gapUpRate ? Number(stock.gapUpRate) : null;
   const closingStrength = latestCandle ? calculateClosingStrength(latestCandle) : null;
   const gapUpMomentum = hasGapUpMomentum({
@@ -812,13 +812,13 @@ export async function executePurchaseRecommendation(
         boostReasons.push(`ギャップアップモメンタム（${gapUpMomentum.reasons.join("、")}）`);
       }
 
-      aggressiveStyle.reason = `【短期リバウンド狙い】${boostReasons.join("、")}。慎重派は様子見ですが、短期的な反発を狙える局面です。${aggressiveStyle.reason}`;
+      aggressiveStyle.reason = `【短期リバウンド狙い】${boostReasons.join("、")}。安定配当型は様子見ですが、短期的な反発を狙える局面です。${aggressiveStyle.reason}`;
       aggressiveStyle.advice = `リバウンドの兆候があります。短期で利益を狙えるチャンスですが、利確は早めに設定しましょう。`;
       aggressiveStyle.caution = `短期リバウンド狙いのポジションです。想定と逆に動いたら早めの撤退を。${aggressiveStyle.caution}`;
     }
   }
 
-  // 引け強い・出来高あり・ギャップアップモメンタムの積極派買い推奨は、confidenceを一段ブースト
+  // 引け強い・出来高あり・ギャップアップモメンタムのアクティブ型買い推奨は、confidenceを一段ブースト
   if (aggressiveStyle.recommendation === "buy" && (isClosingStrong || hasVolumeSupport)) {
     aggressiveStyle.confidence = Math.min(
       1.0,

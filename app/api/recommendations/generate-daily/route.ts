@@ -370,6 +370,11 @@ async function processUser(
     isProfitable: s.isProfitable,
     maDeviationRate: s.maDeviationRate ? Number(s.maDeviationRate) : null,
     nextEarningsDate: s.nextEarningsDate ?? null,
+    dividendYield: s.dividendYield ? Number(s.dividendYield) : null,
+    pbr: s.pbr ? Number(s.pbr) : null,
+    per: s.per ? Number(s.per) : null,
+    roe: s.roe ? Number(s.roe) : null,
+    revenueGrowth: s.revenueGrowth ? Number(s.revenueGrowth) : null,
   }));
 
   // 予算の1.5倍までの緩いフィルタ（候補を広めに取る）

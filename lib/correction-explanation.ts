@@ -69,11 +69,11 @@ const RULE_NAMES: Record<CorrectionRuleId, string> = {
 export function getStyleNameJa(styleKey: string): string {
   switch (styleKey) {
     case "CONSERVATIVE":
-      return "慎重派";
+      return "安定配当型";
     case "BALANCED":
-      return "バランス型";
+      return "成長投資型";
     case "AGGRESSIVE":
-      return "積極派";
+      return "アクティブ型";
     default:
       return styleKey;
   }

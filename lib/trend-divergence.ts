@@ -180,8 +180,8 @@ export function generateDivergenceExplanation(
       case "CONSERVATIVE":
         parts.push(
           targetPrice
-            ? `慎重派ロジックでは、リスク回避を優先し、${targetPrice}付近までの調整を待つべきです。`
-            : "慎重派ロジックでは、リスク回避を優先し、調整を確認してからエントリーすべきです。",
+            ? `安定配当型ロジックでは、リスク回避を優先し、${targetPrice}付近までの調整を待つべきです。`
+            : "安定配当型ロジックでは、リスク回避を優先し、調整を確認してからエントリーすべきです。",
         );
         break;
       case "BALANCED":
@@ -200,7 +200,7 @@ export function generateDivergenceExplanation(
   } else {
     switch (investmentStyle) {
       case "CONSERVATIVE":
-        parts.push("慎重派ロジックでは、リスク回避を優先し、反発確認後に慎重に対応すべきです。");
+        parts.push("安定配当型ロジックでは、リスク回避を優先し、反発確認後に慎重に対応すべきです。");
         break;
       case "BALANCED":
         parts.push("戻り売り（一時的な上昇で売る戦略）を検討し、ポジションを軽くするのが賢明です。");

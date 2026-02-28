@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { getTodayForDB } from "@/lib/date-utils"
-import { MAX_TOP_STOCKS_DISPLAY, INVESTMENT_STYLES } from "@/lib/constants"
+import { Prisma } from "@prisma/client"
+import { MAX_TOP_STOCKS_DISPLAY } from "@/lib/constants"
 import type { PurchaseStyleAnalysis } from "@/lib/style-analysis"
 import type { InvestmentStyle } from "@/lib/constants"
 
@@ -46,7 +47,7 @@ export async function GET() {
     let recommendations = await prisma.purchaseRecommendation.findMany({
       where: {
         date: todayUTC,
-        styleAnalyses: { not: null },
+        styleAnalyses: { not: Prisma.DbNull },
       },
       include: {
         stock: true,
@@ -58,7 +59,7 @@ export async function GET() {
     // 当日データがなければ最新日のデータを取得
     if (recommendations.length === 0) {
       const latest = await prisma.purchaseRecommendation.findFirst({
-        where: { styleAnalyses: { not: null } },
+        where: { styleAnalyses: { not: Prisma.DbNull } },
         select: { date: true },
         orderBy: { date: "desc" },
       })
@@ -68,7 +69,7 @@ export async function GET() {
         recommendations = await prisma.purchaseRecommendation.findMany({
           where: {
             date: latest.date,
-            styleAnalyses: { not: null },
+            styleAnalyses: { not: Prisma.DbNull },
           },
           include: {
             stock: true,

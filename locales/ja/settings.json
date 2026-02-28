@@ -32,19 +32,19 @@
     "description": "あなたに合った銘柄をおすすめするために使います",
     "sectionTitle": "投資スタイル",
     "conservative": {
-      "label": "慎重派（守り）",
-      "description": "資産保護を最優先。損失を最小限に抑える",
+      "label": "安定配当型",
+      "description": "配当と安定性を重視。割安な優良企業を選ぶ",
       "icon": "🛡️"
     },
     "balanced": {
-      "label": "バランス型",
-      "description": "リスクとリワードのバランスを重視",
-      "icon": "⚖️"
+      "label": "成長投資型",
+      "description": "成長企業を割安なタイミングで狙う",
+      "icon": "📈"
     },
     "aggressive": {
-      "label": "積極派（攻め）",
-      "description": "短期の変動を許容し、大きな利益を狙う",
-      "icon": "🚀"
+      "label": "アクティブ型",
+      "description": "勢いのある銘柄で短期利益を狙う",
+      "icon": "⚡"
     }
   },
   "investmentBudget": {
@@ -92,7 +92,7 @@
     },
     "10": {
       "label": "+10%",
-      "description": "バランス型"
+      "description": "成長投資型"
     },
     "15": {
       "label": "+15%",
@@ -124,11 +124,11 @@
     "title": "損切りライン（逆指値目安）",
     "-5": {
       "label": "-5%",
-      "description": "慎重派"
+      "description": "安定配当型"
     },
     "-10": {
       "label": "-10%",
-      "description": "バランス型"
+      "description": "成長投資型"
     },
     "-15": {
       "label": "-15%",
@@ -187,9 +187,9 @@
     "investmentStyle": "投資スタイル"
   },
   "investmentStyle": {
-    "conservative": "保守的",
-    "balanced": "バランス",
-    "aggressive": "積極的",
+    "conservative": "安定配当型",
+    "balanced": "成長投資型",
+    "aggressive": "アクティブ型",
     "dayTrader": "デイトレーダー",
     "swingTrader": "スイングトレーダー",
     "longTerm": "長期投資"
@@ -213,7 +213,7 @@
     "failed": "設定の保存に失敗しました"
   },
   "tooltips": {
-    "investmentStyle": "投資スタイルとは、リスクの取り方やリターンの目標を決める投資の基本方針のことです",
+    "investmentStyle": "投資スタイルとは、どのような考え方で銘柄を選ぶかの基本方針です。配当重視、成長重視、短期売買などから選べます",
     "targetReturn": "指値とは、自分で売りたい価格を指定して注文を出す方法です。指定した価格に達すると自動で売り注文が実行されます",
     "reverseStopOrder": "逆指値とは、株価が指定した価格まで下がったら自動で売り注文を出す仕組みです",
     "riskAndReward": "リスクとは損する可能性のこと、リワードとは得られる利益のことです"

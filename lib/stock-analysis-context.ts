@@ -589,7 +589,7 @@ export function buildTimingIndicatorsContext(
     if (Math.abs(gapUpRate) >= 5) {
       gapInterpretation = "大きなギャップは過熱感の兆候。飛びつき買いに注意";
     } else if (gapUpRate >= 2 && gapUpRate < 5) {
-      gapInterpretation = "好材料を反映した小幅ギャップ。引け強い+出来高が伴えば積極派にとって正のモメンタムシグナル";
+      gapInterpretation = "好材料を反映した小幅ギャップ。引け強い+出来高が伴えばアクティブ型にとって正のモメンタムシグナル";
     } else {
       gapInterpretation = "通常範囲の変動";
     }

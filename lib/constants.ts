@@ -32,11 +32,11 @@ export const MIN_CHART_DATA_POINTS = 20;
 // デフォルト値
 export const DEFAULT_INVESTMENT_BUDGET = 100000;
 
-// 投資スタイル（リスク許容度）
+// 投資スタイル（投資戦略）
 export const INVESTMENT_STYLES = {
-  CONSERVATIVE: "CONSERVATIVE", // 慎重派
-  BALANCED: "BALANCED", // バランス型
-  AGGRESSIVE: "AGGRESSIVE", // 積極派
+  CONSERVATIVE: "CONSERVATIVE", // 安定配当型
+  BALANCED: "BALANCED", // 成長投資型
+  AGGRESSIVE: "AGGRESSIVE", // アクティブ型
 } as const;
 
 export type InvestmentStyle =
@@ -83,46 +83,76 @@ export const INVESTMENT_STYLE_CONFIG: Record<
   }
 > = {
   CONSERVATIVE: {
-    text: "慎重派（守り）",
+    text: "安定配当型",
     icon: "🛡️",
-    short: "資産保護を最優先",
+    short: "配当と安定性を重視",
     description:
-      "損失を最小限に抑えることを重視。少しの逆行で即撤退し、早めに利益を確定します。",
+      "高配当・割安な優良企業を中心に、安定したリターンを目指します。",
     color: "text-blue-800",
     bg: "bg-blue-100",
   },
   BALANCED: {
-    text: "バランス型",
-    icon: "⚖️",
-    short: "リスクとリワードのバランス",
+    text: "成長投資型",
+    icon: "📈",
+    short: "成長性と割安さのバランス",
     description:
-      "リスクとリワードのバランスを重視。市場のノイズは許容し、セオリー通りの投資を目指します。",
-    color: "text-gray-800",
-    bg: "bg-gray-100",
+      "業績が伸びている成長企業を、割安なタイミングで狙います。",
+    color: "text-green-800",
+    bg: "bg-green-100",
   },
   AGGRESSIVE: {
-    text: "積極派（攻め）",
-    icon: "🚀",
-    short: "利益の最大化を優先",
+    text: "アクティブ型",
+    icon: "⚡",
+    short: "勢いとチャンスを重視",
     description:
-      "短期の変動を許容し、大きな利益を狙う。大きな揺さぶりに耐え、トレンドが続く限り最大利益を目指します。",
+      "モメンタム（勢い）のある銘柄に乗り、短期で利益を狙います。",
     color: "text-red-800",
     bg: "bg-red-100",
   },
 };
 
+// 投資観点別のスコアボーナス（スコアリングで使用）
+export const PERSPECTIVE_BONUS = {
+  // 安定配当型: 配当 + バリュー + ディフェンシブ
+  CONSERVATIVE: {
+    HIGH_DIVIDEND: 15, // dividendYield >= 4%
+    NORMAL_DIVIDEND: 8, // dividendYield >= 2%
+    NO_DIVIDEND: -10, // dividendYield === 0 or null
+    LOW_PBR: 12, // PBR < 1
+    FAIR_PBR: 5, // PBR < 1.5
+    HIGH_PBR: -8, // PBR > 3
+    LOW_PER: 8, // PER < 15（割安）
+    PROFITABLE: 8, // 黒字企業ボーナス
+  },
+  // 成長投資型: グロース + バリュー
+  BALANCED: {
+    HIGH_GROWTH: 15, // revenueGrowth >= 20%
+    MODERATE_GROWTH: 8, // revenueGrowth >= 10%
+    HIGH_ROE: 10, // ROE >= 15%
+    GOOD_ROE: 5, // ROE >= 10%
+    LOW_PBR: 8, // PBR < 1（割安成長株）
+    GROWTH_PER: 5, // PER 15-30（成長企業の適正範囲）
+    NEGATIVE_GROWTH: -10, // revenueGrowth < 0%
+  },
+  // アクティブ型: モメンタム + グロース
+  AGGRESSIVE: {
+    HIGH_GROWTH: 10, // revenueGrowth >= 20%
+    MODERATE_GROWTH: 5, // revenueGrowth >= 10%
+  },
+} as const;
+
 /**
- * 投資スタイルに応じた基本ラベル ("慎重派（守り）" 等) を取得します。
+ * 投資スタイルに応じた基本ラベル ("安定配当型" 等) を取得します。
  */
 export function getStyleLabel(style: string | null): string {
   return (
     INVESTMENT_STYLE_CONFIG[style as keyof typeof INVESTMENT_STYLE_CONFIG]
-      ?.text || "バランス型"
+      ?.text || "成長投資型"
   );
 }
 
 /**
- * 投資スタイルに応じたリッチラベル ("🛡️ 慎重派（守り）" 等) を取得します。
+ * 投資スタイルに応じたリッチラベル ("🛡️ 安定配当型" 等) を取得します。
  */
 export function getRichStyleLabel(style: string | null): string {
   const config =
@@ -132,7 +162,7 @@ export function getRichStyleLabel(style: string | null): string {
 }
 
 /**
- * 投資スタイルに応じたプロンプト用ラベル ("慎重派（守り） - 資産保護を最優先" 等) を取得します。
+ * 投資スタイルに応じたプロンプト用ラベル ("安定配当型 - 配当と安定性を重視" 等) を取得します。
  */
 export function getPromptStyleLabel(style: string | null): string {
   const config =
@@ -407,20 +437,20 @@ export const TREND_DIVERGENCE = {
 export const MOMENTUM = {
   // 下落トレンド検出（週間変化率 %）: これ以下で buy → stay
   // 投資スタイル別の閾値
-  CONSERVATIVE_DECLINE_THRESHOLD: -10, // 慎重派: -10% で下落判定（タイト）
+  CONSERVATIVE_DECLINE_THRESHOLD: -10, // 安定配当型: -10% で下落判定（タイト）
   BALANCED_DECLINE_THRESHOLD: -15, // バランス: -15% で下落判定（標準）
-  AGGRESSIVE_DECLINE_THRESHOLD: -20, // 積極派: -20% で下落判定（寛容）
+  AGGRESSIVE_DECLINE_THRESHOLD: -20, // アクティブ型: -20% で下落判定（寛容）
   DEFAULT_DECLINE_THRESHOLD: -15, // 投資スタイル未設定時のデフォルト
   DECLINE_CONFIDENCE_PENALTY: -0.1, // 下落トレンド時のconfidenceペナルティ
   // 急騰銘柄ルールの投資スタイル別閾値（週間変化率 %）: これ以上で buy → stay
-  CONSERVATIVE_SURGE_THRESHOLD: 20, // 慎重派: +20% 以上でブロック（タイト）
+  CONSERVATIVE_SURGE_THRESHOLD: 20, // 安定配当型: +20% 以上でブロック（タイト）
   BALANCED_SURGE_THRESHOLD: 25, // バランス: +25% 以上でブロック（標準）
-  AGGRESSIVE_SURGE_THRESHOLD: 50, // 積極派: +50% 以上でブロック
+  AGGRESSIVE_SURGE_THRESHOLD: 50, // アクティブ型: +50% 以上でブロック
   DEFAULT_SURGE_THRESHOLD: 25, // 投資スタイル未設定時のデフォルト
   // 赤字×急騰銘柄の閾値（週間変化率 %）: 赤字銘柄がこれ以上急騰で buy → stay
   UNPROFITABLE_SURGE_THRESHOLD: 20, // 赤字企業の急騰は+20%からブロック
-  // 過熱圏ルール: 積極派は無効化
-  AGGRESSIVE_SKIP_OVERHEAT: true, // 積極派: 過熱圏ルールをスキップ
+  // 過熱圏ルール: アクティブ型は無効化
+  AGGRESSIVE_SKIP_OVERHEAT: true, // アクティブ型: 過熱圏ルールをスキップ
   // おすすめスコアリング用ペナルティ
   DECLINE_SCORE_PENALTY: -15, // 下落銘柄のスコアペナルティ
   STRONG_DECLINE_SCORE_PENALTY: -25, // 強い下落銘柄のスコアペナルティ
@@ -429,9 +459,9 @@ export const MOMENTUM = {
 // 利益確定促進ルール（含み益 + 短期下落予兆 → 利確を促す）
 export const PROFIT_TAKING_PROMOTION = {
   // 利確促進の最低含み益率（%）: これ以上で短期下落予兆がある場合に利確を促す
-  CONSERVATIVE_MIN_PROFIT: 3, // 慎重派: +3%以上で利確検討
-  BALANCED_MIN_PROFIT: 8, // バランス型: +8%以上で利確検討
-  AGGRESSIVE_MIN_PROFIT: 15, // 積極派: +15%以上で一部利確検討（大きな利益を守る）
+  CONSERVATIVE_MIN_PROFIT: 3, // 安定配当型: +3%以上で利確検討
+  BALANCED_MIN_PROFIT: 8, // 成長投資型: +8%以上で利確検討
+  AGGRESSIVE_MIN_PROFIT: 15, // アクティブ型: +15%以上で一部利確検討（大きな利益を守る）
   // 推奨売却割合
   CONSERVATIVE_SELL_PERCENT: 75 as 25 | 50 | 75 | 100,
   BALANCED_SELL_PERCENT: 50 as 25 | 50 | 75 | 100,
@@ -462,9 +492,9 @@ export const VOLUME_ANALYSIS = {
 export const TIMING_INDICATORS = {
   // ギャップアップ率の閾値（投資スタイル別）
   GAP_UP_SURGE_THRESHOLD: 10, // デフォルト（後方互換性のため残す）
-  GAP_UP_SURGE_CONSERVATIVE: 10, // 慎重派: 10%以上でブロック
-  GAP_UP_SURGE_BALANCED: 15, // バランス型: 15%以上でブロック
-  GAP_UP_SURGE_AGGRESSIVE: 20, // 積極派: 20%以上でブロック
+  GAP_UP_SURGE_CONSERVATIVE: 10, // 安定配当型: 10%以上でブロック
+  GAP_UP_SURGE_BALANCED: 15, // 成長投資型: 15%以上でブロック
+  GAP_UP_SURGE_AGGRESSIVE: 20, // アクティブ型: 20%以上でブロック
   GAP_UP_WARNING_THRESHOLD: 5, // これ以上でAIに警告指示
   // 出来高急増率の閾値
   VOLUME_SPIKE_EXTREME_THRESHOLD: 5.0, // 異常な出来高（仕手株リスク判定用）
@@ -474,9 +504,9 @@ export const TIMING_INDICATORS = {
   TURNOVER_OKU_THRESHOLD: 100_000_000, // 1億円（億円単位表示の閾値）
 } as const;
 
-// 積極派リバウンド狙いロジック
-// 慎重派・バランス型がstayでも、引けにかけて強い/出来高が伴う銘柄は
-// 積極派のみ短期リバウンド狙いでbuyに昇格する
+// アクティブ型リバウンド狙いロジック
+// 安定配当型・成長投資型がstayでも、引けにかけて強い/出来高が伴う銘柄は
+// アクティブ型のみ短期リバウンド狙いでbuyに昇格する
 export const AGGRESSIVE_REBOUND = {
   // 引けにかけて強い判定の閾値（ローソク足分析の強度%）
   CLOSING_STRENGTH_THRESHOLD: 55,
@@ -486,11 +516,11 @@ export const AGGRESSIVE_REBOUND = {
   REBOUND_CONFIDENCE: 0.60,
   // 出来高+引け強い両方が揃った場合のconfidence
   REBOUND_CONFIDENCE_WITH_VOLUME: 0.65,
-  // 既にbuyの積極派に対する引け強い/出来高ありのconfidenceブースト
+  // 既にbuyのアクティブ型に対する引け強い/出来高ありのconfidenceブースト
   CONFIDENCE_BOOST: 0.05,
 } as const;
 
-// ギャップアップモメンタムシグナル（積極派向け）
+// ギャップアップモメンタムシグナル（アクティブ型向け）
 // 小幅ギャップアップ + 引け強い + 出来高 → 正のモメンタムシグナル
 export const GAP_UP_MOMENTUM = {
   MIN_GAP_UP: 2, // 正シグナルの最小ギャップ率(%)
@@ -503,9 +533,9 @@ export const GAP_UP_MOMENTUM = {
 // テクニカルブレーキの閾値（投資スタイル別）
 // combinedTechnical.strength がこの値以上で buy → stay
 export const TECHNICAL_BRAKE = {
-  CONSERVATIVE: 70, // 慎重派: 70%以上の売りシグナルでブロック
-  BALANCED: 75, // バランス型: 75%以上でブロック
-  AGGRESSIVE: 85, // 積極派: 85%以上でブロック（逆張り許容）
+  CONSERVATIVE: 70, // 安定配当型: 70%以上の売りシグナルでブロック
+  BALANCED: 75, // 成長投資型: 75%以上でブロック
+  AGGRESSIVE: 85, // アクティブ型: 85%以上でブロック（逆張り許容）
 } as const;
 
 // 相対強度分析の閾値（銘柄 vs 市場/セクター）
@@ -580,7 +610,7 @@ export const BENCHMARK_METRICS = {
   EXCESS_RETURN_BAD: -3, // -3%以下で注意
   // ベータ値の評価
   BETA_STABLE: 0.5, // 安定型
-  BETA_BALANCED: 1.0, // バランス型
+  BETA_BALANCED: 1.0, // 成長投資型
   BETA_AGGRESSIVE: 1.5, // 積極型
   // シャープレシオの評価
   SHARPE_EXCELLENT: 1.0, // 優秀

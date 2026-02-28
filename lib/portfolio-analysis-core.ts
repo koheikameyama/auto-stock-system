@@ -359,7 +359,7 @@ function postProcessPortfolioAnalysis(params: {
     for (const styleKey of ALL_STYLE_KEYS_SHARED) {
       const sa = result.styleAnalyses[styleKey];
       // 期間分析ベースの率を優先、フォールバックはAIの率
-      // スタイル差はATR補正で自動的に出る（慎重派: 2.0x, バランス: 2.5x, 積極派: 3.0x）
+      // スタイル差はATR補正で自動的に出る（安定配当型: 2.0x, 成長投資型: 2.5x, アクティブ型: 3.0x）
       const { suggestedSellPrice, suggestedStopLossPrice } =
         calculatePricesFromRates({
           currentPrice,
@@ -799,9 +799,9 @@ export async function executePortfolioAnalysis(
 
   // ユーザー設定コンテキスト
   const styleMap: Record<string, string> = {
-    CONSERVATIVE: "慎重派（守り） - 資産保護を最優先",
-    BALANCED: "バランス型 - リスクとリワードのバランス",
-    AGGRESSIVE: "積極派（攻め） - 利益の最大化を優先",
+    CONSERVATIVE: "安定配当型（守り） - 資産保護を最優先",
+    BALANCED: "成長投資型 - リスクとリワードのバランス",
+    AGGRESSIVE: "アクティブ型（攻め） - 利益の最大化を優先",
   };
   const userContext = userSettings
     ? `\n【ユーザーの投資設定】
@@ -1191,9 +1191,9 @@ export async function executeSimulatedPortfolioAnalysis(
   );
 
   const styleMap: Record<string, string> = {
-    CONSERVATIVE: "慎重派（守り） - 資産保護を最優先",
-    BALANCED: "バランス型 - リスクとリワードのバランス",
-    AGGRESSIVE: "積極派（攻め） - 利益の最大化を優先",
+    CONSERVATIVE: "安定配当型（守り） - 資産保護を最優先",
+    BALANCED: "成長投資型 - リスクとリワードのバランス",
+    AGGRESSIVE: "アクティブ型（攻め） - 利益の最大化を優先",
   };
   const userContext = userSettings
     ? `\n【ユーザーの投資設定】
