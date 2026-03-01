@@ -54,7 +54,6 @@ import {
 } from "@/lib/recommendation-scoring";
 import { insertRecommendationOutcome } from "@/lib/outcome-utils";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
-import { executePurchaseRecommendation } from "@/lib/purchase-recommendation-core";
 
 interface GenerateRequest {
   session?: "morning" | "afternoon" | "evening";
@@ -271,7 +270,6 @@ export async function POST(request: NextRequest) {
             remainingBudget,
             sectorTrendMap,
             sectorTrendContext,
-            marketData?.isMarketPanic === true,
           );
           return result;
         } catch (error) {
@@ -349,7 +347,6 @@ async function processUser(
   remainingBudget: number | null,
   sectorTrendMap: Record<string, SectorTrendData>,
   sectorTrendContext: string,
-  isMarketPanic: boolean = false,
 ): Promise<UserResult> {
   const { userId, investmentStyle, investmentBudget } = user;
 
@@ -395,7 +392,6 @@ async function processUser(
     looseFiltered,
     investmentStyle,
     sectorTrendMap,
-    isMarketPanic,
   );
   console.log(
     `  Top 3 scores: ${scored
@@ -456,21 +452,8 @@ async function processUser(
     return { userId, success: false, error: "AI selection failed" };
   }
 
-  // 購入判断で"buy"にならない銘柄をフィルタリング
-  const { filtered, all } = await filterByPurchaseRecommendation(
-    userId,
-    recommendations,
-    topCandidates,
-  );
-
-  // フォールバック時も "avoid"（見送り推奨）は除外
-  const fallback = all.filter((r) => r.purchaseJudgment !== "avoid");
-  const recsToSave = filtered.length > 0 ? filtered : fallback;
-  if (filtered.length === 0) {
-    console.log(
-      `  All recommendations filtered out by purchase judgment, using fallback (excluding avoid): ${fallback.length} stocks`,
-    );
-  }
+  // AI選定結果をそのまま保存（最大5件）
+  const recsToSave = recommendations.slice(0, MAX_DAILY_RECOMMENDATIONS);
 
   const saved = await saveRecommendations(
     userId,
@@ -486,67 +469,7 @@ async function processUser(
   };
 }
 
-const PURCHASE_FILTER_CONCURRENCY = 5;
 const MAX_DAILY_RECOMMENDATIONS = 5;
-
-interface RecWithJudgment {
-  tickerCode: string;
-  reason: string;
-  investmentTheme: string;
-  purchaseJudgment: string;
-}
-
-async function filterByPurchaseRecommendation(
-  userId: string,
-  recommendations: Array<{
-    tickerCode: string;
-    reason: string;
-    investmentTheme: string;
-  }>,
-  candidates: ScoredStock[],
-): Promise<{ filtered: RecWithJudgment[]; all: RecWithJudgment[] }> {
-  const stockMap = new Map(candidates.map((s) => [s.tickerCode, s]));
-  const limit = pLimit(PURCHASE_FILTER_CONCURRENCY);
-
-  const results = await Promise.all(
-    recommendations.map((rec) =>
-      limit(async () => {
-        const stock = stockMap.get(rec.tickerCode);
-        if (!stock) return { rec, keep: true, judgment: "buy" };
-
-        try {
-          const result = await executePurchaseRecommendation(userId, stock.id);
-          const keep = result.recommendation === "buy";
-          console.log(
-            `  ${keep ? "✅" : "❌"} ${rec.tickerCode}: PurchaseRec = ${result.recommendation}`,
-          );
-          return { rec, keep, judgment: result.recommendation };
-        } catch (error) {
-          console.warn(
-            `  ⚠️ ${rec.tickerCode}: PurchaseRec check failed, keeping`,
-            error,
-          );
-          return { rec, keep: true, judgment: "buy" };
-        }
-      }),
-    ),
-  );
-
-  const all = results.map((r) => ({
-    ...r.rec,
-    purchaseJudgment: r.judgment,
-  }));
-  const filtered = results
-    .filter((r) => r.keep)
-    .map((r) => ({ ...r.rec, purchaseJudgment: r.judgment }));
-  console.log(
-    `  Purchase filter: ${recommendations.length} → ${filtered.length} stocks`,
-  );
-  return {
-    filtered: filtered.slice(0, MAX_DAILY_RECOMMENDATIONS),
-    all,
-  };
-}
 
 async function buildStockContexts(
   candidates: ScoredStock[],
@@ -926,7 +849,11 @@ ${ctx.technicalContext}${ctx.candlestickContext}${ctx.chartPatternContext}${ctx.
 
 async function saveRecommendations(
   userId: string,
-  recommendations: RecWithJudgment[],
+  recommendations: Array<{
+    tickerCode: string;
+    reason: string;
+    investmentTheme: string;
+  }>,
   candidates: ScoredStock[],
 ): Promise<number> {
   const today = getTodayForDB();
@@ -958,7 +885,7 @@ async function saveRecommendations(
           stockId: stock.id,
           reason: rec.reason,
           investmentTheme: rec.investmentTheme,
-          purchaseJudgment: rec.purchaseJudgment,
+          purchaseJudgment: null,
         },
         create: {
           userId,
@@ -967,7 +894,7 @@ async function saveRecommendations(
           position: idx + 1,
           reason: rec.reason,
           investmentTheme: rec.investmentTheme,
-          purchaseJudgment: rec.purchaseJudgment,
+          purchaseJudgment: null,
         },
       });
 

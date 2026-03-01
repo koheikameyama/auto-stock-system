@@ -4,14 +4,8 @@
  * Pythonスクリプト (generate_personal_recommendations.py) から移植
  */
 
-import { MA_DEVIATION, MOMENTUM, MARKET_DEFENSIVE_MODE, EARNINGS_SAFETY, PERSPECTIVE_BONUS } from "@/lib/constants"
+import { PERSPECTIVE_BONUS } from "@/lib/constants"
 import { getSectorScoreBonus, type SectorTrendData } from "@/lib/sector-trend"
-import {
-  isDangerousStock,
-  isInDecline,
-  isOverheated,
-  isSurgeStock,
-} from "@/lib/stock-safety-rules"
 
 // 設定
 export const SCORING_CONFIG = {
@@ -129,7 +123,6 @@ export function calculateStockScores(
   stocks: StockForScoring[],
   investmentStyle: string | null,
   sectorTrends?: Record<string, SectorTrendData>,
-  isMarketPanic?: boolean,
 ): ScoredStock[] {
   const style = investmentStyle || "BALANCED"
   const weights = SCORE_WEIGHTS[style] || SCORE_WEIGHTS["BALANCED"]
@@ -147,38 +140,7 @@ export function calculateStockScores(
   const penalty = RISK_PENALTY[style] || -20
   const scoredStocks: ScoredStock[] = []
 
-  const isAggressive = investmentStyle === "AGGRESSIVE"
-
   for (const stock of stocks) {
-    // 異常な急騰（週間+50%超）は除外（アクティブ型は+80%超のみ除外）
-    const extremeSurgeLimit = isAggressive ? 80 : 50
-    if (stock.weekChangeRate !== null && stock.weekChangeRate > extremeSurgeLimit) {
-      continue
-    }
-
-    // 購入判断で強制補正（buy→stay）される銘柄を除外
-    const volatilityNum = stock.volatility !== null ? Number(stock.volatility) : null
-    const weekChange = stock.weekChangeRate !== null ? Number(stock.weekChangeRate) : null
-    const maDeviation = stock.maDeviationRate !== null ? Number(stock.maDeviationRate) : null
-    if (
-      isDangerousStock(stock.isProfitable, volatilityNum) ||
-      isSurgeStock(weekChange, style) ||
-      isInDecline(weekChange, style) ||
-      isOverheated(maDeviation, style)
-    ) {
-      continue
-    }
-
-    // 決算3日前以内の銘柄を除外（決算ギャンブル防止）
-    if (stock.nextEarningsDate) {
-      const now = new Date()
-      const diffMs = new Date(stock.nextEarningsDate).getTime() - now.getTime()
-      const diffDays = diffMs / (1000 * 60 * 60 * 24)
-      if (diffDays >= 0 && diffDays <= EARNINGS_SAFETY.PRE_EARNINGS_BLOCK_DAYS) {
-        continue
-      }
-    }
-
     let totalScore = 0
     const scoreBreakdown: Record<string, number> = {}
 
@@ -202,59 +164,10 @@ export function calculateStockScores(
       scoreBreakdown["riskPenalty"] = penalty
     }
 
-    // 急騰銘柄へのペナルティ（投資スタイル別）
-    if (stock.weekChangeRate !== null) {
-      if (isAggressive) {
-        // アクティブ型: 急騰ペナルティなし（モメンタム重視）
-      } else if (stock.weekChangeRate >= 30) {
-        totalScore -= 20
-        scoreBreakdown["surgePenalty"] = -20
-      } else if (stock.weekChangeRate >= 20) {
-        totalScore -= 10
-        scoreBreakdown["surgePenalty"] = -10
-      }
-    }
-
-    // 下落トレンドへのペナルティ（投資スタイル別）
-    if (stock.weekChangeRate !== null) {
-      const declineThreshold =
-        investmentStyle === "CONSERVATIVE"
-          ? MOMENTUM.CONSERVATIVE_DECLINE_THRESHOLD
-          : investmentStyle === "AGGRESSIVE"
-            ? MOMENTUM.AGGRESSIVE_DECLINE_THRESHOLD
-            : MOMENTUM.BALANCED_DECLINE_THRESHOLD
-
-      if (stock.weekChangeRate <= declineThreshold) {
-        totalScore += MOMENTUM.STRONG_DECLINE_SCORE_PENALTY
-        scoreBreakdown["declinePenalty"] = MOMENTUM.STRONG_DECLINE_SCORE_PENALTY
-      } else if (stock.weekChangeRate <= declineThreshold + 3) {
-        // 閾値付近（閾値+3%まで）は軽めのペナルティ
-        totalScore += MOMENTUM.DECLINE_SCORE_PENALTY
-        scoreBreakdown["declinePenalty"] = MOMENTUM.DECLINE_SCORE_PENALTY
-      }
-    }
-
     // 業績不明の銘柄へのペナルティ
     if (stock.isProfitable === null) {
       totalScore -= 5
       scoreBreakdown["unknownEarningsPenalty"] = -5
-    }
-
-    // 移動平均乖離率によるペナルティ/ボーナス
-    if (stock.maDeviationRate !== null) {
-      if (stock.maDeviationRate >= MA_DEVIATION.UPPER_THRESHOLD && !isAggressive) {
-        // アクティブ型は過熱圏ペナルティをスキップ（モメンタム重視）
-        totalScore += MA_DEVIATION.SCORE_PENALTY
-        scoreBreakdown["maDeviationPenalty"] = MA_DEVIATION.SCORE_PENALTY
-      } else if (
-        stock.maDeviationRate <= MA_DEVIATION.LOWER_THRESHOLD &&
-        stock.isProfitable === true &&
-        stock.volatility !== null &&
-        stock.volatility <= MA_DEVIATION.LOW_VOLATILITY_THRESHOLD
-      ) {
-        totalScore += MA_DEVIATION.SCORE_BONUS
-        scoreBreakdown["maDeviationBonus"] = MA_DEVIATION.SCORE_BONUS
-      }
     }
 
     // セクタートレンドによるボーナス/ペナルティ
@@ -264,12 +177,6 @@ export function calculateStockScores(
         totalScore += bonus
         scoreBreakdown["sectorTrendBonus"] = bonus
       }
-    }
-
-    // 市場パニック時の一律ペナルティ
-    if (isMarketPanic) {
-      totalScore += MARKET_DEFENSIVE_MODE.SCORE_PENALTY
-      scoreBreakdown["marketPanicPenalty"] = MARKET_DEFENSIVE_MODE.SCORE_PENALTY
     }
 
     // 投資観点に基づくボーナス/ペナルティ
