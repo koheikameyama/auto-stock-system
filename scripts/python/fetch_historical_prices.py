@@ -4,6 +4,7 @@
 yfinanceを使って過去の株価データを取得
 """
 
+import argparse
 import json
 import os
 import sys
@@ -13,11 +14,14 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 import yfinance as yf
 
 
-def fetch_historical(ticker: str, period: str) -> list[dict]:
+def fetch_historical(ticker: str, period: str = "1mo", start: str | None = None, end: str | None = None) -> list[dict]:
     """ヒストリカルデータを取得"""
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
+        if start and end:
+            hist = stock.history(start=start, end=end)
+        else:
+            hist = stock.history(period=period)
 
         results = []
         for date, row in hist.iterrows():
@@ -39,7 +43,12 @@ def fetch_historical(ticker: str, period: str) -> list[dict]:
 
 
 if __name__ == "__main__":
-    ticker = sys.argv[1] if len(sys.argv) > 1 else ""
-    period = sys.argv[2] if len(sys.argv) > 2 else "1mo"
-    results = fetch_historical(ticker, period)
+    parser = argparse.ArgumentParser(description="ヒストリカル株価取得")
+    parser.add_argument("ticker", help="ティッカーコード")
+    parser.add_argument("period", nargs="?", default="1mo", help="取得期間 (1mo, 3mo, 1y)")
+    parser.add_argument("--start", help="開始日 (YYYY-MM-DD)")
+    parser.add_argument("--end", help="終了日 (YYYY-MM-DD)")
+    args = parser.parse_args()
+
+    results = fetch_historical(args.ticker, args.period, args.start, args.end)
     print(json.dumps(results))

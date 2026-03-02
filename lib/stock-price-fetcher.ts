@@ -130,19 +130,17 @@ export async function fetchStockPrices(
  *
  * @param tickerCode - ティッカーコード（.T サフィックスの有無は問わない）
  * @param period - 期間（"1m", "3m", "1y"）
+ * @param endDate - 終了日（指定時は endDate の 60 日前から endDate までのデータを取得）
  * @returns ヒストリカル株価データ配列
  */
 export async function fetchHistoricalPrices(
   tickerCode: string,
   period: "1m" | "3m" | "1y" = "1m",
+  endDate?: Date,
 ): Promise<HistoricalPrice[]> {
   const normalizedCode = normalizeTickerCode(tickerCode);
 
   try {
-    // yfinanceのperiod形式に変換
-    const yfinancePeriod =
-      period === "1m" ? "1mo" : period === "3m" ? "3mo" : "1y";
-
     const scriptPath = getPythonScriptPath("fetch_historical_prices.py");
 
     // スクリプトの存在確認
@@ -152,10 +150,22 @@ export async function fetchHistoricalPrices(
       );
     }
 
-    const { stdout, stderr } = await execAsync(
-      `python3 "${scriptPath}" "${normalizedCode}" "${yfinancePeriod}"`,
-      { timeout: 60000 },
-    );
+    let command: string;
+    if (endDate) {
+      // endDate が指定された場合は 60 日前〜endDate の範囲で取得
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 60);
+      const startStr = startDate.toISOString().split("T")[0];
+      const endStr = endDate.toISOString().split("T")[0];
+      command = `python3 "${scriptPath}" "${normalizedCode}" --start "${startStr}" --end "${endStr}"`;
+    } else {
+      // yfinanceのperiod形式に変換
+      const yfinancePeriod =
+        period === "1m" ? "1mo" : period === "3m" ? "3mo" : "1y";
+      command = `python3 "${scriptPath}" "${normalizedCode}" "${yfinancePeriod}"`;
+    }
+
+    const { stdout, stderr } = await execAsync(command, { timeout: 60000 });
 
     if (stderr) {
       console.error("Python stderr:", stderr);
@@ -164,6 +174,52 @@ export async function fetchHistoricalPrices(
     const results: HistoricalPrice[] = JSON.parse(stdout.trim());
 
     // 日付でソート（古い順）
+    results.sort((a, b) => a.date.localeCompare(b.date));
+
+    return results;
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch historical prices for ${normalizedCode}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+}
+
+/**
+ * 任意の日付範囲でヒストリカル株価データを取得（Python yfinance経由）
+ * バックテスト用途（実際のリターン計算など）に使用
+ *
+ * @param tickerCode - ティッカーコード
+ * @param startDate - 開始日
+ * @param endDate - 終了日
+ * @returns ヒストリカル株価データ配列
+ */
+export async function fetchHistoricalPricesByDateRange(
+  tickerCode: string,
+  startDate: Date,
+  endDate: Date,
+): Promise<HistoricalPrice[]> {
+  const normalizedCode = normalizeTickerCode(tickerCode);
+
+  try {
+    const scriptPath = getPythonScriptPath("fetch_historical_prices.py");
+
+    if (!fs.existsSync(scriptPath)) {
+      throw new Error(
+        `Python script not found: ${scriptPath} (cwd: ${process.cwd()})`,
+      );
+    }
+
+    const startStr = startDate.toISOString().split("T")[0];
+    const endStr = endDate.toISOString().split("T")[0];
+    const command = `python3 "${scriptPath}" "${normalizedCode}" --start "${startStr}" --end "${endStr}"`;
+
+    const { stdout, stderr } = await execAsync(command, { timeout: 60000 });
+
+    if (stderr) {
+      console.error("Python stderr:", stderr);
+    }
+
+    const results: HistoricalPrice[] = JSON.parse(stdout.trim());
     results.sort((a, b) => a.date.localeCompare(b.date));
 
     return results;
