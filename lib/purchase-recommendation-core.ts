@@ -800,8 +800,8 @@ export async function executePurchaseRecommendation(
     if (!isHardBlocked && (isClosingStrong || hasVolumeSupport || gapUpMomentum.isMomentum)) {
       aggressiveStyle.recommendation = "buy";
       aggressiveStyle.buyCondition = null;
-      aggressiveStyle.buyTiming = "market";
-      aggressiveStyle.dipTargetPrice = null;
+      aggressiveStyle.buyTiming = "dip";
+      aggressiveStyle.dipTargetPrice = sma25ForTiming;
       aggressiveStyle.confidence = isClosingStrong && hasVolumeSupport
         ? Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE_WITH_VOLUME)
         : Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE);
