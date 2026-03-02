@@ -587,102 +587,61 @@ export default function StockAnalysisCard({
                       {(() => {
                         const limitPriceNum = effectiveAnalysis.limitPrice;
                         const currentPrice = effectiveAnalysis.currentPrice;
-                        const isBuy = effectiveAnalysis.recommendation === "buy";
 
-                        if (isBuy) {
-                          // buy推奨時: 現在価格と比較
-                          // buyTimingがある場合はmarketの時のみ、ない場合（古いデータ等）は既存のロジックを維持
-                          const isNowBuyTime =
-                            currentPrice &&
-                            (!effectiveAnalysis.buyTiming ||
-                              effectiveAnalysis.buyTiming === "market") &&
-                            Math.abs(limitPriceNum - currentPrice) /
-                              currentPrice <
-                              0.01; // 1%以内なら「今が買い時」
-                          const priceDiff = currentPrice
-                            ? limitPriceNum - currentPrice
-                            : 0;
-                          const priceDiffPercent = currentPrice
-                            ? ((priceDiff / currentPrice) * 100).toFixed(1)
-                            : "0";
-                          return (
-                            <>
-                              <p className="text-xs text-gray-500">
-                                {isNowBuyTime ? "今が買い時" : "指値（買い）"}
+                        // buy/hold共通: 売却目標として表示
+                        // 含み損がある場合は「成行で売却OK」を表示しない（売却目標は含み益がある場合のみ目標到達と判定）
+                        const avgPrice = effectiveAnalysis.averagePurchasePrice;
+                        const hasLoss =
+                          avgPrice && currentPrice && currentPrice < avgPrice;
+                        const priceDiff = currentPrice
+                          ? limitPriceNum - currentPrice
+                          : 0;
+                        const priceDiffPercent = currentPrice
+                          ? ((priceDiff / currentPrice) * 100).toFixed(1)
+                          : "0";
+
+                        const isTargetReached =
+                          !hasLoss && currentPrice && priceDiff <= 0;
+                        const isNearTarget =
+                          !hasLoss &&
+                          currentPrice &&
+                          !isTargetReached &&
+                          Math.abs(priceDiff / currentPrice) < 0.01;
+
+                        const takeProfitRate = effectiveAnalysis?.suggestedSellTargetRate;
+                        const takeProfitPercent = takeProfitRate ? Math.round(takeProfitRate * 100) : null;
+
+                        return (
+                          <>
+                            <p className="text-xs text-gray-500">売却目標</p>
+                            <p className="text-base font-bold text-green-600">
+                              {`${formatPrice(limitPriceNum)}円`}
+                            </p>
+                            {takeProfitPercent && (
+                              <p className="text-xs text-gray-400">
+                                +{takeProfitPercent}%目安
                               </p>
-                              <p className="text-base font-bold text-green-600">
-                                {isNowBuyTime
-                                  ? "成行で購入OK"
-                                  : `${formatPrice(limitPriceNum)}円`}
-                              </p>
-                              {!isNowBuyTime &&
-                                currentPrice &&
-                                priceDiff < 0 && (
-                                  <p className="text-xs text-yellow-600">
-                                    あと{Math.abs(priceDiff).toLocaleString()}円
-                                    / {Math.abs(Number(priceDiffPercent))}
-                                    %下落で到達
-                                  </p>
-                                )}
-                            </>
-                          );
-                        } else {
-                          // hold推奨時: 売却目標
-                          // 含み損がある場合は「成行で売却OK」を表示しない（売却目標は含み益がある場合のみ目標到達と判定）
-                          const avgPrice = effectiveAnalysis.averagePurchasePrice;
-                          const hasLoss =
-                            avgPrice && currentPrice && currentPrice < avgPrice;
-                          const priceDiff = currentPrice
-                            ? limitPriceNum - currentPrice
-                            : 0;
-                          const priceDiffPercent = currentPrice
-                            ? ((priceDiff / currentPrice) * 100).toFixed(1)
-                            : "0";
-
-                          // AIがhold（保有）を推奨しているため、「今が売り時」「成行で売却OK」という強い売却メッセージは出さない
-                          const isTargetReached =
-                            !hasLoss && currentPrice && priceDiff <= 0;
-                          const isNearTarget =
-                            !hasLoss &&
-                            currentPrice &&
-                            !isTargetReached &&
-                            Math.abs(priceDiff / currentPrice) < 0.01;
-
-                          const takeProfitRate = effectiveAnalysis?.suggestedSellTargetRate;
-                          const takeProfitPercent = takeProfitRate ? Math.round(takeProfitRate * 100) : null;
-
-                          return (
-                            <>
-                              <p className="text-xs text-gray-500">売却目標</p>
-                              <p className="text-base font-bold text-green-600">
-                                {`${formatPrice(limitPriceNum)}円`}
-                              </p>
-                              {takeProfitPercent && (
-                                <p className="text-xs text-gray-400">
-                                  +{takeProfitPercent}%目安
+                            )}
+                            {currentPrice &&
+                              priceDiff > 0 &&
+                              !isNearTarget && (
+                                <p className="text-xs text-green-600">
+                                  あと+{priceDiff.toLocaleString()}円 / +
+                                  {priceDiffPercent}%で到達
                                 </p>
                               )}
-                              {currentPrice &&
-                                priceDiff > 0 &&
-                                !isNearTarget && (
-                                  <p className="text-xs text-green-600">
-                                    あと+{priceDiff.toLocaleString()}円 / +
-                                    {priceDiffPercent}%で到達
-                                  </p>
-                                )}
-                              {isNearTarget && (
-                                <p className="text-xs text-green-600 font-semibold">
-                                  目標到達圏内
-                                </p>
-                              )}
-                              {isTargetReached && (
-                                <p className="text-xs text-green-600 font-bold">
-                                  目標価格に到達
-                                </p>
-                              )}
-                            </>
-                          );
-                        }
+                            {isNearTarget && (
+                              <p className="text-xs text-green-600 font-semibold">
+                                目標到達圏内
+                              </p>
+                            )}
+                            {isTargetReached && (
+                              <p className="text-xs text-green-600 font-bold">
+                                目標価格に到達
+                              </p>
+                            )}
+                          </>
+                        );
                       })()}
                     </div>
                   )}
