@@ -78,10 +78,10 @@ jobs:
 
   personal-recommendations:
     needs: [fetch-news, calculate-sector-trends]
-    if: "!failure() && !cancelled() && inputs.session != 'post-close'"
+    if: "!failure() && !cancelled() && (inputs.session == 'pre-morning' || inputs.session == 'pre-afternoon')"
     uses: ./.github/workflows/session-personal-recommendations.yml
     with:
-      session: ${{ inputs.session == 'pre-morning' && 'morning' || inputs.session == 'morning' && 'morning' || inputs.session == 'close' && 'evening' || 'afternoon' }}
+      session: ${{ inputs.session == 'pre-morning' && 'morning' || 'afternoon' }}
     secrets: inherit
 
   gainers-losers:
