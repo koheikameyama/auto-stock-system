@@ -119,7 +119,9 @@ export default function DailyMarketNavigator({
     return <Skeleton />
   }
 
-  const sessionIcon = activeSession === "evening" ? "🌙" : activeSession === "pre-afternoon" ? "📊" : "🧭"
+  // データのセッション情報を優先し、なければ現在時刻から判定
+  const displaySession = data?.session ?? activeSession
+  const sessionIcon = displaySession === "evening" ? "🌙" : displaySession === "pre-afternoon" ? "📊" : "🧭"
 
   // No analysis yet
   if (!data?.hasAnalysis) {
@@ -134,7 +136,7 @@ export default function DailyMarketNavigator({
               {t("title")}
             </div>
             <p className="text-xs text-gray-600">
-              {activeSession === "evening" ? t("noEveningAnalysis") : t("noAnalysis")}
+              {displaySession === "evening" ? t("noEveningAnalysis") : t("noAnalysis")}
             </p>
           </div>
         </div>
@@ -154,7 +156,7 @@ export default function DailyMarketNavigator({
         <div className="flex items-center gap-2 mb-2">
           <span className="text-lg">{sessionIcon}</span>
           <span className="text-xs font-semibold text-gray-500">
-            {t(`session.${activeSession}`)}
+            {t(`session.${displaySession}`)}
           </span>
           <span
             className={`ml-auto px-2 py-0.5 rounded-full text-xs font-semibold ${toneStyle.bg} ${toneStyle.text} border ${toneStyle.border}`}
