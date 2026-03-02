@@ -83,6 +83,35 @@ export function getFreshnessColorClass(status: "fresh" | "normal" | "stale"): st
 }
 
 /**
+ * 購入判断の表示モードを取得
+ * - actionable: 取引時間中（09:30-15:30）→ アクション可能な分析として表示
+ * - informational: 取引時間外 → 情報提供・準備として表示
+ */
+export type RecommendationDisplayMode = "actionable" | "informational"
+
+export function getRecommendationDisplayMode(): RecommendationDisplayMode {
+  const now = dayjs().tz("Asia/Tokyo")
+  const timeInMinutes = now.hour() * 60 + now.minute()
+
+  const actionableStart = 9 * 60 + 30  // 09:30
+  const actionableEnd = 15 * 60 + 30   // 15:30
+
+  if (timeInMinutes >= actionableStart && timeInMinutes < actionableEnd) {
+    return "actionable"
+  }
+  return "informational"
+}
+
+/**
+ * 取引時間前（寄り前）かどうかを判定
+ */
+export function isPreMarketTime(): boolean {
+  const now = dayjs().tz("Asia/Tokyo")
+  const timeInMinutes = now.hour() * 60 + now.minute()
+  return timeInMinutes < 9 * 60 + 30 // 09:30より前
+}
+
+/**
  * 分析日時の表示用フォーマット
  * 例: 「寄り前分析 (2時間前)」
  */

@@ -25,9 +25,9 @@ on:
 # セッション別の実行内容:
 #
 #   pre-morning (08:00):   news(JP+US) → trends → 分析ジョブ群 → navigator(morning) ← 分析結果を集約
-#   morning (09:10):       分析ジョブ群
+#   morning (09:30):       分析ジョブ群（開場30分後・値動き安定後の再判定）
 #   pre-afternoon (11:40): news(JP) + prices → trends → 分析ジョブ群 → navigator(pre-afternoon) ← 分析結果を集約
-#   afternoon (12:40):     分析ジョブ群
+#   afternoon (13:00):     分析ジョブ群（後場開始30分後の再判定）
 #   close (15:40):         prices → trends → 分析 + gainers + snapshots
 #   post-close (17:00):    navigator(evening) ← close の分析結果を集約
 # ──────────────────────────────────────────────
@@ -61,6 +61,8 @@ jobs:
     needs: [fetch-news, calculate-sector-trends]
     if: "!failure() && !cancelled() && inputs.session != 'post-close'"
     uses: ./.github/workflows/session-purchase-recommendations.yml
+    with:
+      session: ${{ inputs.session }}
     secrets: inherit
 
   portfolio-analysis:

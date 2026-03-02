@@ -5,6 +5,11 @@ import AnalysisTimestamp from "./AnalysisTimestamp";
 import { UPDATE_SCHEDULES } from "@/lib/constants";
 import { useTranslations } from "next-intl";
 import InvestmentStyleTabs from "./InvestmentStyleTabs";
+import {
+  getRecommendationDisplayMode,
+  isPreMarketTime,
+  type RecommendationDisplayMode,
+} from "@/lib/analysis-time";
 
 interface PurchaseRecommendationProps {
   stockId: string;
@@ -138,6 +143,7 @@ export default function PurchaseRecommendation({
   currentTargetBuyPrice,
 }: PurchaseRecommendationProps) {
   const t = useTranslations("stocks.styleAnalysis");
+  const tSession = useTranslations("stocks.purchaseSession");
   const [data, setData] = useState<RecommendationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -145,6 +151,11 @@ export default function PurchaseRecommendation({
   const [error, setError] = useState<string | null>(null);
   const [userInvestmentStyle, setUserInvestmentStyle] = useState<string>("BALANCED");
   const [selectedStyle, setSelectedStyle] = useState<string>("BALANCED");
+  const [displayMode, setDisplayMode] = useState<RecommendationDisplayMode>("actionable");
+
+  useEffect(() => {
+    setDisplayMode(getRecommendationDisplayMode());
+  }, []);
 
   async function fetchRecommendation() {
     setLoading(true);
@@ -780,6 +791,45 @@ export default function PurchaseRecommendation({
     );
   };
 
+  // 情報提供モード（取引時間外）バナー
+  const InformationalBanner = () => {
+    if (displayMode !== "informational") return null;
+
+    if (isPreMarketTime()) {
+      return (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🌅</span>
+            <div>
+              <p className="text-sm font-semibold text-blue-800">
+                {tSession("preMarketTitle")}
+              </p>
+              <p className="text-xs text-blue-600">
+                {tSession("preMarketDescription")}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🌙</span>
+          <div>
+            <p className="text-sm font-semibold text-indigo-800">
+              {tSession("postMarketTitle")}
+            </p>
+            <p className="text-xs text-indigo-600">
+              {tSession("postMarketDescription")}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ヘッダーコンポーネント
   const ReanalyzeHeader = () => (
     <div className="flex items-center justify-between mb-3">
@@ -822,6 +872,7 @@ export default function PurchaseRecommendation({
       <div>
         <ReanalyzeHeader />
         <StyleTabs />
+        <InformationalBanner />
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-md p-4 sm:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">💡</span>
@@ -883,6 +934,7 @@ export default function PurchaseRecommendation({
       <div>
         <ReanalyzeHeader />
         <StyleTabs />
+        <InformationalBanner />
         <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg shadow-md p-4 sm:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">⏳</span>
@@ -943,6 +995,7 @@ export default function PurchaseRecommendation({
       <div>
         <ReanalyzeHeader />
         <StyleTabs />
+        <InformationalBanner />
         <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-lg shadow-md p-4 sm:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">🚫</span>
@@ -1010,6 +1063,7 @@ export default function PurchaseRecommendation({
     <div>
       <ReanalyzeHeader />
       <StyleTabs />
+      <InformationalBanner />
       <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-lg shadow-md p-4 sm:p-6 mb-4">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-2xl">⏳</span>

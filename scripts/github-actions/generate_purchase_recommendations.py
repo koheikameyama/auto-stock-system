@@ -142,6 +142,12 @@ def main():
     print("=== Starting Purchase Recommendation Generation ===")
     print(f"Time: {datetime.now().isoformat()}")
 
+    session = os.environ.get("SESSION", "")
+    informational_sessions = {"pre-morning", "close"}
+    suppress_notifications = session in informational_sessions
+    if session:
+        print(f"Session: {session} (notifications: {'suppressed' if suppress_notifications else 'enabled'})")
+
     app_url = get_app_url()
     cron_secret = get_cron_secret()
     conn = psycopg2.connect(get_database_url())
@@ -221,7 +227,7 @@ def main():
                 print(f"  Buy recommendation for {notified_count}/{len(watchlist_users)} users (style-filtered)")
 
         # 買い推奨通知を送信
-        if buy_notifications:
+        if buy_notifications and not suppress_notifications:
             print(f"\n=== Sending {len(buy_notifications)} buy recommendation notifications ===")
             notify_result = send_buy_recommendation_notifications(
                 app_url, cron_secret, buy_notifications
@@ -231,6 +237,8 @@ def main():
             print(f"  Skipped (duplicate): {notify_result.get('skipped', 0)}")
             if notify_result.get("errors"):
                 print(f"  Errors: {notify_result['errors']}")
+        elif buy_notifications and suppress_notifications:
+            print(f"\n=== Skipping {len(buy_notifications)} buy notifications (session={session}, informational mode) ===")
 
         print(f"\n=== Summary ===")
         print(f"Success: {success_count}, Errors: {error_count}")

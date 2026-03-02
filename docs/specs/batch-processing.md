@@ -7,7 +7,7 @@ GitHub Actionsで定期実行されるバッチ処理群です。株価データ
 ## 日次データフロー
 
 ```
-SESSION (09:10 / 10:10 / 12:40 / 13:40 / 15:40 JST) ── session-batch.yml
+SESSION (08:00 / 09:30 / 11:40 / 13:00 / 15:40 / 17:00 JST) ── session-batch.yml
 
   Phase 1: データ取得（並列）
   ├─ fetch-news（morning: JP+US / afternoon: JP / 他セッション: スキップ）
@@ -44,21 +44,22 @@ MONTHLY
 
 ## cron-job.org スケジュール
 
-セッション系は5トリガー:
+セッション系は6トリガー:
 
-| JST | ワークフロー | 入力 |
-|-----|------------|------|
-| 09:10 | session-batch | session=morning |
-| 10:10 | session-batch | session=mid-morning |
-| 12:40 | session-batch | session=afternoon |
-| 13:40 | session-batch | session=mid-afternoon |
-| 15:40 | session-batch | session=close |
+| JST | ワークフロー | 入力 | 目的 | 買い推奨通知 |
+|-----|------------|------|------|-------------|
+| 08:00 | session-batch | session=pre-morning | 寄り前分析（前日終値+米国市場+ニュース） | 抑制（情報提供モード） |
+| 09:30 | session-batch | session=morning | 開場30分後の再判定（値動き安定後） | 送信 |
+| 11:40 | session-batch | session=pre-afternoon | 前場株価取得+ニュース更新+分析 | 送信 |
+| 13:00 | session-batch | session=afternoon | 後場開始30分後の再判定 | 送信 |
+| 15:40 | session-batch | session=close | 大引け後の最終分析+ランキング+スナップショット | 抑制（情報提供モード） |
+| 17:00 | session-batch | session=post-close | Navigator(evening)で結果集約 | - |
 
 ## ワークフロー一覧
 
 ### 1. 株価分析オーケストレーター（session-batch.yml）
 
-cron-job.org から `workflow_dispatch` でセッション（morning/mid-morning/afternoon/mid-afternoon/close）を指定してトリガー。
+cron-job.org から `workflow_dispatch` でセッション（pre-morning/morning/pre-afternoon/afternoon/close/post-close）を指定してトリガー。
 
 **実行フロー（`needs` で順序保証）**:
 

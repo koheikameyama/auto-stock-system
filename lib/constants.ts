@@ -235,6 +235,15 @@ export const CHAT_CONFIG = {
   MAX_TOKENS: 3000,
 } as const;
 
+// 購入判断の表示モード判定用
+// 取引時間中（09:30-15:30）は actionable、それ以外は informational
+export const PURCHASE_RECOMMENDATION_SESSION = {
+  ACTIONABLE_START_HOUR: 9,
+  ACTIONABLE_START_MINUTE: 30,
+  ACTIONABLE_END_HOUR: 15,
+  ACTIONABLE_END_MINUTE: 30,
+} as const;
+
 // AI分析の更新スケジュール（平日のみ、session-batch.yml で一括実行）
 export const UPDATE_SCHEDULES = {
   // あなたへのおすすめ（session-personal-recommendations.yml）
