@@ -280,7 +280,7 @@ export function applyPurchaseStyleSafetyRules(params: {
 
     // 売りタイミング判定（avoid推奨時のみ）
     if (styleResult.recommendation === "avoid") {
-      const { deviationRate: devRate, rsi, sma25 } = sellTimingParams;
+      const { deviationRate: devRate, rsi } = sellTimingParams;
       const isDeviationOk =
         devRate === null || devRate >= -5;
       const isRsiOk = rsi === null || rsi >= 30;
@@ -288,8 +288,9 @@ export function applyPurchaseStyleSafetyRules(params: {
       if (isDeviationOk && isRsiOk) {
         styleResult.sellTiming = "market";
       } else {
-        styleResult.sellTiming = "rebound";
-        styleResult.sellTargetPrice = sma25;
+        // 売られすぎ状態は「様子見」として扱う（ウォッチリスト文脈では戻り待ちではなく様子見が適切）
+        styleResult.recommendation = "stay";
+        styleResult.sellTiming = null;
       }
     }
 

@@ -20,11 +20,9 @@ interface InvestmentStyleTabsProps {
   className?: string;
 }
 
-function getRecommendationColor(recommendation: string, sellTiming?: string | null): string {
+function getRecommendationColor(recommendation: string): string {
   if (recommendation === "buy") return "text-green-600";
   if (recommendation === "stay" || recommendation === "hold")
-    return "text-yellow-600";
-  if (recommendation === "avoid" && sellTiming === "rebound")
     return "text-yellow-600";
   return "text-red-600";
 }
@@ -79,11 +77,9 @@ export default function InvestmentStyleTabs({
                 styleResult.recommendation as RecommendationLabel
               ) && (
                 <span
-                  className={`text-[10px] font-bold leading-none ${getRecommendationColor(styleResult.recommendation, styleResult.sellTiming)}`}
+                  className={`text-[10px] font-bold leading-none ${getRecommendationColor(styleResult.recommendation)}`}
                 >
-                  {styleResult.recommendation === "avoid" && styleResult.sellTiming === "rebound"
-                    ? t("labels.rebound")
-                    : t(`labels.${styleResult.recommendation}`)}
+                  {t(`labels.${styleResult.recommendation}`)}
                 </span>
               )}
           </button>

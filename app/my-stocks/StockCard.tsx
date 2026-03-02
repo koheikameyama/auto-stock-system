@@ -200,17 +200,9 @@ export default function StockCard({
               </span>
             ) : isWatchlist &&
               recommendation?.recommendation === "avoid" &&
-              recommendation.sellTiming ? (
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                  recommendation.sellTiming === "market"
-                    ? "bg-red-100 text-red-700"
-                    : "bg-yellow-100 text-yellow-700"
-                }`}
-              >
-                {recommendation.sellTiming === "market"
-                  ? "即見送り"
-                  : "戻り待ち"}
+              recommendation.sellTiming === "market" ? (
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                即見送り
               </span>
             ) : (
               <span
