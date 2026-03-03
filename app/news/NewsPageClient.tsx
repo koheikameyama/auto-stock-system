@@ -6,7 +6,7 @@ import { getRelativeTime, getMarketFlag } from "@/lib/news-utils"
 import type { NewsItem } from "@/lib/news-utils"
 import { useMarkPageSeen } from "@/app/hooks/useMarkPageSeen"
 
-type MarketFilter = "ALL" | "JP" | "US"
+type MarketFilter = "ALL" | "JP" | "US" | "IMPACT"
 
 export default function NewsPageClient() {
   // ページ訪問時に閲覧済みをマーク
@@ -21,9 +21,13 @@ export default function NewsPageClient() {
     async function fetchNews() {
       setLoading(true)
       try {
-        const response = await fetch(
-          `/api/news?limit=50&market=${filter}&withRelated=true`
-        )
+        const params = new URLSearchParams({ limit: "50", withRelated: "true" });
+        if (filter === "IMPACT") {
+          params.set("category", "impact");
+        } else if (filter !== "ALL") {
+          params.set("market", filter);
+        }
+        const response = await fetch(`/api/news?${params.toString()}`)
         const data = await response.json()
 
         if (data.success) {
@@ -60,6 +64,12 @@ export default function NewsPageClient() {
           onClick={() => setFilter("US")}
         >
           {t('filters.us')}
+        </FilterButton>
+        <FilterButton
+          active={filter === "IMPACT"}
+          onClick={() => setFilter("IMPACT")}
+        >
+          {t('filters.impact')}
         </FilterButton>
       </div>
 
@@ -175,6 +185,47 @@ function NewsListItem({ news, t }: { news: NewsItem; t: any }) {
               </span>
             )}
           </div>
+
+          {/* 市場影響情報 */}
+          {(news.category === "geopolitical" || news.category === "macro") && (
+            <div className="mt-2 space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  {t("impact.badge")}
+                </span>
+                {news.impactDirection && (
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    news.impactDirection === "negative"
+                      ? "bg-red-100 text-red-700"
+                      : news.impactDirection === "positive"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-100 text-gray-700"
+                  }`}>
+                    {t(`impact.direction.${news.impactDirection}`)}
+                  </span>
+                )}
+              </div>
+              {news.impactSectors && (() => {
+                try {
+                  const sectors: string[] = JSON.parse(news.impactSectors);
+                  return sectors.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {sectors.map((sector: string) => (
+                        <span key={sector} className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+                          {sector}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null;
+                } catch { return null; }
+              })()}
+              {news.impactSummary && (
+                <p className="text-xs text-muted-foreground">
+                  → {news.impactSummary}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </a>
