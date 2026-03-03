@@ -158,10 +158,12 @@ AIに判断を任せながら理由を理解できる投資体験を提供しま
 | マイ株 | [my-stocks.md](my-stocks.md) | ポートフォリオ・ウォッチリスト・追跡銘柄・売却済み管理 |
 | ポートフォリオ分析 | [portfolio-analysis.md](portfolio-analysis.md) | 資産推移グラフ、損益分析、AI総評 |
 | 銘柄詳細 | [stock-detail.md](stock-detail.md) | チャート、テクニカル分析、財務指標、ニュース |
-| AIレコメンド | [ai-recommendations.md](ai-recommendations.md) | 日次おすすめ、購入判断、ポートフォリオ分析 |
+| 日次おすすめ | [daily-recommendations.md](daily-recommendations.md) | AI銘柄レコメンド |
+| 購入判断 | [purchase-analysis.md](purchase-analysis.md) | ウォッチリスト銘柄の買い/見送り判断 |
 | 市場ランキング | [market-movers.md](market-movers.md) | 日次上昇/下落ランキング + AI原因分析 |
 | ニュース | [news.md](news.md) | JP/USマーケットニュース、セクタートレンド |
-| AIレポート | [ai-report.md](ai-report.md) | AI精度レポート、推奨結果追跡 |
+| AIレポート | [ai-report.md](ai-report.md) | AI精度レポート |
+| 結果追跡 | [recommendation-outcomes.md](recommendation-outcomes.md) | 推奨結果の追跡・成功基準 |
 | AIチャット | [ai-chat.md](ai-chat.md) | ツール連携AIチャット |
 | 通知 | [notifications.md](notifications.md) | プッシュ通知、アプリ内通知 |
 | 設定・認証 | [settings.md](settings.md) | 投資スタイル、予算、通知設定 |

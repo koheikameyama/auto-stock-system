@@ -180,10 +180,12 @@ import {
 | [my-stocks.md](docs/specs/my-stocks.md) | マイ株（ポートフォリオ・ウォッチリスト・追跡・売却済み） |
 | [portfolio-analysis.md](docs/specs/portfolio-analysis.md) | ポートフォリオ分析 |
 | [stock-detail.md](docs/specs/stock-detail.md) | 銘柄詳細 |
-| [ai-recommendations.md](docs/specs/ai-recommendations.md) | AIレコメンド |
+| [daily-recommendations.md](docs/specs/daily-recommendations.md) | 日次おすすめ |
+| [purchase-analysis.md](docs/specs/purchase-analysis.md) | 購入判断 |
 | [market-movers.md](docs/specs/market-movers.md) | 市場ランキング |
 | [news.md](docs/specs/news.md) | ニュース・セクタートレンド |
 | [ai-report.md](docs/specs/ai-report.md) | AIレポート |
+| [recommendation-outcomes.md](docs/specs/recommendation-outcomes.md) | 結果追跡 |
 | [ai-chat.md](docs/specs/ai-chat.md) | AIチャット |
 | [notifications.md](docs/specs/notifications.md) | 通知 |
 | [settings.md](docs/specs/settings.md) | 設定・認証 |
