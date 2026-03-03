@@ -39,7 +39,8 @@ from lib.constants import (
     PURCHASE_REMOVE_SUCCESS_THRESHOLD,
     ANALYSIS_UP_SUCCESS_THRESHOLD,
     ANALYSIS_DOWN_SUCCESS_THRESHOLD,
-    ANALYSIS_NEUTRAL_SUCCESS_THRESHOLD,
+    ANALYSIS_NEUTRAL_LOW,
+    ANALYSIS_NEUTRAL_HIGH,
 )
 
 # .envファイルから環境変数を読み込む（ローカル実行用）
@@ -469,7 +470,7 @@ def analyze_analysis_outcomes(data: list[dict]) -> dict:
         elif trend == "down":
             is_success = perf < ANALYSIS_DOWN_SUCCESS_THRESHOLD
         elif trend == "neutral":
-            is_success = -ANALYSIS_NEUTRAL_SUCCESS_THRESHOLD <= perf <= ANALYSIS_NEUTRAL_SUCCESS_THRESHOLD
+            is_success = ANALYSIS_NEUTRAL_LOW <= perf <= ANALYSIS_NEUTRAL_HIGH
         else:
             is_success = None
         valid.append({**d, "performance": perf, "isSuccess": is_success})
