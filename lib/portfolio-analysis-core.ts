@@ -451,15 +451,14 @@ function postProcessPortfolioAnalysis(params: {
   }
 
   // 戻り売り目安のフォールバックチェーン: SMA25 → SMA75 → ATR14 → market
-  // 基準は平均取得価格と現在価格のうち高い方（損切り回避 + UI表示のマイナス防止）
-  const reboundFloor = Math.max(currentPrice, averagePrice);
-  if (sellTiming === "rebound" && currentPrice && (!sellTargetPrice || sellTargetPrice <= reboundFloor)) {
+  // 基準は現在価格（目安が現在価格以下だと「反発を待つ」意味がないため）
+  if (sellTiming === "rebound" && currentPrice && (!sellTargetPrice || sellTargetPrice <= currentPrice)) {
     const atr14 = stock.atr14 ? Number(stock.atr14) : null;
-    // SMA25は既に初回設定で試行済み（reboundFloor以下のためここに到達）
-    if (sma75 !== null && sma75 > reboundFloor) {
+    // SMA25は既に初回設定で試行済み（currentPrice以下のためここに到達）
+    if (sma75 !== null && sma75 > currentPrice) {
       sellTargetPrice = sma75;
     } else if (atr14 && atr14 > 0) {
-      sellTargetPrice = Math.round(reboundFloor + atr14 * SELL_TIMING.REBOUND_ATR_MULTIPLIER);
+      sellTargetPrice = Math.round(currentPrice + atr14 * SELL_TIMING.REBOUND_ATR_MULTIPLIER);
     } else {
       sellTiming = "market";
       sellTargetPrice = null;
