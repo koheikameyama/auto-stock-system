@@ -159,6 +159,10 @@ export async function POST(request: NextRequest) {
         eps: true,
         fiftyTwoWeekHigh: true,
         fiftyTwoWeekLow: true,
+        debtEquityRatio: true,
+        currentRatio: true,
+        dividendGrowthRate: true,
+        payoutRatio: true,
         isDelisted: true,
         fetchFailCount: true,
         nextEarningsDate: true,
@@ -333,6 +337,10 @@ async function processUser(
     eps: unknown;
     fiftyTwoWeekHigh: unknown;
     fiftyTwoWeekLow: unknown;
+    debtEquityRatio: unknown;
+    currentRatio: unknown;
+    dividendGrowthRate: unknown;
+    payoutRatio: unknown;
     isDelisted: boolean;
     fetchFailCount: number;
     nextEarningsDate: Date | null;
@@ -369,6 +377,10 @@ async function processUser(
     per: s.per ? Number(s.per) : null,
     roe: s.roe ? Number(s.roe) : null,
     revenueGrowth: s.revenueGrowth ? Number(s.revenueGrowth) : null,
+    debtEquityRatio: s.debtEquityRatio ? Number(s.debtEquityRatio) : null,
+    currentRatio: s.currentRatio ? Number(s.currentRatio) : null,
+    dividendGrowthRate: s.dividendGrowthRate ? Number(s.dividendGrowthRate) : null,
+    payoutRatio: s.payoutRatio ? Number(s.payoutRatio) : null,
   }));
 
   // 予算の1.5倍までの緩いフィルタ（候補を広めに取る）
@@ -483,6 +495,10 @@ async function buildStockContexts(
     eps: unknown;
     fiftyTwoWeekHigh: unknown;
     fiftyTwoWeekLow: unknown;
+    debtEquityRatio: unknown;
+    currentRatio: unknown;
+    dividendGrowthRate: unknown;
+    payoutRatio: unknown;
     marketCap: unknown;
     isDelisted: boolean;
     fetchFailCount: number;
@@ -608,6 +624,18 @@ async function buildStockContexts(
               : undefined,
             fiftyTwoWeekLow: stockData.fiftyTwoWeekLow
               ? Number(stockData.fiftyTwoWeekLow)
+              : undefined,
+            debtEquityRatio: stockData.debtEquityRatio
+              ? Number(stockData.debtEquityRatio)
+              : undefined,
+            currentRatio: stockData.currentRatio
+              ? Number(stockData.currentRatio)
+              : undefined,
+            dividendGrowthRate: stockData.dividendGrowthRate
+              ? Number(stockData.dividendGrowthRate)
+              : undefined,
+            payoutRatio: stockData.payoutRatio
+              ? Number(stockData.payoutRatio)
               : undefined,
           },
           currentPrice,

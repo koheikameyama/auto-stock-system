@@ -170,6 +170,75 @@ def fetch_earnings_data(ticker_code: str) -> dict | None:
         except Exception:
             pass
 
+        # ---- バランスシート（負債比率・流動比率） ----
+        debt_equity_ratio = None
+        current_ratio = None
+        try:
+            balance = stock.balance_sheet
+            if balance is not None and not balance.empty:
+                bs_years = balance.columns[:1]
+                if len(bs_years) > 0:
+                    col = bs_years[0]
+                    # 負債比率 = Total Debt / Stockholders Equity
+                    total_debt = None
+                    stockholders_equity = None
+                    if "Total Debt" in balance.index:
+                        try:
+                            total_debt = float(balance.loc["Total Debt", col])
+                        except Exception:
+                            pass
+                    if "Stockholders Equity" in balance.index:
+                        try:
+                            stockholders_equity = float(balance.loc["Stockholders Equity", col])
+                        except Exception:
+                            pass
+                    if total_debt is not None and stockholders_equity is not None and stockholders_equity != 0:
+                        debt_equity_ratio = round(total_debt / stockholders_equity, 2)
+
+                    # 流動比率 = Current Assets / Current Liabilities
+                    current_assets = None
+                    current_liabilities = None
+                    if "Current Assets" in balance.index:
+                        try:
+                            current_assets = float(balance.loc["Current Assets", col])
+                        except Exception:
+                            pass
+                    if "Current Liabilities" in balance.index:
+                        try:
+                            current_liabilities = float(balance.loc["Current Liabilities", col])
+                        except Exception:
+                            pass
+                    if current_assets is not None and current_liabilities is not None and current_liabilities != 0:
+                        current_ratio = round(current_assets / current_liabilities, 2)
+        except Exception:
+            pass
+
+        # ---- 配当分析（配当性向・配当成長率） ----
+        payout_ratio = None
+        dividend_growth_rate = None
+
+        # 配当性向: stock.infoから取得
+        try:
+            info = stock.info
+            pr = info.get("payoutRatio")
+            if pr is not None:
+                payout_ratio = round(pr * 100, 2)
+        except Exception:
+            pass
+
+        # 配当成長率: 過去の年間配当合計を比較
+        try:
+            dividends = stock.dividends
+            if dividends is not None and len(dividends) > 0:
+                annual = dividends.resample("YE").sum()
+                if len(annual) >= 2:
+                    latest_div = float(annual.iloc[-1])
+                    prev_div = float(annual.iloc[-2])
+                    if prev_div > 0:
+                        dividend_growth_rate = round(((latest_div - prev_div) / prev_div) * 100, 2)
+        except Exception:
+            pass
+
         return {
             "latestRevenue": latest_revenue,
             "latestNetIncome": latest_net_income,
@@ -180,6 +249,10 @@ def fetch_earnings_data(ticker_code: str) -> dict | None:
             "profitTrend": profit_trend,
             "nextEarningsDate": next_earnings_date,
             "exDividendDate": ex_dividend_date,
+            "debtEquityRatio": debt_equity_ratio,
+            "currentRatio": current_ratio,
+            "payoutRatio": payout_ratio,
+            "dividendGrowthRate": dividend_growth_rate,
         }
 
     except Exception as e:
@@ -203,6 +276,10 @@ def update_earnings_data(conn, stock_id: str, data: dict | None):
                     "profitTrend" = %s,
                     "nextEarningsDate" = %s,
                     "exDividendDate" = %s,
+                    "debtEquityRatio" = %s,
+                    "currentRatio" = %s,
+                    "payoutRatio" = %s,
+                    "dividendGrowthRate" = %s,
                     "earningsUpdatedAt" = NOW()
                 WHERE id = %s
             ''', (
@@ -215,6 +292,10 @@ def update_earnings_data(conn, stock_id: str, data: dict | None):
                 data.get("profitTrend"),
                 data.get("nextEarningsDate"),
                 data.get("exDividendDate"),
+                data.get("debtEquityRatio"),
+                data.get("currentRatio"),
+                data.get("payoutRatio"),
+                data.get("dividendGrowthRate"),
                 stock_id,
             ))
         else:

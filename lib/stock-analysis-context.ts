@@ -59,6 +59,10 @@ export interface StockFinancials {
   eps?: DecimalLike;
   fiftyTwoWeekHigh?: DecimalLike;
   fiftyTwoWeekLow?: DecimalLike;
+  debtEquityRatio?: DecimalLike;
+  currentRatio?: DecimalLike;
+  dividendGrowthRate?: DecimalLike;
+  payoutRatio?: DecimalLike;
 }
 
 /**
@@ -186,6 +190,62 @@ export function buildFinancialMetrics(
     }
   }
 
+  // 負債比率（D/E Ratio）
+  if (stock.debtEquityRatio != null) {
+    const de = Number(stock.debtEquityRatio);
+    if (de < 0.5) {
+      metrics.push(`- 負債比率(D/E): ${de.toFixed(2)}倍（非常に健全。自己資本が潤沢）`);
+    } else if (de < 1.0) {
+      metrics.push(`- 負債比率(D/E): ${de.toFixed(2)}倍（健全。借入は適正範囲）`);
+    } else if (de < 2.0) {
+      metrics.push(`- 負債比率(D/E): ${de.toFixed(2)}倍（やや借入多め。業種によっては注意）`);
+    } else {
+      metrics.push(`- 負債比率(D/E): ${de.toFixed(2)}倍（注意。借入依存度が高い）`);
+    }
+  }
+
+  // 流動比率（Current Ratio）
+  if (stock.currentRatio != null) {
+    const cr = Number(stock.currentRatio);
+    if (cr >= 2.0) {
+      metrics.push(`- 流動比率: ${cr.toFixed(2)}倍（非常に良好。短期的な支払い能力に余裕あり）`);
+    } else if (cr >= 1.5) {
+      metrics.push(`- 流動比率: ${cr.toFixed(2)}倍（良好。短期的な資金繰りは安定）`);
+    } else if (cr >= 1.0) {
+      metrics.push(`- 流動比率: ${cr.toFixed(2)}倍（最低限。短期の支払い能力はギリギリ）`);
+    } else {
+      metrics.push(`- 流動比率: ${cr.toFixed(2)}倍（注意。短期的な資金繰りにリスクあり）`);
+    }
+  }
+
+  // 配当性向（Payout Ratio）
+  if (stock.payoutRatio != null) {
+    const pr = Number(stock.payoutRatio);
+    if (pr < 30) {
+      metrics.push(`- 配当性向: ${pr.toFixed(1)}%（余裕あり。増配や内部留保の余力が大きい）`);
+    } else if (pr < 50) {
+      metrics.push(`- 配当性向: ${pr.toFixed(1)}%（適正。配当と成長投資のバランスが取れている）`);
+    } else if (pr < 80) {
+      metrics.push(`- 配当性向: ${pr.toFixed(1)}%（やや高め。利益の多くを配当に回している）`);
+    } else {
+      metrics.push(`- 配当性向: ${pr.toFixed(1)}%（注意。利益のほとんどを配当に回しており、減配リスクあり）`);
+    }
+  }
+
+  // 配当成長率
+  if (stock.dividendGrowthRate != null) {
+    const dg = Number(stock.dividendGrowthRate);
+    if (dg > 10) {
+      metrics.push(`- 配当成長率: +${dg.toFixed(1)}%（高成長。積極的な増配姿勢）`);
+    } else if (dg > 0) {
+      metrics.push(`- 配当成長率: +${dg.toFixed(1)}%（増配。安定した配当成長）`);
+    } else if (dg === 0) {
+      metrics.push(`- 配当成長率: 据え置き`);
+    } else {
+      metrics.push(`- 配当成長率: ${dg.toFixed(1)}%（減配。業績悪化や方針転換の可能性）`);
+    }
+  }
+
   if (stock.fiftyTwoWeekHigh && stock.fiftyTwoWeekLow && currentPrice) {
     const high = Number(stock.fiftyTwoWeekHigh);
     const low = Number(stock.fiftyTwoWeekLow);
@@ -197,6 +257,71 @@ export function buildFinancialMetrics(
   }
 
   return metrics.length > 0 ? metrics.join("\n") : "財務データなし";
+}
+
+/**
+ * セクター内相対評価コンテキスト文字列を生成する
+ * @param stock - PER/PBR/ROE を持つ銘柄オブジェクト
+ * @param sectorAvg - セクター平均（avgPER/avgPBR/avgROE）
+ * @param sectorName - セクター名
+ */
+export function buildSectorComparisonContext(
+  stock: { per?: DecimalLike; pbr?: DecimalLike; roe?: DecimalLike },
+  sectorAvg: { avgPER: number | null; avgPBR: number | null; avgROE: number | null } | null,
+  sectorName?: string | null,
+): string {
+  if (!sectorAvg) return "";
+
+  const lines: string[] = [];
+
+  if (stock.per != null && sectorAvg.avgPER != null) {
+    const per = Number(stock.per);
+    const avg = sectorAvg.avgPER;
+    const diffPct = avg !== 0 ? ((per - avg) / Math.abs(avg)) * 100 : 0;
+    if (diffPct < -10) {
+      lines.push(`- PER: ${per.toFixed(1)}倍 vs セクター平均${avg.toFixed(1)}倍（割安。セクター平均より${Math.abs(diffPct).toFixed(0)}%低い）`);
+    } else if (diffPct > 10) {
+      lines.push(`- PER: ${per.toFixed(1)}倍 vs セクター平均${avg.toFixed(1)}倍（割高。セクター平均より${diffPct.toFixed(0)}%高い）`);
+    } else {
+      lines.push(`- PER: ${per.toFixed(1)}倍 vs セクター平均${avg.toFixed(1)}倍（セクター平均並み）`);
+    }
+  }
+
+  if (stock.pbr != null && sectorAvg.avgPBR != null) {
+    const pbr = Number(stock.pbr);
+    const avg = sectorAvg.avgPBR;
+    const diffPct = avg !== 0 ? ((pbr - avg) / Math.abs(avg)) * 100 : 0;
+    if (diffPct < -10) {
+      lines.push(`- PBR: ${pbr.toFixed(2)}倍 vs セクター平均${avg.toFixed(2)}倍（割安。セクター平均より${Math.abs(diffPct).toFixed(0)}%低い）`);
+    } else if (diffPct > 10) {
+      lines.push(`- PBR: ${pbr.toFixed(2)}倍 vs セクター平均${avg.toFixed(2)}倍（割高。セクター平均より${diffPct.toFixed(0)}%高い）`);
+    } else {
+      lines.push(`- PBR: ${pbr.toFixed(2)}倍 vs セクター平均${avg.toFixed(2)}倍（セクター平均並み）`);
+    }
+  }
+
+  if (stock.roe != null && sectorAvg.avgROE != null) {
+    const roe = Number(stock.roe) * 100;
+    const avg = sectorAvg.avgROE * 100;
+    const diffPct = avg !== 0 ? ((roe - avg) / Math.abs(avg)) * 100 : 0;
+    if (diffPct > 10) {
+      lines.push(`- ROE: ${roe.toFixed(1)}% vs セクター平均${avg.toFixed(1)}%（効率的。セクター平均より${diffPct.toFixed(0)}%高い）`);
+    } else if (diffPct < -10) {
+      lines.push(`- ROE: ${roe.toFixed(1)}% vs セクター平均${avg.toFixed(1)}%（セクター平均以下。${Math.abs(diffPct).toFixed(0)}%低い）`);
+    } else {
+      lines.push(`- ROE: ${roe.toFixed(1)}% vs セクター平均${avg.toFixed(1)}%（セクター平均並み）`);
+    }
+  }
+
+  if (lines.length === 0) return "";
+
+  const sectorLabel = sectorName ? `（${sectorName}）` : "";
+
+  return `
+【セクター内相対評価${sectorLabel}】
+${lines.join("\n")}
+※ セクター内で割安か割高かを示します。同業他社比較の参考にしてください。
+`;
 }
 
 /**

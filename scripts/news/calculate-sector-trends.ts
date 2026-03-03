@@ -78,6 +78,9 @@ interface SectorPriceMomentum {
   avgVolumeRatio: number | null
   avgVolatility: number | null
   stockCount: number
+  avgPER: number | null
+  avgPBR: number | null
+  avgROE: number | null
 }
 
 // --- ユーティリティ ---
@@ -271,6 +274,9 @@ async function main(): Promise<void> {
       maDeviationRate: true,
       volumeRatio: true,
       volatility: true,
+      per: true,
+      pbr: true,
+      roe: true,
     },
     _count: {
       id: true,
@@ -287,6 +293,9 @@ async function main(): Promise<void> {
       avgVolumeRatio: null,
       avgVolatility: null,
       stockCount: 0,
+      avgPER: null,
+      avgPBR: null,
+      avgROE: null,
     }
   }
 
@@ -300,6 +309,9 @@ async function main(): Promise<void> {
         avgVolumeRatio: row._avg.volumeRatio !== null ? Number(row._avg.volumeRatio) : null,
         avgVolatility: row._avg.volatility !== null ? Number(row._avg.volatility) : null,
         stockCount: row._count.id,
+        avgPER: row._avg.per !== null ? Number(row._avg.per) : null,
+        avgPBR: row._avg.pbr !== null ? Number(row._avg.pbr) : null,
+        avgROE: row._avg.roe !== null ? Number(row._avg.roe) : null,
       }
     }
   }
@@ -372,6 +384,9 @@ async function main(): Promise<void> {
       avgVolumeRatio: m.avgVolumeRatio,
       avgVolatility: m.avgVolatility,
       stockCount: m.stockCount,
+      avgPER: m.avgPER,
+      avgPBR: m.avgPBR,
+      avgROE: m.avgROE,
       compositeScore,
       trendDirection,
     }

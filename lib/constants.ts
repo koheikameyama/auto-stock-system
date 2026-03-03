@@ -111,9 +111,28 @@ export const INVESTMENT_STYLE_CONFIG: Record<
   },
 };
 
+// バランスシート・配当分析の閾値
+export const DEBT_EQUITY_THRESHOLDS = {
+  HEALTHY: 0.5, // 非常に健全
+  NORMAL: 1.0, // 健全
+  ELEVATED: 2.0, // やや借入多め（これ以上は注意）
+} as const;
+
+export const CURRENT_RATIO_THRESHOLDS = {
+  EXCELLENT: 2.0, // 非常に良好
+  GOOD: 1.5, // 良好
+  MINIMUM: 1.0, // 最低限（これ以下は注意）
+} as const;
+
+export const PAYOUT_RATIO_THRESHOLDS = {
+  LOW: 30, // 余裕あり
+  NORMAL: 50, // 適正
+  HIGH: 80, // やや高め（これ以上は減配リスク注意）
+} as const;
+
 // 投資観点別のスコアボーナス（スコアリングで使用）
 export const PERSPECTIVE_BONUS = {
-  // 安定配当型: 配当 + バリュー + ディフェンシブ
+  // 安定配当型: 配当 + バリュー + ディフェンシブ + 財務安全性
   CONSERVATIVE: {
     HIGH_DIVIDEND: 15, // dividendYield >= 4%
     NORMAL_DIVIDEND: 8, // dividendYield >= 2%
@@ -123,6 +142,11 @@ export const PERSPECTIVE_BONUS = {
     HIGH_PBR: -8, // PBR > 3
     LOW_PER: 8, // PER < 15（割安）
     PROFITABLE: 8, // 黒字企業ボーナス
+    LOW_DEBT: 8, // debtEquityRatio < 0.5（財務健全）
+    HIGH_DEBT: -8, // debtEquityRatio >= 2.0（借入過多）
+    HEALTHY_PAYOUT: 5, // payoutRatio < 50%（配当余力あり）
+    HIGH_PAYOUT: -5, // payoutRatio >= 80%（減配リスク）
+    DIVIDEND_GROWTH: 5, // dividendGrowthRate > 0（増配実績）
   },
   // 成長投資型: グロース + バリュー
   BALANCED: {

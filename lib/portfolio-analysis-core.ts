@@ -23,6 +23,7 @@ import {
   buildEarningsContext,
   buildExDividendContext,
   buildGeopoliticalRiskContext,
+  buildSectorComparisonContext,
   type GeopoliticalRiskData,
 } from "@/lib/stock-analysis-context";
 import { buildPortfolioAnalysisPrompt } from "@/lib/prompts/portfolio-analysis-prompt";
@@ -774,13 +775,22 @@ export async function executePortfolioAnalysis(
   // セクタートレンド
   let sectorTrendContext = "";
   let sectorAvgWeekChangeRate: number | null = null;
+  let sectorAvg: { avgPER: number | null; avgPBR: number | null; avgROE: number | null } | null = null;
   if (stock.sector) {
     const sectorTrend = await getSectorTrend(stock.sector);
     if (sectorTrend) {
       sectorTrendContext = `\n【セクタートレンド】\n${formatSectorTrendForPrompt(sectorTrend)}\n`;
       sectorAvgWeekChangeRate = sectorTrend.avgWeekChangeRate ?? null;
+      sectorAvg = {
+        avgPER: sectorTrend.avgPER ?? null,
+        avgPBR: sectorTrend.avgPBR ?? null,
+        avgROE: sectorTrend.avgROE ?? null,
+      };
     }
   }
+
+  // セクター内相対評価
+  const sectorComparisonContext = buildSectorComparisonContext(stock, sectorAvg, stock.sector);
 
   // 相対強度分析
   const relativeStrengthContext = buildRelativeStrengthContext(
@@ -860,7 +870,7 @@ export async function executePortfolioAnalysis(
     profitPercent,
     userContext,
     purchaseRecContext,
-    financialMetrics,
+    financialMetrics: financialMetrics + sectorComparisonContext,
     weekChangeContext,
     patternContext,
     technicalContext,
@@ -1233,13 +1243,22 @@ export async function executeSimulatedPortfolioAnalysis(
 
   let sectorTrendContext = "";
   let sectorAvgWeekChangeRate: number | null = null;
+  let simSectorAvg: { avgPER: number | null; avgPBR: number | null; avgROE: number | null } | null = null;
   if (stock.sector) {
     const sectorTrend = await getSectorTrend(stock.sector);
     if (sectorTrend) {
       sectorTrendContext = `\n【セクタートレンド】\n${formatSectorTrendForPrompt(sectorTrend)}\n`;
       sectorAvgWeekChangeRate = sectorTrend.avgWeekChangeRate ?? null;
+      simSectorAvg = {
+        avgPER: sectorTrend.avgPER ?? null,
+        avgPBR: sectorTrend.avgPBR ?? null,
+        avgROE: sectorTrend.avgROE ?? null,
+      };
     }
   }
+
+  // セクター内相対評価
+  const simSectorComparisonContext = buildSectorComparisonContext(stock, simSectorAvg, stock.sector);
 
   const relativeStrengthContext = buildRelativeStrengthContext(
     weekChangeRate,
@@ -1273,7 +1292,7 @@ export async function executeSimulatedPortfolioAnalysis(
     profitPercent,
     userContext,
     purchaseRecContext: "",
-    financialMetrics,
+    financialMetrics: financialMetrics + simSectorComparisonContext,
     weekChangeContext,
     patternContext,
     technicalContext,

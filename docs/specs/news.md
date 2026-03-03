@@ -89,6 +89,9 @@
 | avgMaDeviationRate | セクター平均MA乖離率(%) |
 | avgVolumeRatio | セクター平均出来高比率 |
 | avgVolatility | セクター平均ボラティリティ(%) |
+| avgPER | セクター平均PER（株価収益率） |
+| avgPBR | セクター平均PBR（株価純資産倍率） |
+| avgROE | セクター平均ROE（自己資本利益率、小数） |
 | compositeScore | 総合スコア（-100〜+100） |
 | trendDirection | up / down / neutral |
 
@@ -135,7 +138,8 @@
 | score3d / score7d | Float | ニューススコア |
 | newsCount3d / newsCount7d | Int | ニュース件数 |
 | usNewsCount3d / usNewsCount7d | Int | 米国ニュース件数 |
-| avg* | Float? | 株価指標の平均値群 |
+| avg* | Float? | 株価指標の平均値群（avgWeekChangeRate, avgDailyChangeRate等） |
+| avgPER / avgPBR / avgROE | Float? | セクター内ファンダメンタル平均（相対評価用） |
 | compositeScore | Float? | 総合スコア |
 | trendDirection | String | トレンド方向 |
 

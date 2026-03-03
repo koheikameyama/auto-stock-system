@@ -98,6 +98,10 @@ export interface StockForScoring {
   per: number | null
   roe: number | null
   revenueGrowth: number | null
+  debtEquityRatio: number | null
+  currentRatio: number | null
+  dividendGrowthRate: number | null
+  payoutRatio: number | null
 }
 
 export interface ScoredStock extends StockForScoring {
@@ -240,6 +244,29 @@ export function calculateStockScores(
       if (stock.isProfitable === true) {
         totalScore += pb.PROFITABLE
         scoreBreakdown["profitableBonus"] = pb.PROFITABLE
+      }
+      // 財務安全性ボーナス（安定配当型向け）
+      if (stock.debtEquityRatio !== null) {
+        if (stock.debtEquityRatio < 0.5) {
+          totalScore += pb.LOW_DEBT
+          scoreBreakdown["debtBonus"] = pb.LOW_DEBT
+        } else if (stock.debtEquityRatio >= 2.0) {
+          totalScore += pb.HIGH_DEBT
+          scoreBreakdown["debtPenalty"] = pb.HIGH_DEBT
+        }
+      }
+      if (stock.payoutRatio !== null) {
+        if (stock.payoutRatio < 50) {
+          totalScore += pb.HEALTHY_PAYOUT
+          scoreBreakdown["payoutBonus"] = pb.HEALTHY_PAYOUT
+        } else if (stock.payoutRatio >= 80) {
+          totalScore += pb.HIGH_PAYOUT
+          scoreBreakdown["payoutPenalty"] = pb.HIGH_PAYOUT
+        }
+      }
+      if (stock.dividendGrowthRate !== null && stock.dividendGrowthRate > 0) {
+        totalScore += pb.DIVIDEND_GROWTH
+        scoreBreakdown["dividendGrowthBonus"] = pb.DIVIDEND_GROWTH
       }
     } else if (style === "BALANCED") {
       const pb = PERSPECTIVE_BONUS.BALANCED
