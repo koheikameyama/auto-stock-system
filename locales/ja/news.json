@@ -23,7 +23,8 @@
     "relevance": "関連度",
     "all": "すべて",
     "japan": "🇯🇵 日本",
-    "us": "🇺🇸 米国"
+    "us": "🇺🇸 米国",
+    "impact": "🌍 市場影響"
   },
   "relatedStocks": {
     "moreCount": "+{count}件"
@@ -32,5 +33,14 @@
     "positive": "ポジティブ",
     "negative": "ネガティブ",
     "neutral": "中立"
+  },
+  "impact": {
+    "badge": "市場影響",
+    "sectors": "影響セクター",
+    "direction": {
+      "positive": "追い風",
+      "negative": "逆風",
+      "mixed": "影響あり"
+    }
   }
 }

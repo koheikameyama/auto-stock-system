@@ -215,5 +215,18 @@
     "estimatedGap": "予測ギャップ",
     "beta": "感応度",
     "betaDesc": "市場全体の動きに対して、この銘柄がどれだけ大きく動くかの目安"
+  },
+  "geopoliticalRisk": {
+    "title": "地政学・マクロリスク",
+    "noRisk": "現在、大きな地政学リスクはありません",
+    "viewMore": "詳細を見る",
+    "riskLevel": {
+      "stable": "安定",
+      "caution": "注意",
+      "alert": "警戒"
+    },
+    "impactPositive": "に追い風",
+    "impactNegative": "に逆風",
+    "impactMixed": "に影響"
   }
 }
