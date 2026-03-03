@@ -80,8 +80,8 @@ function validateDipPrice(
       return aiPrice;
     }
   }
-  // フォールバック: SMA25
-  return sma25;
+  // フォールバック: SMA25、それもなければ現在価格からフォールバック率で算出
+  return sma25 ?? Math.round(currentPrice * (1 - MA_DEVIATION.DIP_PRICE_FALLBACK_RATE));
 }
 
 const ALL_STYLES: InvestmentStyle[] = [

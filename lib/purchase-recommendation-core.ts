@@ -577,6 +577,8 @@ export async function executePurchaseRecommendation(
     const styleName = getStyleNameJa(styleKey);
     // correctionExplanation を初期化（AI結果にはこのフィールドがないため）
     sa.correctionExplanation = null;
+    // AIが返す suggestedDipPrice を dipTargetPrice にマッピング
+    sa.dipTargetPrice = sa.suggestedDipPrice ?? null;
 
     // テクニカル総合判定ブレーキ（投資スタイル別の閾値）
     const technicalBrakeThreshold = getTechnicalBrakeThreshold(styleKey);
@@ -801,7 +803,9 @@ export async function executePurchaseRecommendation(
       aggressiveStyle.recommendation = "buy";
       aggressiveStyle.buyCondition = null;
       aggressiveStyle.buyTiming = "dip";
-      aggressiveStyle.dipTargetPrice = sma25ForTiming;
+      aggressiveStyle.dipTargetPrice = sma25ForTiming
+        ?? aggressiveStyle.dipTargetPrice
+        ?? Math.round(currentPrice * (1 - MA_DEVIATION.DIP_PRICE_FALLBACK_RATE));
       aggressiveStyle.confidence = isClosingStrong && hasVolumeSupport
         ? Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE_WITH_VOLUME)
         : Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE);
