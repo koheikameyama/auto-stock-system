@@ -67,13 +67,18 @@ def calculate_holdings_from_transactions(transactions: list[dict]) -> tuple[int,
     return max(0, total_quantity), avg_price
 
 
-def fetch_user_holdings(conn, user_ids: list[str]) -> dict:
+def fetch_user_holdings(conn, user_ids: list[str]) -> tuple[dict, dict[str, Decimal]]:
     """
-    ユーザーごとの保有銘柄情報を一括取得
+    ユーザーごとの保有銘柄情報と累計確定損益を一括取得
     N+1問題を避けるため、全ユーザーのデータを一括取得
+
+    Returns:
+        (holdings, realized_gains):
+            holdings: ユーザーID → 保有銘柄リスト
+            realized_gains: ユーザーID → 累計確定損益
     """
     if not user_ids:
-        return {}
+        return {}, {}
 
     with conn.cursor() as cur:
         # トランザクションを時系列順で取得
@@ -88,7 +93,8 @@ def fetch_user_holdings(conn, user_ids: list[str]) -> dict:
                 s.name,
                 s."tickerCode",
                 s.sector,
-                s."latestPrice"
+                s."latestPrice",
+                t."totalAmount"
             FROM "Transaction" t
             JOIN "Stock" s ON t."stockId" = s.id
             WHERE t."userId" = ANY(%s)
@@ -106,6 +112,7 @@ def fetch_user_holdings(conn, user_ids: list[str]) -> dict:
                 "type": row[2],
                 "quantity": row[3],
                 "price": row[4],
+                "totalAmount": Decimal(str(row[10])) if row[10] else Decimal("0"),
             })
             # 銘柄情報を保存（最後のものが使われる）
             stock_info[stock_id] = {
@@ -116,13 +123,15 @@ def fetch_user_holdings(conn, user_ids: list[str]) -> dict:
             }
 
         # 各ユーザー・銘柄の保有状況を計算
-        result = defaultdict(list)
+        holdings = defaultdict(list)
+        realized_gains: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+
         for user_id, stocks in user_stock_transactions.items():
             for stock_id, transactions in stocks.items():
                 quantity, avg_price = calculate_holdings_from_transactions(transactions)
                 if quantity > 0:
                     info = stock_info[stock_id]
-                    result[user_id].append({
+                    holdings[user_id].append({
                         "stockId": stock_id,
                         "name": info["name"],
                         "tickerCode": info["tickerCode"],
@@ -131,8 +140,16 @@ def fetch_user_holdings(conn, user_ids: list[str]) -> dict:
                         "quantity": quantity,
                         "avgPrice": avg_price,
                     })
+                elif quantity == 0:
+                    # 売却済み銘柄: 確定損益を計算（売却総額 - 購入総額）
+                    buy_txs = [t for t in transactions if t["type"] == "buy"]
+                    sell_txs = [t for t in transactions if t["type"] == "sell"]
+                    if buy_txs and sell_txs:
+                        total_buy = sum(t["totalAmount"] for t in buy_txs)
+                        total_sell = sum(t["totalAmount"] for t in sell_txs)
+                        realized_gains[user_id] += total_sell - total_buy
 
-        return dict(result)
+        return dict(holdings), dict(realized_gains)
 
 
 def calculate_snapshot(holdings: list[dict]) -> dict:
@@ -212,6 +229,7 @@ def upsert_snapshots(conn, snapshots: list[dict], date: datetime):
             json.dumps(s["sectorBreakdown"], ensure_ascii=False),
             json.dumps(s["stockBreakdown"], ensure_ascii=False),
             float(s["nikkeiClose"]) if s.get("nikkeiClose") is not None else None,
+            float(s["realizedGain"]) if s.get("realizedGain") is not None else None,
         ))
 
     with conn.cursor() as cur:
@@ -221,7 +239,7 @@ def upsert_snapshots(conn, snapshots: list[dict], date: datetime):
             INSERT INTO "PortfolioSnapshot" (
                 "id", "userId", "date", "totalValue", "totalCost",
                 "unrealizedGain", "unrealizedGainPercent", "stockCount",
-                "sectorBreakdown", "stockBreakdown", "nikkeiClose", "createdAt"
+                "sectorBreakdown", "stockBreakdown", "nikkeiClose", "realizedGain", "createdAt"
             )
             VALUES %s
             ON CONFLICT ("userId", "date") DO UPDATE SET
@@ -232,11 +250,12 @@ def upsert_snapshots(conn, snapshots: list[dict], date: datetime):
                 "stockCount" = EXCLUDED."stockCount",
                 "sectorBreakdown" = EXCLUDED."sectorBreakdown",
                 "stockBreakdown" = EXCLUDED."stockBreakdown",
-                "nikkeiClose" = EXCLUDED."nikkeiClose"
+                "nikkeiClose" = EXCLUDED."nikkeiClose",
+                "realizedGain" = EXCLUDED."realizedGain"
             ''',
             values,
             template='''(
-                gen_random_uuid()::text, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, NOW()
+                gen_random_uuid()::text, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, NOW()
             )''',
             page_size=100
         )
@@ -283,8 +302,8 @@ def main():
             print("No users with holdings. Exiting.")
             return
 
-        # 2. 全ユーザーの保有情報を一括取得
-        all_holdings = fetch_user_holdings(conn, user_ids)
+        # 2. 全ユーザーの保有情報と確定損益を一括取得
+        all_holdings, realized_gains = fetch_user_holdings(conn, user_ids)
         print(f"Fetched holdings for {len(all_holdings)} users")
 
         # 3. 各ユーザーのスナップショットを計算
@@ -293,6 +312,7 @@ def main():
             snapshot = calculate_snapshot(holdings)
             snapshot["userId"] = user_id
             snapshot["nikkeiClose"] = nikkei_close
+            snapshot["realizedGain"] = realized_gains.get(user_id, Decimal("0"))
             snapshots.append(snapshot)
             print(f"  User {user_id[:8]}...: {snapshot['stockCount']} stocks, ¥{float(snapshot['totalValue']):,.0f}")
 

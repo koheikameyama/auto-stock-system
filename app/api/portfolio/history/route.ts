@@ -33,20 +33,27 @@ export async function GET(request: Request) {
         totalCost: true,
         unrealizedGain: true,
         unrealizedGainPercent: true,
+        realizedGain: true,
         stockCount: true,
         nikkeiClose: true,
       },
     })
 
-    const history = snapshots.map((s) => ({
-      date: s.date.toISOString().split("T")[0],
-      totalValue: Number(s.totalValue),
-      totalCost: Number(s.totalCost),
-      unrealizedGain: Number(s.unrealizedGain),
-      unrealizedGainPercent: Number(s.unrealizedGainPercent),
-      stockCount: s.stockCount,
-      nikkeiClose: s.nikkeiClose ? Number(s.nikkeiClose) : null,
-    }))
+    const history = snapshots.map((s) => {
+      const unrealizedGain = Number(s.unrealizedGain)
+      const realizedGain = s.realizedGain ? Number(s.realizedGain) : 0
+      return {
+        date: s.date.toISOString().split("T")[0],
+        totalValue: Number(s.totalValue),
+        totalCost: Number(s.totalCost),
+        unrealizedGain,
+        unrealizedGainPercent: Number(s.unrealizedGainPercent),
+        realizedGain,
+        totalGain: unrealizedGain + realizedGain,
+        stockCount: s.stockCount,
+        nikkeiClose: s.nikkeiClose ? Number(s.nikkeiClose) : null,
+      }
+    })
 
     return NextResponse.json({
       history,

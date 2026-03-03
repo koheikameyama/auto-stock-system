@@ -751,10 +751,11 @@ model PortfolioSnapshot {
   date   DateTime @db.Date
 
   // 資産サマリー
-  totalValue            Decimal @db.Decimal(15, 2) // 総資産額（時価評価額）
-  totalCost             Decimal @db.Decimal(15, 2) // 総投資額（取得原価）
-  unrealizedGain        Decimal @db.Decimal(15, 2) // 含み損益
-  unrealizedGainPercent Decimal @db.Decimal(8, 2) // 損益率（%）
+  totalValue            Decimal  @db.Decimal(15, 2) // 総資産額（時価評価額）
+  totalCost             Decimal  @db.Decimal(15, 2) // 総投資額（取得原価）
+  unrealizedGain        Decimal  @db.Decimal(15, 2) // 含み損益
+  unrealizedGainPercent Decimal  @db.Decimal(8, 2) // 損益率（%）
+  realizedGain          Decimal? @db.Decimal(15, 2) // 累計確定損益
 
   // 銘柄数
   stockCount Int // 保有銘柄数

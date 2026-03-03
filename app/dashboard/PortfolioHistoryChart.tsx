@@ -20,6 +20,8 @@ interface HistoryItem {
   totalValue: number
   unrealizedGain: number
   unrealizedGainPercent: number
+  realizedGain: number
+  totalGain: number
 }
 
 interface HistoryData {
@@ -127,10 +129,8 @@ export default function PortfolioHistoryChart() {
   const changePercent = firstValue > 0 ? (change / firstValue) * 100 : 0
 
   // 損益推移用
-  const lastGain = data.history[data.history.length - 1]?.unrealizedGain || 0
-  const lastGainPercent =
-    data.history[data.history.length - 1]?.unrealizedGainPercent || 0
-  const pnlColor = lastGain >= 0 ? "#22c55e" : "#ef4444"
+  const lastTotalGain = data.history[data.history.length - 1]?.totalGain || 0
+  const pnlColor = lastTotalGain >= 0 ? "#22c55e" : "#ef4444"
 
   return (
     <div className="bg-white rounded-lg border p-4">
@@ -157,13 +157,11 @@ export default function PortfolioHistoryChart() {
               {data.history.length > 0 && (
                 <span
                   className={`text-sm font-medium ${
-                    lastGain >= 0 ? "text-green-600" : "text-red-600"
+                    lastTotalGain >= 0 ? "text-green-600" : "text-red-600"
                   }`}
                 >
-                  {lastGain >= 0 ? "+" : ""}
-                  {lastGain.toLocaleString()}円（
-                  {lastGainPercent >= 0 ? "+" : ""}
-                  {lastGainPercent.toFixed(1)}%）
+                  {lastTotalGain >= 0 ? "+" : ""}
+                  {lastTotalGain.toLocaleString()}円
                 </span>
               )}
             </>
@@ -255,24 +253,22 @@ export default function PortfolioHistoryChart() {
                         <>
                           <p
                             className={`font-semibold ${
-                              item.unrealizedGain >= 0
+                              item.totalGain >= 0
                                 ? "text-green-600"
                                 : "text-red-600"
                             }`}
                           >
-                            {item.unrealizedGain >= 0 ? "+" : ""}
-                            {item.unrealizedGain.toLocaleString()}円
+                            {item.totalGain >= 0 ? "+" : ""}
+                            {item.totalGain.toLocaleString()}円
                           </p>
-                          <p
-                            className={`text-xs ${
-                              item.unrealizedGainPercent >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {item.unrealizedGainPercent >= 0 ? "+" : ""}
-                            {item.unrealizedGainPercent.toFixed(1)}%
-                          </p>
+                          {item.realizedGain !== 0 && (
+                            <p className="text-xs text-gray-500">
+                              含み {item.unrealizedGain >= 0 ? "+" : ""}
+                              {item.unrealizedGain.toLocaleString()}円 / 確定{" "}
+                              {item.realizedGain >= 0 ? "+" : ""}
+                              {item.realizedGain.toLocaleString()}円
+                            </p>
+                          )}
                         </>
                       )}
                     </div>
@@ -292,7 +288,7 @@ export default function PortfolioHistoryChart() {
             )}
             <Line
               type="monotone"
-              dataKey={viewMode === "asset" ? "totalValue" : "unrealizedGain"}
+              dataKey={viewMode === "asset" ? "totalValue" : "totalGain"}
               stroke={viewMode === "asset" ? "#3b82f6" : pnlColor}
               strokeWidth={2}
               dot={false}
