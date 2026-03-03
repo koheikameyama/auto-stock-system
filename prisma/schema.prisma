@@ -114,6 +114,14 @@ model Stock {
   operatingCF Decimal? @db.Decimal(15, 2) // 営業キャッシュフロー
   freeCF      Decimal? @db.Decimal(15, 2) // フリーキャッシュフロー
 
+  // バランスシート指標
+  debtEquityRatio    Decimal? @db.Decimal(8, 2) // 負債比率 (D/E Ratio)
+  currentRatio       Decimal? @db.Decimal(8, 2) // 流動比率
+
+  // 配当分析
+  dividendGrowthRate Decimal? @db.Decimal(8, 2) // 配当成長率（%）
+  payoutRatio        Decimal? @db.Decimal(8, 2) // 配当性向（%）
+
   // その他の有用な指標
   fiftyTwoWeekHigh Decimal? @db.Decimal(12, 2) // 52週高値
   fiftyTwoWeekLow  Decimal? @db.Decimal(12, 2) // 52週安値
@@ -239,6 +247,11 @@ model SectorTrend {
   avgVolumeRatio     Float? // セクター平均出来高比率
   avgVolatility      Float? // セクター平均ボラティリティ（%）
   stockCount         Int    @default(0) // 集計対象の銘柄数
+
+  // セクター内ファンダメンタル平均（相対評価用）
+  avgPER Float?
+  avgPBR Float?
+  avgROE Float?
 
   // 総合スコア（ニュース + 株価を統合）
   compositeScore Float? // -100 〜 +100

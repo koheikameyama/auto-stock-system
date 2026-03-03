@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import FinancialMetrics from "@/app/components/FinancialMetrics";
 import EarningsInfo from "@/app/components/EarningsInfo";
+import SectorComparison from "@/app/components/SectorComparison";
 import StockChart from "@/app/components/StockChart";
 import PriceHistory from "@/app/components/PriceHistory";
 import RelatedNews from "@/app/components/RelatedNews";
@@ -47,6 +48,10 @@ interface StockData {
   eps: number | null;
   latestRevenue: number | null;
   latestNetIncome: number | null;
+  debtEquityRatio: number | null;
+  currentRatio: number | null;
+  dividendGrowthRate: number | null;
+  payoutRatio: number | null;
   volatility: number | null;
   weekChangeRate: number | null;
   gapUpRate: number | null;
@@ -98,6 +103,11 @@ interface Props {
   trackedStockId?: string;
   soldStockInfo?: SoldStockInfo | null;
   marketEnvironment?: MarketEnvironment | null;
+  sectorAvg?: {
+    avgPER: number | null;
+    avgPBR: number | null;
+    avgROE: number | null;
+  } | null;
 }
 
 export default function StockDetailClient({
@@ -110,6 +120,7 @@ export default function StockDetailClient({
   trackedStockId,
   soldStockInfo,
   marketEnvironment,
+  sectorAvg,
 }: Props) {
   const router = useRouter();
   const t = useTranslations("stocks.detailClient");
@@ -554,6 +565,7 @@ export default function StockDetailClient({
               <>
                 <FinancialMetrics stock={stock} embedded />
                 <EarningsInfo earnings={stock} embedded />
+                <SectorComparison stock={stock} sectorAvg={sectorAvg ?? null} embedded />
               </>
             )}
           </div>

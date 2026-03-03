@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getTodayForDB } from "@/lib/date-utils";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
 import { fetchStockPrices } from "@/lib/stock-price-fetcher";
+import { getSectorTrend } from "@/lib/sector-trend";
 import { Decimal } from "@prisma/client/runtime/library";
 import AuthenticatedLayout from "@/app/components/AuthenticatedLayout";
 import StockDetailClient from "./StockDetailClient";
@@ -100,6 +101,14 @@ async function StockDetailContent({
     redirect("/dashboard");
   }
 
+  // セクター平均データを取得（相対評価用）
+  const sectorTrend = stock.sector ? await getSectorTrend(stock.sector) : null
+  const sectorAvg = sectorTrend ? {
+    avgPER: sectorTrend.avgPER,
+    avgPBR: sectorTrend.avgPBR,
+    avgROE: sectorTrend.avgROE,
+  } : null
+
   const stockData = {
     id: stock.id,
     tickerCode: stock.tickerCode,
@@ -129,6 +138,10 @@ async function StockDetailContent({
     latestNetIncome: stock.latestNetIncome
       ? Number(stock.latestNetIncome)
       : null,
+    debtEquityRatio: stock.debtEquityRatio ? Number(stock.debtEquityRatio) : null,
+    currentRatio: stock.currentRatio ? Number(stock.currentRatio) : null,
+    dividendGrowthRate: stock.dividendGrowthRate ? Number(stock.dividendGrowthRate) : null,
+    payoutRatio: stock.payoutRatio ? Number(stock.payoutRatio) : null,
     volatility: stock.volatility ? Number(stock.volatility) : null,
     weekChangeRate: stock.weekChangeRate ? Number(stock.weekChangeRate) : null,
     gapUpRate: stock.gapUpRate ? Number(stock.gapUpRate) : null,
@@ -267,6 +280,7 @@ async function StockDetailContent({
         wtiClose: preMarketData.wtiClose ? Number(preMarketData.wtiClose) : null,
         wtiChangeRate: preMarketData.wtiChangeRate ? Number(preMarketData.wtiChangeRate) : null,
       } : null}
+      sectorAvg={sectorAvg}
     />
   );
 }

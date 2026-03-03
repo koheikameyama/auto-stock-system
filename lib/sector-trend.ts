@@ -28,6 +28,9 @@ export interface SectorTrendData {
   stockCount: number
   compositeScore: number | null
   trendDirection: string
+  avgPER: number | null
+  avgPBR: number | null
+  avgROE: number | null
 }
 
 /**
@@ -97,9 +100,16 @@ export function formatSectorTrendForPrompt(trend: SectorTrendData): string {
     ? `、出来高${trend.avgVolumeRatio.toFixed(1)}倍`
     : ""
 
+  const fundamentalParts = [
+    trend.avgPER !== null ? `PER${trend.avgPER.toFixed(1)}倍` : null,
+    trend.avgPBR !== null ? `PBR${trend.avgPBR.toFixed(1)}倍` : null,
+    trend.avgROE !== null ? `ROE${(trend.avgROE * 100).toFixed(1)}%` : null,
+  ].filter(Boolean)
+  const fundamentalNote = fundamentalParts.length > 0 ? `\n  ファンダメンタル平均: ${fundamentalParts.join("、")}` : ""
+
   return `【${trend.sector}】${arrow} ${label}（総合スコア${score >= 0 ? "+" : ""}${score.toFixed(0)}）
   ニュース: ポジティブ${trend.positive3d}件/${trend.newsCount3d}件（スコア${trend.score3d >= 0 ? "+" : ""}${trend.score3d.toFixed(0)}）${usNote}
-  株価: ${priceNote ? priceNote.replace(" / ", "") : "データなし"}${volumeNote}`
+  株価: ${priceNote ? priceNote.replace(" / ", "") : "データなし"}${volumeNote}${fundamentalNote}`
 }
 
 /**

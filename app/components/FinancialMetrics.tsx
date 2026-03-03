@@ -9,6 +9,10 @@ interface Stock {
   roe?: number | null
   operatingCF?: number | null
   freeCF?: number | null
+  debtEquityRatio?: number | null
+  currentRatio?: number | null
+  dividendGrowthRate?: number | null
+  payoutRatio?: number | null
 }
 
 interface FinancialMetricsProps {
@@ -42,7 +46,7 @@ function MetricCard({ label, technicalName, value, hint, tooltipId, tooltipText 
 export default function FinancialMetrics({ stock, embedded = false }: FinancialMetricsProps) {
   const tTooltip = useTranslations('stocks.tooltips')
   const t = useTranslations('stocks.financialMetrics')
-  const { pbr, per, roe, operatingCF, freeCF } = stock
+  const { pbr, per, roe, operatingCF, freeCF, debtEquityRatio, currentRatio, dividendGrowthRate, payoutRatio } = stock
 
   function formatCashFlow(value: number | null | undefined): string {
     if (value === null || value === undefined) return "-"
@@ -69,7 +73,15 @@ export default function FinancialMetrics({ stock, embedded = false }: FinancialM
     operatingCF !== null &&
     operatingCF !== undefined ||
     freeCF !== null &&
-    freeCF !== undefined
+    freeCF !== undefined ||
+    debtEquityRatio !== null &&
+    debtEquityRatio !== undefined ||
+    currentRatio !== null &&
+    currentRatio !== undefined ||
+    dividendGrowthRate !== null &&
+    dividendGrowthRate !== undefined ||
+    payoutRatio !== null &&
+    payoutRatio !== undefined
 
   if (!hasAnyData) {
     return null
@@ -134,6 +146,42 @@ export default function FinancialMetrics({ stock, embedded = false }: FinancialM
           hint={freeCF !== null && freeCF !== undefined ? t('freeCF.hint') : t('noData')}
           tooltipId="free-cf"
           tooltipText={tTooltip('freeCF')}
+        />
+
+        <MetricCard
+          label={t('debtEquityRatio.label')}
+          technicalName={t('debtEquityRatio.technicalName')}
+          value={debtEquityRatio !== null && debtEquityRatio !== undefined ? t('units.times', { value: debtEquityRatio.toFixed(2) }) : "-"}
+          hint={debtEquityRatio !== null && debtEquityRatio !== undefined ? t('debtEquityRatio.hint') : t('noData')}
+          tooltipId="debt-equity-ratio"
+          tooltipText={tTooltip('debtEquityRatio')}
+        />
+
+        <MetricCard
+          label={t('currentRatio.label')}
+          technicalName={t('currentRatio.technicalName')}
+          value={currentRatio !== null && currentRatio !== undefined ? t('units.times', { value: currentRatio.toFixed(2) }) : "-"}
+          hint={currentRatio !== null && currentRatio !== undefined ? t('currentRatio.hint') : t('noData')}
+          tooltipId="current-ratio"
+          tooltipText={tTooltip('currentRatio')}
+        />
+
+        <MetricCard
+          label={t('dividendGrowthRate.label')}
+          technicalName={t('dividendGrowthRate.technicalName')}
+          value={dividendGrowthRate !== null && dividendGrowthRate !== undefined ? t('units.percent', { value: dividendGrowthRate.toFixed(1) }) : "-"}
+          hint={dividendGrowthRate !== null && dividendGrowthRate !== undefined ? t('dividendGrowthRate.hint') : t('noData')}
+          tooltipId="dividend-growth-rate"
+          tooltipText={tTooltip('dividendGrowthRate')}
+        />
+
+        <MetricCard
+          label={t('payoutRatio.label')}
+          technicalName={t('payoutRatio.technicalName')}
+          value={payoutRatio !== null && payoutRatio !== undefined ? t('units.percent', { value: payoutRatio.toFixed(1) }) : "-"}
+          hint={payoutRatio !== null && payoutRatio !== undefined ? t('payoutRatio.hint') : t('noData')}
+          tooltipId="payout-ratio"
+          tooltipText={tTooltip('payoutRatio')}
         />
       </div>
     </section>

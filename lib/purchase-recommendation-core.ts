@@ -22,6 +22,7 @@ import {
   buildEarningsContext,
   buildExDividendContext,
   buildGeopoliticalRiskContext,
+  buildSectorComparisonContext,
   type GeopoliticalRiskData,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
@@ -312,11 +313,17 @@ export async function executePurchaseRecommendation(
   // セクタートレンド
   let sectorTrendContext = "";
   let sectorAvgWeekChangeRate: number | null = null;
+  let sectorAvg: { avgPER: number | null; avgPBR: number | null; avgROE: number | null } | null = null;
   if (stock.sector) {
     const sectorTrend = await getSectorTrend(stock.sector);
     if (sectorTrend) {
       sectorTrendContext = `\n【セクタートレンド】\n${formatSectorTrendForPrompt(sectorTrend)}\n`;
       sectorAvgWeekChangeRate = sectorTrend.avgWeekChangeRate ?? null;
+      sectorAvg = {
+        avgPER: sectorTrend.avgPER ?? null,
+        avgPBR: sectorTrend.avgPBR ?? null,
+        avgROE: sectorTrend.avgROE ?? null,
+      };
     }
   }
 
@@ -329,6 +336,9 @@ export async function executePurchaseRecommendation(
 
   // 財務指標のフォーマット
   const financialMetrics = buildFinancialMetrics(stock, currentPrice);
+
+  // セクター内相対評価
+  const sectorComparisonContext = buildSectorComparisonContext(stock, sectorAvg, stock.sector);
 
   // データ取得不可コンテキスト
   const delistingContext = buildDelistingContext(
@@ -366,7 +376,7 @@ export async function executePurchaseRecommendation(
     tickerCode: stock.tickerCode,
     sector: stock.sector,
     currentPrice,
-    financialMetrics,
+    financialMetrics: financialMetrics + sectorComparisonContext,
     userContext,
     predictionContext,
     pricesCount: prices.length,
