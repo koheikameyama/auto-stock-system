@@ -221,7 +221,7 @@ export default function StockCard({
               const badgeColor = pct >= 75 ? "bg-green-100 text-green-700" : pct >= 50 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600";
               return (
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${badgeColor}`}>
-                  {pct}%
+                  信頼度:{pct}%
                 </span>
               );
             })()}
