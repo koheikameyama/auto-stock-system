@@ -113,6 +113,76 @@
     "evalExcellent": "優秀",
     "evalNeedsImprovement": "改善の余地あり"
   },
+  "latestNews": {
+    "title": "最新のニュース",
+    "viewMore": "もっと見る →",
+    "fetchError": "ニュースの取得に失敗しました",
+    "relatedStock": "あなたの保有銘柄「{name}」に関連",
+    "sentimentPositive": "ポジティブ",
+    "sentimentNegative": "ネガティブ",
+    "sentimentNeutral": "中立"
+  },
+  "portfolioHistory": {
+    "title": "資産推移",
+    "titlePnl": "損益推移",
+    "noData": "まだデータがありません",
+    "autoRecordNote": "毎日15:30以降に自動記録されます",
+    "period1m": "1ヶ月",
+    "period3m": "3ヶ月",
+    "period6m": "6ヶ月",
+    "period1y": "1年",
+    "viewAsset": "資産推移",
+    "viewPnl": "損益推移",
+    "unrealizedGain": "含み損益: {value}",
+    "unrealizedLabel": "含み",
+    "realizedLabel": "確定",
+    "dayCount": "{count}日分",
+    "unitMan": "万",
+    "yen": "円"
+  },
+  "composition": {
+    "title": "ポートフォリオ構成",
+    "viewBySector": "セクター別",
+    "viewByStock": "銘柄別",
+    "other": "その他",
+    "stockCount": "{count}銘柄",
+    "totalAssets": "総資産額",
+    "unitManYen": "万円",
+    "yen": "円"
+  },
+  "portfolioSummary": {
+    "title": "資産状況",
+    "totalAssets": "総資産額",
+    "unrealizedGain": "含み損益",
+    "gainRate": "損益率",
+    "marketComparison": "市場比較",
+    "toMyStocks": "マイ銘柄へ",
+    "vsNikkei": "vs 日経平均",
+    "holdingStocks": "保有銘柄（{count}件）",
+    "shares": "{count}株"
+  },
+  "performanceSummary": {
+    "title": "運用成績",
+    "saleHistory": "売却履歴",
+    "totalGain": "トータル損益",
+    "realizedGain": "確定損益",
+    "winRate": "勝率",
+    "averageReturn": "平均リターン",
+    "winLose": "{win}勝{lose}敗"
+  },
+  "marketMoversWidget": {
+    "title": "値上がり・値下がり",
+    "latestData": "（最新データ）",
+    "viewMore": "詳しく見る →",
+    "gainers": "値上がり",
+    "losers": "値下がり"
+  },
+  "featuredStocks": {
+    "title": "今日の注目銘柄",
+    "noRecommendations": "おすすめ銘柄がまだありません",
+    "dailyRecommendationNote": "AIが毎日あなたに合った銘柄をおすすめします",
+    "personalTitle": "あなたへのおすすめ"
+  },
   "gapPrediction": {
     "title": "寄り付きギャップ予測",
     "subtitle": "海外市場の動きから、今朝の日本株の値動きを予測しています",

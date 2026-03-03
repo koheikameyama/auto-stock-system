@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 export default function NotificationBell() {
+  const t = useTranslations("notifications");
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -38,7 +40,7 @@ export default function NotificationBell() {
     <Link
       href="/notifications"
       className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
-      aria-label="通知"
+      aria-label={t("bell.ariaLabel")}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

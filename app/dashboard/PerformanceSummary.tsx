@@ -2,12 +2,14 @@
 
 import Link from "next/link"
 import type { PortfolioSummary } from "@/store/types"
+import { useTranslations } from "next-intl"
 
 interface PerformanceSummaryProps {
   summary: PortfolioSummary
 }
 
 export default function PerformanceSummary({ summary }: PerformanceSummaryProps) {
+  const t = useTranslations("dashboard.performanceSummary")
   const hasSoldStocks = summary.winCount + summary.loseCount > 0
 
   return (
@@ -18,14 +20,14 @@ export default function PerformanceSummary({ summary }: PerformanceSummaryProps)
             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
               <span className="text-lg">📈</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900">運用成績</span>
+            <span className="text-sm font-semibold text-gray-900">{t("title")}</span>
           </div>
           {hasSoldStocks && (
             <Link
               href="/my-stocks?tab=sold"
               className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
             >
-              <span>売却履歴</span>
+              <span>{t("saleHistory")}</span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
@@ -35,7 +37,7 @@ export default function PerformanceSummary({ summary }: PerformanceSummaryProps)
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {/* トータル損益 */}
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">トータル損益</div>
+            <div className="text-xs text-gray-500 mb-1">{t("totalGain")}</div>
             <div
               className={`text-base sm:text-lg font-bold ${
                 summary.totalGain >= 0 ? "text-green-600" : "text-red-600"
@@ -54,7 +56,7 @@ export default function PerformanceSummary({ summary }: PerformanceSummaryProps)
 
           {/* 確定損益 */}
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">確定損益</div>
+            <div className="text-xs text-gray-500 mb-1">{t("realizedGain")}</div>
             {hasSoldStocks ? (
               <div
                 className={`text-base sm:text-lg font-bold ${
@@ -71,14 +73,14 @@ export default function PerformanceSummary({ summary }: PerformanceSummaryProps)
 
           {/* 勝率 */}
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">勝率</div>
+            <div className="text-xs text-gray-500 mb-1">{t("winRate")}</div>
             {hasSoldStocks ? (
               <>
                 <div className="text-base sm:text-lg font-bold text-gray-900">
                   {summary.winRate !== null ? `${summary.winRate.toFixed(0)}%` : "-"}
                 </div>
                 <div className="text-[10px] text-gray-400">
-                  {summary.winCount}勝{summary.loseCount}敗
+                  {t("winLose", { win: summary.winCount, lose: summary.loseCount })}
                 </div>
               </>
             ) : (
@@ -88,7 +90,7 @@ export default function PerformanceSummary({ summary }: PerformanceSummaryProps)
 
           {/* 平均リターン */}
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">平均リターン</div>
+            <div className="text-xs text-gray-500 mb-1">{t("averageReturn")}</div>
             {summary.averageReturn !== null ? (
               <div
                 className={`text-base sm:text-lg font-bold ${

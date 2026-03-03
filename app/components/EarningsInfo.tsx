@@ -1,5 +1,7 @@
 "use client"
 
+import { useTranslations } from "next-intl"
+
 interface EarningsData {
   isProfitable?: boolean | null
   profitTrend?: string | null
@@ -15,25 +17,6 @@ interface EarningsInfoProps {
   embedded?: boolean
 }
 
-function formatLargeNumber(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "-"
-  const absValue = Math.abs(value)
-  if (absValue >= 1_000_000_000_000) {
-    return `${(value / 1_000_000_000_000).toFixed(2)}兆円`
-  }
-  if (absValue >= 100_000_000) {
-    return `${(value / 100_000_000).toFixed(0)}億円`
-  }
-  return `${value.toLocaleString()}円`
-}
-
-function getProfitTrendLabel(trend: string | null | undefined): string {
-  if (trend === "increasing") return "増益"
-  if (trend === "decreasing") return "減益"
-  if (trend === "stable") return "横ばい"
-  return "-"
-}
-
 function getProfitTrendColor(trend: string | null | undefined): string {
   if (trend === "increasing") return "text-green-600"
   if (trend === "decreasing") return "text-red-600"
@@ -41,6 +24,27 @@ function getProfitTrendColor(trend: string | null | undefined): string {
 }
 
 export default function EarningsInfo({ earnings, embedded = false }: EarningsInfoProps) {
+  const t = useTranslations("stocks.earnings")
+
+  const formatLargeNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined) return "-"
+    const absValue = Math.abs(value)
+    if (absValue >= 1_000_000_000_000) {
+      return t("unitTrillion", { value: (value / 1_000_000_000_000).toFixed(2) })
+    }
+    if (absValue >= 100_000_000) {
+      return t("unitBillion", { value: (value / 100_000_000).toFixed(0) })
+    }
+    return t("unitYen", { value: value.toLocaleString() })
+  }
+
+  const getProfitTrendLabel = (trend: string | null | undefined): string => {
+    if (trend === "increasing") return t("trendIncreasing")
+    if (trend === "decreasing") return t("trendDecreasing")
+    if (trend === "stable") return t("trendStable")
+    return "-"
+  }
+
   const {
     isProfitable,
     profitTrend,
@@ -67,10 +71,10 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
     <section className={wrapperClass}>
       <div className="mb-4">
         <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-          業績情報
+          {t("title")}
         </h2>
         <p className="text-sm text-gray-500 mt-1">
-          直近の決算データ
+          {t("subtitle")}
         </p>
       </div>
 
@@ -89,11 +93,11 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
               isProfitable ? "text-green-700" : "text-red-700"
             }`}
           >
-            {isProfitable ? "黒字" : "赤字"}
+            {isProfitable ? t("profitable") : t("unprofitable")}
           </span>
           {profitTrend && (
             <span className={`text-sm font-medium ${getProfitTrendColor(profitTrend)}`}>
-              （{getProfitTrendLabel(profitTrend)}）
+              ({getProfitTrendLabel(profitTrend)})
             </span>
           )}
         </div>
@@ -103,7 +107,7 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
         {/* 売上高 */}
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-sm font-semibold text-gray-900">売上高</span>
+            <span className="text-sm font-semibold text-gray-900">{t("revenue")}</span>
             <span className="text-xs text-gray-500">(Revenue)</span>
           </div>
           <p className="text-xl font-bold text-gray-900 mb-1">
@@ -115,7 +119,7 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
                 revenueGrowth >= 0 ? "text-green-600" : "text-red-600"
               }`}
             >
-              前年比 {revenueGrowth >= 0 ? "+" : ""}
+              {t("yoyChange")} {revenueGrowth >= 0 ? "+" : ""}
               {revenueGrowth.toFixed(1)}%
             </p>
           )}
@@ -124,7 +128,7 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
         {/* 純利益 */}
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-sm font-semibold text-gray-900">純利益</span>
+            <span className="text-sm font-semibold text-gray-900">{t("netIncome")}</span>
             <span className="text-xs text-gray-500">(Net Income)</span>
           </div>
           <p className="text-xl font-bold text-gray-900 mb-1">
@@ -136,7 +140,7 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
                 netIncomeGrowth >= 0 ? "text-green-600" : "text-red-600"
               }`}
             >
-              前年比 {netIncomeGrowth >= 0 ? "+" : ""}
+              {t("yoyChange")} {netIncomeGrowth >= 0 ? "+" : ""}
               {netIncomeGrowth.toFixed(1)}%
             </p>
           )}
@@ -145,7 +149,7 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
         {/* EPS */}
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-sm font-semibold text-gray-900">1株利益</span>
+            <span className="text-sm font-semibold text-gray-900">{t("epsLabel")}</span>
             <span className="text-xs text-gray-500">(EPS)</span>
           </div>
           <p className="text-xl font-bold text-gray-900 mb-1">
@@ -154,16 +158,16 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
           <p className="text-xs text-gray-500">
             {eps !== null && eps !== undefined
               ? eps > 0
-                ? "1株あたりの利益"
-                : "1株あたりの損失"
-              : "データがありません"}
+                ? t("epsProfit")
+                : t("epsLoss")
+              : t("noData")}
           </p>
         </div>
 
         {/* 利益トレンド */}
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-sm font-semibold text-gray-900">利益傾向</span>
+            <span className="text-sm font-semibold text-gray-900">{t("profitTrendLabel")}</span>
             <span className="text-xs text-gray-500">(Trend)</span>
           </div>
           <p className={`text-xl font-bold mb-1 ${getProfitTrendColor(profitTrend)}`}>
@@ -171,12 +175,12 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
           </p>
           <p className="text-xs text-gray-500">
             {profitTrend === "increasing"
-              ? "前年より利益が増加"
+              ? t("trendIncreasingDesc")
               : profitTrend === "decreasing"
-                ? "前年より利益が減少"
+                ? t("trendDecreasingDesc")
                 : profitTrend === "stable"
-                  ? "前年とほぼ同水準"
-                  : "データがありません"}
+                  ? t("trendStableDesc")
+                  : t("noData")}
           </p>
         </div>
       </div>
@@ -187,9 +191,9 @@ export default function EarningsInfo({ earnings, embedded = false }: EarningsInf
           <div className="flex items-start gap-2">
             <span className="text-amber-500">⚠️</span>
             <div>
-              <p className="text-sm font-semibold text-amber-800">注意</p>
+              <p className="text-sm font-semibold text-amber-800">{t("warningTitle")}</p>
               <p className="text-xs text-amber-700 mt-1">
-                この銘柄は直近決算で赤字です。投資する場合は、赤字の原因や今後の見通しを確認することをおすすめします。
+                {t("warningMessage")}
               </p>
             </div>
           </div>

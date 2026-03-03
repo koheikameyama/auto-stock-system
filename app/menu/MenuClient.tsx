@@ -1,13 +1,14 @@
 "use client"
 
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { useBadges } from "@/app/contexts/BadgeContext"
 
 type BadgeKey = "ai-report"
 
 interface MenuItem {
   href: string
-  label: string
+  labelKey: string
   badgeKey?: BadgeKey
   icon: JSX.Element
 }
@@ -15,7 +16,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   {
     href: "/ai-report",
-    label: "AI精度レポート",
+    labelKey: "aiReport",
     badgeKey: "ai-report",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,7 +31,7 @@ const menuItems: MenuItem[] = [
   },
   {
     href: "/settings",
-    label: "設定",
+    labelKey: "settings",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -51,12 +52,13 @@ const menuItems: MenuItem[] = [
 ]
 
 export default function MenuClient({ isAdmin }: { isAdmin: boolean }) {
+  const t = useTranslations("menu")
   const { badges } = useBadges()
 
   const items = isAdmin
     ? [...menuItems, {
         href: "/admin",
-        label: "管理者ページ",
+        labelKey: "admin",
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -76,7 +78,7 @@ export default function MenuClient({ isAdmin }: { isAdmin: boolean }) {
             className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all text-gray-700"
           >
             <span className="text-gray-500">{item.icon}</span>
-            <span className="font-medium">{item.label}</span>
+            <span className="font-medium">{t(item.labelKey)}</span>
             {hasBadge && (
               <span className="w-2.5 h-2.5 bg-red-500 rounded-full" />
             )}

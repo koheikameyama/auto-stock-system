@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import { getActionButtonClass, ACTION_BUTTON_LABELS, CARD_FOOTER_STYLES } from "@/lib/ui-config"
 import CopyableTicker from "@/app/components/CopyableTicker"
 import EditTransactionDialog from "./EditTransactionDialog"
@@ -48,24 +49,25 @@ interface SoldStockCardProps {
   onTransactionUpdated?: () => void
 }
 
-function getHypotheticalComment(hypotheticalProfitPercent: number, actualProfitPercent: number): string {
+function getHypotheticalCommentKey(hypotheticalProfitPercent: number, actualProfitPercent: number): string {
   const diff = hypotheticalProfitPercent - actualProfitPercent
 
   if (diff > 20) {
-    return "かなり早めの利確でした"
+    return "hypotheticalVeryEarly"
   } else if (diff > 5) {
-    return "早めの利確でした"
+    return "hypotheticalEarly"
   } else if (diff > -5) {
-    return "適切なタイミングでした"
+    return "hypotheticalGood"
   } else if (diff > -20) {
-    return "良いタイミングでした"
+    return "hypotheticalGreat"
   } else {
-    return "絶好のタイミングでした"
+    return "hypotheticalPerfect"
   }
 }
 
 export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchase, onTransactionUpdated }: SoldStockCardProps) {
   const router = useRouter()
+  const t = useTranslations("portfolio.soldStockCard")
   const isProfit = soldStock.totalProfit >= 0
   const [showTransactions, setShowTransactions] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
@@ -76,7 +78,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
   }
 
   const handleDeleteTransaction = async (transactionId: string) => {
-    if (!confirm("この取引履歴を削除しますか？")) {
+    if (!confirm(t("deleteConfirm"))) {
       return
     }
 
@@ -87,14 +89,14 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || "削除に失敗しました")
+        throw new Error(data.error || t("deleteFailed"))
       }
 
-      toast.success("取引履歴を削除しました")
+      toast.success(t("deleteSuccess"))
       onTransactionUpdated?.()
     } catch (err: any) {
       console.error(err)
-      toast.error(err.message || "削除に失敗しました")
+      toast.error(err.message || t("deleteFailed"))
     }
   }
 
@@ -120,7 +122,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
               : "bg-red-50 text-red-700"
           }`}
         >
-          {isProfit ? "利益確定" : "損切り"}
+          {isProfit ? t("profitTaken") : t("lossCut")}
         </span>
 
         {/* Header */}
@@ -141,19 +143,19 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
             {" ~ "}
             {new Date(soldStock.lastSellDate).toLocaleDateString("ja-JP")}
           </span>
-          <span className="ml-2">• {soldStock.totalBuyQuantity}株</span>
+          <span className="ml-2">• {soldStock.totalBuyQuantity}{t("shares")}</span>
         </div>
 
         {/* Amounts */}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-3">
           <div>
-            <span className="text-xs sm:text-sm text-gray-600 block">購入金額</span>
+            <span className="text-xs sm:text-sm text-gray-600 block">{t("purchaseAmount")}</span>
             <span className="text-base sm:text-lg font-bold text-gray-900">
               ¥{soldStock.totalBuyAmount.toLocaleString()}
             </span>
           </div>
           <div>
-            <span className="text-xs sm:text-sm text-gray-600 block">売却金額</span>
+            <span className="text-xs sm:text-sm text-gray-600 block">{t("sellAmount")}</span>
             <span className="text-base sm:text-lg font-bold text-gray-900">
               ¥{soldStock.totalSellAmount.toLocaleString()}
             </span>
@@ -169,7 +171,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs sm:text-sm text-gray-600">損益</span>
+            <span className="text-xs sm:text-sm text-gray-600">{t("profitLoss")}</span>
             <div className="text-right">
               <span
                 className={`text-lg sm:text-xl font-bold ${
@@ -197,15 +199,15 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
             <div className="flex items-center gap-1.5 mb-2">
               <span className="text-sm">📊</span>
               <span className="text-xs sm:text-sm font-semibold text-gray-700">
-                今も保有してたら
+                {t("hypotheticalTitle")}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500">
-                → {getHypotheticalComment(
+                → {t(getHypotheticalCommentKey(
                     soldStock.hypotheticalProfitPercent ?? 0,
                     soldStock.profitPercent
-                  )}
+                  ))}
               </span>
               <div className="text-right">
                 <span
@@ -251,7 +253,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              取引履歴 ({soldStock.transactions.length}件)
+              {t("transactionHistory", { count: soldStock.transactions.length })}
             </button>
 
             {showTransactions && (
@@ -270,7 +272,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
                             : "bg-orange-100 text-orange-700"
                         }`}
                       >
-                        {transaction.type === "buy" ? "買" : "売"}
+                        {transaction.type === "buy" ? t("buy") : t("sell")}
                       </span>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
@@ -281,7 +283,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-sm font-semibold text-gray-900">
-                          {transaction.quantity}株 @ ¥{transaction.price.toLocaleString()}
+                          {transaction.quantity}{t("shares")} @ ¥{transaction.price.toLocaleString()}
                         </p>
                         <p className="text-xs text-gray-500">
                           ¥{transaction.totalAmount.toLocaleString()}
@@ -296,7 +298,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
                             )
                           }}
                           className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                          title="メニュー"
+                          title={t("menu")}
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                             <circle cx="12" cy="5" r="1.5" />
@@ -322,7 +324,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                               >
-                                編集
+                                {t("edit")}
                               </button>
                               <button
                                 onClick={(e) => {
@@ -332,7 +334,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                               >
-                                削除
+                                {t("delete")}
                               </button>
                             </div>
                           </>
@@ -376,7 +378,7 @@ export default function SoldStockCard({ soldStock, onAddToWatchlist, onRepurchas
 
           {/* Detail Link */}
           <div className={CARD_FOOTER_STYLES.detailLink}>
-            <span className={CARD_FOOTER_STYLES.detailLinkText}>詳細を見る</span>
+            <span className={CARD_FOOTER_STYLES.detailLinkText}>{t("viewDetails")}</span>
             <svg
               className="w-4 h-4 ml-1"
               fill="none"

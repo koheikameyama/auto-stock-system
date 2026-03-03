@@ -7,6 +7,10 @@ import settings from './settings.json';
 import auth from './auth.json';
 import news from './news.json';
 import dashboard from './dashboard.json';
+import legal from './legal.json';
+import marketMovers from './marketMovers.json';
+import admin from './admin.json';
+import menu from './menu.json';
 
 export default {
   common,
@@ -18,4 +22,8 @@ export default {
   auth,
   news,
   dashboard,
+  legal,
+  marketMovers,
+  admin,
+  menu,
 };

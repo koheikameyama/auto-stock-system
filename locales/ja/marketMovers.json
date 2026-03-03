@@ -1,0 +1,29 @@
+{
+  "backLabel": "ダッシュボード",
+  "title": "値上がり・値下がりランキング",
+  "noData": "データがまだありません",
+  "noDataDescription": "場後（15:30頃）に自動生成されます",
+  "latest": "最新",
+  "dateRanking": "{date}の前日比ランキング",
+  "latestData": "（最新データ）",
+  "gainersTop": "値上がりトップ{count}",
+  "losersTop": "値下がりトップ{count}",
+  "volumeNote": "※ 出来高10万株以上の銘柄が対象です。場後に毎日更新されます。",
+  "addedToWatchlist": "ウォッチリストに追加しました",
+  "addedToTracked": "追跡リストに追加しました",
+  "defaultMarket": "プライム",
+  "aiAnalysis": "AI原因分析",
+  "relatedNews": "関連ニュース",
+  "viewDetails": "詳しく見る",
+  "interested": "気になる",
+  "track": "追跡",
+  "sentiment": {
+    "positive": "好材料",
+    "negative": "悪材料",
+    "neutral": "中立"
+  },
+  "badge": {
+    "gainer": "値上がり",
+    "loser": "値下がり"
+  }
+}

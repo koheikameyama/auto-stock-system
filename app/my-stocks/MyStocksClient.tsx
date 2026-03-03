@@ -122,7 +122,7 @@ export default function MyStocksClient() {
         setSoldStocks(soldData);
       } catch (err) {
         console.error("Error fetching data:", err);
-        setError("銘柄の取得に失敗しました");
+        setError(t("myStocksClient.fetchError"));
       } finally {
         setLoading(false);
       }
@@ -292,10 +292,10 @@ export default function MyStocksClient() {
       // 追跡銘柄リストから削除
       setTrackedStocks((prev) => prev.filter((ts) => ts.stockId !== stockId));
       setActiveTab("watchlist");
-      toast.success("気になるリストに追加しました");
+      toast.success(t("myStocksClient.addedToWatchlist"));
     } catch (err) {
       console.error("Error adding to watchlist:", err);
-      toast.error(err instanceof Error ? err.message : "追加に失敗しました");
+      toast.error(err instanceof Error ? err.message : t("myStocksClient.addFailed"));
     }
   };
 
@@ -330,10 +330,10 @@ export default function MyStocksClient() {
       const newStock = await response.json();
       setUserStocks((prev) => [...prev, newStock]);
       setActiveTab("watchlist");
-      toast.success("気になるリストに追加しました");
+      toast.success(t("myStocksClient.addedToWatchlist"));
     } catch (err) {
       console.error("Error adding to watchlist:", err);
-      toast.error(err instanceof Error ? err.message : "追加に失敗しました");
+      toast.error(err instanceof Error ? err.message : t("myStocksClient.addFailed"));
     }
   };
 
@@ -351,33 +351,33 @@ export default function MyStocksClient() {
 
   // ユーザー銘柄（ポートフォリオ・ウォッチリスト）を削除
   const handleDeleteUserStock = async (stock: UserStock) => {
-    if (!confirm(`${stock.stock.name}を削除しますか？`)) return;
+    if (!confirm(t("myStocksClient.deleteConfirmName", { name: stock.stock.name }))) return;
     try {
       const response = await fetch(`/api/user-stocks/${stock.id}`, {
         method: "DELETE",
       });
-      if (!response.ok) throw new Error("削除に失敗しました");
+      if (!response.ok) throw new Error(t("myStocksClient.deleteFailed"));
       setUserStocks((prev) => prev.filter((s) => s.id !== stock.id));
-      toast.success(`${stock.stock.name}を削除しました`);
+      toast.success(t("myStocksClient.deleteSuccess", { name: stock.stock.name }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "削除に失敗しました");
+      toast.error(err instanceof Error ? err.message : t("myStocksClient.deleteFailed"));
     }
   };
 
   // 追跡銘柄を削除
   const handleDeleteTrackedStock = async (trackedStockId: string) => {
     const ts = trackedStocks.find((t) => t.id === trackedStockId);
-    if (!confirm(`${ts?.stock.name ?? "この銘柄"}を削除しますか？`)) return;
+    if (!confirm(t("myStocksClient.deleteConfirmName", { name: ts?.stock.name ?? t("myStocksClient.thisStock") }))) return;
     try {
       const response = await fetch(`/api/tracked-stocks/${trackedStockId}`, {
         method: "DELETE",
       });
-      if (!response.ok) throw new Error("削除に失敗しました");
+      if (!response.ok) throw new Error(t("myStocksClient.deleteFailed"));
       setTrackedStocks((prev) => prev.filter((t) => t.id !== trackedStockId));
       removeTrackedStock(trackedStockId);
-      toast.success("追跡銘柄を削除しました");
+      toast.success(t("myStocksClient.trackedDeleteSuccess"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "削除に失敗しました");
+      toast.error(err instanceof Error ? err.message : t("myStocksClient.deleteFailed"));
     }
   };
 
@@ -420,7 +420,7 @@ export default function MyStocksClient() {
       });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "追跡に失敗しました");
+        throw new Error(data.error || t("myStocksClient.trackingFailed"));
       }
       const newTracked = await response.json();
       // ウォッチリストから削除
@@ -437,9 +437,9 @@ export default function MyStocksClient() {
       setShowTrackingModal(false);
       setTrackingFromWatchlist(null);
       setActiveTab("tracked");
-      toast.success("追跡に追加しました");
+      toast.success(t("myStocksClient.addedToTracked"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "追跡に失敗しました");
+      toast.error(err instanceof Error ? err.message : t("myStocksClient.trackingFailed"));
     } finally {
       setTrackingInProgress(false);
     }
@@ -477,7 +477,7 @@ export default function MyStocksClient() {
       setActiveTab("watchlist");
       toast.success(t("zeroStockOptions.addedToWatchlist"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "追加に失敗しました");
+      toast.error(err instanceof Error ? err.message : t("myStocksClient.addFailed"));
     } finally {
       setZeroStockActionInProgress(false);
     }
@@ -497,7 +497,7 @@ export default function MyStocksClient() {
       });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "追跡に失敗しました");
+        throw new Error(data.error || t("myStocksClient.trackingFailed"));
       }
       const newTracked = await response.json();
       // 0株のポートフォリオ銘柄を除去
@@ -517,7 +517,7 @@ export default function MyStocksClient() {
       setActiveTab("tracked");
       toast.success(t("zeroStockOptions.addedToTracked"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "追跡に失敗しました");
+      toast.error(err instanceof Error ? err.message : t("myStocksClient.trackingFailed"));
     } finally {
       setZeroStockActionInProgress(false);
     }
@@ -854,10 +854,10 @@ export default function MyStocksClient() {
             {soldStocks.length === 0 ? (
               <div className="bg-white rounded-xl p-6 sm:p-12 text-center shadow-sm">
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
-                  保有してた銘柄はありません
+                  {t("myStocksClient.soldEmptyTitle")}
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600">
-                  全株売却した銘柄がここに表示されます
+                  {t("myStocksClient.soldEmptyDescription")}
                 </p>
               </div>
             ) : (
@@ -891,10 +891,10 @@ export default function MyStocksClient() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4">
               <div>
                 <p className="text-xs sm:text-sm text-gray-500">
-                  現在 {displayStocks.length} 銘柄
+                  {t("myStocksClient.currentCount", { count: displayStocks.length })}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  AI分析更新 {UPDATE_SCHEDULES.STOCK_ANALYSIS}（平日）
+                  {t("myStocksClient.analysisUpdate", { schedule: UPDATE_SCHEDULES.STOCK_ANALYSIS })}
                 </p>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -944,8 +944,8 @@ export default function MyStocksClient() {
                     />
                   </svg>
                   {activeTab === "portfolio"
-                    ? "保有銘柄を追加"
-                    : "気になる銘柄を追加"}
+                    ? t("myStocksClient.addPortfolioStock")
+                    : t("myStocksClient.addWatchlistStock")}
                 </button>
               </div>
             </div>
@@ -954,17 +954,17 @@ export default function MyStocksClient() {
               <div className="bg-white rounded-xl p-6 sm:p-12 text-center shadow-sm">
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
                   {activeTab === "portfolio"
-                    ? "保有銘柄がありません"
-                    : "気になる銘柄がありません"}
+                    ? t("myStocksClient.emptyPortfolioTitle")
+                    : t("myStocksClient.emptyWatchlistTitle")}
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-                  銘柄を追加して投資を始めましょう
+                  {t("myStocksClient.emptyDescription")}
                 </p>
                 <button
                   onClick={handleAddStock}
                   className="px-5 sm:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg text-sm sm:text-base font-semibold hover:bg-blue-700 transition-colors"
                 >
-                  銘柄を追加する
+                  {t("myStocksClient.addStockButton")}
                 </button>
               </div>
             ) : (
@@ -1136,7 +1136,7 @@ export default function MyStocksClient() {
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-lg font-bold text-gray-900">
-                この銘柄を追跡しますか？
+                {t("myStocksClient.trackConfirmTitle")}
               </h3>
               <button
                 onClick={() => {
@@ -1166,7 +1166,7 @@ export default function MyStocksClient() {
               </span>
             </p>
             <p className="text-sm text-gray-500 mb-6">
-              追跡すると、AI分析なしで株価だけを追いかけられます。気になるリストからは移動されます。
+              {t("myStocksClient.trackConfirmDescription")}
             </p>
             <div className="flex gap-2">
               <button
@@ -1183,10 +1183,10 @@ export default function MyStocksClient() {
                     );
                     setShowTrackingModal(false);
                     setTrackingFromWatchlist(null);
-                    toast.success("見送りました");
+                    toast.success(t("myStocksClient.dismissed"));
                   } catch (err) {
                     toast.error(
-                      err instanceof Error ? err.message : "削除に失敗しました",
+                      err instanceof Error ? err.message : t("myStocksClient.deleteFailed"),
                     );
                   } finally {
                     setTrackingInProgress(false);
@@ -1195,14 +1195,14 @@ export default function MyStocksClient() {
                 disabled={trackingInProgress}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
               >
-                {trackingInProgress ? "処理中..." : "見送る"}
+                {trackingInProgress ? t("myStocksClient.processing") : t("myStocksClient.passForNow")}
               </button>
               <button
                 onClick={handleConfirmTracking}
                 disabled={trackingInProgress}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                {trackingInProgress ? "処理中..." : "追跡する"}
+                {trackingInProgress ? t("myStocksClient.processing") : t("myStocksClient.trackAction")}
               </button>
             </div>
           </div>

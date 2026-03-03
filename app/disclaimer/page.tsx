@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 export default function DisclaimerPage() {
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(true);
   const [activeSection, setActiveSection] = useState<string>("");
+  const t = useTranslations("legal");
 
   useEffect(() => {
     setCanGoBack(window.history.length > 1);
@@ -30,7 +32,6 @@ export default function DisclaimerPage() {
         const el = document.getElementById(id);
         if (el) {
           const rect = el.getBoundingClientRect();
-          // 少し早めにアクティブにするためにオフセットを調整
           return rect.top >= 0 && rect.top <= 200;
         }
         return false;
@@ -52,17 +53,17 @@ export default function DisclaimerPage() {
   };
 
   const sections = [
-    { id: "section-1", title: "1. 投資助言サービスではありません" },
-    { id: "section-2", title: "2. 元本割れのリスク" },
-    { id: "section-3", title: "3. 過去の実績は将来を保証しません" },
-    { id: "section-4", title: "4. 投資判断の責任" },
-    { id: "section-5", title: "5. 情報の正確性" },
-    { id: "section-6", title: "6. 損害賠償の制限" },
-    { id: "section-7", title: "7. システムの中断・停止" },
-    { id: "section-8", title: "8. 第三者サービスの利用" },
-    { id: "section-9", title: "9. 税務・法務に関する助言ではありません" },
-    { id: "section-10", title: "10. 免責事項の変更" },
-    { id: "section-11", title: "11. お問い合わせ" },
+    { id: "section-1", title: t("disclaimer.sections.notAdvice.tocTitle") },
+    { id: "section-2", title: t("disclaimer.sections.principalRisk.tocTitle") },
+    { id: "section-3", title: t("disclaimer.sections.pastPerformance.tocTitle") },
+    { id: "section-4", title: t("disclaimer.sections.responsibility.tocTitle") },
+    { id: "section-5", title: t("disclaimer.sections.accuracy.tocTitle") },
+    { id: "section-6", title: t("disclaimer.sections.liability.tocTitle") },
+    { id: "section-7", title: t("disclaimer.sections.systemInterruption.tocTitle") },
+    { id: "section-8", title: t("disclaimer.sections.thirdPartyServices.tocTitle") },
+    { id: "section-9", title: t("disclaimer.sections.taxLegalAdvice.tocTitle") },
+    { id: "section-10", title: t("disclaimer.sections.changes.tocTitle") },
+    { id: "section-11", title: t("disclaimer.sections.contact.tocTitle") },
   ];
 
   const scrollToSection = (id: string) => {
@@ -104,12 +105,12 @@ export default function DisclaimerPage() {
                 />
               </svg>
             </div>
-            <span className="font-medium">{canGoBack ? "戻る" : "ホーム"}</span>
+            <span className="font-medium">{canGoBack ? t("common.back") : t("common.home")}</span>
           </button>
 
           <div className="hidden sm:block text-slate-400 text-sm font-medium uppercase tracking-[0.2em]">
             Stock Buddy <span className="mx-2 text-slate-200">|</span>{" "}
-            Disclaimer
+            {t("common.headerLabel")}
           </div>
         </div>
       </header>
@@ -121,7 +122,7 @@ export default function DisclaimerPage() {
             <nav className="p-6 bg-white rounded-[32px] shadow-sm border border-slate-100/50">
               <h3 className="text-xs font-black text-slate-400 mb-6 flex items-center gap-2 uppercase tracking-[0.15em]">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                Contents
+                {t("common.contentsLabel")}
               </h3>
               <ul className="space-y-1">
                 {sections.map((section) => (
@@ -146,10 +147,10 @@ export default function DisclaimerPage() {
           <div className="lg:col-span-8">
             <div className="mb-12">
               <span className="inline-block px-3 py-1 rounded-lg bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-[0.2em] mb-4">
-                Legal Compliance
+                {t("common.legalCompliance")}
               </span>
               <h1 className="text-4xl sm:text-6xl font-black text-slate-900 mb-6 tracking-tight leading-[1.1]">
-                免責事項
+                {t("disclaimer.title")}
               </h1>
               <div className="flex items-center gap-4 text-slate-400 text-xs font-medium">
                 <span className="flex items-center gap-1.5">
@@ -166,10 +167,10 @@ export default function DisclaimerPage() {
                       d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
-                  最終更新日: 2026年2月22日
+                  {t("common.lastUpdated")}
                 </span>
                 <span className="w-1 h-1 rounded-full bg-slate-200"></span>
-                <span>Stock Buddy Legal Team</span>
+                <span>{t("common.legalTeam")}</span>
               </div>
             </div>
 
@@ -206,10 +207,10 @@ export default function DisclaimerPage() {
                 </div>
                 <div>
                   <h3 className="text-rose-900 font-black text-xl mb-3 tracking-tight">
-                    重要事項のご確認
+                    {t("disclaimer.importantNotice.title")}
                   </h3>
                   <p className="text-rose-800/80 leading-relaxed text-sm sm:text-base font-medium">
-                    本サービスを利用する前に、以下の免責事項を必ずお読みください。ご利用を開始された時点で、本事項のすべてに同意したものとみなされます。
+                    {t("disclaimer.importantNotice.description")}
                   </p>
                 </div>
               </div>
@@ -222,20 +223,19 @@ export default function DisclaimerPage() {
                     1
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    投資助言サービスではありません
+                    {t("disclaimer.sections.notAdvice.title")}
                   </h2>
                 </div>
                 <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1">
                   <p className="text-slate-600 mb-8 leading-relaxed font-medium">
-                    本サービス（Stock
-                    Buddy）は、金融商品取引法に基づく投資助言業の登録を受けておらず、投資助言サービスではありません。
+                    {t("disclaimer.sections.notAdvice.description")}
                   </p>
                   <ul className="space-y-5">
                     {[
-                      "本サービスが提供する情報、分析、推奨は、一般的な参考情報の提供を目的としたものです。",
-                      "特定の銘柄の売買を推奨・勧誘するものではありません。",
-                      "投資判断はユーザー自身の責任において行ってください。",
-                      "本サービスの情報を投資判断の唯一の根拠とすることは避けてください。",
+                      t("disclaimer.sections.notAdvice.items.0"),
+                      t("disclaimer.sections.notAdvice.items.1"),
+                      t("disclaimer.sections.notAdvice.items.2"),
+                      t("disclaimer.sections.notAdvice.items.3"),
                     ].map((item, i) => (
                       <li
                         key={i}
@@ -267,21 +267,21 @@ export default function DisclaimerPage() {
                     2
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    元本割れのリスク
+                    {t("disclaimer.sections.principalRisk.title")}
                   </h2>
                 </div>
                 <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1">
                   <div className="p-6 rounded-2xl bg-slate-50 border-l-4 border-blue-500 mb-8">
                     <p className="text-slate-900 leading-relaxed font-black">
-                      株式投資には元本割れのリスクが常に存在します。
+                      {t("disclaimer.sections.principalRisk.highlight")}
                     </p>
                   </div>
                   <ul className="space-y-5">
                     {[
-                      "投資元本を下回る可能性があることを理解してください。",
-                      "市場の変動により、投資した金額の全部または一部を失う可能性があります。",
-                      "特に短期間での大きな値動きにより、想定以上の損失が発生する可能性があります。",
-                      "投資は余裕資金で行い、生活に必要な資金を投資に回さないでください。",
+                      t("disclaimer.sections.principalRisk.items.0"),
+                      t("disclaimer.sections.principalRisk.items.1"),
+                      t("disclaimer.sections.principalRisk.items.2"),
+                      t("disclaimer.sections.principalRisk.items.3"),
                     ].map((item, i) => (
                       <li
                         key={i}
@@ -313,15 +313,15 @@ export default function DisclaimerPage() {
                     3
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    過去の実績は将来を保証しません
+                    {t("disclaimer.sections.pastPerformance.title")}
                   </h2>
                 </div>
                 <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1">
                   <ul className="space-y-5">
                     {[
-                      "過去に高いリターンを示した銘柄が、将来も同様のリターンをもたらすとは限りません。",
-                      "市場環境、経済状況、企業業績などは常に変化します。",
-                      "AI分析の結果は過去のデータに基づくものであり、将来の市場動向を正確に予測するものではありません。",
+                      t("disclaimer.sections.pastPerformance.items.0"),
+                      t("disclaimer.sections.pastPerformance.items.1"),
+                      t("disclaimer.sections.pastPerformance.items.2"),
                     ].map((item, i) => (
                       <li
                         key={i}
@@ -353,19 +353,19 @@ export default function DisclaimerPage() {
                     4
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    投資判断の責任
+                    {t("disclaimer.sections.responsibility.title")}
                   </h2>
                 </div>
                 <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1">
                   <p className="text-slate-600 mb-8 leading-relaxed font-medium">
-                    最終的な投資判断は、ユーザー自身の責任において行ってください。
+                    {t("disclaimer.sections.responsibility.description")}
                   </p>
                   <ul className="space-y-5">
                     {[
-                      "本サービスの情報に基づいて投資を行った結果、損失が発生した場合でも、当社は一切の責任を負いません。",
-                      "投資を行う際は、ご自身で企業情報、財務状況、市場動向などを確認してください。",
-                      "必要に応じて、専門家（ファイナンシャルプランナー、証券会社など）に相談することをお勧めします。",
-                      "ご自身のリスク許容度、投資目的、財務状況を十分に考慮した上で投資判断を行ってください。",
+                      t("disclaimer.sections.responsibility.items.0"),
+                      t("disclaimer.sections.responsibility.items.1"),
+                      t("disclaimer.sections.responsibility.items.2"),
+                      t("disclaimer.sections.responsibility.items.3"),
                     ].map((item, i) => (
                       <li
                         key={i}
@@ -392,7 +392,7 @@ export default function DisclaimerPage() {
               </section>
 
               {/* ... Other sections follow same premium pattern ... */}
-              {/* Note: In a real implementation I would expand all sections, 
+              {/* Note: In a real implementation I would expand all sections,
                   but for brevity I'll ensure the key ones are high quality and consistent */}
 
               <section id="section-5" className="scroll-mt-32">
@@ -401,19 +401,19 @@ export default function DisclaimerPage() {
                     5
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    情報の正確性
+                    {t("disclaimer.sections.accuracy.title")}
                   </h2>
                 </div>
                 <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1">
                   <p className="text-slate-600 mb-8 leading-relaxed font-medium">
-                    本サービスが提供する情報の正確性、完全性、有用性、適時性について保証するものではありません。
+                    {t("disclaimer.sections.accuracy.description")}
                   </p>
                   <ul className="space-y-4">
                     {[
-                      "株価データは外部サービスから取得しており、遅延や誤差が発生する可能性があります。",
-                      "市場の急激な変動により、表示される情報が実際の状況と異なる場合があります。",
-                      "AI分析の結果は統計的な予測であり、必ずしも正確とは限りません。",
-                      "企業の業績予想や市場分析は、当社の見解であり、実際の結果と異なる可能性があります。",
+                      t("disclaimer.sections.accuracy.items.0"),
+                      t("disclaimer.sections.accuracy.items.1"),
+                      t("disclaimer.sections.accuracy.items.2"),
+                      t("disclaimer.sections.accuracy.items.3"),
                     ].map((item, i) => (
                       <li key={i} className="flex gap-3 text-slate-600 text-sm">
                         <span className="text-blue-500 font-bold">•</span>
@@ -430,27 +430,27 @@ export default function DisclaimerPage() {
                     6
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    損害賠償の制限
+                    {t("disclaimer.sections.liability.title")}
                   </h2>
                 </div>
                 <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {[
                       {
-                        l: "投資損失",
-                        d: "本サービスの情報に基づく投資により発生した損失について、当社は一切の責任を負いません。",
+                        l: t("disclaimer.sections.liability.items.investmentLoss.label"),
+                        d: t("disclaimer.sections.liability.items.investmentLoss.description"),
                       },
                       {
-                        l: "機会損失",
-                        d: "本サービスの利用または利用不能により発生した機会損失について、当社は責任を負いません。",
+                        l: t("disclaimer.sections.liability.items.opportunityLoss.label"),
+                        d: t("disclaimer.sections.liability.items.opportunityLoss.description"),
                       },
                       {
-                        l: "間接的損害",
-                        d: "本サービスに起因する間接的、付随的、派生的、特別な損害について、当社は責任を負いません。",
+                        l: t("disclaimer.sections.liability.items.indirectDamage.label"),
+                        d: t("disclaimer.sections.liability.items.indirectDamage.description"),
                       },
                       {
-                        l: "責任の範囲",
-                        d: "当社に故意または重過失がある場合を除き、損害賠償責任は発生しないものとします。",
+                        l: t("disclaimer.sections.liability.items.scopeOfLiability.label"),
+                        d: t("disclaimer.sections.liability.items.scopeOfLiability.description"),
                       },
                     ].map((item, i) => (
                       <div
@@ -475,28 +475,28 @@ export default function DisclaimerPage() {
                     11
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    お問い合わせ
+                    {t("disclaimer.sections.contact.title")}
                   </h2>
                 </div>
                 <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1">
                   <div className="flex flex-col sm:flex-row gap-10">
                     <div className="flex-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">
-                        Support Channel
+                        {t("common.supportChannel")}
                       </p>
                       <p className="text-xl font-black text-slate-900 tracking-tight">
-                        Stock Buddy カスタマーサポート
+                        {t("common.customerSupport")}
                       </p>
                     </div>
                     <div className="flex-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">
-                        Email Address
+                        {t("common.emailAddress")}
                       </p>
                       <a
                         href="mailto:support@stock-buddy.net"
                         className="text-xl font-black text-blue-600 hover:text-blue-700 transition-all hover:underline underline-offset-8 decoration-blue-200"
                       >
-                        support@stock-buddy.net
+                        {t("common.contactEmail")}
                       </a>
                     </div>
                   </div>
@@ -518,18 +518,17 @@ export default function DisclaimerPage() {
               <div className="relative z-10 text-center">
                 <div className="w-16 h-1 w-12 bg-blue-500 mx-auto mb-8 rounded-full"></div>
                 <h4 className="text-2xl sm:text-3xl font-black mb-6 tracking-tight">
-                  ご理解とご協力のお願い
+                  {t("disclaimer.footer.title")}
                 </h4>
                 <p className="text-slate-400 max-w-xl mx-auto leading-relaxed text-[15px] font-medium">
-                  投資は市場のリスクを伴う動的な活動です。Stock
-                  Buddyをご利用の際は、上記の免責事項を十分に理解し、ご自身のリスク許容度に合わせた判断をお願いいたします。
+                  {t("disclaimer.footer.description")}
                 </p>
                 <div className="mt-10">
                   <button
                     onClick={handleBack}
                     className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-sm transition-all hover:bg-blue-50 hover:scale-105 active:scale-95 shadow-xl shadow-black/20"
                   >
-                    了解しました
+                    {t("disclaimer.footer.understood")}
                   </button>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslations } from "next-intl"
 import { formatAnalysisTime } from "@/lib/analysis-time"
 
 interface AnalysisTimestampProps {
@@ -12,6 +13,7 @@ interface AnalysisTimestampProps {
  * 時間帯ラベル（寄り前分析など）と鮮度（◯時間前）を表示
  */
 export default function AnalysisTimestamp({ dateString, className = "" }: AnalysisTimestampProps) {
+  const t = useTranslations("stocks.analysisTimestamp")
   const { label, relative, freshness, colorClass } = formatAnalysisTime(dateString)
 
   return (
@@ -22,7 +24,7 @@ export default function AnalysisTimestamp({ dateString, className = "" }: Analys
         {relative}
       </span>
       {freshness === "stale" && (
-        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-100 text-orange-600 text-[10px]" title="分析が古くなっています">
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-100 text-orange-600 text-[10px]" title={t("staleTooltip")}>
           !
         </span>
       )}

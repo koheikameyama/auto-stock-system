@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { getActionButtonClass, ACTION_BUTTON_LABELS, CARD_FOOTER_STYLES } from "@/lib/ui-config"
 import { FETCH_FAIL_WARNING_THRESHOLD, EARNINGS_DATE_BADGE } from "@/lib/constants"
 import dayjs from "dayjs"
@@ -49,6 +50,7 @@ interface TrackedStockCardProps {
 
 export default function TrackedStockCard({ trackedStock, isStale = false, priceLoaded = false, onMoveToWatchlist, onPurchase, onDelete }: TrackedStockCardProps) {
   const { stock, currentPrice, changePercent } = trackedStock
+  const t = useTranslations("portfolio.trackedStockCard")
   const [signal, setSignal] = useState<Signal | null>(null)
 
   // Fetch signal asynchronously
@@ -80,12 +82,12 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
     const daysUntil = earningsDay.diff(today, "day")
     if (daysUntil < 0 || daysUntil > EARNINGS_DATE_BADGE.INFO_DAYS) return null
     if (daysUntil <= EARNINGS_DATE_BADGE.URGENT_DAYS) {
-      return { text: daysUntil === 0 ? "本日決算" : `${daysUntil}日後に決算`, color: "text-red-700", bg: "bg-red-100", border: "border-red-200" }
+      return { text: daysUntil === 0 ? t("earningsToday") : t("earningsDaysAway", { days: daysUntil }), color: "text-red-700", bg: "bg-red-100", border: "border-red-200" }
     }
     if (daysUntil <= EARNINGS_DATE_BADGE.WARNING_DAYS) {
-      return { text: `${daysUntil}日後に決算`, color: "text-yellow-700", bg: "bg-yellow-100", border: "border-yellow-200" }
+      return { text: t("earningsDaysAway", { days: daysUntil }), color: "text-yellow-700", bg: "bg-yellow-100", border: "border-yellow-200" }
     }
-    return { text: `${daysUntil}日後に決算`, color: "text-gray-600", bg: "bg-gray-100", border: "border-gray-200" }
+    return { text: t("earningsDaysAway", { days: daysUntil }), color: "text-gray-600", bg: "bg-gray-100", border: "border-gray-200" }
   }
 
   // staleまたはデータ取得不可の銘柄は詳細遷移・バッジを無効化
@@ -108,9 +110,9 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
                 : "bg-gray-100 text-gray-700"
           }`}
         >
-          {signal.signal === "buy" && "買いシグナル"}
-          {signal.signal === "sell" && "売りシグナル"}
-          {signal.signal === "neutral" && "様子見"}
+          {signal.signal === "buy" && t("buySignal")}
+          {signal.signal === "sell" && t("sellSignal")}
+          {signal.signal === "neutral" && t("neutral")}
         </span>
       )}
 
@@ -154,7 +156,7 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
       {/* Price Info */}
       <div className="mb-4">
         {stock.isDelisted && (
-          <span className="text-xs text-gray-500 mb-1 block">最終価格</span>
+          <span className="text-xs text-gray-500 mb-1 block">{t("lastPrice")}</span>
         )}
         {currentPrice ? (
           <div>
@@ -176,14 +178,14 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-                時点
+                {t("asOf")}
               </p>
             )}
           </div>
         ) : isStale ? (
-          <span className="text-xs text-amber-600">株価データが取得できませんでした。<br />上場廃止、取引停止の銘柄の可能性があります。</span>
+          <span className="text-xs text-amber-600">{t("priceUnavailable")}<br />{t("priceUnavailableDetail")}</span>
         ) : (
-          <span className="text-sm text-gray-400">価格取得中...</span>
+          <span className="text-sm text-gray-400">{t("loadingPrice")}</span>
         )}
       </div>
 
@@ -212,7 +214,7 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
               onClick={() => onDelete(trackedStock.id)}
               className="px-2 py-1 text-xs font-medium rounded transition-colors text-red-600 hover:bg-red-50"
             >
-              削除
+              {t("delete")}
             </button>
           )}
         </div>
@@ -220,14 +222,14 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
         {/* Detail Link */}
         {linkDisabled ? (
           <div className="flex items-center text-gray-300 ml-auto">
-            <span className="text-xs text-gray-300">詳細を見る</span>
+            <span className="text-xs text-gray-300">{t("viewDetails")}</span>
             <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </div>
         ) : (
           <Link href={`/stocks/${trackedStock.stockId}`} className={CARD_FOOTER_STYLES.detailLink}>
-            <span className={CARD_FOOTER_STYLES.detailLinkText}>詳細を見る</span>
+            <span className={CARD_FOOTER_STYLES.detailLinkText}>{t("viewDetails")}</span>
             <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>

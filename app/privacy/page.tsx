@@ -2,10 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 export default function PrivacyPolicyPage() {
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(true);
+  const t = useTranslations("legal");
 
   useEffect(() => {
     setCanGoBack(window.history.length > 1);
@@ -20,14 +22,14 @@ export default function PrivacyPolicyPage() {
   };
 
   const sections = [
-    { id: "sec-1", title: "1. 収集する情報" },
-    { id: "sec-2", title: "2. 情報の利用目的" },
-    { id: "sec-3", title: "3. 情報の第三者提供" },
-    { id: "sec-4", title: "4. 情報の保管と保護" },
-    { id: "sec-5", title: "5. お客様の権利" },
-    { id: "sec-6", title: "6. Cookie（クッキー）の使用" },
-    { id: "sec-7", title: "7. 本ポリシーの変更" },
-    { id: "sec-8", title: "8. お問い合わせ" },
+    { id: "sec-1", title: t("privacy.sections.collectInfo.tocTitle") },
+    { id: "sec-2", title: t("privacy.sections.purpose.tocTitle") },
+    { id: "sec-3", title: t("privacy.sections.thirdParty.tocTitle") },
+    { id: "sec-4", title: t("privacy.tocSections.sec4") },
+    { id: "sec-5", title: t("privacy.sections.rights.tocTitle") },
+    { id: "sec-6", title: t("privacy.tocSections.sec6") },
+    { id: "sec-7", title: t("privacy.tocSections.sec7") },
+    { id: "sec-8", title: t("privacy.sections.contact.tocTitle") },
   ];
 
   const scrollToSection = (id: string) => {
@@ -67,7 +69,7 @@ export default function PrivacyPolicyPage() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            戻る
+            {t("common.back")}
           </button>
         </div>
       </header>
@@ -75,20 +77,19 @@ export default function PrivacyPolicyPage() {
       <main className="max-w-3xl mx-auto px-6 py-12">
         <div className="mb-12">
           <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">
-            プライバシーポリシー
+            {t("privacy.title")}
           </h1>
-          <p className="text-sm text-slate-400">最終更新日: 2026年2月22日</p>
+          <p className="text-sm text-slate-400">{t("common.lastUpdated")}</p>
         </div>
 
         <p className="mb-12 text-[15px] text-slate-600 leading-relaxed">
-          Stock
-          Buddy（以下「本サービス」といいます）の提供にあたり、お客様の個人情報の保護に努めております。
+          {t("privacy.intro")}
         </p>
 
         {/* Simple Table of Contents */}
         <nav className="mb-16 p-6 bg-slate-50 rounded-2xl">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
-            目次
+            {t("common.tableOfContents")}
           </p>
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
             {sections.map((s) => (
@@ -107,32 +108,32 @@ export default function PrivacyPolicyPage() {
         <div className="space-y-16">
           <section id="sec-1" className="scroll-mt-24">
             <h2 className="text-lg font-bold text-slate-900 mb-6 border-l-4 border-slate-200 pl-4">
-              1. 収集する情報
+              {t("privacy.sections.collectInfo.title")}
             </h2>
             <div className="pl-5 space-y-8">
               <div>
                 <h3 className="text-[15px] font-bold text-slate-800 mb-3">
-                  1.1 お客様が提供する情報
+                  {t("privacy.sections.collectInfo.userProvided.title")}
                 </h3>
                 <ul className="space-y-2 text-[15px] text-slate-600 list-disc pl-5">
                   <li>
-                    メールアドレス、氏名、プロフィール画像（Google認証経由）
+                    {t("privacy.sections.collectInfo.userProvided.items.0")}
                   </li>
-                  <li>投資設定情報（予算、投資期間、リスク許容度）</li>
-                  <li>保有銘柄情報（銘柄、数量、取得単価）</li>
-                  <li>気になる銘柄情報</li>
+                  <li>{t("privacy.sections.collectInfo.userProvided.items.1")}</li>
+                  <li>{t("privacy.sections.collectInfo.userProvided.items.2")}</li>
+                  <li>{t("privacy.sections.collectInfo.userProvided.items.3")}</li>
                 </ul>
               </div>
               <div>
                 <h3 className="text-[15px] font-bold text-slate-800 mb-3">
-                  1.2 自動的に収集される情報
+                  {t("privacy.sections.collectInfo.autoCollected.title")}
                 </h3>
                 <ul className="space-y-2 text-[15px] text-slate-600 list-disc pl-5">
                   <li>
-                    アクセスログ（IPアドレス、ブラウザ情報、アクセス日時）
+                    {t("privacy.sections.collectInfo.autoCollected.items.0")}
                   </li>
-                  <li>Cookie情報</li>
-                  <li>利用状況データ（閲覧ページ、操作履歴）</li>
+                  <li>{t("privacy.sections.collectInfo.autoCollected.items.1")}</li>
+                  <li>{t("privacy.sections.collectInfo.autoCollected.items.2")}</li>
                 </ul>
               </div>
             </div>
@@ -140,26 +141,26 @@ export default function PrivacyPolicyPage() {
 
           <section id="sec-2" className="scroll-mt-24">
             <h2 className="text-lg font-bold text-slate-900 mb-6 border-l-4 border-slate-200 pl-4">
-              2. 情報の利用目的
+              {t("privacy.sections.purpose.title")}
             </h2>
             <div className="pl-5 space-y-8">
               <div>
                 <h3 className="text-[15px] font-bold text-slate-800 mb-3">
-                  2.1 サービス提供のため
+                  {t("privacy.sections.purpose.serviceProvision.title")}
                 </h3>
                 <ul className="space-y-2 text-[15px] text-slate-600 list-disc pl-5">
-                  <li>ユーザー認証、AI分析による銘柄推奨</li>
-                  <li>パーソナライズされた投資アドバイス</li>
-                  <li>保有銘柄管理機能の提供</li>
+                  <li>{t("privacy.sections.purpose.serviceProvision.items.0")}</li>
+                  <li>{t("privacy.sections.purpose.serviceProvision.items.1")}</li>
+                  <li>{t("privacy.sections.purpose.serviceProvision.items.2")}</li>
                 </ul>
               </div>
               <div>
                 <h3 className="text-[15px] font-bold text-slate-800 mb-3">
-                  2.2 サービス改善・コミュニケーション
+                  {t("privacy.sections.purpose.improvement.title")}
                 </h3>
                 <ul className="space-y-2 text-[15px] text-slate-600 list-disc pl-5">
-                  <li>利用状況の分析、新機能の開発、バグ修正</li>
-                  <li>サービスに関する通知、重要なお知らせ、サポート対応</li>
+                  <li>{t("privacy.sections.purpose.improvement.items.0")}</li>
+                  <li>{t("privacy.sections.purpose.improvement.items.1")}</li>
                 </ul>
               </div>
             </div>
@@ -167,26 +168,28 @@ export default function PrivacyPolicyPage() {
 
           <section id="sec-3" className="scroll-mt-24">
             <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-slate-200 pl-4">
-              3. 情報の第三者提供
+              {t("privacy.sections.thirdParty.title")}
             </h2>
             <div className="pl-5 space-y-4 text-[15px] text-slate-600 leading-relaxed">
               <p>
-                当社は、お客様の同意がある場合や法令に基づく場合を除き、個人情報を第三者に提供しません。
+                {t("privacy.sections.thirdParty.description")}
               </p>
               <div className="p-5 bg-slate-50 rounded-xl">
                 <p className="font-bold text-slate-800 mb-2">
-                  外部サービスの利用
+                  {t("privacy.sections.thirdParty.externalServices")}
                 </p>
                 <ul className="space-y-1.5 text-sm">
                   <li>
                     <span className="font-medium">Google OAuth</span>:
-                    ユーザー認証
+                    {" "}{t("privacy.sections.thirdParty.googleOAuth")}
                   </li>
                   <li>
-                    <span className="font-medium">OpenAI API</span>: AI分析機能
+                    <span className="font-medium">OpenAI API</span>:
+                    {" "}{t("privacy.sections.thirdParty.openAI")}
                   </li>
                   <li>
-                    <span className="font-medium">Railway</span>: ホスティング
+                    <span className="font-medium">Railway</span>:
+                    {" "}{t("privacy.sections.thirdParty.railway")}
                   </li>
                 </ul>
               </div>
@@ -195,29 +198,29 @@ export default function PrivacyPolicyPage() {
 
           <section id="sec-5" className="scroll-mt-24">
             <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-slate-200 pl-4">
-              5. お客様の権利
+              {t("privacy.sections.rights.title")}
             </h2>
             <p className="pl-5 mb-4 text-[15px] text-slate-600">
-              お客様は、以下の権利を有します。
+              {t("privacy.sections.rights.description")}
             </p>
             <ul className="pl-10 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[15px] text-slate-600 list-disc">
-              <li>個人情報の開示請求</li>
-              <li>個人情報の訂正・削除請求</li>
-              <li>利用停止請求</li>
-              <li>アカウントの削除</li>
+              <li>{t("privacy.sections.rights.items.0")}</li>
+              <li>{t("privacy.sections.rights.items.1")}</li>
+              <li>{t("privacy.sections.rights.items.2")}</li>
+              <li>{t("privacy.sections.rights.items.3")}</li>
             </ul>
           </section>
 
           <section id="sec-8" className="scroll-mt-24">
             <h2 className="text-lg font-bold text-slate-900 mb-6 border-l-4 border-slate-200 pl-4">
-              8. お問い合わせ
+              {t("privacy.sections.contact.title")}
             </h2>
             <div className="pl-5">
               <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
                 <p className="text-sm font-bold text-slate-900 mb-1">
-                  Stock Buddy 個人情報保護担当
+                  {t("common.privacyContact")}
                 </p>
-                <p className="text-sm text-blue-600">privacy@stock-buddy.net</p>
+                <p className="text-sm text-blue-600">{t("common.privacyEmail")}</p>
               </div>
             </div>
           </section>
@@ -226,7 +229,7 @@ export default function PrivacyPolicyPage() {
 
       <footer className="py-20 border-t border-slate-50 text-center">
         <p className="text-slate-300 text-[10px] uppercase tracking-widest">
-          &copy; 2026 Stock Buddy
+          {t("common.copyright")}
         </p>
       </footer>
     </div>

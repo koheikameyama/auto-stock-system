@@ -54,5 +54,34 @@
   },
   "tooltip": {
     "showDescription": "用語の説明を表示"
+  },
+  "chat": {
+    "consultAboutInvesting": "投資について相談",
+    "consultAboutStock": "{name}について相談",
+    "placeholderInvesting": "投資について相談...",
+    "placeholderStock": "{name}について質問...",
+    "askAboutStock": "{name}について質問してください",
+    "stockSpecificAdvice": "この銘柄に特化したアドバイスをします",
+    "askAnything": "投資について何でも質問してください",
+    "personalizedAdvice": "あなたの保有銘柄や気になる銘柄をもとにアドバイスします",
+    "thinking": "考えています...",
+    "errorMessage": "エラーが発生しました。もう一度お試しください。",
+    "suggestedQuestions": "よくある質問:",
+    "sources": "参考情報（{count}件）",
+    "defaultQuestions": {
+      "q1": "今日の注目点は？",
+      "q2": "保有銘柄どう？",
+      "q3": "何か気をつけることある？"
+    },
+    "portfolioQuestions": {
+      "q1": "今後の見通しは？",
+      "q2": "売り時？まだ持つべき？",
+      "q3": "追加購入すべき？"
+    },
+    "watchlistQuestions": {
+      "q1": "今後の見通しは？",
+      "q2": "今が買い時？",
+      "q3": "どんなリスクがある？"
+    }
   }
 }

@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { useTranslations } from "next-intl";
 import { useChatContext } from "@/app/contexts/ChatContext";
 
 interface ParsedSource {
@@ -50,6 +51,7 @@ function parseMessage(content: string): ParsedMessage {
 
 // ソースアコーディオンコンポーネント
 function SourcesAccordion({ sources }: { sources: ParsedSource[] }) {
+  const t = useTranslations("common.chat");
   const [isOpen, setIsOpen] = useState(false);
 
   if (sources.length === 0) return null;
@@ -73,7 +75,7 @@ function SourcesAccordion({ sources }: { sources: ParsedSource[] }) {
             d="M9 5l7 7-7 7"
           />
         </svg>
-        📰 参考情報（{sources.length}件）
+        📰 {t("sources", { count: sources.length })}
       </button>
       {isOpen && (
         <ul className="mt-2 space-y-1">
@@ -95,23 +97,9 @@ function SourcesAccordion({ sources }: { sources: ParsedSource[] }) {
   );
 }
 
-const DEFAULT_QUESTIONS = [
-  "今日の注目点は？",
-  "保有銘柄どう？",
-  "何か気をつけることある？",
-];
-
-const PORTFOLIO_STOCK_QUESTIONS = [
-  "今後の見通しは？",
-  "売り時？まだ持つべき？",
-  "追加購入すべき？",
-];
-
-const WATCHLIST_STOCK_QUESTIONS = [
-  "今後の見通しは？",
-  "今が買い時？",
-  "どんなリスクがある？",
-];
+const DEFAULT_QUESTION_KEYS = ["q1", "q2", "q3"] as const;
+const PORTFOLIO_QUESTION_KEYS = ["q1", "q2", "q3"] as const;
+const WATCHLIST_QUESTION_KEYS = ["q1", "q2", "q3"] as const;
 
 // メッセージからテキストコンテンツを抽出
 function getMessageText(message: UIMessage): string {
@@ -125,6 +113,7 @@ function getMessageText(message: UIMessage): string {
 }
 
 export default function GlobalChat() {
+  const t = useTranslations("common.chat");
   const { stockContext } = useChatContext();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -155,11 +144,21 @@ export default function GlobalChat() {
   }, [stockContext, setMessages]);
 
   // 質問候補を決定
-  const suggestedQuestions = stockContext
+  const questionKeys = stockContext
     ? stockContext.type === "portfolio"
-      ? PORTFOLIO_STOCK_QUESTIONS
-      : WATCHLIST_STOCK_QUESTIONS
-    : DEFAULT_QUESTIONS;
+      ? PORTFOLIO_QUESTION_KEYS
+      : WATCHLIST_QUESTION_KEYS
+    : DEFAULT_QUESTION_KEYS;
+
+  const questionPrefix = stockContext
+    ? stockContext.type === "portfolio"
+      ? "portfolioQuestions"
+      : "watchlistQuestions"
+    : "defaultQuestions";
+
+  const suggestedQuestions = questionKeys.map((key) =>
+    t(`${questionPrefix}.${key}`)
+  );
 
   // メッセージが更新されたら自動スクロール
   useEffect(() => {
@@ -183,13 +182,13 @@ export default function GlobalChat() {
 
   // チャットタイトル
   const chatTitle = stockContext
-    ? `${stockContext.name}について相談`
-    : "投資について相談";
+    ? t("consultAboutStock", { name: stockContext.name })
+    : t("consultAboutInvesting");
 
   // プレースホルダー
   const placeholder = stockContext
-    ? `${stockContext.name}について質問...`
-    : "投資について相談...";
+    ? t("placeholderStock", { name: stockContext.name })
+    : t("placeholderInvesting");
 
   return (
     <>
@@ -293,17 +292,17 @@ export default function GlobalChat() {
                 {stockContext ? (
                   <>
                     <p className="mb-4 font-semibold text-gray-700">
-                      {stockContext.name}について質問してください
+                      {t("askAboutStock", { name: stockContext.name })}
                     </p>
                     <p className="text-sm">
-                      この銘柄に特化したアドバイスをします
+                      {t("stockSpecificAdvice")}
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="mb-4">投資について何でも質問してください</p>
+                    <p className="mb-4">{t("askAnything")}</p>
                     <p className="text-sm">
-                      あなたの保有銘柄や気になる銘柄をもとにアドバイスします
+                      {t("personalizedAdvice")}
                     </p>
                   </>
                 )}
@@ -359,7 +358,7 @@ export default function GlobalChat() {
                       <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
                     </div>
                     <span className="text-sm text-gray-600">
-                      考えています...
+                      {t("thinking")}
                     </span>
                   </div>
                 </div>
@@ -370,7 +369,7 @@ export default function GlobalChat() {
               <div className="flex justify-start">
                 <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 max-w-[80%]">
                   <p className="text-sm text-red-600">
-                    エラーが発生しました。もう一度お試しください。
+                    {t("errorMessage")}
                   </p>
                   <p className="text-xs text-red-400 mt-1">
                     {error.message}
@@ -385,7 +384,7 @@ export default function GlobalChat() {
           {/* Suggested Questions */}
           {messages.length === 0 && (
             <div className="px-4 pb-3">
-              <p className="text-xs text-gray-500 mb-2">💡 よくある質問:</p>
+              <p className="text-xs text-gray-500 mb-2">💡 {t("suggestedQuestions")}</p>
               <div className="flex flex-wrap gap-2">
                 {suggestedQuestions.map((question, index) => (
                   <button

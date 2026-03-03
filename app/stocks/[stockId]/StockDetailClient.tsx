@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import FinancialMetrics from "@/app/components/FinancialMetrics";
 import EarningsInfo from "@/app/components/EarningsInfo";
 import StockChart from "@/app/components/StockChart";
@@ -91,32 +92,6 @@ interface Props {
   soldStockInfo?: SoldStockInfo | null;
 }
 
-// Category badge labels and styles
-const categoryBadges: Record<string, { label: string; className: string }> = {
-  surge: { label: "急騰", className: "bg-red-100 text-red-700" },
-  stable: { label: "安定", className: "bg-blue-100 text-blue-700" },
-  trending: { label: "話題", className: "bg-yellow-100 text-yellow-700" },
-};
-
-function getHypotheticalComment(
-  hypotheticalProfitPercent: number,
-  actualProfitPercent: number,
-): string {
-  const diff = hypotheticalProfitPercent - actualProfitPercent;
-
-  if (diff > 20) {
-    return "かなり早めの利確でした";
-  } else if (diff > 5) {
-    return "早めの利確でした";
-  } else if (diff > -5) {
-    return "適切なタイミングでした";
-  } else if (diff > -20) {
-    return "良いタイミングでした";
-  } else {
-    return "絶好のタイミングでした";
-  }
-}
-
 export default function StockDetailClient({
   stock,
   recommendation,
@@ -128,7 +103,34 @@ export default function StockDetailClient({
   soldStockInfo,
 }: Props) {
   const router = useRouter();
+  const t = useTranslations("stocks.detailClient");
   const { setStockContext } = useChatContext();
+
+  // Category badge labels and styles
+  const categoryBadges: Record<string, { label: string; className: string }> = {
+    surge: { label: t("categorySurge"), className: "bg-red-100 text-red-700" },
+    stable: { label: t("categoryStable"), className: "bg-blue-100 text-blue-700" },
+    trending: { label: t("categoryTrending"), className: "bg-yellow-100 text-yellow-700" },
+  };
+
+  const getHypotheticalComment = (
+    hypotheticalProfitPercent: number,
+    actualProfitPercent: number,
+  ): string => {
+    const diff = hypotheticalProfitPercent - actualProfitPercent;
+
+    if (diff > 20) {
+      return t("hypotheticalVeryEarly");
+    } else if (diff > 5) {
+      return t("hypotheticalEarly");
+    } else if (diff > -5) {
+      return t("hypotheticalGoodTiming");
+    } else if (diff > -20) {
+      return t("hypotheticalBetterTiming");
+    } else {
+      return t("hypotheticalPerfectTiming");
+    }
+  };
   const { price, loading, isStale } = useStockPrice(stock.tickerCode);
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
   const [movingToWatchlist, setMovingToWatchlist] = useState(false);
@@ -176,7 +178,7 @@ export default function StockDetailClient({
     // 追跡中の場合
     if (localIsTracked) {
       return {
-        badge: "追跡中",
+        badge: t("tracked"),
         className: "bg-gray-100 text-gray-700",
       };
     }
@@ -185,7 +187,7 @@ export default function StockDetailClient({
 
     if (recommendation.type === "personal") {
       return {
-        badge: "あなたへのおすすめ",
+        badge: t("personalRecommendation"),
         className: "bg-blue-100 text-blue-700",
       };
     }
@@ -195,7 +197,7 @@ export default function StockDetailClient({
       return { badge: cat.label, className: cat.className };
     }
 
-    return { badge: "おすすめ", className: "bg-purple-100 text-purple-700" };
+    return { badge: t("recommended"), className: "bg-purple-100 text-purple-700" };
   };
 
   const badgeInfo = getBadgeInfo();
@@ -203,7 +205,7 @@ export default function StockDetailClient({
   // 追跡銘柄の削除
   const handleDeleteTracked = async () => {
     if (!localTrackedStockId) return;
-    if (!confirm(`${stock.name}の追跡をやめますか？`)) return;
+    if (!confirm(t("confirmStopTracking", { name: stock.name }))) return;
 
     try {
       const response = await fetch(
@@ -215,13 +217,13 @@ export default function StockDetailClient({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "削除に失敗しました");
+        throw new Error(data.error || t("deleteFailed"));
       }
 
       router.push("/my-stocks");
     } catch (err: unknown) {
       console.error(err);
-      alert(err instanceof Error ? err.message : "削除に失敗しました");
+      alert(err instanceof Error ? err.message : t("deleteFailed"));
     }
   };
 
@@ -251,7 +253,7 @@ export default function StockDetailClient({
       router.push("/my-stocks");
     } catch (err: unknown) {
       console.error(err);
-      alert(err instanceof Error ? err.message : "追加に失敗しました");
+      alert(err instanceof Error ? err.message : t("addFailed"));
     } finally {
       setMovingToWatchlist(false);
     }
@@ -292,7 +294,7 @@ export default function StockDetailClient({
         } else if (daysUntil <= EARNINGS_DATE_BADGE.WARNING_DAYS) {
           color = "text-yellow-700"; bg = "bg-yellow-100"; border = "border-yellow-200";
         }
-        const text = daysUntil === 0 ? "本日決算発表予定" : `${daysUntil}日後に決算発表予定`;
+        const text = daysUntil === 0 ? t("earningsToday") : t("earningsInDays", { days: daysUntil });
         return (
           <div className="mb-3">
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold border ${bg} ${color} ${border}`}>
@@ -319,13 +321,13 @@ export default function StockDetailClient({
                 disabled={movingToWatchlist}
                 className="px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
               >
-                {movingToWatchlist ? "移動中..." : "気になるへ"}
+                {movingToWatchlist ? t("movingToWatchlist") : t("moveToWatchlist")}
               </button>
               <button
                 onClick={() => setShowPurchaseDialog(true)}
                 className="px-2 py-1 text-xs font-medium text-green-600 hover:bg-green-50 rounded transition-colors"
               >
-                +購入
+                {t("addPurchase")}
               </button>
             </>
           ) : (
@@ -346,7 +348,7 @@ export default function StockDetailClient({
           <div className="flex items-center gap-2 mb-4">
             <span className="text-lg">📦</span>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-              売却済み
+              {t("soldTitle")}
             </h2>
             <span className="text-xs text-gray-400">
               {new Date(soldStockInfo.lastSellDate).toLocaleDateString("ja-JP")}
@@ -356,13 +358,13 @@ export default function StockDetailClient({
           {/* 売却実績 */}
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <span className="text-xs text-gray-500 block">購入金額</span>
+              <span className="text-xs text-gray-500 block">{t("purchaseAmount")}</span>
               <span className="text-base font-bold text-gray-900">
                 ¥{soldStockInfo.totalBuyAmount.toLocaleString()}
               </span>
             </div>
             <div>
-              <span className="text-xs text-gray-500 block">売却金額</span>
+              <span className="text-xs text-gray-500 block">{t("sellAmount")}</span>
               <span className="text-base font-bold text-gray-900">
                 ¥{soldStockInfo.totalSellAmount.toLocaleString()}
               </span>
@@ -378,7 +380,7 @@ export default function StockDetailClient({
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">損益</span>
+              <span className="text-sm text-gray-600">{t("profitLoss")}</span>
               <div className="text-right">
                 <span
                   className={`text-lg font-bold ${
@@ -410,7 +412,7 @@ export default function StockDetailClient({
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="text-sm">📊</span>
                 <span className="text-sm font-semibold text-gray-700">
-                  今も保有してたら
+                  {t("hypotheticalTitle")}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -460,10 +462,10 @@ export default function StockDetailClient({
             <span className="text-xl">👁️</span>
             <div>
               <p className="text-sm text-blue-800 font-semibold mb-1">
-                追跡モード
+                {t("trackingModeTitle")}
               </p>
               <p className="text-xs text-blue-700">
-                この銘柄はAI分析なしで株価を追跡しています。AI分析を利用するには「気になる」へ移動してください。
+                {t("trackingModeDescription")}
               </p>
             </div>
           </div>
@@ -477,8 +479,8 @@ export default function StockDetailClient({
             <span className="text-lg">🤖</span>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900">
               {recommendation.type === "personal"
-                ? "AIおすすめ理由"
-                : "注目理由"}
+                ? t("aiRecommendationTitle")
+                : t("featuredReasonTitle")}
             </h2>
             {dateLabel && (
               <span className="text-xs text-gray-400">{dateLabel}</span>
@@ -518,10 +520,10 @@ export default function StockDetailClient({
       {/* Tabs Section */}
       <Tabs
         tabs={[
-          { id: "chart", label: "チャート" },
-          { id: "analysis", label: "分析" },
-          { id: "news", label: "ニュース" },
-          { id: "details", label: "詳細" },
+          { id: "chart", label: t("tabChart") },
+          { id: "analysis", label: t("tabAnalysis") },
+          { id: "news", label: t("tabNews") },
+          { id: "details", label: t("tabDetails") },
         ]}
         defaultTab="chart"
       >
@@ -551,7 +553,7 @@ export default function StockDetailClient({
 
       {/* Delete Button (for tracked stocks) */}
       {localIsTracked && (
-        <DeleteButton label="追跡をやめる" onClick={handleDeleteTracked} />
+        <DeleteButton label={t("stopTracking")} onClick={handleDeleteTracked} />
       )}
 
       {/* Purchase Dialog */}

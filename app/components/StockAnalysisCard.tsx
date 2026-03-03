@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import AnalysisTimestamp from "./AnalysisTimestamp";
 import {
   UPDATE_SCHEDULES,
@@ -107,6 +108,8 @@ export default function StockAnalysisCard({
   onApplyAIPrices,
 }: StockAnalysisCardProps) {
 
+  const tAC = useTranslations("stocks.analysisCard");
+
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -159,7 +162,7 @@ export default function StockAnalysisCard({
         onAnalysisDateLoaded?.(null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setError(err instanceof Error ? err.message : tAC("error"));
     } finally {
       setLoading(false);
     }
@@ -186,7 +189,7 @@ export default function StockAnalysisCard({
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || "分析の生成に失敗しました");
+        throw new Error(errData.error || tAC("generateFailed"));
       }
 
       // 結果を反映
@@ -201,7 +204,7 @@ export default function StockAnalysisCard({
       }
     } catch (err) {
       console.error("Error generating analysis:", err);
-      setError(err instanceof Error ? err.message : "分析の生成に失敗しました");
+      setError(err instanceof Error ? err.message : tAC("generateFailed"));
     } finally {
       setGenerating(false);
     }
@@ -244,13 +247,13 @@ export default function StockAnalysisCard({
   const getTrendText = (trend: string) => {
     switch (trend) {
       case "up":
-        return "上昇傾向";
+        return tAC("trendUp");
       case "down":
-        return "下降傾向";
+        return tAC("trendDown");
       case "neutral":
-        return "横ばい";
+        return tAC("trendNeutral");
       default:
-        return "不明";
+        return tAC("trendUnknown");
     }
   };
 
@@ -309,11 +312,11 @@ export default function StockAnalysisCard({
       <div className="bg-gray-50 rounded-lg p-6 text-center">
         <div className="text-4xl mb-3">📊</div>
         <p className="text-sm text-gray-600 mb-4">
-          {isSimulation ? "購入後分析を生成中..." : "AIが分析中です..."}
+          {isSimulation ? tAC("generatingPostPurchase") : tAC("aiAnalyzing")}
         </p>
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-400 text-white text-sm font-medium rounded-lg cursor-not-allowed">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-          {isSimulation ? "生成中..." : "分析中..."}
+          {isSimulation ? tAC("generating") : tAC("analyzing")}
         </div>
       </div>
     );
@@ -326,7 +329,7 @@ export default function StockAnalysisCard({
       <div className="bg-gray-50 rounded-lg p-6 text-center">
         <div className="text-4xl mb-3">📊</div>
         <p className="text-sm text-gray-600 mb-4">
-          {error || "分析データはまだ生成されていません"}
+          {error || tAC("noDataYet")}
         </p>
         <button
           onClick={generateAnalysis}
@@ -345,7 +348,7 @@ export default function StockAnalysisCard({
               d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
             />
           </svg>
-          今すぐ分析する
+          {tAC("analyzeNow")}
         </button>
       </div>
     );
@@ -412,7 +415,7 @@ export default function StockAnalysisCard({
       {/* シミュレーションバッジ */}
       {isSimulation && (
         <div className="bg-amber-100 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2">
-          <span>🧪 シミュレーションモード: 100株保有として分析</span>
+          <span>🧪 {tAC("simulationBadge")}</span>
         </div>
       )}
 
@@ -429,7 +432,7 @@ export default function StockAnalysisCard({
       {/* ヘッダー */}
       <div className="flex items-center justify-between -mt-2 mb-2">
         <h3 className="text-base font-bold text-gray-800">
-          {quantity || isSimulation ? "AI売買判断" : "AI価格予測"}
+          {quantity || isSimulation ? tAC("aiTradeJudgment") : tAC("aiPricePrediction")}
         </h3>
         {!isSimulation && (
           <button
@@ -440,7 +443,7 @@ export default function StockAnalysisCard({
             {generating ? (
               <>
                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                分析中...
+                {tAC("analyzing")}
               </>
             ) : (
               <>
@@ -457,7 +460,7 @@ export default function StockAnalysisCard({
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                <span>更新</span>
+                <span>{tAC("refresh")}</span>
               </>
             )}
           </button>
@@ -489,34 +492,33 @@ export default function StockAnalysisCard({
             <div className="flex items-center gap-2 mb-3">
               <span className="text-2xl">⚠️</span>
               <p className="font-bold text-red-800">
-                撤退ライン到達（{changePercent.toFixed(1)}%）
+                {tAC("stopLossReached", { percent: changePercent.toFixed(1) })}
               </p>
             </div>
             <div className="bg-white rounded-lg p-3 mb-3">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">買値</span>
+                <span className="text-gray-600">{tAC("buyPrice")}</span>
                 <span className="font-semibold">
-                  {avgPrice.toLocaleString()}円
+                  {avgPrice.toLocaleString()}{tAC("yen")}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm mt-1">
-                <span className="text-gray-600">現在価格</span>
+                <span className="text-gray-600">{tAC("currentPrice")}</span>
                 <span className="font-semibold text-red-600">
-                  {currentPrice.toLocaleString()}円
+                  {currentPrice.toLocaleString()}{tAC("yen")}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm mt-1">
-                <span className="text-gray-600">設定した撤退ライン</span>
+                <span className="text-gray-600">{tAC("stopLineSetting")}</span>
                 <span className="font-semibold">{stopLossRate}%</span>
               </div>
             </div>
             <div className="bg-amber-50 rounded-lg p-3 text-sm">
               <p className="font-semibold text-amber-800 mb-1">
-                💡 撤退ラインとは？
+                💡 {tAC("stopLossExplainTitle")}
               </p>
               <p className="text-amber-700">
-                損失を限定し、次の投資機会を守る判断です。
-                プロは「撤退ルールを守る」ことで資産を守っています。
+                {tAC("stopLossExplainText")}
               </p>
             </div>
           </div>
@@ -529,13 +531,13 @@ export default function StockAnalysisCard({
           <div className="mb-2">
             <div className="flex items-center justify-between mb-1.5">
               <p className="font-semibold text-gray-800">
-                💡 AIアドバイス
+                💡 {tAC("aiAdvice")}
               </p>
               {effectiveAnalysis.confidence !== null && (() => {
                 const pct = Math.round(effectiveAnalysis.confidence * 100);
                 return (
                   <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${pct >= 75 ? "bg-green-200 text-green-800" : pct >= 50 ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
-                    信頼度 {pct}%
+                    {tAC("confidence", { percent: pct })}
                   </span>
                 );
               })()}
@@ -552,7 +554,7 @@ export default function StockAnalysisCard({
           {correctionExplanation && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3">
               <p className="text-xs font-semibold text-indigo-700 mb-1">
-                セーフティルールによる補正
+                {tAC("safetyRuleCorrection")}
               </p>
               <p className="text-xs text-indigo-600 leading-relaxed">
                 {correctionExplanation}
@@ -563,7 +565,7 @@ export default function StockAnalysisCard({
           {styleData?.divergenceExplanation && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
               <p className="text-xs font-semibold text-amber-700 mb-1">
-                トレンドのねじれ検出
+                {tAC("trendTwistDetected")}
               </p>
               <p className="text-xs text-amber-600 leading-relaxed">
                 {styleData.divergenceExplanation}
@@ -589,7 +591,7 @@ export default function StockAnalysisCard({
             return (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
                 <p className="text-sm font-semibold text-gray-800 mb-2">
-                  🎯 AI推奨価格
+                  🎯 {tAC("aiRecommendedPrice")}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {showLimitPrice && effectiveAnalysis.limitPrice && (
@@ -623,31 +625,30 @@ export default function StockAnalysisCard({
 
                         return (
                           <>
-                            <p className="text-xs text-gray-500">売却目標</p>
+                            <p className="text-xs text-gray-500">{tAC("sellTarget")}</p>
                             <p className="text-base font-bold text-green-600">
-                              {`${formatPrice(limitPriceNum)}円`}
+                              {`${formatPrice(limitPriceNum)}${tAC("yen")}`}
                             </p>
                             {takeProfitPercent && (
                               <p className="text-xs text-gray-400">
-                                +{takeProfitPercent}%目安
+                                {tAC("takeProfitPercent", { percent: takeProfitPercent })}
                               </p>
                             )}
                             {currentPrice &&
                               priceDiff > 0 &&
                               !isNearTarget && (
                                 <p className="text-xs text-green-600">
-                                  あと+{priceDiff.toLocaleString()}円 / +
-                                  {priceDiffPercent}%で到達
+                                  {tAC("remainToTarget", { amount: priceDiff.toLocaleString(), percent: priceDiffPercent })}
                                 </p>
                               )}
                             {isNearTarget && (
                               <p className="text-xs text-green-600 font-semibold">
-                                目標到達圏内
+                                {tAC("nearTarget")}
                               </p>
                             )}
                             {isTargetReached && (
                               <p className="text-xs text-green-600 font-bold">
-                                目標価格に到達
+                                {tAC("targetReached")}
                               </p>
                             )}
                           </>
@@ -676,23 +677,21 @@ export default function StockAnalysisCard({
                         return (
                           <>
                             <p className="text-xs text-gray-500">
-                              撤退ライン
+                              {tAC("stopLossLine")}
                             </p>
                             <p className="text-base font-bold text-red-600">
-                              {formatPrice(stopLossPriceNum)}円
+                              {formatPrice(stopLossPriceNum)}{tAC("yen")}
                             </p>
                             {stopLossRatePercent && (
                               <p className="text-xs text-gray-400">
-                                -{stopLossRatePercent}%目安
+                                {tAC("stopLossPercent", { percent: stopLossRatePercent })}
                               </p>
                             )}
                             {currentPrice && priceDiff < 0 && (
                               <p
                                 className={`text-xs ${isNearStopLoss ? "text-red-600 font-semibold" : "text-gray-500"}`}
                               >
-                                {isNearStopLoss ? "⚠️ " : ""}あと
-                                {Math.abs(priceDiff).toLocaleString()}円 /{" "}
-                                {Math.abs(Number(priceDiffPercent))}%下落で発動
+                                {isNearStopLoss ? "⚠️ " : ""}{tAC("remainToStopLoss", { amount: Math.abs(priceDiff).toLocaleString(), percent: Math.abs(Number(priceDiffPercent)) })}
                               </p>
                             )}
                           </>
@@ -714,7 +713,7 @@ export default function StockAnalysisCard({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    AI推奨価格を設定に反映
+                    {tAC("applyAIPrices")}
                   </button>
                 )}
               </div>
@@ -724,12 +723,12 @@ export default function StockAnalysisCard({
           {effectiveAnalysis.recommendation === "buy" && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
                 <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                  📈 買い推奨
+                  📈 {tAC("buyRecommendation")}
                 </p>
                 <p className="text-sm text-gray-700">
                   {effectiveAnalysis.buyTiming === "dip"
-                    ? "上昇トレンド中の健全な調整です。押し目でのサポートを確認しながらの買い増しを検討しましょう。"
-                    : "強い上昇シグナルが出ています。積極的な投資を検討できるタイミングです。"}
+                    ? tAC("buyDipText")
+                    : tAC("buyStrongText")}
                 </p>
               </div>
             )}
@@ -737,10 +736,10 @@ export default function StockAnalysisCard({
           {effectiveAnalysis.recommendation === "hold" && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                👀 ホールド
+                👀 {tAC("holdRecommendation")}
               </p>
               <p className="text-sm text-gray-700">
-                {effectiveAnalysis.holdCondition || "現在は重要な節目や調整局面にあります。不透明な動きが多いため、無理に動かず静観するのが賢明です。"}
+                {effectiveAnalysis.holdCondition || tAC("holdDefaultText")}
               </p>
             </div>
           )}
@@ -748,13 +747,13 @@ export default function StockAnalysisCard({
           {effectiveAnalysis.recommendation === "sell" && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                ⚠️ 売却検討
+                ⚠️ {tAC("sellConsideration")}
               </p>
               <div className="space-y-2">
                 {effectiveAnalysis.suggestedSellPercent && (
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">推奨売却:</span>
+                      <span className="text-xs text-gray-500">{tAC("recommendedSell")}</span>
                       <span
                         className={`font-bold ${
                           effectiveAnalysis.suggestedSellPercent === 100
@@ -767,11 +766,7 @@ export default function StockAnalysisCard({
                     </div>
                     {quantity && quantity > 0 && (
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {quantity}株中{" "}
-                        {Math.round(
-                          (quantity * effectiveAnalysis.suggestedSellPercent) / 100,
-                        )}
-                        株
+                        {tAC("sharesCount", { total: quantity, sell: Math.round((quantity * effectiveAnalysis.suggestedSellPercent) / 100) })}
                       </p>
                     )}
                   </div>
@@ -780,57 +775,55 @@ export default function StockAnalysisCard({
                   effectiveAnalysis.sellTiming === "rebound" ? (
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">売却方法:</span>
+                        <span className="text-xs text-gray-500">{tAC("sellMethod")}</span>
                         <span className="font-bold text-amber-600">
-                          戻り売り推奨
+                          {tAC("reboundSellRecommended")}
                         </span>
                       </div>
                       {effectiveAnalysis.sellTargetPrice ? (
                         <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-amber-700">
-                              戻り売りの目安
+                              {tAC("reboundTarget")}
                             </span>
                             <span className="text-base font-bold text-amber-800">
-                              {effectiveAnalysis.sellTargetPrice.toLocaleString()}円
+                              {effectiveAnalysis.sellTargetPrice.toLocaleString()}{tAC("yen")}
                             </span>
                           </div>
                           {effectiveAnalysis.currentPrice && (
                             <p className="text-xs text-amber-600 mt-1">
-                              現在価格から
-                              {effectiveAnalysis.sellTargetPrice > effectiveAnalysis.currentPrice
-                                ? `+${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}円（+${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`
-                                : `${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}円（${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`}
-                              で到達
+                              {tAC("priceFromCurrent", {
+                                diff: effectiveAnalysis.sellTargetPrice > effectiveAnalysis.currentPrice
+                                  ? `+${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}${tAC("yen")}（+${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`
+                                  : `${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}${tAC("yen")}（${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`
+                              })}
                             </p>
                           )}
                         </div>
                       ) : (
                         <p className="text-sm text-yellow-800 mt-1">
-                          現在は売られすぎの状態です。少し反発してから売却するのがおすすめです。
+                          {tAC("reboundOversoldText")}
                         </p>
                       )}
                       <p className="text-xs text-yellow-600 mt-1">
-                        戻り売り:
-                        下落後の一時的な反発（リバウンド）を狙って売ること。移動平均線は過去25日間の平均価格で、株価が戻りやすい目安になります。
+                        {tAC("reboundExplain")}
                       </p>
                     </div>
                   ) : (
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">売却方法:</span>
+                        <span className="text-xs text-gray-500">{tAC("sellMethod")}</span>
                         <span className="font-bold text-red-600">
-                          成行での売却を検討
+                          {tAC("marketSellConsider")}
                         </span>
                       </div>
                       {effectiveAnalysis.suggestedSellPrice && effectiveAnalysis.averagePurchasePrice && effectiveAnalysis.suggestedSellPrice > effectiveAnalysis.averagePurchasePrice ? (
                         <p className="text-xs text-blue-600 mt-0.5">
-                          💡 {effectiveAnalysis.suggestedSellPrice.toLocaleString()}
-                          円の指値注文で+{(effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice).toLocaleString()}円（+{((effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice) / effectiveAnalysis.averagePurchasePrice * 100).toFixed(1)}%）の利益を確定できます
+                          💡 {tAC("limitOrderProfit", { price: effectiveAnalysis.suggestedSellPrice.toLocaleString(), diff: (effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice).toLocaleString(), percent: ((effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice) / effectiveAnalysis.averagePurchasePrice * 100).toFixed(1) })}
                         </p>
                       ) : effectiveAnalysis.currentPrice ? (
                         <p className="text-xs text-gray-500 mt-0.5">
-                          現在価格: {effectiveAnalysis.currentPrice.toLocaleString()}円
+                          {tAC("currentPriceLabel", { price: effectiveAnalysis.currentPrice.toLocaleString() })}
                         </p>
                       ) : null}
                     </div>
@@ -839,14 +832,14 @@ export default function StockAnalysisCard({
                   effectiveAnalysis.suggestedSellPrice && (
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">売却価格:</span>
+                        <span className="text-xs text-gray-500">{tAC("sellPriceLabel")}</span>
                         <span className="font-bold text-gray-800">
-                          {effectiveAnalysis.suggestedSellPrice.toLocaleString()}円
+                          {effectiveAnalysis.suggestedSellPrice.toLocaleString()}{tAC("yen")}
                         </span>
                       </div>
                       {effectiveAnalysis.currentPrice && (
                         <p className="text-xs text-gray-500 mt-0.5">
-                          現在価格: {effectiveAnalysis.currentPrice.toLocaleString()}円
+                          {tAC("currentPriceLabel", { price: effectiveAnalysis.currentPrice.toLocaleString() })}
                         </p>
                       )}
                     </div>
@@ -854,7 +847,7 @@ export default function StockAnalysisCard({
                 )}
                 {effectiveAnalysis.sellReason && (
                   <div className="mt-2 p-2 bg-white rounded border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">理由:</p>
+                    <p className="text-xs text-gray-500 mb-1">{tAC("reasonLabel")}</p>
                     <p className="text-sm text-gray-700">
                       {effectiveAnalysis.sellReason}
                     </p>
@@ -887,7 +880,7 @@ export default function StockAnalysisCard({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        AI推奨価格を設定に反映
+                        {tAC("applyAIPrices")}
                       </button>
                     );
                   })()
@@ -910,7 +903,7 @@ export default function StockAnalysisCard({
               </span>
               <div className="flex-1">
                 <h4 className={`text-sm font-bold ${styleData?.divergenceLabel ? "text-amber-800" : "text-purple-800"}`}>
-                  短期予測（今週）
+                  {tAC("shortTermPrediction")}
                 </h4>
                 <p className={`text-xs ${styleData?.divergenceLabel ? "text-amber-600" : "text-purple-600"}`}>
                   {styleData?.divergenceLabel || getTrendText(analysis.shortTermTrend)}{" "}
@@ -936,7 +929,7 @@ export default function StockAnalysisCard({
                 </span>
                 <div className="flex-1">
                   <h4 className="text-sm font-bold text-blue-800">
-                    中期予測（今月）
+                    {tAC("midTermPrediction")}
                   </h4>
                   <p className="text-xs text-blue-600">
                     {getTrendText(analysis.midTermTrend)}{" "}
@@ -963,7 +956,7 @@ export default function StockAnalysisCard({
                 </span>
                 <div className="flex-1">
                   <h4 className="text-sm font-bold text-emerald-800">
-                    長期予測（今後3ヶ月）
+                    {tAC("longTermPrediction")}
                   </h4>
                   <p className="text-xs text-emerald-600">
                     {getTrendText(analysis.longTermTrend)}{" "}
@@ -987,12 +980,12 @@ export default function StockAnalysisCard({
       <div className="text-center space-y-1">
         {analysisDate && <AnalysisTimestamp dateString={analysisDate} />}
         <p className="text-xs text-gray-400">
-          更新 {UPDATE_SCHEDULES.STOCK_ANALYSIS}（平日）
+          {tAC("updateSchedule", { schedule: UPDATE_SCHEDULES.STOCK_ANALYSIS })}
         </p>
       </div>
 
       <p className="text-xs text-gray-500 text-center">
-        ※ 予測は参考情報です。投資判断はご自身の責任でお願いします。
+        {tAC("disclaimer")}
       </p>
     </div>
   );

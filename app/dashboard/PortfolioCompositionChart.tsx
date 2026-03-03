@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts"
+import { useTranslations } from "next-intl"
 
 type ViewMode = "stock" | "sector"
 
@@ -45,6 +46,7 @@ interface SectorDiversificationAnalysis {
 }
 
 export default function PortfolioCompositionChart() {
+  const t = useTranslations("dashboard.composition")
   const [data, setData] = useState<CompositionData | null>(null)
   const [sectorAnalysis, setSectorAnalysis] = useState<SectorDiversificationAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
@@ -83,7 +85,7 @@ export default function PortfolioCompositionChart() {
       <div className="bg-white rounded-lg border p-4">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg">📊</span>
-          <h3 className="font-semibold">ポートフォリオ構成</h3>
+          <h3 className="font-semibold">{t("title")}</h3>
         </div>
         <div className="flex items-center justify-center h-64">
           <div className="w-48 h-48 rounded-full bg-gray-100 animate-pulse" />
@@ -110,8 +112,8 @@ export default function PortfolioCompositionChart() {
     displayData = [
       ...mainItems,
       {
-        name: "その他",
-        sector: "その他",
+        name: t("other"),
+        sector: t("other"),
         value: otherValue,
         percent: Math.round(otherPercent * 10) / 10,
         color: "#94a3b8",
@@ -122,9 +124,9 @@ export default function PortfolioCompositionChart() {
 
   const formatValue = (value: number) => {
     if (value >= 10000) {
-      return `${(value / 10000).toFixed(1)}万円`
+      return `${(value / 10000).toFixed(1)}${t("unitManYen")}`
     }
-    return `${value.toLocaleString()}円`
+    return `${value.toLocaleString()}${t("yen")}`
   }
 
   return (
@@ -132,7 +134,7 @@ export default function PortfolioCompositionChart() {
       <div className="mb-4">
         <div className="flex items-center gap-2">
           <span className="text-lg">📊</span>
-          <h3 className="font-semibold">ポートフォリオ構成</h3>
+          <h3 className="font-semibold">{t("title")}</h3>
         </div>
         <div className="flex bg-gray-100 rounded-lg p-0.5 mt-2 w-fit">
           <button
@@ -143,7 +145,7 @@ export default function PortfolioCompositionChart() {
                 : "text-gray-500"
             }`}
           >
-            セクター別
+            {t("viewBySector")}
           </button>
           <button
             onClick={() => setViewMode("stock")}
@@ -153,7 +155,7 @@ export default function PortfolioCompositionChart() {
                 : "text-gray-500"
             }`}
           >
-            銘柄別
+            {t("viewByStock")}
           </button>
         </div>
       </div>
@@ -190,7 +192,7 @@ export default function PortfolioCompositionChart() {
                         </p>
                         {viewMode === "sector" && item.stockCount && (
                           <p className="text-gray-500 text-xs">
-                            {item.stockCount}銘柄
+                            {t("stockCount", { count: item.stockCount })}
                           </p>
                         )}
                       </div>
@@ -234,7 +236,7 @@ export default function PortfolioCompositionChart() {
       </div>
 
       <div className="mt-4 pt-4 border-t flex justify-between text-sm text-gray-600">
-        <span>総資産額</span>
+        <span>{t("totalAssets")}</span>
         <span className="font-semibold text-gray-900">
           {formatValue(data.totalValue)}
         </span>

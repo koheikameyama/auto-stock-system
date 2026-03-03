@@ -4,12 +4,14 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { getRelativeTime, getMarketFlag } from "@/lib/news-utils"
 import type { NewsItem } from "@/lib/news-utils"
+import { useTranslations } from "next-intl"
 
 interface LatestNewsProps {
   userId: string
 }
 
 export default function LatestNews({ userId: _userId }: LatestNewsProps) {
+  const t = useTranslations("dashboard.latestNews")
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -23,17 +25,17 @@ export default function LatestNews({ userId: _userId }: LatestNewsProps) {
         if (data.success) {
           setNews(data.news)
         } else {
-          setError("ニュースの取得に失敗しました")
+          setError(t("fetchError"))
         }
       } catch {
-        setError("ニュースの取得に失敗しました")
+        setError(t("fetchError"))
       } finally {
         setLoading(false)
       }
     }
 
     fetchNews()
-  }, [])
+  }, [t])
 
   if (loading) {
     return <LatestNewsSkeleton />
@@ -49,13 +51,13 @@ export default function LatestNews({ userId: _userId }: LatestNewsProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-lg">📰</span>
-            <h2 className="text-sm sm:text-base font-bold text-gray-900">最新のニュース</h2>
+            <h2 className="text-sm sm:text-base font-bold text-gray-900">{t("title")}</h2>
           </div>
           <Link
             href="/news"
             className="text-xs text-blue-600 hover:text-blue-800 font-medium"
           >
-            もっと見る →
+            {t("viewMore")}
           </Link>
         </div>
       </div>
@@ -70,6 +72,7 @@ export default function LatestNews({ userId: _userId }: LatestNewsProps) {
 }
 
 function NewsCard({ news }: { news: NewsItem }) {
+  const t = useTranslations("dashboard.latestNews")
   const marketFlag = getMarketFlag(news.market)
   const relativeTime = getRelativeTime(news.publishedAt)
 
@@ -92,7 +95,7 @@ function NewsCard({ news }: { news: NewsItem }) {
             <div className="flex items-center gap-1 mb-1">
               <span className="text-xs text-gray-500">→</span>
               <span className="text-xs text-blue-600">
-                あなたの保有銘柄「{news.relatedStocks[0].name}」に関連
+                {t("relatedStock", { name: news.relatedStocks[0].name })}
               </span>
             </div>
           )}
@@ -110,10 +113,10 @@ function NewsCard({ news }: { news: NewsItem }) {
                 }`}
               >
                 {news.sentiment === "positive"
-                  ? "ポジティブ"
+                  ? t("sentimentPositive")
                   : news.sentiment === "negative"
-                  ? "ネガティブ"
-                  : "中立"}
+                  ? t("sentimentNegative")
+                  : t("sentimentNeutral")}
               </span>
             )}
           </div>

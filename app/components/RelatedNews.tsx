@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 import dayjs from "dayjs"
 
 interface NewsItem {
@@ -13,18 +14,20 @@ interface NewsItem {
   matchType: "ticker" | "sector"
 }
 
-const sentimentLabel = (sentiment: string | null) => {
-  switch (sentiment) {
-    case "positive":
-      return { text: "好材料", className: "bg-green-100 text-green-700" }
-    case "negative":
-      return { text: "悪材料", className: "bg-red-100 text-red-700" }
-    default:
-      return { text: "中立", className: "bg-gray-100 text-gray-600" }
-  }
-}
-
 export default function RelatedNews({ stockId, embedded = false }: { stockId: string; embedded?: boolean }) {
+  const t = useTranslations("stocks.relatedNews")
+
+  const sentimentLabel = (sentiment: string | null) => {
+    switch (sentiment) {
+      case "positive":
+        return { text: t("sentimentPositive"), className: "bg-green-100 text-green-700" }
+      case "negative":
+        return { text: t("sentimentNegative"), className: "bg-red-100 text-red-700" }
+      default:
+        return { text: t("sentimentNeutral"), className: "bg-gray-100 text-gray-600" }
+    }
+  }
+
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -64,7 +67,7 @@ export default function RelatedNews({ stockId, embedded = false }: { stockId: st
     }
 
     if (news.length === 0) {
-      return <p className="text-sm text-gray-500">関連ニュースがありません</p>
+      return <p className="text-sm text-gray-500">{t("noNews")}</p>
     }
 
     return (
@@ -106,7 +109,7 @@ export default function RelatedNews({ stockId, embedded = false }: { stockId: st
                     </span>
                     {item.matchType === "sector" && (
                       <span className="px-1.5 py-0.5 text-xs rounded bg-blue-50 text-blue-600">
-                        同業種
+                        {t("sameSector")}
                       </span>
                     )}
                   </div>
@@ -144,7 +147,7 @@ export default function RelatedNews({ stockId, embedded = false }: { stockId: st
   return (
     <section className={wrapperClass}>
       <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">
-        関連ニュース
+        {t("title")}
       </h2>
       {renderContent()}
     </section>

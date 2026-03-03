@@ -101,6 +101,8 @@ type Period = "1m" | "3m" | "1y"
 
 export default function StockChart({ stockId, embedded = false }: StockChartProps) {
   const tTooltip = useTranslations('stocks.tooltips')
+  const tChart = useTranslations('stocks.chartView')
+  const tChartPeriod = useTranslations('stocks.chart')
   const [data, setData] = useState<ChartData[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [patterns, setPatterns] = useState<PatternsData | null>(null)
@@ -123,7 +125,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
         const response = await fetch(`/api/stocks/${stockId}/historical-prices?period=${period}`)
         if (!response.ok) {
           const errData = await response.json()
-          throw new Error(errData.error || "データの取得に失敗しました")
+          throw new Error(errData.error || tChart("fetchError"))
         }
         const result = await response.json()
         setData(result.data)
@@ -132,7 +134,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
         setTrendlines(result.technicalAnalysis?.trendlines || null)
       } catch (err) {
         console.error("Error fetching chart data:", err)
-        setError(err instanceof Error ? err.message : "データの取得に失敗しました")
+        setError(err instanceof Error ? err.message : tChart("fetchError"))
       } finally {
         setLoading(false)
       }
@@ -213,9 +215,9 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
     : data.map(d => ({ ...d, supportTrendline: null as number | null, resistanceTrendline: null as number | null }))
 
   const periodLabels: Record<Period, string> = {
-    "1m": "1ヶ月",
-    "3m": "3ヶ月",
-    "1y": "1年",
+    "1m": tChartPeriod("period1m") as string,
+    "3m": tChartPeriod("period3m") as string,
+    "1y": tChartPeriod("period1y") as string,
   }
 
   const formatDate = (dateStr: string) => {
@@ -227,17 +229,17 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
 
   // RSIの解釈
   const getRSIInterpretation = (rsi: number | null) => {
-    if (rsi === null) return { text: "計算中", color: "text-gray-500" }
-    if (rsi >= 70) return { text: "買われすぎ", color: "text-red-600" }
-    if (rsi <= 30) return { text: "売られすぎ", color: "text-green-600" }
-    return { text: "中立", color: "text-gray-600" }
+    if (rsi === null) return { text: tChart("calculating"), color: "text-gray-500" }
+    if (rsi >= 70) return { text: tChart("overbought"), color: "text-red-600" }
+    if (rsi <= 30) return { text: tChart("oversold"), color: "text-green-600" }
+    return { text: tChart("neutral"), color: "text-gray-600" }
   }
 
   // MACDの解釈
   const getMACDInterpretation = (histogram: number | null) => {
-    if (histogram === null) return { text: "計算中", color: "text-gray-500" }
-    if (histogram > 0) return { text: "上昇トレンド", color: "text-green-600" }
-    return { text: "下降トレンド", color: "text-red-600" }
+    if (histogram === null) return { text: tChart("calculating"), color: "text-gray-500" }
+    if (histogram > 0) return { text: tChart("uptrendLabel"), color: "text-green-600" }
+    return { text: tChart("downtrendLabel"), color: "text-red-600" }
   }
 
   const wrapperClass = embedded
@@ -258,7 +260,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
     return (
       <div className={wrapperClass || "p-4"}>
         <div className="text-center text-gray-500 py-8">
-          <p>データが取得できませんでした</p>
+          <p>{tChart("noData")}</p>
         </div>
       </div>
     )
@@ -271,7 +273,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
     <div className={wrapperClass}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-900">チャート</h2>
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900">{tChart("chartTitle")}</h2>
 
         {/* Period Selector */}
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
@@ -301,7 +303,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
               : "text-gray-500 hover:text-gray-700"
           }`}
         >
-          株価
+          {tChart("priceTab")}
         </button>
         <span
           className={`px-4 py-2 text-sm font-medium transition-colors flex items-center ${
@@ -347,7 +349,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                     <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
                   )}
                 </span>
-                トレンドライン
+                {tChart("trendlineToggle")}
               </button>
             )}
             {/* 日経平均比較トグル */}
@@ -366,7 +368,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                   <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
                 )}
               </span>
-              日経平均と比較
+              {tChart("nikkeiCompare")}
               {nikkeiLoading && <span className="ml-1 animate-spin">⏳</span>}
             </button>
           </div>
@@ -397,18 +399,18 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                           <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs">
                             <p className="font-medium text-gray-900 mb-2">{label}</p>
                             <p className="text-blue-600">
-                              この銘柄: {stockChange >= 0 ? "+" : ""}{stockChange?.toFixed(2)}%
+                              {tChart("thisStock")}: {stockChange >= 0 ? "+" : ""}{stockChange?.toFixed(2)}%
                             </p>
                             {nikkeiChange !== null && (
                               <p className="text-orange-600">
-                                日経平均: {nikkeiChange >= 0 ? "+" : ""}{nikkeiChange?.toFixed(2)}%
+                                {tChart("nikkei")}: {nikkeiChange >= 0 ? "+" : ""}{nikkeiChange?.toFixed(2)}%
                               </p>
                             )}
                             {nikkeiChange !== null && (
                               <p className={`mt-1 pt-1 border-t border-gray-100 font-medium ${
                                 stockChange > nikkeiChange ? "text-green-600" : "text-red-600"
                               }`}>
-                                差: {stockChange - nikkeiChange >= 0 ? "+" : ""}{(stockChange - nikkeiChange).toFixed(2)}%
+                                {tChart("diff")} {stockChange - nikkeiChange >= 0 ? "+" : ""}{(stockChange - nikkeiChange).toFixed(2)}%
                               </p>
                             )}
                           </div>
@@ -424,7 +426,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                     stroke="#2563eb"
                     strokeWidth={2}
                     dot={false}
-                    name="この銘柄"
+                    name={tChart("thisStock")}
                   />
                   <Line
                     type="monotone"
@@ -432,7 +434,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                     stroke="#f97316"
                     strokeWidth={2}
                     dot={false}
-                    name="日経平均"
+                    name={tChart("nikkei")}
                     connectNulls
                   />
                 </LineChart>
@@ -470,20 +472,20 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                       return (
                         <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs">
                           <p className="font-medium text-gray-900 mb-1">{label}</p>
-                          <p className="text-gray-600">始値: {formatPrice(d.open)}</p>
-                          <p className="text-gray-600">高値: {formatPrice(d.high)}</p>
-                          <p className="text-gray-600">安値: {formatPrice(d.low)}</p>
+                          <p className="text-gray-600">{tChart("tooltipOpen")}: {formatPrice(d.open)}</p>
+                          <p className="text-gray-600">{tChart("tooltipHigh")}: {formatPrice(d.high)}</p>
+                          <p className="text-gray-600">{tChart("tooltipLow")}: {formatPrice(d.low)}</p>
                           <p className={`font-medium ${isUp ? "text-green-600" : "text-red-600"}`}>
-                            終値: {formatPrice(d.close)}
+                            {tChart("tooltipClose")}: {formatPrice(d.close)}
                           </p>
                           {d.supportTrendline && (
                             <p className="text-green-500 mt-1">
-                              サポート: {formatPrice(d.supportTrendline)}
+                              {tChart("support")}: {formatPrice(d.supportTrendline)}
                             </p>
                           )}
                           {d.resistanceTrendline && (
                             <p className="text-red-500">
-                              レジスタンス: {formatPrice(d.resistanceTrendline)}
+                              {tChart("resistance")}: {formatPrice(d.resistanceTrendline)}
                             </p>
                           )}
                           {signal && (
@@ -492,7 +494,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                                 signal.signal === "buy" ? "text-green-600" : "text-red-600"
                               }`}
                             >
-                              {signal.signal === "buy" ? "買いシグナル" : "売りシグナル"}
+                              {signal.signal === "buy" ? tChart("buySignal") : tChart("sellSignal")}
                             </p>
                           )}
                         </div>
@@ -594,11 +596,11 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
             <div className="flex items-center justify-center gap-4 mt-2 text-xs">
               <div className="flex items-center gap-1">
                 <div className="w-3 h-0.5 bg-blue-600"></div>
-                <span className="text-gray-600">この銘柄</span>
+                <span className="text-gray-600">{tChart("thisStock")}</span>
               </div>
               <div className="flex items-center gap-1">
                 <div className="w-3 h-0.5 bg-orange-500"></div>
-                <span className="text-gray-600">日経平均</span>
+                <span className="text-gray-600">{tChart("nikkei")}</span>
               </div>
             </div>
           )}
@@ -607,7 +609,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
           {showTrendlines && trendlines && !showNikkeiComparison && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold text-gray-900">トレンドライン分析</span>
+                <span className="text-sm font-semibold text-gray-900">{tChart("trendlineAnalysis")}</span>
                 <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                   trendlines.overallTrend === "uptrend"
                     ? "bg-green-100 text-green-700"
@@ -623,9 +625,9 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                   <div className="flex items-center gap-1">
                     <div className="w-4 h-0 border-t-2 border-dashed border-green-500"></div>
                     <span className="text-gray-600">
-                      サポート {formatPrice(trendlines.support.currentProjectedPrice)}
+                      {tChart("support")} {formatPrice(trendlines.support.currentProjectedPrice)}
                       {trendlines.support.broken && (
-                        <span className="text-red-500 ml-1">割れ</span>
+                        <span className="text-red-500 ml-1">{tChart("broken")}</span>
                       )}
                     </span>
                   </div>
@@ -634,9 +636,9 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                   <div className="flex items-center gap-1">
                     <div className="w-4 h-0 border-t-2 border-dashed border-red-500"></div>
                     <span className="text-gray-600">
-                      レジスタンス {formatPrice(trendlines.resistance.currentProjectedPrice)}
+                      {tChart("resistance")} {formatPrice(trendlines.resistance.currentProjectedPrice)}
                       {trendlines.resistance.broken && (
-                        <span className="text-green-500 ml-1">突破</span>
+                        <span className="text-green-500 ml-1">{tChart("breakout")}</span>
                       )}
                     </span>
                   </div>
@@ -644,10 +646,10 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
               </div>
               <p className="text-xs text-gray-500">
                 {trendlines.overallTrend === "uptrend"
-                  ? "安値が切り上がっており、上昇トレンドが形成されています"
+                  ? tChart("trendDescUptrend")
                   : trendlines.overallTrend === "downtrend"
-                  ? "高値が切り下がっており、下降トレンドが形成されています"
-                  : "明確なトレンドは確認されず、レンジ内で推移しています"}
+                  ? tChart("trendDescDowntrend")
+                  : tChart("trendDescSideways")}
               </p>
             </div>
           )}
@@ -657,7 +659,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
             <div className="mt-4 p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-sm text-gray-600">ローソク足パターン</span>
+                  <span className="text-sm text-gray-600">{tChart("candlestickPattern")}</span>
                   <p
                     className={`text-lg font-bold ${
                       patterns.latest.signal === "buy"
@@ -671,7 +673,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-gray-500 block">強さ</span>
+                  <span className="text-xs text-gray-500 block">{tChart("strength")}</span>
                   <span className="text-lg font-medium text-gray-900">
                     {patterns.latest.strength}%
                   </span>
@@ -680,7 +682,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
               <p className="text-xs text-gray-500 mt-2">{patterns.latest.learnMore}</p>
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">総合判断</span>
+                  <span className="text-xs text-gray-500">{tChart("overallJudgment")}</span>
                   <span
                     className={`px-2 py-0.5 rounded text-xs font-medium ${
                       patterns.combined.signal === "buy"
@@ -690,9 +692,9 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                           : "bg-gray-100 text-gray-700"
                     }`}
                   >
-                    {patterns.combined.signal === "buy" && "買い傾向"}
-                    {patterns.combined.signal === "sell" && "売り傾向"}
-                    {patterns.combined.signal === "neutral" && "様子見"}
+                    {patterns.combined.signal === "buy" && tChart("buyTrend")}
+                    {patterns.combined.signal === "sell" && tChart("sellTrend")}
+                    {patterns.combined.signal === "neutral" && tChart("waitAndSee")}
                   </span>
                 </div>
                 {patterns.combined.reasons.length > 0 && (
@@ -705,7 +707,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
           )}
 
           <p className="text-xs text-gray-400 mt-2">
-            ※ シグナルは参考情報です。投資判断はご自身で行ってください。
+            {tChart("signalDisclaimer")}
           </p>
 
           {/* Learning Section Toggle */}
@@ -713,7 +715,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
             onClick={() => setShowLearning(!showLearning)}
             className="mt-3 w-full flex items-center justify-center gap-2 py-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
           >
-            <span>{showLearning ? "ローソク足の見方を閉じる" : "ローソク足の見方を見る"}</span>
+            <span>{showLearning ? tChart("closeLearning") : tChart("openLearning")}</span>
             <svg
               className={`w-4 h-4 transition-transform ${showLearning ? "rotate-180" : ""}`}
               fill="none"
@@ -728,27 +730,27 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
           {showLearning && (
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">
               <p className="text-sm text-gray-700 mb-3">
-                ローソク足は1日の株価の動きを表しています。
-                <span className="text-green-600 font-medium">緑色</span>は値上がり、
-                <span className="text-red-600 font-medium">赤色</span>は値下がりを意味します。
+                {tChart("learningIntro")}
+                <span className="text-green-600 font-medium">{tChart("learningGreen")}</span>{tChart("learningGreenMeaning")}
+                <span className="text-red-600 font-medium">{tChart("learningRed")}</span>{tChart("learningRedMeaning")}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-green-700">買いシグナル</p>
+                  <p className="text-xs font-semibold text-green-700">{tChart("buySignalLabel")}</p>
                   <div className="text-xs text-gray-600 space-y-1">
-                    <p>📈 強い上昇：上昇が続きやすい</p>
-                    <p>⬆️ 底打ち反発：反発のサイン</p>
-                    <p>↗️ 押し目：買いチャンスかも</p>
-                    <p>〰️ じわじわ上昇：上昇トレンド継続</p>
+                    <p>📈 {tChart("buySignalStrong")}</p>
+                    <p>⬆️ {tChart("buySignalBottom")}</p>
+                    <p>↗️ {tChart("buySignalDip")}</p>
+                    <p>〰️ {tChart("buySignalGradual")}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-red-700">売りシグナル</p>
+                  <p className="text-xs font-semibold text-red-700">{tChart("sellSignalLabel")}</p>
                   <div className="text-xs text-gray-600 space-y-1">
-                    <p>📉 強い下落：下落が続きやすい</p>
-                    <p>⬇️ 戻り売り：下落のサイン</p>
-                    <p>↘️ 高値からの下落：弱気のサイン</p>
-                    <p>〰️ 下落の始まり：注意が必要</p>
+                    <p>📉 {tChart("sellSignalStrong")}</p>
+                    <p>⬇️ {tChart("sellSignalReturn")}</p>
+                    <p>↘️ {tChart("sellSignalHigh")}</p>
+                    <p>〰️ {tChart("sellSignalStart")}</p>
                   </div>
                 </div>
               </div>
@@ -764,7 +766,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-sm text-gray-600">
-                  RSI (14日)
+                  {tChart("rsi14day")}
                 </span>
                 <p className="text-xl font-bold text-gray-900">
                   {summary?.rsi?.toFixed(1) ?? "-"}
@@ -793,7 +795,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                 />
                 <Tooltip
                   formatter={(value) => [Number(value)?.toFixed(1), "RSI"]}
-                  labelFormatter={(label) => `日付: ${label}`}
+                  labelFormatter={(label) => tChart("dateLabel", { label })}
                   contentStyle={{ fontSize: 12 }}
                 />
                 <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" />
@@ -810,7 +812,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
             </ResponsiveContainer>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            ※ RSI 70以上：買われすぎ（売りシグナル）、30以下：売られすぎ（買いシグナル）
+            {tChart("rsiDescription")}
           </p>
         </>
       )}
@@ -829,7 +831,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-xs text-gray-500 block">シグナル: {summary?.signal?.toFixed(2) ?? "-"}</span>
+                <span className="text-xs text-gray-500 block">{tChart("signalLabel")}: {summary?.signal?.toFixed(2) ?? "-"}</span>
                 <span className={`text-sm font-medium ${macdInterpretation.color}`}>
                   {macdInterpretation.text}
                 </span>
@@ -854,12 +856,12 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
                   formatter={(value, name) => {
                     const labels: Record<string, string> = {
                       macd: "MACD",
-                      signal: "シグナル",
-                      histogram: "ヒストグラム",
+                      signal: tChart("signalLabel") as string,
+                      histogram: tChart("histogramLabel") as string,
                     }
                     return [Number(value)?.toFixed(2), labels[String(name)] || name]
                   }}
-                  labelFormatter={(label) => `日付: ${label}`}
+                  labelFormatter={(label) => tChart("dateLabel", { label })}
                   contentStyle={{ fontSize: 12 }}
                 />
                 <ReferenceLine y={0} stroke="#9ca3af" />
@@ -888,7 +890,7 @@ export default function StockChart({ stockId, embedded = false }: StockChartProp
             </ResponsiveContainer>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            ※ MACDがシグナル線を上抜け：買いシグナル、下抜け：売りシグナル
+            {tChart("macdDescription")}
           </p>
         </>
       )}

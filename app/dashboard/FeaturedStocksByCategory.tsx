@@ -38,6 +38,8 @@ interface FeaturedStock {
 
 export default function FeaturedStocksByCategory() {
   const tRec = useTranslations("dashboard.recommendation")
+  const tFeat = useTranslations("dashboard.featuredStocks")
+  const tTop = useTranslations("dashboard.topStocks")
   const [personalRecommendations, setPersonalRecommendations] = useState<FeaturedStock[]>([])
   const [pricesLoaded, setPricesLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -135,9 +137,9 @@ export default function FeaturedStocksByCategory() {
       <div className="bg-white rounded-xl p-4 sm:p-6 shadow-md">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xl sm:text-2xl">⭐</span>
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900">今日の注目銘柄</h3>
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900">{tFeat("title")}</h3>
         </div>
-        <p className="text-xs sm:text-sm text-gray-500">読み込み中...</p>
+        <p className="text-xs sm:text-sm text-gray-500">{tTop("loading")}</p>
       </div>
     )
   }
@@ -147,15 +149,15 @@ export default function FeaturedStocksByCategory() {
       <div className="bg-white rounded-xl p-4 sm:p-6 shadow-md">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xl sm:text-2xl">⭐</span>
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900">今日の注目銘柄</h3>
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900">{tFeat("title")}</h3>
         </div>
         <div className="text-center py-6 sm:py-8">
           <div className="text-4xl sm:text-5xl mb-3 sm:mb-4">🔍</div>
           <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
-            おすすめ銘柄がまだありません
+            {tFeat("noRecommendations")}
           </h3>
           <p className="text-xs sm:text-sm text-gray-600">
-            AIが毎日あなたに合った銘柄をおすすめします
+            {tFeat("dailyRecommendationNote")}
           </p>
         </div>
       </div>
@@ -223,9 +225,9 @@ export default function FeaturedStocksByCategory() {
               {stock.stock.currentPrice != null ? (
                 `¥${stock.stock.currentPrice.toLocaleString()}`
               ) : stock.stock.isStale ? (
-                <span className="text-amber-600 text-xs">株価データが取得できませんでした。<br />データ取得不可、または取引停止の銘柄の可能性があります。</span>
+                <span className="text-amber-600 text-xs">{tTop("priceUnavailable")}</span>
               ) : (
-                <span className="text-gray-400 text-sm">取得中...</span>
+                <span className="text-gray-400 text-sm">{tTop("priceFetching")}</span>
               )}
             </div>
             {stock.stock.marketTime && (
@@ -236,7 +238,7 @@ export default function FeaturedStocksByCategory() {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-                時点
+                {tTop("asOf")}
               </p>
             )}
           </div>
@@ -277,8 +279,8 @@ export default function FeaturedStocksByCategory() {
           <div className="mb-2 sm:mb-3 p-2 rounded-lg bg-red-50 border border-red-200">
             <p className="text-xs text-red-700">
               {stock.stock.isDelisted
-                ? "この銘柄は上場廃止されています"
-                : "上場廃止の可能性があります"}
+                ? tTop("delisted")
+                : tTop("possiblyDelisted")}
             </p>
           </div>
         )}
@@ -291,12 +293,12 @@ export default function FeaturedStocksByCategory() {
             <div className="flex items-start gap-1.5">
               <span className="text-amber-500 text-xs mt-0.5">⚠️</span>
               <div className="text-xs text-amber-700 space-y-0.5">
-                {stock.stock.isProfitable === false && <p>赤字銘柄</p>}
+                {stock.stock.isProfitable === false && <p>{tTop("riskUnprofitable")}</p>}
                 {stock.stock.volatility != null && stock.stock.volatility > 50 && (
-                  <p>高ボラティリティ（{stock.stock.volatility.toFixed(1)}%）</p>
+                  <p>{tTop("riskHighVolatility", { value: stock.stock.volatility.toFixed(1) })}</p>
                 )}
                 {stock.stock.weekChangeRate != null && stock.stock.weekChangeRate < -15 && (
-                  <p>直近1週間で{stock.stock.weekChangeRate.toFixed(1)}%下落</p>
+                  <p>{tTop("riskWeekDecline", { value: stock.stock.weekChangeRate.toFixed(1) })}</p>
                 )}
               </div>
             </div>
@@ -324,7 +326,7 @@ export default function FeaturedStocksByCategory() {
 
           {linkDisabled ? (
             <div className="flex items-center text-gray-300 ml-auto">
-              <span className="text-xs text-gray-300">詳細を見る</span>
+              <span className="text-xs text-gray-300">{tTop("viewDetail")}</span>
               <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
@@ -334,7 +336,7 @@ export default function FeaturedStocksByCategory() {
               href={stock.userStockId ? `/my-stocks/${stock.userStockId}` : `/stocks/${stock.stockId}`}
               className={CARD_FOOTER_STYLES.detailLink}
             >
-              <span className={CARD_FOOTER_STYLES.detailLinkText}>詳細を見る</span>
+              <span className={CARD_FOOTER_STYLES.detailLinkText}>{tTop("viewDetail")}</span>
               <svg
                 className="w-4 h-4 ml-1"
                 fill="none"
@@ -380,7 +382,7 @@ export default function FeaturedStocksByCategory() {
       <div className="mb-4 sm:mb-5">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xl sm:text-2xl">⭐</span>
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900">あなたへのおすすめ</h3>
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900">{tFeat("personalTitle")}</h3>
         </div>
         <p className="text-xs sm:text-sm text-gray-600">
           {tRec("subtitle")}

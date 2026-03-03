@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { UPDATE_SCHEDULES } from "@/lib/constants";
 
 const VISIT_COUNT_KEY = "push-prompt-visit-count";
@@ -11,6 +12,7 @@ const DISMISS_DAYS = 7;
 
 export default function PushNotificationPrompt() {
   const router = useRouter();
+  const t = useTranslations("notifications.pushPrompt");
   const [showPrompt, setShowPrompt] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -64,9 +66,7 @@ export default function PushNotificationPrompt() {
       // 通知許可を求める
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        alert(
-          "通知が許可されませんでした。ブラウザの設定から許可してください。",
-        );
+        alert(t("permissionDenied"));
         setIsLoading(false);
         return;
       }
@@ -91,14 +91,14 @@ export default function PushNotificationPrompt() {
         body: JSON.stringify(subscription),
       });
 
-      alert("プッシュ通知をオンにしました！");
+      alert(t("enabled"));
       setShowPrompt(false);
       // 訪問カウントをリセット
       localStorage.removeItem(VISIT_COUNT_KEY);
       localStorage.removeItem(DISMISSED_UNTIL_KEY);
     } catch (error) {
       console.error("Error enabling push:", error);
-      alert("プッシュ通知の設定に失敗しました");
+      alert(t("failed"));
     } finally {
       setIsLoading(false);
     }
@@ -143,31 +143,31 @@ export default function PushNotificationPrompt() {
         <div className="text-center mb-6">
           <div className="text-5xl mb-4">🔔</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">
-            通知をオンにしませんか？
+            {t("title")}
           </h2>
           <p className="text-gray-600 text-sm">
-            毎日の分析結果や注目銘柄の更新をお知らせします
+            {t("description")}
           </p>
         </div>
 
         {/* 通知スケジュール */}
         <div className="bg-blue-50 rounded-xl p-4 mb-6">
           <h3 className="font-semibold text-gray-900 mb-2 text-sm">
-            通知スケジュール
+            {t("scheduleTitle")}
           </h3>
           <ul className="space-y-1.5 text-sm text-gray-700">
             <li className="flex items-start gap-2">
               <span className="text-blue-500">•</span>
               <span>
                 <strong>{UPDATE_SCHEDULES.STOCK_ANALYSIS}</strong> -
-                ポートフォリオ分析・購入レコメンド（平日）
+                {t("scheduleAnalysis")}
               </span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-blue-500">•</span>
               <span>
                 <strong>{UPDATE_SCHEDULES.PERSONAL_RECOMMENDATIONS}</strong> -
-                あなたへのおすすめ更新（平日）
+                {t("scheduleRecommendations")}
               </span>
             </li>
           </ul>
@@ -179,20 +179,20 @@ export default function PushNotificationPrompt() {
             disabled={isLoading}
             className="w-full py-3 px-4 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? "設定中..." : "通知をオンにする"}
+            {isLoading ? t("enabling") : t("enableButton")}
           </button>
           <div className="flex gap-2">
             <button
               onClick={handleGoToSettings}
               className="flex-1 py-2.5 px-4 text-gray-600 bg-gray-100 rounded-xl font-medium hover:bg-gray-200 transition-colors text-sm"
             >
-              設定で詳しく見る
+              {t("goToSettings")}
             </button>
             <button
               onClick={handleDismiss}
               className="flex-1 py-2.5 px-4 text-gray-500 rounded-xl font-medium hover:bg-gray-100 transition-colors text-sm"
             >
-              後で
+              {t("later")}
             </button>
           </div>
         </div>

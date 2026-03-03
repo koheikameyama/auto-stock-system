@@ -1,6 +1,7 @@
 "use client"
 
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 
 interface CopyableTickerProps {
   tickerCode: string
@@ -13,6 +14,7 @@ function getCleanTicker(tickerCode: string): string {
 }
 
 export default function CopyableTicker({ tickerCode, className = "" }: CopyableTickerProps) {
+  const t = useTranslations("stocks.ticker")
   const cleanTicker = getCleanTicker(tickerCode)
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -21,9 +23,9 @@ export default function CopyableTicker({ tickerCode, className = "" }: CopyableT
 
     try {
       await navigator.clipboard.writeText(cleanTicker)
-      toast.success(`${cleanTicker} をコピーしました`)
+      toast.success(t("copied", { ticker: cleanTicker }))
     } catch {
-      toast.error("コピーに失敗しました")
+      toast.error(t("copyFailed"))
     }
   }
 
@@ -31,7 +33,7 @@ export default function CopyableTicker({ tickerCode, className = "" }: CopyableT
     <span
       onClick={handleCopy}
       className={`cursor-pointer hover:text-blue-600 active:text-blue-700 transition-colors ${className}`}
-      title="タップしてコピー"
+      title={t("tapToCopy")}
     >
       {tickerCode}
     </span>
@@ -39,6 +41,8 @@ export default function CopyableTicker({ tickerCode, className = "" }: CopyableT
 }
 
 // 銘柄名からティッカーをコピーするためのユーティリティ
+// Note: This is a non-hook utility function, so it cannot use useTranslations.
+// The strings here will be updated when copyTicker callers migrate to using hooks directly.
 export function copyTicker(tickerCode: string) {
   const cleanTicker = getCleanTicker(tickerCode)
   navigator.clipboard.writeText(cleanTicker)

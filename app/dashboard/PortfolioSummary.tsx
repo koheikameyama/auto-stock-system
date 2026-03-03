@@ -5,6 +5,7 @@ import Link from "next/link"
 import PerformanceSummary from "./PerformanceSummary"
 import { useAppStore } from "@/store/useAppStore"
 import type { PortfolioSummary as PortfolioSummaryData, NikkeiData, UserStock } from "@/store/types"
+import { useTranslations } from "next-intl"
 
 interface PortfolioSummaryProps {
   hasHoldings: boolean
@@ -22,6 +23,7 @@ interface HoldingStock {
 }
 
 export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps) {
+  const t = useTranslations("dashboard.portfolioSummary")
   const { fetchPortfolioSummary, fetchNikkei, fetchUserStocks, fetchStockPrices } = useAppStore()
   const [summary, setSummary] = useState<PortfolioSummaryData | null>(null)
   const [nikkei, setNikkei] = useState<NikkeiData | null>(null)
@@ -104,23 +106,23 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
           <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
             <span className="text-lg">💰</span>
           </div>
-          <span className="text-sm font-semibold text-gray-900">資産状況</span>
+          <span className="text-sm font-semibold text-gray-900">{t("title")}</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">総資産額</div>
+            <div className="text-xs text-gray-500 mb-1">{t("totalAssets")}</div>
             <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">含み損益</div>
+            <div className="text-xs text-gray-500 mb-1">{t("unrealizedGain")}</div>
             <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">損益率</div>
+            <div className="text-xs text-gray-500 mb-1">{t("gainRate")}</div>
             <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">市場比較</div>
+            <div className="text-xs text-gray-500 mb-1">{t("marketComparison")}</div>
             <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
           </div>
         </div>
@@ -147,10 +149,10 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
             <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
               <span className="text-lg">💰</span>
             </div>
-            <span className="text-sm font-semibold text-gray-900">資産状況</span>
+            <span className="text-sm font-semibold text-gray-900">{t("title")}</span>
           </div>
           <div className="flex items-center gap-1 text-xs text-gray-400">
-            <span>マイ銘柄へ</span>
+            <span>{t("toMyStocks")}</span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
@@ -158,13 +160,13 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">総資産額</div>
+            <div className="text-xs text-gray-500 mb-1">{t("totalAssets")}</div>
             <div className="text-base sm:text-lg font-bold text-gray-900">
               ¥{Math.round(summary.totalValue).toLocaleString()}
             </div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">含み損益</div>
+            <div className="text-xs text-gray-500 mb-1">{t("unrealizedGain")}</div>
             <div
               className={`text-base sm:text-lg font-bold ${
                 summary.unrealizedGain >= 0 ? "text-green-600" : "text-red-600"
@@ -175,7 +177,7 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
             </div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">損益率</div>
+            <div className="text-xs text-gray-500 mb-1">{t("gainRate")}</div>
             <div
               className={`text-base sm:text-lg font-bold ${
                 summary.unrealizedGainPercent >= 0 ? "text-green-600" : "text-red-600"
@@ -186,7 +188,7 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
             </div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">市場比較</div>
+            <div className="text-xs text-gray-500 mb-1">{t("marketComparison")}</div>
             {nikkei ? (
               <div className="flex flex-col items-center">
                 <div
@@ -198,7 +200,7 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
                   {comparison?.toFixed(1)}%
                 </div>
                 <div className="text-[10px] text-gray-400">
-                  vs 日経平均
+                  {t("vsNikkei")}
                 </div>
               </div>
             ) : (
@@ -219,7 +221,7 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
               className="flex items-center justify-between w-full text-left"
             >
               <div className="text-xs text-gray-500">
-                保有銘柄（{holdings.length}件）
+                {t("holdingStocks", { count: holdings.length })}
               </div>
               <svg
                 className={`w-4 h-4 text-gray-400 transition-transform ${
@@ -244,7 +246,7 @@ export default function PortfolioSummary({ hasHoldings }: PortfolioSummaryProps)
                         {stock.name}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {stock.quantity.toLocaleString()}株
+                        {t("shares", { count: stock.quantity.toLocaleString() })}
                       </div>
                     </div>
                     <div className="text-right ml-2">

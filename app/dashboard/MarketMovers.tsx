@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import CopyableTicker from "@/app/components/CopyableTicker"
+import { useTranslations } from "next-intl"
 
 interface MoverStock {
   position: number
@@ -25,6 +26,7 @@ interface MoversData {
 }
 
 export default function MarketMovers() {
+  const t = useTranslations("dashboard.marketMoversWidget")
   const [data, setData] = useState<MoversData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -61,17 +63,17 @@ export default function MarketMovers() {
           <div className="flex items-center gap-2">
             <span className="text-lg">📊</span>
             <h2 className="text-sm sm:text-base font-bold text-gray-900">
-              値上がり・値下がり
+              {t("title")}
             </h2>
             {!data.isToday && (
-              <span className="text-xs text-gray-400">（最新データ）</span>
+              <span className="text-xs text-gray-400">{t("latestData")}</span>
             )}
           </div>
           <Link
             href="/market-movers"
             className="text-xs text-blue-600 hover:text-blue-800 font-medium"
           >
-            詳しく見る →
+            {t("viewMore")}
           </Link>
         </div>
       </div>
@@ -82,7 +84,7 @@ export default function MarketMovers() {
           <div className="flex items-center gap-1 mb-2 sm:mb-3">
             <span className="text-sm">🔺</span>
             <span className="text-xs sm:text-sm font-semibold text-red-600">
-              値上がり
+              {t("gainers")}
             </span>
           </div>
           <div className="space-y-2">
@@ -115,7 +117,7 @@ export default function MarketMovers() {
           <div className="flex items-center gap-1 mb-2 sm:mb-3">
             <span className="text-sm">🔻</span>
             <span className="text-xs sm:text-sm font-semibold text-blue-600">
-              値下がり
+              {t("losers")}
             </span>
           </div>
           <div className="space-y-2">

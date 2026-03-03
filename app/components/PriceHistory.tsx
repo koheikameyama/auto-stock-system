@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 
 interface PriceData {
   date: string
@@ -19,6 +20,7 @@ interface PriceHistoryProps {
 }
 
 export default function PriceHistory({ stockId, embedded = false }: PriceHistoryProps) {
+  const t = useTranslations("stocks.priceHistory")
   const [data, setData] = useState<PriceData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,14 +34,14 @@ export default function PriceHistory({ stockId, embedded = false }: PriceHistory
         const response = await fetch(`/api/stocks/${stockId}/historical-prices?period=1m`)
         if (!response.ok) {
           const errData = await response.json()
-          throw new Error(errData.error || "データの取得に失敗しました")
+          throw new Error(errData.error || t("fetchFailed"))
         }
         const result = await response.json()
         // 新しい順に並べ替え
         setData(result.data.reverse())
       } catch (err) {
         console.error("Error fetching price history:", err)
-        setError(err instanceof Error ? err.message : "データの取得に失敗しました")
+        setError(err instanceof Error ? err.message : t("fetchFailed"))
       } finally {
         setLoading(false)
       }
@@ -83,7 +85,7 @@ export default function PriceHistory({ stockId, embedded = false }: PriceHistory
     return (
       <div className={wrapperClass || "p-4"}>
         <div className="text-center text-gray-500 py-4">
-          <p>データが取得できませんでした</p>
+          <p>{t("noData")}</p>
         </div>
       </div>
     )
@@ -93,18 +95,18 @@ export default function PriceHistory({ stockId, embedded = false }: PriceHistory
 
   return (
     <div className={wrapperClass}>
-      <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">価格履歴</h2>
+      <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">{t("title")}</h2>
 
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200">
-              <th className="text-left py-2 px-2 text-gray-600 font-medium">日付</th>
-              <th className="text-right py-2 px-2 text-gray-600 font-medium">終値</th>
-              <th className="text-right py-2 px-2 text-gray-600 font-medium hidden sm:table-cell">高値</th>
-              <th className="text-right py-2 px-2 text-gray-600 font-medium hidden sm:table-cell">安値</th>
-              <th className="text-right py-2 px-2 text-gray-600 font-medium">出来高</th>
+              <th className="text-left py-2 px-2 text-gray-600 font-medium">{t("date")}</th>
+              <th className="text-right py-2 px-2 text-gray-600 font-medium">{t("closePrice")}</th>
+              <th className="text-right py-2 px-2 text-gray-600 font-medium hidden sm:table-cell">{t("highPrice")}</th>
+              <th className="text-right py-2 px-2 text-gray-600 font-medium hidden sm:table-cell">{t("lowPrice")}</th>
+              <th className="text-right py-2 px-2 text-gray-600 font-medium">{t("volume")}</th>
               <th className="text-right py-2 px-2 text-gray-600 font-medium hidden sm:table-cell">RSI</th>
             </tr>
           </thead>
@@ -162,7 +164,7 @@ export default function PriceHistory({ stockId, embedded = false }: PriceHistory
             onClick={() => setShowAll(!showAll)}
             className="text-sm text-blue-600 hover:text-blue-700 font-medium"
           >
-            {showAll ? "閉じる" : `すべて表示 (${data.length}件)`}
+            {showAll ? t("collapse") : t("showAll", { count: data.length })}
           </button>
         </div>
       )}

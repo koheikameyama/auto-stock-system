@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslations } from "next-intl"
 import FinancialMetrics from "@/app/components/FinancialMetrics"
 import EarningsInfo from "@/app/components/EarningsInfo"
 import StockChart from "@/app/components/StockChart"
@@ -49,6 +50,7 @@ interface Props {
 }
 
 export default function MarketMoverDetailClient({ stock, mover }: Props) {
+  const t = useTranslations("marketMovers")
   const { price, loading, isStale } = useStockPrice(stock.tickerCode)
 
   const isGainer = mover?.type === "gainer"
@@ -64,7 +66,7 @@ export default function MarketMoverDetailClient({ stock, mover }: Props) {
       name={stock.name}
       tickerCode={stock.tickerCode}
       sector={stock.sector}
-      badge={mover ? (isGainer ? "値上がり" : "値下がり") : undefined}
+      badge={mover ? (isGainer ? t("badge.gainer") : t("badge.loser")) : undefined}
       badgeClassName={mover ? (isGainer ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700") : undefined}
       backHref="/market-movers"
     >
@@ -88,7 +90,7 @@ export default function MarketMoverDetailClient({ stock, mover }: Props) {
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-lg">🤖</span>
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                  AI原因分析
+                  {t("aiAnalysis")}
                 </h2>
                 {dateLabel && (
                   <span className="text-xs text-gray-400">
@@ -131,7 +133,7 @@ export default function MarketMoverDetailClient({ stock, mover }: Props) {
                   <div className="flex items-center gap-1.5 mb-3">
                     <span className="text-sm">📰</span>
                     <span className="text-sm font-semibold text-gray-700">
-                      関連ニュース
+                      {t("relatedNews")}
                     </span>
                   </div>
                   <div className="space-y-2">
@@ -163,10 +165,10 @@ export default function MarketMoverDetailClient({ stock, mover }: Props) {
                               }`}
                             >
                               {item.sentiment === "positive"
-                                ? "好材料"
+                                ? t("sentiment.positive")
                                 : item.sentiment === "negative"
-                                ? "悪材料"
-                                : "中立"}
+                                ? t("sentiment.negative")
+                                : t("sentiment.neutral")}
                             </span>
                           )}
                         </div>

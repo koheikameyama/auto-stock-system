@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import { getActionButtonClass, ACTION_BUTTON_LABELS } from "@/lib/ui-config"
 
 interface StockActionButtonsProps {
@@ -35,6 +36,7 @@ export default function StockActionButtons({
   onTrackedSuccess,
 }: StockActionButtonsProps) {
   const router = useRouter()
+  const t = useTranslations("stocks.actionButtons")
   const [addingToWatchlist, setAddingToWatchlist] = useState(false)
   const [addingToTracked, setAddingToTracked] = useState(false)
 
@@ -56,10 +58,10 @@ export default function StockActionButtons({
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || "追加に失敗しました")
+        throw new Error(data.error || t("addFailed"))
       }
 
-      toast.success("気になるに追加しました")
+      toast.success(t("addedToWatchlist"))
       if (onWatchlistSuccess) {
         onWatchlistSuccess()
       } else if (redirectTo) {
@@ -67,7 +69,7 @@ export default function StockActionButtons({
       }
     } catch (err: unknown) {
       const error = err as Error
-      toast.error(error.message || "追加に失敗しました")
+      toast.error(error.message || t("addFailed"))
     } finally {
       setAddingToWatchlist(false)
     }
@@ -86,10 +88,10 @@ export default function StockActionButtons({
 
       const data = await response.json()
       if (!response.ok) {
-        throw new Error(data.error || "追加に失敗しました")
+        throw new Error(data.error || t("addFailed"))
       }
 
-      toast.success("追跡に追加しました")
+      toast.success(t("addedToTracked"))
       if (onTrackedSuccess) {
         onTrackedSuccess(data.id)
       } else if (redirectTo) {
@@ -97,7 +99,7 @@ export default function StockActionButtons({
       }
     } catch (err: unknown) {
       const error = err as Error
-      toast.error(error.message || "追加に失敗しました")
+      toast.error(error.message || t("addFailed"))
     } finally {
       setAddingToTracked(false)
     }
@@ -116,7 +118,7 @@ export default function StockActionButtons({
             disabled={isDisabled}
             className={getActionButtonClass("watchlist", { disabled: true })}
           >
-            {addingToWatchlist ? "追加中..." : ACTION_BUTTON_LABELS.watchlist}
+            {addingToWatchlist ? t("adding") : ACTION_BUTTON_LABELS.watchlist}
           </button>
         )
       )}
@@ -131,7 +133,7 @@ export default function StockActionButtons({
             disabled={isDisabled}
             className={getActionButtonClass("tracked", { disabled: true })}
           >
-            {addingToTracked ? "追加中..." : ACTION_BUTTON_LABELS.tracked}
+            {addingToTracked ? t("adding") : ACTION_BUTTON_LABELS.tracked}
           </button>
         )
       )}

@@ -207,14 +207,14 @@ export default function MyStockDetailClient({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "削除に失敗しました");
+        throw new Error(data.error || tPortfolio("detailClient.deleteFailed"));
       }
 
-      toast.success("削除しました");
+      toast.success(tPortfolio("detailClient.deleteSuccess"));
       router.push("/my-stocks");
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "削除に失敗しました");
+      toast.error(err.message || tPortfolio("detailClient.deleteFailed"));
     }
   };
 
@@ -230,14 +230,14 @@ export default function MyStockDetailClient({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "削除に失敗しました");
+        throw new Error(data.error || tPortfolio("detailClient.transactionDeleteFailed"));
       }
 
-      toast.success("取引履歴を削除しました");
+      toast.success(tPortfolio("detailClient.transactionDeleteSuccess"));
       router.refresh();
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "削除に失敗しました");
+      toast.error(err.message || tPortfolio("detailClient.transactionDeleteFailed"));
     }
   };
 
@@ -853,7 +853,7 @@ export default function MyStockDetailClient({
       )}
 
       {/* Delete Button */}
-      <DeleteButton label="削除" onClick={handleDelete} />
+      <DeleteButton label={tPortfolio("detailClient.deleteLabel")} onClick={handleDelete} />
 
       {/* Edit Transaction Dialog */}
       {selectedTransaction && (
@@ -944,10 +944,10 @@ export default function MyStockDetailClient({
                     await fetch(`/api/user-stocks/${stock.id}`, {
                       method: "DELETE",
                     });
-                    toast.success("見送りました");
+                    toast.success(tPortfolio("detailClient.dismissed"));
                     router.push("/my-stocks");
                   } catch (err: any) {
-                    toast.error(err.message || "削除に失敗しました");
+                    toast.error(err.message || tPortfolio("detailClient.deleteFailed"));
                   } finally {
                     setTrackingStock(false);
                     setShowTrackingModal(false);
@@ -971,15 +971,15 @@ export default function MyStockDetailClient({
                     });
                     if (!response.ok) {
                       const data = await response.json();
-                      throw new Error(data.error || "追跡に失敗しました");
+                      throw new Error(data.error || tPortfolio("detailClient.trackingFailed"));
                     }
                     await fetch(`/api/user-stocks/${stock.id}`, {
                       method: "DELETE",
                     });
-                    toast.success("追跡に追加しました");
+                    toast.success(tPortfolio("detailClient.addedToTracked"));
                     router.push("/my-stocks");
                   } catch (err: any) {
-                    toast.error(err.message || "追跡に失敗しました");
+                    toast.error(err.message || tPortfolio("detailClient.trackingFailed"));
                   } finally {
                     setTrackingStock(false);
                     setShowTrackingModal(false);
@@ -1069,14 +1069,14 @@ export default function MyStockDetailClient({
                       },
                     );
                     if (!response.ok) {
-                      throw new Error("保存に失敗しました");
+                      throw new Error(tPortfolio("detailClient.saveFailed"));
                     }
                     setCurrentTargetBuyPrice(priceValue);
                     setShowBuyAlertModal(false);
-                    toast.success("通知設定を保存しました");
+                    toast.success(tPortfolio("detailClient.alertSaved"));
                   } catch (err) {
                     console.error(err);
-                    toast.error("保存に失敗しました");
+                    toast.error(tPortfolio("detailClient.saveFailed"));
                   } finally {
                     setSavingTargetPrice(false);
                   }
@@ -1152,7 +1152,7 @@ export default function MyStockDetailClient({
                     toast.error(
                       err instanceof Error
                         ? err.message
-                        : "追加に失敗しました",
+                        : tPortfolio("detailClient.addFailed"),
                     );
                   } finally {
                     setZeroStockActionInProgress(false);
@@ -1196,7 +1196,7 @@ export default function MyStockDetailClient({
                     });
                     if (!response.ok) {
                       const data = await response.json();
-                      throw new Error(data.error || "追跡に失敗しました");
+                      throw new Error(data.error || tPortfolio("detailClient.trackingFailed"));
                     }
                     toast.success(
                       tPortfolio("zeroStockOptions.addedToTracked"),
@@ -1206,7 +1206,7 @@ export default function MyStockDetailClient({
                     toast.error(
                       err instanceof Error
                         ? err.message
-                        : "追跡に失敗しました",
+                        : tPortfolio("detailClient.trackingFailed"),
                     );
                   } finally {
                     setZeroStockActionInProgress(false);

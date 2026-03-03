@@ -1,0 +1,41 @@
+{
+  "loading": "読み込み中...",
+  "stockMasterTitle": "銘柄マスタ管理",
+  "updateFailed": "更新に失敗しました",
+  "searchPlaceholder": "銘柄コード or 名前で検索",
+  "search": "検索",
+  "showingRange": "{total}件中 {from}-{to}件を表示",
+  "noStocks": "該当する銘柄がありません",
+  "filters": {
+    "all": "すべて",
+    "failed": "取得失敗あり",
+    "delisted": "データ取得不可"
+  },
+  "status": {
+    "delisted": "データ取得不可",
+    "warning": "要確認",
+    "normal": "正常"
+  },
+  "table": {
+    "stock": "銘柄",
+    "latestPrice": "最新株価",
+    "failCount": "失敗回数",
+    "userCount": "利用者数",
+    "status": "状態",
+    "action": "操作"
+  },
+  "card": {
+    "price": "株価",
+    "fail": "失敗",
+    "users": "利用者"
+  },
+  "updated": "更新: {date}",
+  "notUpdated": "未更新",
+  "updating": "更新中...",
+  "unblock": "解除",
+  "block": "停止",
+  "pagination": {
+    "prev": "前へ",
+    "next": "次へ"
+  }
+}

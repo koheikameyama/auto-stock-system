@@ -1,6 +1,7 @@
 "use client"
 
 import { ReactNode, useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 import BackButton from "./BackButton"
 import StockHeader from "./StockHeader"
 import { copyTicker } from "./CopyableTicker"
@@ -24,6 +25,7 @@ export default function StockDetailLayout({
   backHref = "/my-stocks",
   children,
 }: StockDetailLayoutProps) {
+  const t = useTranslations("stocks.detailLayout")
   const [showStickyHeader, setShowStickyHeader] = useState(false)
 
   useEffect(() => {
@@ -60,7 +62,7 @@ export default function StockDetailLayout({
           <div
             onClick={handleCopy}
             className="flex-1 min-w-0 cursor-pointer hover:text-blue-600 transition-colors"
-            title="タップしてコピー"
+            title={t("tapToCopy")}
           >
             <p className="text-sm font-bold text-gray-900 truncate">{name}</p>
             <p className="text-xs text-gray-500">{tickerCode}</p>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import BackButton from "@/app/components/BackButton"
 import AddStockDialog from "@/app/my-stocks/AddStockDialog"
 import CopyableTicker from "@/app/components/CopyableTicker"
@@ -36,6 +37,7 @@ interface MoversData {
 }
 
 export default function MarketMoversDetail() {
+  const t = useTranslations("marketMovers")
   const [data, setData] = useState<MoversData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -79,7 +81,7 @@ export default function MarketMoversDetail() {
       id: stock.id,
       tickerCode: stock.tickerCode,
       name: stock.name,
-      market: stock.market || "プライム",
+      market: stock.market || t("defaultMarket"),
       sector: stock.sector,
       latestPrice: stock.latestPrice,
     })
@@ -89,7 +91,7 @@ export default function MarketMoversDetail() {
   if (loading) {
     return (
       <>
-        <BackButton href="/dashboard" label="ダッシュボード" />
+        <BackButton href="/dashboard" label={t("backLabel")} />
         <div className="mb-6 sm:mb-8">
           <div className="w-48 h-8 bg-gray-200 rounded animate-pulse mb-2" />
           <div className="w-32 h-4 bg-gray-200 rounded animate-pulse" />
@@ -115,16 +117,16 @@ export default function MarketMoversDetail() {
   if (!data || (data.gainers.length === 0 && data.losers.length === 0)) {
     return (
       <>
-        <BackButton href="/dashboard" label="ダッシュボード" />
+        <BackButton href="/dashboard" label={t("backLabel")} />
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-            値上がり・値下がりランキング
+            {t("title")}
           </h1>
         </div>
         <div className="bg-white rounded-xl shadow-md p-6 text-center">
           <div className="text-4xl mb-3">📊</div>
-          <p className="text-gray-600">データがまだありません</p>
-          <p className="text-xs text-gray-400 mt-1">場後（15:30頃）に自動生成されます</p>
+          <p className="text-gray-600">{t("noData")}</p>
+          <p className="text-xs text-gray-400 mt-1">{t("noDataDescription")}</p>
         </div>
       </>
     )
@@ -135,20 +137,20 @@ export default function MarketMoversDetail() {
         month: "long",
         day: "numeric",
       })
-    : "最新"
+    : t("latest")
 
   return (
     <>
-      <BackButton href="/dashboard" label="ダッシュボード" />
+      <BackButton href="/dashboard" label={t("backLabel")} />
 
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-          値上がり・値下がりランキング
+          {t("title")}
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          {dateLabel}の前日比ランキング
+          {t("dateRanking", { date: dateLabel })}
           {!data.isToday && (
-            <span className="text-xs text-gray-400 ml-1">（最新データ）</span>
+            <span className="text-xs text-gray-400 ml-1">{t("latestData")}</span>
           )}
         </p>
       </div>
@@ -159,7 +161,7 @@ export default function MarketMoversDetail() {
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">🔺</span>
             <h2 className="text-lg sm:text-xl font-bold text-red-600">
-              値上がりトップ{data.gainers.length}
+              {t("gainersTop", { count: data.gainers.length })}
             </h2>
           </div>
 
@@ -184,7 +186,7 @@ export default function MarketMoversDetail() {
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">🔻</span>
             <h2 className="text-lg sm:text-xl font-bold text-blue-600">
-              値下がりトップ{data.losers.length}
+              {t("losersTop", { count: data.losers.length })}
             </h2>
           </div>
 
@@ -204,7 +206,7 @@ export default function MarketMoversDetail() {
       )}
 
       <p className="text-xs text-gray-400 text-center mt-4">
-        ※ 出来高10万株以上の銘柄が対象です。場後に毎日更新されます。
+        {t("volumeNote")}
       </p>
 
       {/* ウォッチリスト / 追跡 追加ダイアログ */}
@@ -220,8 +222,8 @@ export default function MarketMoversDetail() {
             setDialogStock(null)
             toast.success(
               dialogType === "watchlist"
-                ? "ウォッチリストに追加しました"
-                : "追跡リストに追加しました"
+                ? t("addedToWatchlist")
+                : t("addedToTracked")
             )
           }}
           defaultType={dialogType}
@@ -245,6 +247,7 @@ function MoverCard({
   onToggle: () => void
   onAddStock: (type: "watchlist" | "tracked", stock: MoverStock["stock"]) => void
 }) {
+  const t = useTranslations("marketMovers")
   const isGainer = type === "gainer"
   const changeColor = isGainer ? "text-red-600" : "text-blue-600"
   const news = (mover.relatedNews as RelatedNewsItem[] | null) || []
@@ -305,7 +308,7 @@ function MoverCard({
           <div className={`rounded-lg p-3 sm:p-4 mb-3 ${isGainer ? "bg-red-50 border border-red-100" : "bg-blue-50 border border-blue-100"}`}>
             <div className="flex items-center gap-1.5 mb-2">
               <span className="text-sm">🤖</span>
-              <span className="text-xs font-semibold text-gray-700">AI原因分析</span>
+              <span className="text-xs font-semibold text-gray-700">{t("aiAnalysis")}</span>
             </div>
             <p className="text-sm text-gray-800 leading-relaxed">
               {mover.analysis}
@@ -317,7 +320,7 @@ function MoverCard({
             <div className="mb-3">
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="text-sm">📰</span>
-                <span className="text-xs font-semibold text-gray-700">関連ニュース</span>
+                <span className="text-xs font-semibold text-gray-700">{t("relatedNews")}</span>
               </div>
               <div className="space-y-2">
                 {news.map((item, idx) => (
@@ -348,10 +351,10 @@ function MoverCard({
                           }`}
                         >
                           {item.sentiment === "positive"
-                            ? "好材料"
+                            ? t("sentiment.positive")
                             : item.sentiment === "negative"
-                            ? "悪材料"
-                            : "中立"}
+                            ? t("sentiment.negative")
+                            : t("sentiment.neutral")}
                         </span>
                       )}
                     </div>
@@ -389,19 +392,19 @@ function MoverCard({
               href={`/market-movers/${mover.stock.id}`}
               className="flex-1 px-2 sm:px-3 py-2 rounded-lg font-semibold text-xs sm:text-sm text-center transition-colors bg-gray-800 text-white hover:bg-gray-900"
             >
-              詳しく見る
+              {t("viewDetails")}
             </Link>
             <button
               onClick={() => onAddStock("watchlist", mover.stock)}
               className="flex-1 px-2 sm:px-3 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-colors bg-blue-600 text-white hover:bg-blue-700"
             >
-              気になる
+              {t("interested")}
             </button>
             <button
               onClick={() => onAddStock("tracked", mover.stock)}
               className="flex-1 px-2 sm:px-3 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
             >
-              追跡
+              {t("track")}
             </button>
           </div>
         </div>

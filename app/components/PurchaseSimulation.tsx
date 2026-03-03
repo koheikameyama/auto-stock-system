@@ -53,7 +53,7 @@ export default function PurchaseSimulation({
     holdingsWithGains.length > 0 && (canAfford === null || !canAfford);
 
   // Calculate after-purchase sector balance
-  const watchlistSector = stockSector || "その他";
+  const watchlistSector = stockSector || t("otherSector");
   const afterTotalValue = totalPortfolioValue + estimatedCost;
   const afterSectors = currentSectors.map((s) => ({ ...s }));
   const existingSector = afterSectors.find(

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 interface UserStock {
   id: string;
@@ -53,6 +54,7 @@ export default function AddStockDialog({
   defaultType,
   initialStock,
 }: AddStockDialogProps) {
+  const t = useTranslations("portfolio.addStockDialog");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showResults, setShowResults] = useState(false);
@@ -164,18 +166,18 @@ export default function AddStockDialog({
         tickerCode += ".T";
       }
     } else {
-      setError("銘柄コードを入力するか、検索結果から選択してください");
+      setError(t("errorNoTicker"));
       return;
     }
 
     // Validate portfolio fields
     if (defaultType === "portfolio") {
       if (!quantity || parseInt(quantity) <= 0) {
-        setError("保有株数を入力してください");
+        setError(t("errorNoQuantity"));
         return;
       }
       if (!averagePrice || parseFloat(averagePrice) <= 0) {
-        setError("購入時単価を入力してください");
+        setError(t("errorNoPrice"));
         return;
       }
     }
@@ -197,7 +199,7 @@ export default function AddStockDialog({
 
         if (!response.ok) {
           const data = await response.json();
-          throw new Error(data.error || "銘柄の追加に失敗しました");
+          throw new Error(data.error || t("addFailed"));
         }
 
         newStock = await response.json();
@@ -225,7 +227,7 @@ export default function AddStockDialog({
 
         if (!response.ok) {
           const data = await response.json();
-          throw new Error(data.error || "銘柄の追加に失敗しました");
+          throw new Error(data.error || t("addFailed"));
         }
 
         newStock = await response.json();
@@ -240,7 +242,7 @@ export default function AddStockDialog({
       setAveragePrice("");
       setPurchaseDate(new Date().toISOString().split("T")[0]);
     } catch (err: any) {
-      const errorMessage = err.message || "銘柄の追加に失敗しました";
+      const errorMessage = err.message || t("addFailed");
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -256,10 +258,10 @@ export default function AddStockDialog({
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
             {defaultType === "portfolio"
-              ? "保有銘柄を追加"
+              ? t("titlePortfolio")
               : defaultType === "tracked"
-                ? "追跡銘柄を追加"
-                : "気になる銘柄を追加"}
+                ? t("titleTracked")
+                : t("titleWatchlist")}
           </h2>
           <button
             onClick={onClose}
@@ -294,7 +296,7 @@ export default function AddStockDialog({
               htmlFor="searchQuery"
               className="block text-sm font-semibold text-gray-700 mb-2"
             >
-              銘柄を検索 <span className="text-red-500">*</span>
+              {t("searchLabel")} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -307,13 +309,13 @@ export default function AddStockDialog({
                   setSelectedStock(null);
                 }
               }}
-              placeholder="東証銘柄コード（例: 7203）または会社名を入力"
+              placeholder={t("searchPlaceholder")}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               autoComplete="off"
               required
             />
             <p className="mt-1 text-xs text-gray-500">
-              ※現在は東京証券取引所（東証）の銘柄のみ対応しています。
+              {t("tseOnlyNote")}
             </p>
             {searching && (
               <div className="absolute right-3 top-11 text-gray-400">
@@ -377,7 +379,7 @@ export default function AddStockDialog({
                 <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4">
                   <div className="flex justify-between items-start mb-2">
                     <p className="text-sm text-gray-600">
-                      マスタに該当する銘柄が見つかりませんでした
+                      {t("noResultsFound")}
                     </p>
                     <button
                       type="button"
@@ -400,8 +402,7 @@ export default function AddStockDialog({
                     </button>
                   </div>
                   <p className="text-xs text-gray-500">
-                    銘柄コード（例:
-                    7203）を入力して「追加」を押すと、自動的にデータを収集して追加します
+                    {t("noResultsHint")}
                   </p>
                 </div>
               )}
@@ -422,7 +423,7 @@ export default function AddStockDialog({
                   htmlFor="quantity"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  保有株数 <span className="text-red-500">*</span>
+                  {t("quantityLabel")} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -430,7 +431,7 @@ export default function AddStockDialog({
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   min="1"
-                  placeholder="例: 100"
+                  placeholder={t("quantityPlaceholder")}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
@@ -441,11 +442,10 @@ export default function AddStockDialog({
                   htmlFor="averagePrice"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  購入時単価 <span className="text-red-500">*</span>
+                  {t("averagePriceLabel")} <span className="text-red-500">*</span>
                   {selectedStock?.latestPrice && (
                     <span className="ml-2 text-xs font-normal text-gray-500">
-                      （現在価格: ¥{selectedStock.latestPrice.toLocaleString()}
-                      ）
+                      {t("currentPriceHint", { price: selectedStock.latestPrice.toLocaleString() })}
                     </span>
                   )}
                 </label>
@@ -456,12 +456,12 @@ export default function AddStockDialog({
                   onChange={(e) => setAveragePrice(e.target.value)}
                   min="0"
                   step="0.01"
-                  placeholder="例: 2500"
+                  placeholder={t("averagePricePlaceholder")}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  1株あたりの購入価格を入力してください
+                  {t("averagePriceHint")}
                 </p>
               </div>
 
@@ -470,7 +470,7 @@ export default function AddStockDialog({
                   htmlFor="purchaseDate"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  購入日 <span className="text-red-500">*</span>
+                  {t("purchaseDateLabel")} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -492,14 +492,14 @@ export default function AddStockDialog({
               className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
               disabled={loading}
             >
-              キャンセル
+              {t("cancel")}
             </button>
             <button
               type="submit"
               className="flex-1 px-4 py-2 rounded-lg font-semibold transition-colors text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               disabled={loading || (!selectedStock && !searchQuery.trim())}
             >
-              {loading ? "追加中..." : "追加"}
+              {loading ? t("adding") : t("add")}
             </button>
           </div>
         </form>

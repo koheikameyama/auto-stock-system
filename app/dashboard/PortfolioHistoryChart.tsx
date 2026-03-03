@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts"
+import { useTranslations } from "next-intl"
 
 type Period = "1m" | "3m" | "6m" | "1y"
 type ViewMode = "asset" | "pnl"
@@ -29,19 +30,20 @@ interface HistoryData {
   period: string
 }
 
-const PERIOD_LABELS: Record<Period, string> = {
-  "1m": "1ヶ月",
-  "3m": "3ヶ月",
-  "6m": "6ヶ月",
-  "1y": "1年",
+const PERIOD_KEYS: Record<Period, string> = {
+  "1m": "period1m",
+  "3m": "period3m",
+  "6m": "period6m",
+  "1y": "period1y",
 }
 
-const VIEW_LABELS: Record<ViewMode, string> = {
-  asset: "資産推移",
-  pnl: "損益推移",
+const VIEW_KEYS: Record<ViewMode, string> = {
+  asset: "viewAsset",
+  pnl: "viewPnl",
 }
 
 export default function PortfolioHistoryChart() {
+  const t = useTranslations("dashboard.portfolioHistory")
   const [data, setData] = useState<HistoryData | null>(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>("1m")
@@ -70,7 +72,7 @@ export default function PortfolioHistoryChart() {
       <div className="bg-white rounded-lg border p-4">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg">📈</span>
-          <h3 className="font-semibold">資産推移</h3>
+          <h3 className="font-semibold">{t("title")}</h3>
         </div>
         <div className="h-64 bg-gray-100 rounded-lg animate-pulse" />
       </div>
@@ -82,13 +84,13 @@ export default function PortfolioHistoryChart() {
       <div className="bg-white rounded-lg border p-4">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg">📈</span>
-          <h3 className="font-semibold">資産推移</h3>
+          <h3 className="font-semibold">{t("title")}</h3>
         </div>
         <div className="h-64 flex items-center justify-center text-gray-500">
           <div className="text-center">
-            <p className="text-sm">まだデータがありません</p>
+            <p className="text-sm">{t("noData")}</p>
             <p className="text-xs text-gray-400 mt-1">
-              毎日15:30以降に自動記録されます
+              {t("autoRecordNote")}
             </p>
           </div>
         </div>
@@ -98,7 +100,7 @@ export default function PortfolioHistoryChart() {
 
   const formatValue = (value: number) => {
     if (value >= 10000) {
-      return `${(value / 10000).toFixed(1)}万`
+      return `${(value / 10000).toFixed(1)}${t("unitMan")}`
     }
     return `${Math.round(value).toLocaleString()}`
   }
@@ -107,7 +109,7 @@ export default function PortfolioHistoryChart() {
     const abs = Math.abs(value)
     const prefix = value >= 0 ? "+" : ""
     if (abs >= 10000) {
-      return `${prefix}${(value / 10000).toFixed(1)}万`
+      return `${prefix}${(value / 10000).toFixed(1)}${t("unitMan")}`
     }
     return `${prefix}${Math.round(value).toLocaleString()}`
   }
@@ -139,7 +141,7 @@ export default function PortfolioHistoryChart() {
           <span className="text-lg">📈</span>
           {viewMode === "asset" ? (
             <>
-              <h3 className="font-semibold">資産推移</h3>
+              <h3 className="font-semibold">{t("title")}</h3>
               {data.history.length > 1 && (
                 <span
                   className={`text-sm font-medium ${
@@ -153,7 +155,7 @@ export default function PortfolioHistoryChart() {
             </>
           ) : (
             <>
-              <h3 className="font-semibold">損益推移</h3>
+              <h3 className="font-semibold">{t("titlePnl")}</h3>
               {data.history.length > 0 && (
                 <span
                   className={`text-sm font-medium ${
@@ -161,7 +163,7 @@ export default function PortfolioHistoryChart() {
                   }`}
                 >
                   {lastTotalGain >= 0 ? "+" : ""}
-                  {lastTotalGain.toLocaleString()}円
+                  {lastTotalGain.toLocaleString()}{t("yen")}
                 </span>
               )}
             </>
@@ -169,7 +171,7 @@ export default function PortfolioHistoryChart() {
         </div>
         <div className="flex items-center gap-2 mt-2">
           <div className="flex bg-gray-100 rounded-lg p-0.5 w-fit">
-            {(Object.keys(VIEW_LABELS) as ViewMode[]).map((v) => (
+            {(Object.keys(VIEW_KEYS) as ViewMode[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setViewMode(v)}
@@ -179,12 +181,12 @@ export default function PortfolioHistoryChart() {
                     : "text-gray-500"
                 }`}
               >
-                {VIEW_LABELS[v]}
+                {t(VIEW_KEYS[v])}
               </button>
             ))}
           </div>
           <div className="flex bg-gray-100 rounded-lg p-0.5 w-fit">
-            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+            {(Object.keys(PERIOD_KEYS) as Period[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
@@ -194,7 +196,7 @@ export default function PortfolioHistoryChart() {
                     : "text-gray-500"
                 }`}
               >
-                {PERIOD_LABELS[p]}
+                {t(PERIOD_KEYS[p])}
               </button>
             ))}
           </div>
@@ -234,7 +236,7 @@ export default function PortfolioHistoryChart() {
                       {viewMode === "asset" ? (
                         <>
                           <p className="font-semibold">
-                            {item.totalValue.toLocaleString()}円
+                            {item.totalValue.toLocaleString()}{t("yen")}
                           </p>
                           <p
                             className={`text-xs ${
@@ -243,10 +245,7 @@ export default function PortfolioHistoryChart() {
                                 : "text-red-600"
                             }`}
                           >
-                            含み損益: {item.unrealizedGain >= 0 ? "+" : ""}
-                            {item.unrealizedGain.toLocaleString()}円 (
-                            {item.unrealizedGainPercent >= 0 ? "+" : ""}
-                            {item.unrealizedGainPercent.toFixed(1)}%)
+                            {t("unrealizedGain", { value: `${item.unrealizedGain >= 0 ? "+" : ""}${item.unrealizedGain.toLocaleString()}${t("yen")} (${item.unrealizedGainPercent >= 0 ? "+" : ""}${item.unrealizedGainPercent.toFixed(1)}%)` })}
                           </p>
                         </>
                       ) : (
@@ -259,14 +258,14 @@ export default function PortfolioHistoryChart() {
                             }`}
                           >
                             {item.totalGain >= 0 ? "+" : ""}
-                            {item.totalGain.toLocaleString()}円
+                            {item.totalGain.toLocaleString()}{t("yen")}
                           </p>
                           {item.realizedGain !== 0 && (
                             <p className="text-xs text-gray-500">
-                              含み {item.unrealizedGain >= 0 ? "+" : ""}
-                              {item.unrealizedGain.toLocaleString()}円 / 確定{" "}
+                              {t("unrealizedLabel")} {item.unrealizedGain >= 0 ? "+" : ""}
+                              {item.unrealizedGain.toLocaleString()}{t("yen")} / {t("realizedLabel")}{" "}
                               {item.realizedGain >= 0 ? "+" : ""}
-                              {item.realizedGain.toLocaleString()}円
+                              {item.realizedGain.toLocaleString()}{t("yen")}
                             </p>
                           )}
                         </>
@@ -306,7 +305,7 @@ export default function PortfolioHistoryChart() {
           {formatFullDate(data.history[0]?.date || "")} 〜{" "}
           {formatFullDate(data.history[data.history.length - 1]?.date || "")}
         </span>
-        <span>{data.history.length}日分</span>
+        <span>{t("dayCount", { count: data.history.length })}</span>
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslations } from "next-intl"
 import CopyableTicker, { copyTicker } from "./CopyableTicker"
 
 interface StockHeaderProps {
@@ -11,6 +12,7 @@ interface StockHeaderProps {
 }
 
 export default function StockHeader({ name, tickerCode, sector, badge, badgeClassName }: StockHeaderProps) {
+  const t = useTranslations("stocks.stockHeader")
   const handleNameClick = () => {
     copyTicker(tickerCode)
   }
@@ -27,7 +29,7 @@ export default function StockHeader({ name, tickerCode, sector, badge, badgeClas
       <h1
         onClick={handleNameClick}
         className="text-2xl sm:text-3xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 active:text-blue-700 transition-colors"
-        title="タップしてコピー"
+        title={t("tapToCopy")}
       >
         {name}
       </h1>

@@ -86,5 +86,22 @@
     "news": "ニュース通知",
     "dailyReport": "日次レポート",
     "weeklyReport": "週次レポート"
+  },
+  "bell": {
+    "ariaLabel": "通知"
+  },
+  "pushPrompt": {
+    "title": "通知をオンにしませんか？",
+    "description": "毎日の分析結果や注目銘柄の更新をお知らせします",
+    "scheduleTitle": "通知スケジュール",
+    "scheduleAnalysis": "ポートフォリオ分析・購入レコメンド（平日）",
+    "scheduleRecommendations": "あなたへのおすすめ更新（平日）",
+    "enableButton": "通知をオンにする",
+    "enabling": "設定中...",
+    "goToSettings": "設定で詳しく見る",
+    "later": "後で",
+    "permissionDenied": "通知が許可されませんでした。ブラウザの設定から許可してください。",
+    "enabled": "プッシュ通知をオンにしました！",
+    "failed": "プッシュ通知の設定に失敗しました"
   }
 }

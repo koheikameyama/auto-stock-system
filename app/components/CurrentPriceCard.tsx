@@ -1,6 +1,7 @@
 "use client"
 
 import { ReactNode } from "react"
+import { useTranslations } from "next-intl"
 
 interface StockPrice {
   currentPrice: number
@@ -22,7 +23,7 @@ interface CurrentPriceCardProps {
 }
 
 export default function CurrentPriceCard({
-  title = "現在の価格",
+  title,
   price,
   loading,
   fiftyTwoWeekHigh,
@@ -32,23 +33,25 @@ export default function CurrentPriceCard({
   isDelisted = false,
   isStale = false,
 }: CurrentPriceCardProps) {
+  const t = useTranslations("stocks.currentPrice")
+  const displayTitle = title ?? t("defaultTitle")
   return (
     <section className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6">
       <div className={`flex items-center justify-between mb-4 ${isStale && !price ? "hidden sm:flex" : ""}`}>
         <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-          {title}
+          {displayTitle}
         </h2>
         {actions && <div className="flex gap-2">{actions}</div>}
       </div>
 
       <div className="space-y-4">
         {loading ? (
-          <p className="text-sm text-gray-400">読み込み中...</p>
+          <p className="text-sm text-gray-400">{t("loading")}</p>
         ) : price ? (
           <>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">
-                {isDelisted ? "最終価格" : "現在価格"}
+                {isDelisted ? t("finalPrice") : t("currentPrice")}
               </span>
               <div className="text-right">
                 <p className={`text-2xl font-bold ${isDelisted ? "text-gray-400" : "text-gray-900"}`}>
@@ -72,7 +75,7 @@ export default function CurrentPriceCard({
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                    時点
+                    {t("asOf")}
                   </p>
                 )}
               </div>
@@ -80,7 +83,7 @@ export default function CurrentPriceCard({
 
             {(fiftyTwoWeekHigh || fiftyTwoWeekLow) && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">52週高値 / 安値</span>
+                <span className="text-gray-600">{t("fiftyTwoWeekRange")}</span>
                 <span className="font-semibold text-gray-900">
                   ¥{(fiftyTwoWeekHigh || 0).toLocaleString()} / ¥
                   {(fiftyTwoWeekLow || 0).toLocaleString()}
@@ -95,11 +98,11 @@ export default function CurrentPriceCard({
         ) : isStale ? (
           <div className="bg-amber-50 border-l-4 border-amber-400 p-3">
             <p className="text-xs text-amber-800">
-              株価データが取得できませんでした。<br />データ取得不可、または取引停止の銘柄の可能性があります。
+              {t("staleMessage")}<br />{t("staleDetail")}
             </p>
           </div>
         ) : (
-          <p className="text-sm text-gray-400">価格情報なし</p>
+          <p className="text-sm text-gray-400">{t("noPriceInfo")}</p>
         )}
       </div>
     </section>
