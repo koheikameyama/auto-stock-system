@@ -131,7 +131,7 @@ export function generateCorrectionExplanation(ctx: CorrectionContext): string {
       return `直近で配当権利落ちが発生しており、「${ruleName}」が適用されました。株価の下落は配当落ち分を含む可能性があり、トレンド転換ではないと判断しました。`;
 
     case "panic_sell_prevention":
-      return `25日移動平均線から${ctx.actualValue}の下方乖離で「売られすぎ」の状態のため、「${ruleName}」が発動しました。大底での売却を避けるため、自律反発を待つ判断になりました。`;
+      return `25日移動平均線から${ctx.actualValue}の下方乖離で「売られすぎ」の状態のため、${ctx.styleName}の「${ruleName}」が発動しました。大底での売却を避けるため、自律反発を待つ判断になりました。`;
 
     case "trend_protection":
       return `${ctx.additionalInfo}のトレンドが上昇見通しのため、「${ruleName}」が適用されました。短期的な売りシグナルでの即売却は見送り、中長期の回復を優先する判断になりました。`;

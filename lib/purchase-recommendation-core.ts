@@ -25,7 +25,7 @@ import {
   type GeopoliticalRiskData,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
-import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND, GAP_UP_MOMENTUM, EARNINGS_SAFETY, CROSS_STYLE_CONSENSUS } from "@/lib/constants";
+import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND, GAP_UP_MOMENTUM, EARNINGS_SAFETY, CROSS_STYLE_CONSENSUS, GEOPOLITICAL_RISK } from "@/lib/constants";
 import {
   calculateDeviationRate,
   calculateSMA,
@@ -749,8 +749,17 @@ export async function executePurchaseRecommendation(
       sa.confidence = Math.min(1.0, sa.confidence + MA_DEVIATION.CONFIDENCE_BONUS);
     }
 
-    // パニック売り防止
-    if (deviationRate !== null && deviationRate <= SELL_TIMING.PANIC_SELL_THRESHOLD && sa.recommendation === "avoid") {
+    // パニック売り防止（スタイル別閾値 + 市場状況で解除）
+    const panicThreshold = SELL_TIMING.PANIC_SELL_THRESHOLD[styleKey];
+    const isMarketBearish = marketData?.isMarketPanic === true ||
+      (geopoliticalRiskData.vixClose !== null && geopoliticalRiskData.vixClose >= GEOPOLITICAL_RISK.VIX_HIGH);
+    if (
+      !isMarketBearish &&
+      panicThreshold !== null &&
+      deviationRate !== null &&
+      deviationRate <= panicThreshold &&
+      sa.recommendation === "avoid"
+    ) {
       sa.recommendation = "stay";
       sa.caution = `25日移動平均線から${deviationRate.toFixed(1)}%下方乖離しており売られすぎです。大底で見送るのはもったいないため、様子見を推奨します。${sa.caution}`;
       sa.correctionExplanation = generateCorrectionExplanation({

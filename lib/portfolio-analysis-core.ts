@@ -41,6 +41,7 @@ import {
   ATR_EXIT_STRATEGY,
   PROFIT_TAKING_PROMOTION,
   UNIT_SHARES,
+  GEOPOLITICAL_RISK,
 } from "@/lib/constants";
 import { getDaysAgoForDB, getTodayForDB } from "@/lib/date-utils";
 import { isDangerousStock, isPostExDividend } from "@/lib/stock-safety-rules";
@@ -94,6 +95,7 @@ function postProcessPortfolioAnalysis(params: {
   };
   weekChangeRate: number | null;
   marketData: MarketIndexData | null;
+  geopoliticalRiskData: GeopoliticalRiskData | null;
   profitPercent: number | null;
   currentPrice: number;
   averagePrice: number;
@@ -106,7 +108,7 @@ function postProcessPortfolioAnalysis(params: {
   sellTargetPrice: number | null;
   deviationRate: number | null;
 } {
-  const { result, prices, stock, weekChangeRate, marketData, profitPercent, currentPrice, averagePrice, quantity, userSettings } = params;
+  const { result, prices, stock, weekChangeRate, marketData, geopoliticalRiskData, profitPercent, currentPrice, averagePrice, quantity, userSettings } = params;
 
   // テクニカル指標の計算
   const pricesNewestFirst = [...prices].reverse().map((p) => ({ close: p.close }));
@@ -127,10 +129,17 @@ function postProcessPortfolioAnalysis(params: {
       sa.holdCondition = null;
     }
 
-    // パニック売り防止: 乖離率-20%以下 → sell→hold
+    // パニック売り防止（スタイル別閾値 + 市場状況で解除 + 損切りライン優先）
+    const panicThreshold = SELL_TIMING.PANIC_SELL_THRESHOLD[styleKey];
+    const isMarketBearish = marketData?.isMarketPanic === true ||
+      (geopoliticalRiskData?.vixClose !== null && geopoliticalRiskData?.vixClose !== undefined && geopoliticalRiskData.vixClose >= GEOPOLITICAL_RISK.VIX_HIGH);
+    const isAtStopLoss = profitPercent !== null && profitPercent <= SELL_TIMING.STOP_LOSS_THRESHOLD;
     if (
+      !isMarketBearish &&
+      !isAtStopLoss &&
+      panicThreshold !== null &&
       deviationRate !== null &&
-      deviationRate <= SELL_TIMING.PANIC_SELL_THRESHOLD &&
+      deviationRate <= panicThreshold &&
       sa.recommendation === "sell"
     ) {
       sa.recommendation = "hold";
@@ -1018,6 +1027,7 @@ export async function executePortfolioAnalysis(
       stock,
       weekChangeRate,
       marketData,
+      geopoliticalRiskData,
       profitPercent,
       currentPrice,
       averagePrice,
@@ -1413,6 +1423,7 @@ export async function executeSimulatedPortfolioAnalysis(
       stock,
       weekChangeRate,
       marketData,
+      geopoliticalRiskData: simGeopoliticalRiskData,
       profitPercent,
       currentPrice,
       averagePrice,
