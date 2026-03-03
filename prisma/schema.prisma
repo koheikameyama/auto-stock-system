@@ -193,12 +193,19 @@ model MarketNews {
   region      String? // "日本", "米国" など（表示用）
   tickerCode  String? // 銘柄コード（yfinanceで取得した場合に設定、例: "7203"）
 
+  // 地政学・マクロニュース分析
+  category        String  @default("stock") // "stock" | "geopolitical" | "macro"
+  impactSectors   String? // JSON配列 e.g. '["半導体・電子部品","自動車"]'
+  impactDirection String? // "positive" | "negative" | "mixed"
+  impactSummary   String? @db.Text // AI生成の影響説明
+
   @@unique([url, tickerCode])
   @@index([tickerCode])
   @@index([publishedAt(sort: Desc)])
   @@index([sector])
   @@index([source])
   @@index([market])
+  @@index([category])
 }
 
 // セクタートレンド分析（ニュース + 株価統合）
