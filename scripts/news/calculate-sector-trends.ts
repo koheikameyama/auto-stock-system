@@ -175,6 +175,8 @@ async function main(): Promise<void> {
       sentiment: true,
       market: true,
       publishedAt: true,
+      impactSectors: true,
+      category: true,
     },
   })
   console.log(`  取得件数: ${allNews.length}件`)
@@ -220,6 +222,25 @@ async function main(): Promise<void> {
             addSentiment(agg3d[jpSector], sentiment, true)
           }
         }
+      }
+    }
+
+    // impactSectors展開集計（sectorと同じセクターは二重カウント回避）
+    if (news.impactSectors) {
+      try {
+        const sectors: string[] = JSON.parse(news.impactSectors as string)
+        const isUS = news.market === "US"
+        for (const impactSector of sectors) {
+          if (impactSector === news.sector) continue
+          if (impactSector in agg7d) {
+            addSentiment(agg7d[impactSector], sentiment, isUS)
+            if (isWithin3d) {
+              addSentiment(agg3d[impactSector], sentiment, isUS)
+            }
+          }
+        }
+      } catch {
+        // JSONパースエラーは無視
       }
     }
   }
