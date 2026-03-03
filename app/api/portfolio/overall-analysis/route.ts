@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
 
     const requestedSession = request.nextUrl.searchParams.get("session") as NavigatorSession | null
     const result = await getPortfolioOverallAnalysis(session.user.id, requestedSession ?? undefined)
+
     return NextResponse.json(result)
   } catch (error) {
     console.error("Error fetching portfolio overall analysis:", error)
