@@ -126,7 +126,24 @@
 
 **API**: `GET /api/portfolio/composition`
 
-### 8. セクタートレンドヒートマップ
+### 8. 地政学・マクロリスク（セクタートレンドの直上）
+
+直近3日の地政学・マクロ経済ニュースをコンパクトカードで表示。
+
+| 項目 | 説明 |
+|------|------|
+| リスクレベルバッジ | 安定（緑）/ 注意（黄）/ 警戒（赤） |
+| ニュース一覧 | 最大3件。タイトル + 影響セクター + 影響方向 |
+| 詳細リンク | ニュースページ（市場影響フィルター）へ遷移 |
+
+**リスクレベル判定**:
+- 0件 → 安定
+- 1-2件（neutral中心）→ 注意
+- 3件以上 or negative多数 → 警戒
+
+**API**: `GET /api/news/geopolitical`
+
+### 9. セクタートレンドヒートマップ
 
 - 全セクターのトレンドスコアを色分けグリッド表示
 - 時間窓切替: 3日 / 7日
@@ -134,7 +151,7 @@
 
 **API**: `GET /api/sector-trends`
 
-### 9. あなたへのおすすめ（パーソナライズ推奨）
+### 10. あなたへのおすすめ（パーソナライズ推奨）
 
 - ユーザーごとにAIが選定した5銘柄を横スクロールカードで表示
 - 各カード表示項目:
@@ -174,7 +191,7 @@
 }
 ```
 
-### 10. 注目の高評価銘柄（投資スタイル別）
+### 11. 注目の高評価銘柄（投資スタイル別）
 
 - 分析済み全銘柄（PurchaseRecommendation）の中から、ユーザーの投資スタイルで「買い推奨」の銘柄を横スクロールカードで表示
 - confidence（確信度）の高い順に最大10件表示
@@ -226,7 +243,7 @@
 }
 ```
 
-### 11. 市場ランキング（上昇/下落）
+### 12. 市場ランキング（上昇/下落）
 
 - 上昇TOP5、下落TOP5を表示
 - 各銘柄の変化率とAI原因分析
@@ -251,6 +268,7 @@ page.tsx（Server Component）
 ├─ BudgetSummary     → GET /api/budget/summary
 ├─ PortfolioHistoryChart → GET /api/portfolio/history
 ├─ PortfolioCompositionChart → GET /api/portfolio/composition
+├─ GeopoliticalRiskCard → GET /api/news/geopolitical
 ├─ SectorTrendHeatmap → GET /api/sector-trends
 ├─ FeaturedStocksByCategory → GET /api/featured-stocks
 ├─ TopStocksByStyle  → GET /api/top-stocks
@@ -268,6 +286,7 @@ page.tsx（Server Component）
 | BudgetSummary | `BudgetSummary.tsx` | 予算配分表示 |
 | PortfolioHistoryChart | `PortfolioHistoryChart.tsx` | 資産推移/損益推移チャート |
 | PortfolioCompositionChart | `PortfolioCompositionChart.tsx` | 構成比率円グラフ |
+| GeopoliticalRiskCard | `GeopoliticalRiskCard.tsx` | 地政学・マクロリスクカード |
 | SectorTrendHeatmap | `SectorTrendHeatmap.tsx` | セクタートレンドヒートマップ |
 | FeaturedStocksByCategory | `FeaturedStocksByCategory.tsx` | おすすめ銘柄カード群 |
 | TopStocksByStyle | `TopStocksByStyle.tsx` | 投資スタイル別高評価銘柄 |
@@ -283,6 +302,8 @@ page.tsx（Server Component）
 - `app/api/portfolio/history/route.ts` - 資産推移 API
 - `app/api/portfolio/composition/route.ts` - 構成比率 API
 - `app/api/budget/summary/route.ts` - 予算サマリー API
+- `app/dashboard/GeopoliticalRiskCard.tsx` - 地政学リスクカード
+- `app/api/news/geopolitical/route.ts` - 地政学ニュース API
 - `app/api/sector-trends/route.ts` - セクタートレンド API
 - `app/api/featured-stocks/route.ts` - おすすめ銘柄 API
 - `app/dashboard/TopStocksByStyle.tsx` - 投資スタイル別高評価銘柄コンポーネント

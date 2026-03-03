@@ -13,6 +13,7 @@
 - ALL: 全ニュース
 - JP（🇯🇵）: 日本市場のみ
 - US（🇺🇸）: 米国市場のみ
+- 市場影響（🌍）: 地政学・マクロ経済ニュースのみ
 
 ### ニュースカード
 
@@ -22,6 +23,10 @@
 - 関連銘柄バッジ（最大3銘柄）
 - 市場フラグ（JP/US）
 - 経過時間（「X分前」「N日前」）
+- 市場影響バッジ（geopolitical/macroカテゴリの場合）
+- 影響方向（追い風/逆風/影響あり）
+- 影響セクター（複数可）
+- 影響サマリー（AI生成の1-2文）
 
 ## API仕様
 
@@ -35,6 +40,7 @@
 | market | string | - | JP / US |
 | daysAgo | number | 7 | 何日前まで取得 |
 | withRelated | boolean | false | 関連銘柄を含めるか |
+| category | string | - | impact（地政学・マクロのみ） |
 
 **レスポンス**:
 ```json
@@ -62,6 +68,10 @@
 ### `GET /api/news/dashboard`
 
 ダッシュボード用の最新ニュース5件。
+
+### `GET /api/news/geopolitical`
+
+ダッシュボード用。直近3日の地政学・マクロニュース（最大5件）。
 
 ## セクタートレンド
 
@@ -102,6 +112,10 @@
 | market | String | JP / US |
 | region | String? | 表示用地域名 |
 | tickerCode | String? | 銘柄コード（yfinanceで取得した場合に設定、例: "7203"） |
+| category | String | "stock" / "geopolitical" / "macro"（デフォルト: stock） |
+| impactSectors | String? | 影響セクター（JSON配列） |
+| impactDirection | String? | positive / negative / mixed |
+| impactSummary | Text? | AI生成の影響説明 |
 
 **ユニーク制約**: `(url, tickerCode)`（同一URLでも銘柄ごとに別行保存可）
 
@@ -135,6 +149,19 @@
 | 08:00（pre-morning） | 全銘柄個別ニュース（yfinance） | `scripts/github-actions/fetch_stock_news.py` |
 | 11:40（pre-afternoon） | JPニュース（RSS） | `scripts/news/fetch-news.ts` |
 
+## AI分析（地政学・マクロニュース対応）
+
+RSSフィードで取得したニュースに対し、GPT-4o-miniで以下を分析:
+
+1. **株式関連判定** (`is_stock_related`): 直接的な株式ニュースか
+2. **市場影響判定** (`is_market_impact`): 市場に間接的に影響しうるか
+3. **カテゴリ分類**: stock / geopolitical / macro
+4. **影響セクター**: 影響を受けるセクター（複数可）
+5. **影響方向**: 追い風 / 逆風 / 影響あり
+6. **影響サマリー**: 初心者向け説明（日本語）
+
+`is_stock_related=false` でも `is_market_impact=true` なら保存。
+
 ## データ保持期間
 
 | 種別 | 保持期間 |
@@ -156,6 +183,7 @@
 - `app/news/NewsPageClient.tsx` - ニュース一覧コンポーネント
 - `app/api/news/route.ts` - ニュース取得 API
 - `app/api/news/dashboard/route.ts` - ダッシュボード用 API
+- `app/api/news/geopolitical/route.ts` - 地政学ニュース API
 - `app/api/sector-trends/route.ts` - セクタートレンド API
 - `lib/news.ts` - ニュース処理
 - `lib/news-rag.ts` - ニュースRAG（getRelatedNews）
