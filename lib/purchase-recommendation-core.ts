@@ -33,7 +33,7 @@ import {
 import { getTodayForDB } from "@/lib/date-utils";
 import { insertRecommendationOutcome, Prediction } from "@/lib/outcome-utils";
 import { getNikkei225Data, MarketIndexData } from "@/lib/market-index";
-import { applyPurchaseStyleSafetyRules, type StyleAnalysesMap, type PurchaseStyleAnalysis } from "@/lib/style-analysis";
+import { applyPurchaseStyleSafetyRules, calcDipFallbackRate, type StyleAnalysesMap, type PurchaseStyleAnalysis } from "@/lib/style-analysis";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
 import {
   isDangerousStock,
@@ -757,6 +757,7 @@ export async function executePurchaseRecommendation(
       rsi: rsiForTiming,
       sma25: sma25ForTiming,
       currentPrice,
+      volatility,
     },
     sellTimingParams: {
       deviationRate,
@@ -805,7 +806,7 @@ export async function executePurchaseRecommendation(
       aggressiveStyle.buyTiming = "dip";
       aggressiveStyle.dipTargetPrice = sma25ForTiming
         ?? aggressiveStyle.dipTargetPrice
-        ?? Math.round(currentPrice * (1 - MA_DEVIATION.DIP_PRICE_FALLBACK_RATE));
+        ?? Math.round(currentPrice * (1 - calcDipFallbackRate(volatility)));
       aggressiveStyle.confidence = isClosingStrong && hasVolumeSupport
         ? Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE_WITH_VOLUME)
         : Math.max(aggressiveStyle.confidence, AGGRESSIVE_REBOUND.REBOUND_CONFIDENCE);

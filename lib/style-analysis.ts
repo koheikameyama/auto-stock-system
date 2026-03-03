@@ -67,11 +67,13 @@ export type StyleAnalysesMap<T> = Record<InvestmentStyle, T>;
 /**
  * AI推奨押し目価格のバリデーション
  * 異常値の場合はSMA25にフォールバック
+ * SMA25もない場合はvolatility連動で算出
  */
 function validateDipPrice(
   aiPrice: number | null,
   currentPrice: number,
   sma25: number | null,
+  volatility: number | null,
 ): number | null {
   if (aiPrice !== null && aiPrice > 0 && aiPrice < currentPrice) {
     const deviationFromCurrent = ((currentPrice - aiPrice) / currentPrice) * 100;
@@ -80,8 +82,21 @@ function validateDipPrice(
       return aiPrice;
     }
   }
-  // フォールバック: SMA25、それもなければ現在価格からフォールバック率で算出
-  return sma25 ?? Math.round(currentPrice * (1 - MA_DEVIATION.DIP_PRICE_FALLBACK_RATE));
+  // フォールバック: SMA25、それもなければvolatility連動で算出
+  if (sma25 !== null) {
+    return sma25;
+  }
+  const dipRate = calcDipFallbackRate(volatility);
+  return Math.round(currentPrice * (1 - dipRate));
+}
+
+/** volatilityからフォールバック下落率を算出（上下限クランプ付き） */
+export function calcDipFallbackRate(volatility: number | null): number {
+  if (volatility === null) {
+    return MA_DEVIATION.DIP_PRICE_DEFAULT_RATE;
+  }
+  const raw = volatility * MA_DEVIATION.DIP_PRICE_VOLATILITY_FACTOR / 100;
+  return Math.max(MA_DEVIATION.DIP_PRICE_MIN_RATE, Math.min(MA_DEVIATION.DIP_PRICE_MAX_RATE, raw));
 }
 
 const ALL_STYLES: InvestmentStyle[] = [
@@ -103,6 +118,7 @@ export function applyPurchaseStyleSafetyRules(params: {
     rsi: number | null;
     sma25: number | null;
     currentPrice: number;
+    volatility: number | null;
   };
   sellTimingParams: {
     deviationRate: number | null;
@@ -275,7 +291,8 @@ export function applyPurchaseStyleSafetyRules(params: {
         styleResult.buyTiming = "market";
       }
       // AI推奨押し目価格のバリデーション（各スタイルのAI生成値を検証）
-      styleResult.dipTargetPrice = validateDipPrice(styleResult.dipTargetPrice, currentPrice, sma25);
+      const { volatility } = buyTimingParams;
+      styleResult.dipTargetPrice = validateDipPrice(styleResult.dipTargetPrice, currentPrice, sma25, volatility);
     }
 
     // 売りタイミング判定（avoid推奨時のみ）

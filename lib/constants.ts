@@ -432,7 +432,11 @@ export const MA_DEVIATION = {
   DIP_BUY_THRESHOLD: 5, // 乖離率(%)がこれを超えたら押し目買い推奨
   RSI_OVERBOUGHT_THRESHOLD: 70, // RSIがこれを超えたら押し目買い推奨
   EXTREME_UPPER_THRESHOLD: 50, // skipSafetyRulesでもブロックする極端な上方乖離（%）
-  DIP_PRICE_FALLBACK_RATE: 0.03, // SMA25もAI推奨価格もない場合の押し目フォールバック率（現在価格の3%下）
+  // 押し目フォールバック: volatility / 2 をベースに、上下限でクランプ
+  DIP_PRICE_VOLATILITY_FACTOR: 0.5, // ボラティリティに掛ける係数（volatility * factor / 100 = 下落率）
+  DIP_PRICE_MIN_RATE: 0.02, // 最小フォールバック率（2%）
+  DIP_PRICE_MAX_RATE: 0.15, // 最大フォールバック率（15%）
+  DIP_PRICE_DEFAULT_RATE: 0.05, // ボラティリティ不明時のデフォルト率（5%）
 } as const;
 
 // トレンドねじれ（Divergence）検出の閾値
