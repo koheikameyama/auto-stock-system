@@ -50,7 +50,7 @@ MONTHLY
 | JST | ワークフロー | 入力 | 目的 | 買い推奨通知 |
 |-----|------------|------|------|-------------|
 | 08:00 | session-batch | session=pre-morning | 寄り前分析（前日終値+米国市場+ニュース） | 抑制（情報提供モード） |
-| 09:30 | session-batch | session=morning | 開場30分後の再判定（値動き安定後） | 送信 |
+| 09:30 | session-batch | session=morning | 株価取得+開場30分後の再判定（値動き安定後） | 送信 |
 | 11:40 | session-batch | session=pre-afternoon | 前場株価取得+ニュース更新+分析 | 送信 |
 | 13:00 | session-batch | session=afternoon | 後場開始30分後の再判定 | 送信 |
 | 15:40 | session-batch | session=close | 大引け後の最終分析+ランキング+スナップショット | 抑制（情報提供モード） |
@@ -77,8 +77,8 @@ fetch-news + fetch-stock-prices（並列）
 |-------------|------|--------------|
 | `session-fetch-pre-market-data.yml` | 海外市場データ取得 | pre-morning のみ |
 | `session-fetch-news.yml` | ニュース取得 | morning(JP+US) + afternoon(JP) のみ |
-| `session-fetch-stock-prices.yml` | 株価更新 | 常に |
-| `session-calculate-sector-trends.yml` | セクタートレンド計算 | 常に |
+| `session-fetch-stock-prices.yml` | 株価更新 | morning + pre-afternoon + close |
+| `session-calculate-sector-trends.yml` | セクタートレンド計算 | pre-morning + morning + pre-afternoon + close |
 | `session-purchase-recommendations.yml` | 購入判断生成 | 常に |
 | `session-portfolio-analysis.yml` | ポートフォリオ分析 | 常に |
 | `session-personal-recommendations.yml` | おすすめ銘柄生成 | 常に |

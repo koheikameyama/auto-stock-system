@@ -25,7 +25,7 @@ on:
 # セッション別の実行内容:
 #
 #   pre-morning (08:00):   pre-market-data + news(JP+US) + stock-news → trends → 購入判断 + PF分析 → navigator(morning)
-#   morning (09:30):       購入判断 + PF分析 + おすすめ（開場30分後・値動き安定後の再判定）
+#   morning (09:30):       prices → trends → 購入判断 + PF分析 + おすすめ（開場30分後・値動き安定後の再判定）
 #   pre-afternoon (11:40): news(JP) + prices → trends → 購入判断 + PF分析 → navigator(pre-afternoon)
 #   afternoon (13:00):     購入判断 + PF分析 + おすすめ（後場開始30分後の再判定）
 #   close (15:40):         prices → trends → 購入判断 + PF分析 + おすすめ + gainers + snapshots
@@ -53,7 +53,7 @@ jobs:
     secrets: inherit
 
   fetch-stock-prices:
-    if: inputs.session == 'pre-afternoon' || inputs.session == 'close'
+    if: inputs.session == 'morning' || inputs.session == 'pre-afternoon' || inputs.session == 'close'
     uses: ./.github/workflows/session-fetch-stock-prices.yml
     secrets: inherit
 
@@ -61,7 +61,7 @@ jobs:
 
   calculate-sector-trends:
     needs: [fetch-news, fetch-stock-prices]
-    if: "!failure() && !cancelled() && (inputs.session == 'pre-morning' || inputs.session == 'pre-afternoon' || inputs.session == 'close')"
+    if: "!failure() && !cancelled() && (inputs.session == 'pre-morning' || inputs.session == 'morning' || inputs.session == 'pre-afternoon' || inputs.session == 'close')"
     uses: ./.github/workflows/session-calculate-sector-trends.yml
     secrets: inherit
 
