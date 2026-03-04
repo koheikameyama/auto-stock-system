@@ -4,7 +4,7 @@
  * Pythonスクリプト (generate_personal_recommendations.py) から移植
  */
 
-import { PERSPECTIVE_BONUS, SECTOR_TREND, getSectorGroup } from "@/lib/constants"
+import { PERSPECTIVE_BONUS, getSectorGroup } from "@/lib/constants"
 import { computeSectorRankBonuses, getSectorScoreBonus, type SectorTrendData } from "@/lib/sector-trend"
 
 // 設定
@@ -338,93 +338,27 @@ export function calculateStockScores(
   return scoredStocks
 }
 
-/**
- * セクタートレンドに応じたセクター別銘柄数上限を取得
- */
-function getSectorLimit(trend: SectorTrendData | undefined): number {
-  if (!trend) return SCORING_CONFIG.SECTOR_LIMIT_NEUTRAL
-  const score = trend.compositeScore ?? trend.score3d
-  if (score >= SECTOR_TREND.STRONG_UP_THRESHOLD) return SCORING_CONFIG.SECTOR_LIMIT_STRONG_UP
-  if (score >= SECTOR_TREND.UP_THRESHOLD) return SCORING_CONFIG.SECTOR_LIMIT_UP
-  if (score <= SECTOR_TREND.STRONG_DOWN_THRESHOLD) return SCORING_CONFIG.SECTOR_LIMIT_STRONG_DOWN
-  if (score <= SECTOR_TREND.DOWN_THRESHOLD) return SCORING_CONFIG.SECTOR_LIMIT_DOWN
-  return SCORING_CONFIG.SECTOR_LIMIT_NEUTRAL
-}
 
-/**
- * セクター分散を適用（セクタートレンドに応じて銘柄数上限を動的に調整）
- */
-export function applySectorDiversification(
-  stocks: ScoredStock[],
-  sectorTrends?: Record<string, SectorTrendData>,
-): ScoredStock[] {
-  const sectorCounts: Record<string, number> = {}
-  const diversified: ScoredStock[] = []
-
-  for (const stock of stocks) {
-    const sector = getSectorGroup(stock.sector) || "その他"
-    const count = sectorCounts[sector] || 0
-    const limit = getSectorLimit(sectorTrends?.[sector])
-
-    if (count < limit) {
-      diversified.push(stock)
-      sectorCounts[sector] = count + 1
-    }
-  }
-
-  return diversified
-}
-
-/** 予算を10万円単位で切り上げる（残り3万→10万、残り12万→20万、0→10万） */
-export function roundUpBudget(budget: number): number {
-  const unit = SCORING_CONFIG.BUDGET_ROUND_UP_UNIT
-  return Math.max(unit, Math.ceil(budget / unit) * unit)
-}
-
-/** 切り上げ予算でフィルタ（スコアリング前の候補絞り込み用） */
-export function filterByLooseBudget(
+/** 投資予算（総額）で1単元（100株）購入可能な銘柄にフィルタ */
+export function filterByTotalBudget(
   stocks: StockForScoring[],
-  budget: number | null
+  totalBudget: number | null,
 ): StockForScoring[] {
-  if (!budget) return stocks
-  const effectiveBudget = roundUpBudget(budget)
+  if (!totalBudget) return stocks
   return stocks.filter(s =>
-    s.latestPrice !== null && s.latestPrice * 100 <= effectiveBudget
+    s.latestPrice !== null && s.latestPrice * 100 <= totalBudget
   )
 }
 
-/**
- * スコアリング後の最終予算絞り込み
- * 切り上げ予算内の銘柄を優先し、5件未満なら予算超の銘柄も安い順に追加
- */
-const MIN_RECOMMENDATIONS = 5
-
-export function narrowByBudget(
+/** セクターキャップを適用（同一セクターから最大maxPerSector銘柄まで） */
+export function applySectorCap(
   stocks: ScoredStock[],
-  budget: number | null
-): { stocks: ScoredStock[]; isBudgetExceeded: boolean } {
-  if (!budget) return { stocks, isBudgetExceeded: false }
-
-  const effectiveBudget = roundUpBudget(budget)
-
-  const withinBudget = stocks.filter(s =>
-    s.latestPrice !== null && s.latestPrice * 100 <= effectiveBudget
-  )
-
-  if (withinBudget.length >= MIN_RECOMMENDATIONS) {
-    // 実際の予算を超えているかは元の budget で判定
-    const isBudgetExceeded = withinBudget.some(s =>
-      s.latestPrice !== null && s.latestPrice * 100 > budget
-    )
-    return { stocks: withinBudget, isBudgetExceeded }
-  }
-
-  // 切り上げ予算内が5件未満: 予算超の銘柄を安い順に追加
-  const overBudgetIds = new Set(withinBudget.map(s => s.id))
-  const overBudget = stocks
-    .filter(s => !overBudgetIds.has(s.id) && s.latestPrice !== null)
-    .sort((a, b) => (a.latestPrice ?? Infinity) - (b.latestPrice ?? Infinity))
-
-  const combined = [...withinBudget, ...overBudget].slice(0, SCORING_CONFIG.MAX_CANDIDATES_FOR_AI)
-  return { stocks: combined, isBudgetExceeded: combined.some(s => s.latestPrice !== null && s.latestPrice * 100 > budget) }
+  maxPerSector: number = 2,
+): ScoredStock[] {
+  const counts: Record<string, number> = {}
+  return stocks.filter(stock => {
+    const sector = getSectorGroup(stock.sector) || "その他"
+    counts[sector] = (counts[sector] || 0) + 1
+    return counts[sector] <= maxPerSector
+  })
 }

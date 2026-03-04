@@ -45,6 +45,9 @@ ${prompts.intro}
 - 投資スタイル: ${styleLabel}
 - 投資資金: ${budgetLabel}
 ${marketContext}${sectorTrendContext}
+【重要】以下の候補銘柄はすべて、チャート分析・ファンダメンタル分析で「買い候補」として事前に厳選された銘柄です。
+この中から、ユーザーの投資スタイルに最も適した銘柄を選んでください。
+
 【選べる銘柄一覧（詳細分析付き）】
 ${stockSummaries}
 ${newsContext}

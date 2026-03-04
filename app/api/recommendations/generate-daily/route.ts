@@ -44,9 +44,8 @@ import {
 } from "@/lib/stock-safety-rules";
 import {
   calculateStockScores,
-  applySectorDiversification,
-  filterByLooseBudget,
-  narrowByBudget,
+  filterByTotalBudget,
+  applySectorCap,
   SCORING_CONFIG,
   StockForScoring,
   ScoredStock,
@@ -390,13 +389,13 @@ async function processUser(
     profitTrend: s.profitTrend,
   }));
 
-  // 予算の1.5倍までの緩いフィルタ（候補を広めに取る）
-  const looseFiltered = filterByLooseBudget(stocksForScoring, remainingBudget);
+  // 投資予算（総額）で1単元（100株）購入可能な銘柄にフィルタ
+  const budgetFiltered = filterByTotalBudget(stocksForScoring, investmentBudget);
   console.log(
-    `  Stocks after loose budget filter: ${looseFiltered.length}/${stocksForScoring.length}`,
+    `  Stocks after budget filter: ${budgetFiltered.length}/${stocksForScoring.length}`,
   );
 
-  if (looseFiltered.length === 0) {
+  if (budgetFiltered.length === 0) {
     return {
       userId,
       success: false,
@@ -405,7 +404,7 @@ async function processUser(
   }
 
   // チャート分析・ファンダメンタル分析で買い候補の銘柄のみに絞り込み
-  const buyCandidates = filterBuyCandidates(looseFiltered, investmentStyle);
+  const buyCandidates = filterBuyCandidates(budgetFiltered, investmentStyle);
   if (buyCandidates.length === 0) {
     return {
       userId,
@@ -426,17 +425,11 @@ async function processUser(
       .join(", ")}`,
   );
 
-  const diversified = applySectorDiversification(scored, sectorTrendMap);
-  console.log(`  After sector diversification: ${diversified.length} stocks`);
+  // セクターキャップ（同一セクター最大2銘柄）を適用し、上位候補を選出
+  const sectorCapped = applySectorCap(scored, 2);
+  console.log(`  After sector cap: ${sectorCapped.length} stocks`);
 
-  // 予算内の銘柄を優先し、5件未満なら予算超も追加
-  const budgetResult = narrowByBudget(diversified, remainingBudget);
-  const isBudgetExceeded = budgetResult.isBudgetExceeded;
-  if (isBudgetExceeded) {
-    console.log(`  Budget exceeded: including over-budget stocks`);
-  }
-
-  const topCandidates = budgetResult.stocks.slice(
+  const topCandidates = sectorCapped.slice(
     0,
     SCORING_CONFIG.MAX_CANDIDATES_FOR_AI,
   );
@@ -469,7 +462,6 @@ async function processUser(
     marketContext,
     newsContext,
     sectorTrendContext,
-    isBudgetExceeded,
     ownedTickerCodes,
     watchlistTickerCodes,
   );
@@ -743,7 +735,6 @@ async function selectWithAI(
   marketContext: string,
   newsContext: string,
   sectorTrendContext: string,
-  isBudgetExceeded: boolean = false,
   ownedTickerCodes: Set<string> = new Set(),
   watchlistTickerCodes: Set<string> = new Set(),
 ): Promise<Array<{
@@ -752,14 +743,11 @@ async function selectWithAI(
   investmentTheme: string;
 }> | null> {
   const styleLabel = getStyleLabel(investmentStyle);
-  let budgetLabel = investmentBudget
+  const budgetLabel = investmentBudget
     ? remainingBudget !== null
       ? `${remainingBudget.toLocaleString()}円（残り）/ 合計 ${investmentBudget.toLocaleString()}円`
       : `${investmentBudget.toLocaleString()}円`
     : "未設定";
-  if (isBudgetExceeded) {
-    budgetLabel += "（※予算内で購入可能な銘柄がないため、予算に近い銘柄を候補にしています。おすすめ理由に予算を超えている旨を含めてください）";
-  }
 
   const stockSummaries = stockContexts
     .map((ctx, idx) => {
