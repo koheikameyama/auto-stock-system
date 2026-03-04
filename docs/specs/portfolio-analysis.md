@@ -136,7 +136,7 @@ AI生成後、非スタイル依存の安全補正（上記テーブルの大半
 
 ポートフォリオ全体を市場の流れと照合するカード型UIです。朝と夜の2セッションで異なる視点の分析を提供します。
 
-**前提条件**: ポートフォリオ + ウォッチリスト合計3銘柄以上
+**前提条件**: なし（0銘柄でも表示。ポートフォリオがない場合はセクター戦略ベースの市場分析を提供）
 
 **表示場所**:
 - `/dashboard` の最上部
@@ -150,6 +150,15 @@ AI生成後、非スタイル依存の安全補正（上記テーブルの大半
 | 夜（evening） | 15:30 JST | アナリスト兼コーチ | 結果診断。市場振り返り・持ち株の健康診断・明日の予習 |
 
 UIはJST 15時を境にデフォルトセッションを自動切替。タブで手動切替も可能。
+
+**ポートフォリオ有無による分岐**:
+
+| パターン | Section 2 の表示 | STEP 2 の内容 |
+|---------|-----------------|--------------|
+| ポートフォリオあり | 「あなたのポートフォリオ」+ ステータスバッジ | 持ち株の健康診断 |
+| ポートフォリオなし | 「投資戦略ガイド」（バッジなし） | セクターから投資チャンスを探す |
+
+**セクター戦略**: SectorTrendデータ（上位10件）とAI分析のハイブリッドで、セクター別の投資方針を生成。気になるリストに該当セクターの銘柄がある場合は具体的に言及する。
 
 **分析に使用するデータ**:
 - セクター構成・集中率
@@ -169,7 +178,7 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
 | ステップ | 内容 |
 |---------|------|
 | STEP 1: 市場の流れを定義 | セクタートレンド・値動きデータ・NY市場（S&P 500・NASDAQ）の動向から今日の地合いを `bullish / bearish / neutral / sector_rotation` の1つに定義 |
-| STEP 2: ポートフォリオとの照合 | 保有銘柄と市場の流れを突き合わせ、逆行銘柄・リスク水準・要注意銘柄を特定 |
+| STEP 2: ポートフォリオとの照合 / セクター機会発見 | **ポートフォリオあり**: 保有銘柄と市場の流れを突き合わせ、逆行銘柄・リスク水準・要注意銘柄を特定。**ポートフォリオなし**: セクタートレンドから注目セクターと投資チャンスを探索 |
 | STEP 3: 結論（アクション） | 投資スタイルに合わせて「攻める日」か「守る日」かを断定。曖昧な表現を避け具体的なアクションを提示 |
 
 **AI出力スキーマ**:
@@ -199,9 +208,13 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
       "avgDailyChange": -3.1,
       "trendDirection": "up | down | neutral",
       "compositeScore": -25,
-      "commentary": "セクター動向のコメント"
+      "commentary": "セクター動向のコメント",
+      "watchlistStocks": [
+        { "stockName": "東京エレクトロン", "tickerCode": "8035.T" }
+      ]
     }
-  ]
+  ],
+  "sectorStrategy": "セクター別投資戦略テキスト（1-3文）| null"
 }
 ```
 
@@ -223,9 +236,9 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
 | セクション | 内容 |
 |-----------|------|
 | Section 1: 市場 | `marketHeadline` + `marketTone` バッジ + `marketKeyFactor` |
-| Section 2: ポートフォリオ | `portfolioStatus` バッジ + `portfolioSummary` + `actionPlan`（青背景） |
+| Section 2: ポートフォリオ / 投資戦略ガイド | ポートフォリオあり: `portfolioStatus` バッジ + `portfolioSummary` + `actionPlan`。ポートフォリオなし: `portfolioSummary`（市場動向ベース）+ `actionPlan` |
 | Section 3: バディメッセージ | `buddyMessage`（紫背景の吹き出し） |
-| Section 4: 詳細（折りたたみ） | `stockHighlights`（銘柄ハイライト）+ `sectorHighlights`（セクターハイライト） |
+| Section 4: 詳細（折りたたみ） | `sectorStrategy`（セクター別投資戦略）+ `stockHighlights`（銘柄ハイライト）+ `sectorHighlights`（セクターハイライト、気になるリスト銘柄バッジ付き） |
 | フッター | 分析日時 |
 
 ## API仕様
@@ -259,6 +272,7 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
   "analyzedAt": "2026-02-26T10:00:00.000Z",
   "isToday": true,
   "session": "morning",
+  "hasPortfolio": true,
   "portfolioCount": 3,
   "watchlistCount": 2,
   "market": {
@@ -298,10 +312,14 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
         "avgDailyChange": 3.1,
         "trendDirection": "up",
         "compositeScore": 25,
-        "commentary": "AI関連需要の拡大期待で買いが続く"
+        "commentary": "AI関連需要の拡大期待で買いが続く",
+        "watchlistStocks": [
+          { "stockName": "東京エレクトロン", "tickerCode": "8035.T" }
+        ]
       }
     ]
-  }
+  },
+  "sectorStrategy": "半導体セクターが好調。気になるリストの東京エレクトロンは注目です"
 }
 ```
 
@@ -423,7 +441,7 @@ PortfolioSnapshot テーブルからの時系列データ。
 | モデル | OpenAI GPT-4o-mini（`DAILY_MARKET_NAVIGATOR.OPENAI_MODEL`） |
 | Temperature | 0.3（`DAILY_MARKET_NAVIGATOR.OPENAI_TEMPERATURE`） |
 | レスポンス形式 | JSON Schema（strict mode） |
-| 最小銘柄数 | 3銘柄（ポートフォリオ＋ウォッチリスト合計、`DAILY_MARKET_NAVIGATOR.MIN_STOCKS`） |
+| 最小銘柄数 | 0銘柄（制限なし、`DAILY_MARKET_NAVIGATOR.MIN_STOCKS`） |
 
 ## データモデル
 
@@ -452,6 +470,7 @@ PortfolioSnapshot テーブルからの時系列データ。
 | buddyMessage | Text | バディメッセージ（AI生成） |
 | stockHighlights | Json | 銘柄ハイライト（`StockHighlight[]`） |
 | sectorHighlights | Json | セクターハイライト（`SectorHighlight[]`） |
+| sectorStrategy | Text? | セクター別投資戦略（AI生成） |
 
 **StockHighlight JSON構造**:
 
@@ -474,7 +493,10 @@ PortfolioSnapshot テーブルからの時系列データ。
   "avgDailyChange": -3.1,
   "trendDirection": "up | down | neutral",
   "compositeScore": -25,
-  "commentary": "セクター動向のコメント"
+  "commentary": "セクター動向のコメント",
+  "watchlistStocks": [
+    { "stockName": "東京エレクトロン", "tickerCode": "8035.T" }
+  ]
 }
 ```
 

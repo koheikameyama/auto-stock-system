@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useTranslations } from "next-intl"
 import type { MarketNavigatorResult, MarketTone, PortfolioStatus } from "@/lib/portfolio-overall-analysis"
-import { DAILY_MARKET_NAVIGATOR } from "@/lib/constants"
 import CopyableTicker from "@/app/components/CopyableTicker"
 
 interface Props {
@@ -59,14 +58,7 @@ export default function DailyMarketNavigator({
   const [loading, setLoading] = useState(true)
   const [showDetails, setShowDetails] = useState(false)
 
-  const totalCount = portfolioCount + watchlistCount
-
   useEffect(() => {
-    if (totalCount < DAILY_MARKET_NAVIGATOR.MIN_STOCKS) {
-      setLoading(false)
-      return
-    }
-
     const fetchData = async () => {
       setLoading(true)
       try {
@@ -81,28 +73,7 @@ export default function DailyMarketNavigator({
     }
 
     fetchData()
-  }, [totalCount])
-
-  // Not enough stocks
-  if (totalCount < DAILY_MARKET_NAVIGATOR.MIN_STOCKS) {
-    return (
-      <div className="mb-6 bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl p-4 border border-gray-200">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-            <span className="text-xl">🧭</span>
-          </div>
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-gray-900 mb-1">
-              {t("title")}
-            </div>
-            <p className="text-xs text-gray-600">
-              {t("minStocksRequired")}
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  }, [])
 
   // Loading
   if (loading) {
@@ -111,6 +82,7 @@ export default function DailyMarketNavigator({
 
   const displaySession = data?.session ?? "morning"
   const sessionIcon = displaySession === "evening" ? "🌙" : displaySession === "pre-afternoon" ? "📊" : "🧭"
+  const hasPortfolio = data?.hasPortfolio ?? (portfolioCount > 0)
 
   // No analysis yet
   if (!data?.hasAnalysis) {
@@ -136,7 +108,13 @@ export default function DailyMarketNavigator({
   const tone = data.market?.tone || "neutral"
   const status = data.portfolio?.status || "caution"
   const toneStyle = toneStyles[tone] || toneStyles.neutral
-  const statusStyle = statusStyles[status] || statusStyles.caution
+  const statusStyle = hasPortfolio ? (statusStyles[status] || statusStyles.caution) : statusStyles.healthy
+
+  const hasDetails = data.details && (
+    data.details.stockHighlights.length > 0 ||
+    data.details.sectorHighlights.length > 0 ||
+    data.sectorStrategy
+  )
 
   return (
     <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -161,17 +139,19 @@ export default function DailyMarketNavigator({
         </p>
       </div>
 
-      {/* Section 2: Portfolio */}
+      {/* Section 2: Portfolio / Investment Guide */}
       <div className={`p-4 border-l-4 ${statusStyle.border}`}>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-semibold text-gray-500">
-            {t("portfolioSection")}
+            {hasPortfolio ? t("portfolioSection") : t("investmentGuide")}
           </span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyle.bg} ${statusStyle.text}`}
-          >
-            {t(`status.${status}` as `status.${PortfolioStatus}`)}
-          </span>
+          {hasPortfolio && (
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyle.bg} ${statusStyle.text}`}
+            >
+              {t(`status.${status}` as `status.${PortfolioStatus}`)}
+            </span>
+          )}
         </div>
         <p className="text-sm text-gray-700 mb-2">
           {data.portfolio?.summary}
@@ -197,7 +177,7 @@ export default function DailyMarketNavigator({
       )}
 
       {/* Toggle details button */}
-      {data.details && (data.details.stockHighlights.length > 0 || data.details.sectorHighlights.length > 0) && (
+      {hasDetails && (
         <div className="px-4 pb-3">
           <button
             onClick={() => setShowDetails(!showDetails)}
@@ -219,6 +199,16 @@ export default function DailyMarketNavigator({
       {/* Section 4: Details (collapsible) */}
       {showDetails && data.details && (
         <div className="px-4 pb-4 space-y-4">
+          {/* Sector Strategy */}
+          {data.sectorStrategy && (
+            <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+              <div className="text-xs font-semibold text-emerald-700 mb-1">
+                {t("sectorStrategy")}
+              </div>
+              <p className="text-sm text-gray-700">{data.sectorStrategy}</p>
+            </div>
+          )}
+
           {/* Stock highlights */}
           {data.details.stockHighlights.length > 0 && (
             <div>
@@ -275,6 +265,15 @@ export default function DailyMarketNavigator({
                         <span className={`text-xs font-bold ${change.color}`}>{arrow} {change.text}</span>
                       </div>
                       <p className="text-[10px] text-gray-500">{sector.commentary}</p>
+                      {sector.watchlistStocks && sector.watchlistStocks.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {sector.watchlistStocks.map(ws => (
+                            <span key={ws.tickerCode} className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
+                              {ws.stockName}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

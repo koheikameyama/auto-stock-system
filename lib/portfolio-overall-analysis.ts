@@ -37,6 +37,7 @@ export interface SectorHighlight {
   trendDirection: "up" | "down" | "neutral"
   compositeScore: number | null
   commentary: string
+  watchlistStocks?: { stockName: string; tickerCode: string }[]
 }
 
 export interface MarketNavigatorResult {
@@ -64,10 +65,12 @@ export interface MarketNavigatorResult {
     }
   }
   buddyMessage?: string
+  sectorStrategy?: string | null
   details?: {
     stockHighlights: StockHighlight[]
     sectorHighlights: SectorHighlight[]
   }
+  hasPortfolio?: boolean
   portfolioCount?: number
   watchlistCount?: number
 }
@@ -241,6 +244,9 @@ async function generateAnalysisWithAI(
     upcomingEarningsText: string
     benchmarkText: string
     marketOverviewText: string
+    watchlistStocksText: string
+    hasPortfolio: boolean
+    watchlistCount: number
   }
 ): Promise<{
   marketHeadline: string
@@ -252,6 +258,7 @@ async function generateAnalysisWithAI(
   buddyMessage: string
   stockHighlights: StockHighlight[]
   sectorHighlights: SectorHighlight[]
+  sectorStrategy: string | null
 }> {
   const openai = getOpenAIClient()
 
@@ -283,7 +290,9 @@ async function generateAnalysisWithAI(
 
   const prompt = buildPortfolioOverallAnalysisPrompt({
     session,
+    hasPortfolio: dailyContext.hasPortfolio,
     portfolioCount: portfolioStocks.length,
+    watchlistCount: dailyContext.watchlistCount,
     totalValue,
     totalCost,
     unrealizedGain,
@@ -291,6 +300,7 @@ async function generateAnalysisWithAI(
     portfolioVolatility,
     sectorBreakdownText,
     portfolioStocksText,
+    watchlistStocksText: dailyContext.watchlistStocksText,
     hasEarningsData,
     profitableCount,
     increasingCount,
@@ -331,8 +341,20 @@ async function generateAnalysisWithAI(
       trendDirection: { type: "string" as const, enum: ["up", "down", "neutral"] },
       compositeScore: { type: ["number", "null"] as const },
       commentary: { type: "string" as const },
+      watchlistStocks: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            stockName: { type: "string" as const },
+            tickerCode: { type: "string" as const },
+          },
+          required: ["stockName", "tickerCode"] as const,
+          additionalProperties: false as const,
+        },
+      },
     },
-    required: ["sector", "avgDailyChange", "trendDirection", "compositeScore", "commentary"] as const,
+    required: ["sector", "avgDailyChange", "trendDirection", "compositeScore", "commentary", "watchlistStocks"] as const,
     additionalProperties: false as const,
   }
 
@@ -380,8 +402,9 @@ async function generateAnalysisWithAI(
               type: "array",
               items: sectorHighlightSchema,
             },
+            sectorStrategy: { type: ["string", "null"] },
           },
-          required: ["marketHeadline", "marketTone", "marketKeyFactor", "portfolioStatus", "portfolioSummary", "actionPlan", "buddyMessage", "stockHighlights", "sectorHighlights"],
+          required: ["marketHeadline", "marketTone", "marketKeyFactor", "portfolioStatus", "portfolioSummary", "actionPlan", "buddyMessage", "stockHighlights", "sectorHighlights", "sectorStrategy"],
           additionalProperties: false,
         },
       },
@@ -405,6 +428,7 @@ async function generateAnalysisWithAI(
     buddyMessage: result.buddyMessage,
     stockHighlights: result.stockHighlights || [],
     sectorHighlights: result.sectorHighlights || [],
+    sectorStrategy: result.sectorStrategy ?? null,
   }
 }
 
@@ -441,16 +465,7 @@ export async function getPortfolioOverallAnalysis(userId: string, session?: Navi
     return quantity > 0
   }).length
   const watchlistCount = user.watchlistStocks.length
-  const totalCount = portfolioCount + watchlistCount
-
-  // 最小銘柄数未満の場合
-  if (totalCount < DAILY_MARKET_NAVIGATOR.MIN_STOCKS) {
-    return {
-      hasAnalysis: false,
-      portfolioCount,
-      watchlistCount,
-    }
-  }
+  const hasPortfolio = portfolioCount > 0
 
   // sessionが指定されている場合はそのセッションのデータを取得
   // 指定なしの場合は当日の最新分析を取得
@@ -502,16 +517,19 @@ export async function getPortfolioOverallAnalysis(userId: string, session?: Navi
         },
       },
       buddyMessage: analysis.buddyMessage,
+      sectorStrategy: analysis.sectorStrategy ?? null,
       details: {
         stockHighlights: analysis.stockHighlights as unknown as StockHighlight[],
         sectorHighlights: analysis.sectorHighlights as unknown as SectorHighlight[],
       },
+      hasPortfolio,
     }
   }
 
   // 分析がない場合
   return {
     hasAnalysis: false,
+    hasPortfolio,
     portfolioCount,
     watchlistCount,
   }
@@ -555,26 +573,17 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     return quantity > 0
   }).length
   const watchlistCount = user.watchlistStocks.length
-  const totalCount = portfolioCount + watchlistCount
-
-  // 最小銘柄数未満の場合
-  if (totalCount < DAILY_MARKET_NAVIGATOR.MIN_STOCKS) {
-    return {
-      hasAnalysis: false,
-      portfolioCount,
-      watchlistCount,
-    }
-  }
+  const hasPortfolio = portfolioCount > 0
 
   // 投資スタイルのラベルを取得
   const investmentStyleLabel = getStyleLabel(user.settings?.investmentStyle ?? null)
 
-  // 株価を取得
+  // 株価を取得（銘柄がある場合のみ）
   const allTickerCodes = [
     ...user.portfolioStocks.map(ps => ps.stock.tickerCode),
     ...user.watchlistStocks.map(ws => ws.stock.tickerCode),
   ]
-  const { prices } = await fetchStockPrices(allTickerCodes)
+  const prices = allTickerCodes.length > 0 ? (await fetchStockPrices(allTickerCodes)).prices : []
   const priceMap = new Map(prices.map(p => [p.tickerCode, p.currentPrice]))
 
   // ポートフォリオデータを構築
@@ -629,7 +638,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
   const todayForDB = getTodayForDB()
   const tomorrowForDB = new Date(todayForDB.getTime() + 86400000)
 
-  const todaySellTransactions = await prisma.transaction.findMany({
+  const todaySellTransactions = !hasPortfolio ? [] : await prisma.transaction.findMany({
     where: {
       portfolioStock: { userId },
       type: "sell",
@@ -668,17 +677,44 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
       }).join("\n")
     : "本日の売却取引はありません"
 
-  // セクタートレンドを取得（ポートフォリオ内のセクターに絞り込み）
+  // 気になるリストをセクター別にグルーピング
+  const watchlistBySector = new Map<string, { name: string; tickerCode: string }[]>()
+  for (const ws of user.watchlistStocks) {
+    const sector = ws.stock.sector || "その他"
+    if (!watchlistBySector.has(sector)) watchlistBySector.set(sector, [])
+    watchlistBySector.get(sector)!.push({ name: ws.stock.name, tickerCode: ws.stock.tickerCode })
+  }
+
+  // 気になるリスト銘柄のテキスト
+  const watchlistStocksText = user.watchlistStocks.length > 0
+    ? user.watchlistStocks.map(ws => {
+        const price = priceMap.get(ws.stock.tickerCode)
+        const dailyChange = ws.stock.dailyChangeRate ? Number(ws.stock.dailyChangeRate) : null
+        const weekChange = ws.stock.weekChangeRate ? Number(ws.stock.weekChangeRate) : null
+        return `- ${ws.stock.name}（${ws.stock.tickerCode}）: ${ws.stock.sector || "その他"}${price ? `, ¥${Math.round(price).toLocaleString()}` : ""}${dailyChange !== null ? `, 日次${dailyChange >= 0 ? "+" : ""}${dailyChange.toFixed(1)}%` : ""}${weekChange !== null ? `, 週間${weekChange >= 0 ? "+" : ""}${weekChange.toFixed(1)}%` : ""}`
+      }).join("\n")
+    : "気になるリスト銘柄なし"
+
+  // セクタートレンドを取得（ポートフォリオセクター＋注目セクター）
   const portfolioSectors = new Set(portfolioStocksData.map(s => s.sector || "その他"))
   const { trends: allSectorTrends } = await getAllSectorTrends()
-  const relevantSectorTrends = allSectorTrends.filter(t => portfolioSectors.has(t.sector))
+  const relevantSectorTrends = hasPortfolio
+    ? allSectorTrends.filter(t =>
+        portfolioSectors.has(t.sector) ||
+        (t.compositeScore !== null && Math.abs(t.compositeScore) >= 20)
+      ).slice(0, DAILY_MARKET_NAVIGATOR.MAX_SECTOR_TRENDS_FOR_AI)
+    : allSectorTrends.slice(0, DAILY_MARKET_NAVIGATOR.MAX_SECTOR_TRENDS_FOR_AI)
 
   const sectorTrendsText = relevantSectorTrends.length > 0
     ? relevantSectorTrends.map(t => {
         const daily = t.avgDailyChangeRate != null ? `日次平均 ${t.avgDailyChangeRate >= 0 ? "+" : ""}${t.avgDailyChangeRate.toFixed(1)}%` : ""
         const score = t.compositeScore != null ? `総合スコア ${t.compositeScore >= 0 ? "+" : ""}${t.compositeScore.toFixed(0)}` : ""
         const arrow = t.trendDirection === "up" ? "↑" : t.trendDirection === "down" ? "↓" : "→"
-        return `- ${t.sector} ${arrow}: ${[daily, score].filter(Boolean).join(", ")}`
+        const watchlistInSector = watchlistBySector.get(t.sector)
+        const watchlistNote = watchlistInSector
+          ? ` [気になるリスト: ${watchlistInSector.map(s => s.name).join("、")}]`
+          : ""
+        return `- ${t.sector} ${arrow}: ${[daily, score].filter(Boolean).join(", ")}${watchlistNote}`
       }).join("\n")
     : "セクタートレンドデータなし"
 
@@ -736,8 +772,8 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     marketOverviewText = marketParts.join("\n")
   }
 
-  // === ベンチマーク比較データ ===
-  const benchmarkSnapshots = await prisma.portfolioSnapshot.findMany({
+  // === ベンチマーク比較データ ===（ポートフォリオがある場合のみ）
+  const benchmarkSnapshots = !hasPortfolio ? [] : await prisma.portfolioSnapshot.findMany({
     where: {
       userId,
       date: { gte: getDaysAgoForDB(30) },
@@ -820,13 +856,16 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     portfolioVolatility,
     investmentStyleLabel,
     {
-      portfolioAnalysisText,
+      portfolioAnalysisText: hasPortfolio ? portfolioAnalysisText : "ポートフォリオ未登録",
       purchaseRecommendationText,
-      soldStocksText,
+      soldStocksText: hasPortfolio ? soldStocksText : "ポートフォリオ未登録のため売却データなし",
       sectorTrendsText,
       upcomingEarningsText,
-      benchmarkText,
+      benchmarkText: hasPortfolio ? benchmarkText : "ポートフォリオ未登録のためベンチマーク比較なし",
       marketOverviewText,
+      watchlistStocksText,
+      hasPortfolio,
+      watchlistCount,
     }
   )
 
@@ -850,6 +889,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     buddyMessage: aiResult.buddyMessage,
     stockHighlights: aiResult.stockHighlights as unknown as Prisma.InputJsonValue,
     sectorHighlights: aiResult.sectorHighlights as unknown as Prisma.InputJsonValue,
+    sectorStrategy: aiResult.sectorStrategy,
   }
   await prisma.portfolioOverallAnalysis.upsert({
     where: { userId_session: { userId, session } },
@@ -862,6 +902,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     analyzedAt: now.toISOString(),
     isToday: true,
     session,
+    hasPortfolio,
     portfolioCount,
     watchlistCount,
     market: {
@@ -884,6 +925,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
       },
     },
     buddyMessage: aiResult.buddyMessage,
+    sectorStrategy: aiResult.sectorStrategy,
     details: {
       stockHighlights: aiResult.stockHighlights,
       sectorHighlights: aiResult.sectorHighlights,

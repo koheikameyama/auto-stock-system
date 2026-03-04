@@ -586,6 +586,9 @@ model PortfolioOverallAnalysis {
   stockHighlights  Json // 銘柄ハイライト
   sectorHighlights Json // セクターハイライト
 
+  // セクター戦略
+  sectorStrategy String? @db.Text // セクター別投資戦略（AI生成）
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

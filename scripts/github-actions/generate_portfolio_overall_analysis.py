@@ -2,8 +2,8 @@
 """
 ポートフォリオ総評を生成するスクリプト
 
-ポートフォリオ + ウォッチリスト >= 3銘柄のユーザーに対して、
-全体の分析（セクター分散度、ボラティリティなど）を生成します。
+全ユーザーに対して、市場分析・ポートフォリオ総評（セクター分散度、ボラティリティなど）を生成します。
+ポートフォリオがないユーザーにはセクター戦略ベースの市場分析を提供します。
 APIエンドポイントを呼び出してバッチ処理を実行します。
 
 実行タイミング: 15:30 JST（大引け後のみ）
@@ -43,7 +43,7 @@ def get_cron_secret() -> str:
 
 
 def fetch_eligible_users(conn) -> list[dict]:
-    """対象ユーザーを取得（保有中ポートフォリオ+ウォッチリスト >= 3銘柄）"""
+    """対象ユーザーを取得（全ユーザー）"""
     with conn.cursor() as cur:
         cur.execute('''
             SELECT
@@ -64,22 +64,6 @@ def fetch_eligible_users(conn) -> list[dict]:
                 ) as portfolio_count,
                 (SELECT COUNT(*) FROM "WatchlistStock" ws WHERE ws."userId" = u.id) as watchlist_count
             FROM "User" u
-            WHERE
-                (SELECT COUNT(*) FROM "PortfolioStock" ps
-                 WHERE ps."userId" = u.id
-                   AND COALESCE(
-                       (SELECT SUM(
-                           CASE WHEN t.type = 'buy' THEN t.quantity
-                                WHEN t.type = 'sell' THEN -t.quantity
-                                ELSE 0
-                           END
-                       )
-                       FROM "Transaction" t
-                       WHERE t."portfolioStockId" = ps.id
-                       ), 0
-                   ) > 0
-                ) +
-                (SELECT COUNT(*) FROM "WatchlistStock" ws WHERE ws."userId" = u.id) >= 3
         ''')
         rows = cur.fetchall()
         return [
