@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getAuthUser } from "@/lib/auth-utils"
 import { Prisma } from "@prisma/client"
+import { checkBuySignal } from "@/lib/recommendation-buy-filter"
 
 const VALID_SORT_OPTIONS = [
   "dailyChangeRate_desc",
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
     where.latestPrice = priceFilter
   }
 
-  const [stocks, total] = await Promise.all([
+  const [stocks, total, userSettings] = await Promise.all([
     prisma.stock.findMany({
       where,
       select: {
@@ -106,6 +107,11 @@ export async function GET(request: NextRequest) {
         dailyChangeRate: true,
         weekChangeRate: true,
         isProfitable: true,
+        maDeviationRate: true,
+        volumeRatio: true,
+        profitTrend: true,
+        revenueGrowth: true,
+        volatility: true,
         purchaseRecommendations: {
           orderBy: { date: "desc" },
           take: 1,
@@ -137,34 +143,66 @@ export async function GET(request: NextRequest) {
       take: limit,
     }),
     prisma.stock.count({ where }),
+    prisma.userSettings.findUnique({
+      where: { userId: user.id },
+      select: { investmentStyle: true },
+    }),
   ])
 
-  const response = stocks.map((s) => ({
-    id: s.id,
-    tickerCode: s.tickerCode,
-    name: s.name,
-    sector: s.sector,
-    market: s.market,
-    latestPrice: s.latestPrice ? Number(s.latestPrice) : null,
-    dailyChangeRate: s.dailyChangeRate ? Number(s.dailyChangeRate) : null,
-    weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
-    isProfitable: s.isProfitable,
-    latestRecommendation: s.purchaseRecommendations[0]
-      ? {
-          recommendation: s.purchaseRecommendations[0].recommendation,
-          confidence: s.purchaseRecommendations[0].confidence,
-          userFitScore: s.purchaseRecommendations[0].userFitScore,
-          date: s.purchaseRecommendations[0].date.toISOString(),
-        }
-      : null,
-    userStatus: s.portfolioStocks.length > 0
-      ? "portfolio" as const
-      : s.watchlistStocks.length > 0
-        ? "watchlist" as const
-        : s.trackedStocks.length > 0
-          ? "tracked" as const
-          : null,
-  }))
+  const investmentStyle = userSettings?.investmentStyle ?? null
+
+  const response = stocks.map((s) => {
+    const signal = checkBuySignal(
+      {
+        weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
+        maDeviationRate: s.maDeviationRate ? Number(s.maDeviationRate) : null,
+        volumeRatio: s.volumeRatio ? Number(s.volumeRatio) : null,
+        isProfitable: s.isProfitable,
+        profitTrend: s.profitTrend,
+        revenueGrowth: s.revenueGrowth ? Number(s.revenueGrowth) : null,
+        volatility: s.volatility ? Number(s.volatility) : null,
+      },
+      investmentStyle,
+    )
+
+    return {
+      id: s.id,
+      tickerCode: s.tickerCode,
+      name: s.name,
+      sector: s.sector,
+      market: s.market,
+      latestPrice: s.latestPrice ? Number(s.latestPrice) : null,
+      dailyChangeRate: s.dailyChangeRate ? Number(s.dailyChangeRate) : null,
+      weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
+      isProfitable: s.isProfitable,
+      buySignal: {
+        isBuyCandidate: signal.isBuyCandidate,
+        chartSignals: [
+          ...signal.chart.positiveSignals,
+          ...signal.chart.negativeSignals,
+        ],
+        fundamentalSignals: [
+          ...signal.fundamental.positiveSignals,
+          ...signal.fundamental.negativeSignals,
+        ],
+      },
+      latestRecommendation: s.purchaseRecommendations[0]
+        ? {
+            recommendation: s.purchaseRecommendations[0].recommendation,
+            confidence: s.purchaseRecommendations[0].confidence,
+            userFitScore: s.purchaseRecommendations[0].userFitScore,
+            date: s.purchaseRecommendations[0].date.toISOString(),
+          }
+        : null,
+      userStatus: s.portfolioStocks.length > 0
+        ? "portfolio" as const
+        : s.watchlistStocks.length > 0
+          ? "watchlist" as const
+          : s.trackedStocks.length > 0
+            ? "tracked" as const
+            : null,
+    }
+  })
 
   return NextResponse.json({
     stocks: response,

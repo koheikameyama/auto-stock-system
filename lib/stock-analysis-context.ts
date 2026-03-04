@@ -32,6 +32,11 @@ import {
   GEOPOLITICAL_RISK,
 } from "@/lib/constants";
 import { MarketIndexData } from "@/lib/market-index";
+import {
+  checkChartBuySignal,
+  checkFundamentalBuySignal,
+  type BuySignalInput,
+} from "@/lib/recommendation-buy-filter";
 
 // OHLCV データ型（oldest-first で渡す）
 export interface OHLCVData {
@@ -1035,5 +1040,41 @@ export function buildTrendlineContext(prices: OHLCVData[]): string {
 【トレンドライン分析】
 ${lines.join("\n")}
 - 解説: トレンドラインは安値同士・高値同士を結んだ直線で、価格の方向性を示します。サポートラインを割り込むと下落加速、レジスタンスラインを突破すると上昇加速の傾向があります。
+`;
+}
+
+/**
+ * 買いシグナル判定のプロンプト用コンテキスト文字列を生成
+ */
+export function buildBuySignalContext(
+  input: BuySignalInput,
+  investmentStyle?: string | null,
+): string {
+  const chart = checkChartBuySignal(input, investmentStyle);
+  const fundamental = checkFundamentalBuySignal(input, investmentStyle);
+
+  const chartStatus = chart.isBuyCandidate ? "買い候補" : "非該当";
+  const fundamentalStatus = fundamental.isBuyCandidate ? "買い候補" : "非該当";
+
+  const lines: string[] = [];
+  lines.push(`- チャート分析: ${chartStatus}`);
+  if (chart.positiveSignals.length > 0) {
+    lines.push(`  ポジティブ: ${chart.positiveSignals.join("、")}`);
+  }
+  if (chart.negativeSignals.length > 0) {
+    lines.push(`  ネガティブ: ${chart.negativeSignals.join("、")}`);
+  }
+  lines.push(`- ファンダメンタル分析: ${fundamentalStatus}`);
+  if (fundamental.positiveSignals.length > 0) {
+    lines.push(`  ポジティブ: ${fundamental.positiveSignals.join("、")}`);
+  }
+  if (fundamental.negativeSignals.length > 0) {
+    lines.push(`  ネガティブ: ${fundamental.negativeSignals.join("、")}`);
+  }
+
+  return `
+【買いシグナル判定】
+${lines.join("\n")}
+- 解説: チャート分析（モメンタム・乖離率・出来高）とファンダメンタル分析（収益性・業績トレンド）のルールベース判定です。この判定を参考にしつつ、詳細なテクニカル・ファンダメンタル情報も踏まえて総合的に判断してください。
 `;
 }

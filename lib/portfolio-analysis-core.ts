@@ -24,6 +24,7 @@ import {
   buildExDividendContext,
   buildGeopoliticalRiskContext,
   buildSectorComparisonContext,
+  buildBuySignalContext,
   type GeopoliticalRiskData,
 } from "@/lib/stock-analysis-context";
 import { buildPortfolioAnalysisPrompt } from "@/lib/prompts/portfolio-analysis-prompt";
@@ -858,6 +859,20 @@ export async function executePortfolioAnalysis(
 `
     : "";
 
+  // 買いシグナル判定コンテキスト
+  const buySignalContext = buildBuySignalContext(
+    {
+      weekChangeRate,
+      maDeviationRate: stock.maDeviationRate ? Number(stock.maDeviationRate) : null,
+      volumeRatio: stock.volumeRatio ? Number(stock.volumeRatio) : null,
+      isProfitable: stock.isProfitable,
+      profitTrend: stock.profitTrend,
+      revenueGrowth: stock.revenueGrowth ? Number(stock.revenueGrowth) : null,
+      volatility: stock.volatility ? Number(stock.volatility) : null,
+    },
+    userSettings?.investmentStyle,
+  );
+
   // プロンプト構築
   const prompt = buildPortfolioAnalysisPrompt({
     stockName: stock.name,
@@ -878,6 +893,7 @@ export async function executePortfolioAnalysis(
     deviationRateContext,
     volumeAnalysisContext,
     relativeStrengthContext,
+    buySignalContext,
     newsContext,
     marketContext,
     sectorTrendContext,
@@ -1281,6 +1297,20 @@ export async function executeSimulatedPortfolioAnalysis(
   const supportResistanceContext = buildSupportResistanceContext(prices);
   const trendlineContext = buildTrendlineContext(prices);
 
+  // 買いシグナル判定コンテキスト
+  const simBuySignalContext = buildBuySignalContext(
+    {
+      weekChangeRate,
+      maDeviationRate: stock.maDeviationRate ? Number(stock.maDeviationRate) : null,
+      volumeRatio: stock.volumeRatio ? Number(stock.volumeRatio) : null,
+      isProfitable: stock.isProfitable,
+      profitTrend: stock.profitTrend,
+      revenueGrowth: stock.revenueGrowth ? Number(stock.revenueGrowth) : null,
+      volatility: stock.volatility ? Number(stock.volatility) : null,
+    },
+    userSettings?.investmentStyle,
+  );
+
   const prompt = buildPortfolioAnalysisPrompt({
     stockName: stock.name,
     tickerCode: stock.tickerCode,
@@ -1300,6 +1330,7 @@ export async function executeSimulatedPortfolioAnalysis(
     deviationRateContext,
     volumeAnalysisContext,
     relativeStrengthContext,
+    buySignalContext: simBuySignalContext,
     newsContext,
     marketContext,
     sectorTrendContext,

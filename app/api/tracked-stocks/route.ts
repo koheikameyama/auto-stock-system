@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAuthUser } from "@/lib/auth-utils"
 import { prisma } from "@/lib/prisma"
 import { MAX_TRACKED_STOCKS } from "@/lib/constants"
+import { checkBuySignal } from "@/lib/recommendation-buy-filter"
 
 /**
  * GET /api/tracked-stocks
@@ -14,44 +15,85 @@ export async function GET() {
   const userId = user.id
 
   try {
-    const trackedStocks = await prisma.trackedStock.findMany({
-      where: { userId },
-      include: {
-        stock: {
-          select: {
-            id: true,
-            tickerCode: true,
-            name: true,
-            sector: true,
-            market: true,
-            fetchFailCount: true,
-            isDelisted: true,
-            nextEarningsDate: true,
+    const [trackedStocks, userSettings] = await Promise.all([
+      prisma.trackedStock.findMany({
+        where: { userId },
+        include: {
+          stock: {
+            select: {
+              id: true,
+              tickerCode: true,
+              name: true,
+              sector: true,
+              market: true,
+              fetchFailCount: true,
+              isDelisted: true,
+              nextEarningsDate: true,
+              weekChangeRate: true,
+              maDeviationRate: true,
+              volumeRatio: true,
+              isProfitable: true,
+              profitTrend: true,
+              revenueGrowth: true,
+              volatility: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: "desc" },
-    })
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.userSettings.findUnique({
+        where: { userId },
+        select: { investmentStyle: true },
+      }),
+    ])
+
+    const investmentStyle = userSettings?.investmentStyle ?? null
 
     // レスポンス整形（株価はクライアント側で非同期取得）
-    const response = trackedStocks.map((ts) => ({
-      id: ts.id,
-      stockId: ts.stockId,
-      stock: {
-        id: ts.stock.id,
-        tickerCode: ts.stock.tickerCode,
-        name: ts.stock.name,
-        sector: ts.stock.sector,
-        market: ts.stock.market,
-        fetchFailCount: ts.stock.fetchFailCount,
-        isDelisted: ts.stock.isDelisted,
-        nextEarningsDate: ts.stock.nextEarningsDate?.toISOString() ?? null,
-      },
-      currentPrice: null,
-      change: null,
-      changePercent: null,
-      createdAt: ts.createdAt.toISOString(),
-    }))
+    const response = trackedStocks.map((ts) => {
+      const signal = checkBuySignal(
+        {
+          weekChangeRate: ts.stock.weekChangeRate ? Number(ts.stock.weekChangeRate) : null,
+          maDeviationRate: ts.stock.maDeviationRate ? Number(ts.stock.maDeviationRate) : null,
+          volumeRatio: ts.stock.volumeRatio ? Number(ts.stock.volumeRatio) : null,
+          isProfitable: ts.stock.isProfitable,
+          profitTrend: ts.stock.profitTrend,
+          revenueGrowth: ts.stock.revenueGrowth ? Number(ts.stock.revenueGrowth) : null,
+          volatility: ts.stock.volatility ? Number(ts.stock.volatility) : null,
+        },
+        investmentStyle,
+      )
+
+      return {
+        id: ts.id,
+        stockId: ts.stockId,
+        stock: {
+          id: ts.stock.id,
+          tickerCode: ts.stock.tickerCode,
+          name: ts.stock.name,
+          sector: ts.stock.sector,
+          market: ts.stock.market,
+          fetchFailCount: ts.stock.fetchFailCount,
+          isDelisted: ts.stock.isDelisted,
+          nextEarningsDate: ts.stock.nextEarningsDate?.toISOString() ?? null,
+        },
+        buySignal: {
+          isBuyCandidate: signal.isBuyCandidate,
+          chartSignals: [
+            ...signal.chart.positiveSignals,
+            ...signal.chart.negativeSignals,
+          ],
+          fundamentalSignals: [
+            ...signal.fundamental.positiveSignals,
+            ...signal.fundamental.negativeSignals,
+          ],
+        },
+        currentPrice: null,
+        change: null,
+        changePercent: null,
+        createdAt: ts.createdAt.toISOString(),
+      }
+    })
 
     return NextResponse.json(response)
   } catch (error) {

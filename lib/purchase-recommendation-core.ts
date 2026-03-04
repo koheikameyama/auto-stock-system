@@ -23,6 +23,7 @@ import {
   buildExDividendContext,
   buildGeopoliticalRiskContext,
   buildSectorComparisonContext,
+  buildBuySignalContext,
   type GeopoliticalRiskData,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
@@ -129,6 +130,8 @@ export async function executePurchaseRecommendation(
       fiftyTwoWeekHigh: true,
       fiftyTwoWeekLow: true,
       volatility: true,
+      maDeviationRate: true,
+      volumeRatio: true,
       atr14: true,
       gapUpRate: true,
       volumeSpikeRate: true,
@@ -371,6 +374,20 @@ export async function executePurchaseRecommendation(
 
   const hasPrediction = analysis !== null;
 
+  // 買いシグナル判定コンテキスト
+  const buySignalContext = buildBuySignalContext(
+    {
+      weekChangeRate,
+      maDeviationRate: stock.maDeviationRate ? Number(stock.maDeviationRate) : null,
+      volumeRatio: stock.volumeRatio ? Number(stock.volumeRatio) : null,
+      isProfitable: stock.isProfitable,
+      profitTrend: stock.profitTrend,
+      revenueGrowth: stock.revenueGrowth ? Number(stock.revenueGrowth) : null,
+      volatility: stock.volatility ? Number(stock.volatility) : null,
+    },
+    userSettings?.investmentStyle,
+  );
+
   const prompt = buildPurchaseRecommendationPrompt({
     stockName: stock.name,
     tickerCode: stock.tickerCode,
@@ -388,6 +405,7 @@ export async function executePurchaseRecommendation(
     technicalContext,
     chartPatternContext,
     deviationRateContext,
+    buySignalContext,
     volumeAnalysisContext,
     relativeStrengthContext,
     trendlineContext,

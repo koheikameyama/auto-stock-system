@@ -25,6 +25,7 @@ export function buildPortfolioAnalysisPrompt(params: {
   deviationRateContext: string;
   volumeAnalysisContext: string;
   relativeStrengthContext: string;
+  buySignalContext: string;
   newsContext: string;
   marketContext: string;
   sectorTrendContext: string;
@@ -59,6 +60,7 @@ export function buildPortfolioAnalysisPrompt(params: {
     deviationRateContext,
     volumeAnalysisContext,
     relativeStrengthContext,
+    buySignalContext,
     newsContext,
     marketContext,
     sectorTrendContext,
@@ -106,7 +108,7 @@ ${userContext}${purchaseRecContext}
 ${financialMetrics}
 
 【テクニカル分析】${weekChangeContext}${patternContext}${technicalContext}${chartPatternContext}${deviationRateContext}${volumeAnalysisContext}${relativeStrengthContext}${gapFillContext}${supportResistanceContext}${trendlineContext}${atr14 != null ? `\n- ATR(14): ${atr14.toFixed(0)}円（株価の14日間の平均変動幅。損切り幅の参考指標）` : ""}
-【株価データ】
+${buySignalContext}【株価データ】
 直近30日の終値: データあり
 ${newsContext}${marketContext}${sectorTrendContext}
 

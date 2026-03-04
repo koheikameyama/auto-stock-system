@@ -32,6 +32,7 @@ export function buildPurchaseRecommendationPrompt(params: {
   technicalContext: string;
   chartPatternContext: string;
   deviationRateContext: string;
+  buySignalContext: string;
   volumeAnalysisContext: string;
   relativeStrengthContext: string;
   trendlineContext: string;
@@ -57,6 +58,7 @@ export function buildPurchaseRecommendationPrompt(params: {
     technicalContext,
     chartPatternContext,
     deviationRateContext,
+    buySignalContext,
     volumeAnalysisContext,
     relativeStrengthContext,
     trendlineContext,
@@ -84,7 +86,7 @@ ${financialMetrics}
 ${userContext}${predictionContext}
 【株価データ】
 直近30日の終値: ${pricesCount}件のデータあり
-${delistingContext}${weekChangeContext}${marketContext}${sectorTrendContext}${patternContext}${technicalContext}${chartPatternContext}${deviationRateContext}${volumeAnalysisContext}${timingIndicatorsContext}${relativeStrengthContext}${trendlineContext}${newsContext}
+${delistingContext}${weekChangeContext}${marketContext}${sectorTrendContext}${patternContext}${technicalContext}${chartPatternContext}${deviationRateContext}${buySignalContext}${volumeAnalysisContext}${timingIndicatorsContext}${relativeStrengthContext}${trendlineContext}${newsContext}
 【投資スタイル別の判断基準 - 最重要】
 短期/中期/長期の予測を先に出した上で、3つの投資スタイルそれぞれの視点で判断を出してください。
 各スタイルは同じデータを見ていますが、「どのトレンドを重視するか」「GOを出す条件」が異なります。
