@@ -83,8 +83,8 @@ export default function StocksClient() {
   const [sortBy, setSortBy] = useState<string>("dailyChangeRate_desc")
   const [buySignalOnly, setBuySignalOnly] = useState(false)
 
-  // Dialog state
-  const [dialogType, setDialogType] = useState<"portfolio" | "watchlist" | null>(null)
+  // Dialog state (portfolio only)
+  const [dialogType, setDialogType] = useState<"portfolio" | null>(null)
   const [dialogStock, setDialogStock] = useState<{
     id: string
     tickerCode: string
@@ -93,6 +93,7 @@ export default function StocksClient() {
     sector: string | null
     latestPrice: number | null
   } | null>(null)
+  const [addingWatchlistId, setAddingWatchlistId] = useState<string | null>(null)
 
   const fetchStocks = useCallback(
     async (page = 1) => {
@@ -142,10 +143,7 @@ export default function StocksClient() {
     fetchStocks()
   }
 
-  const handleAddStock = (
-    type: "portfolio" | "watchlist",
-    stock: StockListItem
-  ) => {
+  const handleAddPortfolio = (stock: StockListItem) => {
     setDialogStock({
       id: stock.id,
       tickerCode: stock.tickerCode,
@@ -154,7 +152,33 @@ export default function StocksClient() {
       sector: stock.sector,
       latestPrice: stock.latestPrice,
     })
-    setDialogType(type)
+    setDialogType("portfolio")
+  }
+
+  const handleAddWatchlist = async (stock: StockListItem) => {
+    if (addingWatchlistId) return
+    setAddingWatchlistId(stock.id)
+    try {
+      const response = await fetch("/api/user-stocks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tickerCode: stock.tickerCode,
+          type: "watchlist",
+        }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || t("addFailed"))
+      }
+      toast.success(t("addedToWatchlist"))
+      fetchStocks(pagination.page)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t("addFailed")
+      toast.error(message)
+    } finally {
+      setAddingWatchlistId(null)
+    }
   }
 
   if (loading && stocks.length === 0) {
@@ -395,16 +419,17 @@ export default function StocksClient() {
                   ) : (
                     <>
                       <button
-                        onClick={() => handleAddStock("portfolio", stock)}
+                        onClick={() => handleAddPortfolio(stock)}
                         className="flex-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
                       >
                         {t("addPortfolio")}
                       </button>
                       <button
-                        onClick={() => handleAddStock("watchlist", stock)}
-                        className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                        onClick={() => handleAddWatchlist(stock)}
+                        disabled={addingWatchlistId === stock.id}
+                        className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
                       >
-                        {t("addWatchlist")}
+                        {addingWatchlistId === stock.id ? t("adding") : t("addWatchlist")}
                       </button>
                     </>
                   )}
@@ -447,15 +472,12 @@ export default function StocksClient() {
             setDialogStock(null)
           }}
           onSuccess={() => {
-            const msg = dialogType === "portfolio"
-              ? t("addedToPortfolio")
-              : t("addedToWatchlist")
             setDialogType(null)
             setDialogStock(null)
-            toast.success(msg)
+            toast.success(t("addedToPortfolio"))
             fetchStocks(pagination.page)
           }}
-          defaultType={dialogType}
+          defaultType="portfolio"
           initialStock={dialogStock}
         />
       )}

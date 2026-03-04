@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import StockCard from "./StockCard";
 import TrackedStockCard from "./TrackedStockCard";
@@ -78,7 +78,17 @@ export default function MyStocksClient() {
   const [showTransactionDialog, setShowTransactionDialog] = useState(false);
   const [selectedStock, setSelectedStock] = useState<UserStock | null>(null);
   const [transactionType, setTransactionType] = useState<"buy" | "sell">("buy");
-  const [activeTab, setActiveTab] = useState<TabType>("portfolio");
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<TabType>(
+    initialTab === "portfolio" || initialTab === "watchlist" || initialTab === "tracked" || initialTab === "sold"
+      ? initialTab
+      : "portfolio"
+  );
+  const switchTab = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+    router.replace(`/my-stocks?tab=${tab}`, { scroll: false });
+  }, [router]);
   // ウォッチリストからの購入用
   const [purchaseFromWatchlist, setPurchaseFromWatchlist] =
     useState<UserStock | null>(null);
@@ -291,7 +301,7 @@ export default function MyStocksClient() {
       setUserStocks((prev) => [...prev, newStock]);
       // 追跡銘柄リストから削除
       setTrackedStocks((prev) => prev.filter((ts) => ts.stockId !== stockId));
-      setActiveTab("watchlist");
+      switchTab("watchlist");
       toast.success(t("myStocksClient.addedToWatchlist"));
     } catch (err) {
       console.error("Error adding to watchlist:", err);
@@ -329,7 +339,7 @@ export default function MyStocksClient() {
       }
       const newStock = await response.json();
       setUserStocks((prev) => [...prev, newStock]);
-      setActiveTab("watchlist");
+      switchTab("watchlist");
       toast.success(t("myStocksClient.addedToWatchlist"));
     } catch (err) {
       console.error("Error adding to watchlist:", err);
@@ -436,7 +446,7 @@ export default function MyStocksClient() {
       ]);
       setShowTrackingModal(false);
       setTrackingFromWatchlist(null);
-      setActiveTab("tracked");
+      switchTab("tracked");
       toast.success(t("myStocksClient.addedToTracked"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("myStocksClient.trackingFailed"));
@@ -474,7 +484,7 @@ export default function MyStocksClient() {
       setSoldStocks(updatedSoldStocks);
       invalidatePortfolioSummary();
       setZeroStockTarget(null);
-      setActiveTab("watchlist");
+      switchTab("watchlist");
       toast.success(t("zeroStockOptions.addedToWatchlist"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("myStocksClient.addFailed"));
@@ -514,7 +524,7 @@ export default function MyStocksClient() {
       setSoldStocks(updatedSoldStocks);
       invalidatePortfolioSummary();
       setZeroStockTarget(null);
-      setActiveTab("tracked");
+      switchTab("tracked");
       toast.success(t("zeroStockOptions.addedToTracked"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("myStocksClient.trackingFailed"));
@@ -742,7 +752,7 @@ export default function MyStocksClient() {
       <div className="relative mb-6">
         <div className="flex overflow-x-auto scrollbar-hide border-b border-gray-200 -mx-3 px-3 sm:mx-0 sm:px-0">
           <button
-            onClick={() => setActiveTab("portfolio")}
+            onClick={() => switchTab("portfolio")}
             className={`flex-shrink-0 px-3 sm:px-6 py-3 font-semibold text-sm sm:text-base transition-colors whitespace-nowrap ${
               activeTab === "portfolio"
                 ? "border-b-2 border-blue-600 text-blue-600"
@@ -752,7 +762,7 @@ export default function MyStocksClient() {
             {t('tabs.holdings')} ({portfolioStocks.length})
           </button>
           <button
-            onClick={() => setActiveTab("watchlist")}
+            onClick={() => switchTab("watchlist")}
             className={`flex-shrink-0 px-3 sm:px-6 py-3 font-semibold text-sm sm:text-base transition-colors whitespace-nowrap ${
               activeTab === "watchlist"
                 ? "border-b-2 border-blue-600 text-blue-600"
@@ -762,7 +772,7 @@ export default function MyStocksClient() {
             {t('tabs.watchlist')} ({watchlistStocks.length})
           </button>
           <button
-            onClick={() => setActiveTab("tracked")}
+            onClick={() => switchTab("tracked")}
             className={`flex-shrink-0 px-3 sm:px-6 py-3 font-semibold text-sm sm:text-base transition-colors whitespace-nowrap ${
               activeTab === "tracked"
                 ? "border-b-2 border-blue-600 text-blue-600"
@@ -772,7 +782,7 @@ export default function MyStocksClient() {
             {t('tabs.trackedAlt')} ({trackedStocks.length})
           </button>
           <button
-            onClick={() => setActiveTab("sold")}
+            onClick={() => switchTab("sold")}
             className={`flex-shrink-0 px-3 sm:px-6 py-3 font-semibold text-sm sm:text-base transition-colors whitespace-nowrap ${
               activeTab === "sold"
                 ? "border-b-2 border-blue-600 text-blue-600"
@@ -1057,7 +1067,7 @@ export default function MyStocksClient() {
               prev.filter((ts) => ts.stockId !== stockToMove.stockId),
             );
             setStockToMove(null);
-            setActiveTab("portfolio");
+            switchTab("portfolio");
           }
         }}
         defaultType={

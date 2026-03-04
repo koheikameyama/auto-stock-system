@@ -746,6 +746,8 @@
     "noRecommendation": "分析なし",
     "addPortfolio": "+購入",
     "addWatchlist": "+気になる",
+    "adding": "追加中...",
+    "addFailed": "追加に失敗しました",
     "addedToPortfolio": "保有銘柄に追加しました",
     "addedToWatchlist": "気になるに追加しました",
     "statusPortfolio": "保有中",

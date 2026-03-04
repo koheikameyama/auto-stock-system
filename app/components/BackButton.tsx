@@ -8,13 +8,13 @@ interface BackButtonProps {
   label?: string
 }
 
-export default function BackButton({ href = "/my-stocks", label }: BackButtonProps) {
+export default function BackButton({ href, label }: BackButtonProps) {
   const router = useRouter()
   const t = useTranslations('common.buttons')
 
   return (
     <button
-      onClick={() => router.push(href)}
+      onClick={() => href ? router.push(href) : router.back()}
       className="mb-4 sm:mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
     >
       <svg

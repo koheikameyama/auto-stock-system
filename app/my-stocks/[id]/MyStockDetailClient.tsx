@@ -220,7 +220,7 @@ export default function MyStockDetailClient({
       }
 
       toast.success(tPortfolio("detailClient.deleteSuccess"));
-      router.push("/my-stocks");
+      router.push(`/my-stocks?tab=${stock.type}`);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || tPortfolio("detailClient.deleteFailed"));
@@ -954,7 +954,7 @@ export default function MyStockDetailClient({
                       method: "DELETE",
                     });
                     toast.success(tPortfolio("detailClient.dismissed"));
-                    router.push("/my-stocks");
+                    router.push(`/my-stocks?tab=${stock.type}`);
                   } catch (err: any) {
                     toast.error(err.message || tPortfolio("detailClient.deleteFailed"));
                   } finally {
@@ -986,7 +986,7 @@ export default function MyStockDetailClient({
                       method: "DELETE",
                     });
                     toast.success(tPortfolio("detailClient.addedToTracked"));
-                    router.push("/my-stocks");
+                    router.push("/my-stocks?tab=tracked");
                   } catch (err: any) {
                     toast.error(err.message || tPortfolio("detailClient.trackingFailed"));
                   } finally {
@@ -1108,7 +1108,7 @@ export default function MyStockDetailClient({
         onClose={() => setShowPurchaseDialog(false)}
         onSuccess={() => {
           setShowPurchaseDialog(false);
-          router.push("/my-stocks");
+          router.push("/my-stocks?tab=portfolio");
         }}
         defaultType="portfolio"
         initialStock={{
@@ -1156,7 +1156,7 @@ export default function MyStockDetailClient({
                     toast.success(
                       tPortfolio("zeroStockOptions.addedToWatchlist"),
                     );
-                    router.push("/my-stocks");
+                    router.push("/my-stocks?tab=watchlist");
                   } catch (err) {
                     toast.error(
                       err instanceof Error
@@ -1210,7 +1210,7 @@ export default function MyStockDetailClient({
                     toast.success(
                       tPortfolio("zeroStockOptions.addedToTracked"),
                     );
-                    router.push("/my-stocks");
+                    router.push("/my-stocks?tab=tracked");
                   } catch (err) {
                     toast.error(
                       err instanceof Error
@@ -1257,7 +1257,7 @@ export default function MyStockDetailClient({
                   toast.success(
                     tPortfolio("zeroStockOptions.movedToSold"),
                   );
-                  router.push("/my-stocks");
+                  router.push("/my-stocks?tab=sold");
                 }}
                 disabled={zeroStockActionInProgress}
                 className="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 text-left"

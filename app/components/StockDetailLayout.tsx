@@ -22,7 +22,7 @@ export default function StockDetailLayout({
   sector,
   badge,
   badgeClassName,
-  backHref = "/my-stocks",
+  backHref,
   children,
 }: StockDetailLayoutProps) {
   const t = useTranslations("stocks.detailLayout")
