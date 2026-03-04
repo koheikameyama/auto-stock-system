@@ -22,6 +22,7 @@ import {
   buildDefensiveModeContext,
   buildDeviationRateContext,
   buildTrendlineContext,
+  buildEarningsContext,
 } from "@/lib/stock-analysis-context";
 import { buildDailyRecommendationPrompt } from "@/lib/prompts/daily-recommendation-prompt";
 import { getRelatedNews, formatNewsForPrompt } from "@/lib/news-rag";
@@ -83,6 +84,7 @@ interface StockContext {
   deviationRateContext: string;
   deviationRate: number | null;
   predictionContext: string;
+  earningsContext: string;
 }
 
 /**
@@ -159,6 +161,7 @@ export async function POST(request: NextRequest) {
         profitTrend: true,
         revenueGrowth: true,
         eps: true,
+        netIncomeGrowth: true,
         fiftyTwoWeekHigh: true,
         fiftyTwoWeekLow: true,
         debtEquityRatio: true,
@@ -337,6 +340,7 @@ async function processUser(
     profitTrend: string | null;
     revenueGrowth: unknown;
     eps: unknown;
+    netIncomeGrowth: unknown;
     fiftyTwoWeekHigh: unknown;
     fiftyTwoWeekLow: unknown;
     debtEquityRatio: unknown;
@@ -506,6 +510,7 @@ async function buildStockContexts(
     profitTrend: string | null;
     revenueGrowth: unknown;
     eps: unknown;
+    netIncomeGrowth: unknown;
     fiftyTwoWeekHigh: unknown;
     fiftyTwoWeekLow: unknown;
     debtEquityRatio: unknown;
@@ -693,6 +698,20 @@ async function buildStockContexts(
 - AI推奨: ${analysis.recommendation === "buy" ? "買い" : analysis.recommendation === "sell" ? "売り" : "ホールド"} (信頼度: ${(analysis.confidence * 100).toFixed(0)}%)`
       : "";
 
+    const earningsContext = buildEarningsContext(
+      candidate.nextEarningsDate,
+      {
+        isProfitable: candidate.isProfitable,
+        profitTrend: candidate.profitTrend,
+        revenueGrowth: candidate.revenueGrowth,
+        netIncomeGrowth: stockData?.netIncomeGrowth
+          ? Number(stockData.netIncomeGrowth)
+          : null,
+        eps: stockData?.eps ? Number(stockData.eps) : null,
+        per: candidate.per,
+      },
+    );
+
     contexts.push({
       stock: candidate,
       currentPrice,
@@ -706,6 +725,7 @@ async function buildStockContexts(
       deviationRateContext,
       deviationRate,
       predictionContext,
+      earningsContext,
     });
   }
 
@@ -751,7 +771,7 @@ async function selectWithAI(
 - スコア: ${s.score}点
 
 ${ctx.financialMetrics}
-${ctx.technicalContext}${ctx.candlestickContext}${ctx.chartPatternContext}${ctx.trendlineContext}${ctx.weekChangeContext}${ctx.deviationRateContext}${ctx.predictionContext}`;
+${ctx.technicalContext}${ctx.candlestickContext}${ctx.chartPatternContext}${ctx.trendlineContext}${ctx.weekChangeContext}${ctx.deviationRateContext}${ctx.predictionContext}${ctx.earningsContext}`;
     })
     .join("\n\n");
 
@@ -781,7 +801,7 @@ ${ctx.technicalContext}${ctx.candlestickContext}${ctx.chartPatternContext}${ctx.
         { role: "user", content: prompt },
       ],
       temperature: 0.4,
-      max_tokens: 1600,
+      max_tokens: 2000,
       response_format: {
         type: "json_schema",
         json_schema: {
