@@ -81,6 +81,7 @@ export default function StocksClient() {
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [sortBy, setSortBy] = useState<string>("dailyChangeRate_desc")
+  const [buySignalOnly, setBuySignalOnly] = useState(false)
 
   // Dialog state
   const [dialogType, setDialogType] = useState<"portfolio" | "watchlist" | null>(null)
@@ -107,6 +108,7 @@ export default function StocksClient() {
         if (direction !== "all") params.set("direction", direction)
         if (minPrice) params.set("minPrice", minPrice)
         if (maxPrice) params.set("maxPrice", maxPrice)
+        if (buySignalOnly) params.set("buySignalOnly", "true")
 
         const response = await fetch(`/api/stocks/list?${params}`)
         if (!response.ok) throw new Error("Failed to fetch")
@@ -120,7 +122,7 @@ export default function StocksClient() {
         setLoading(false)
       }
     },
-    [search, sector, direction, minPrice, maxPrice, sortBy]
+    [search, sector, direction, minPrice, maxPrice, sortBy, buySignalOnly]
   )
 
   useEffect(() => {
@@ -183,8 +185,8 @@ export default function StocksClient() {
         </button>
       </form>
 
-      {/* Direction tabs */}
-      <div className="flex gap-2 mb-3">
+      {/* Direction tabs + buy signal filter */}
+      <div className="flex gap-2 mb-3 flex-wrap">
         {(["all", "up", "down"] as const).map((dir) => (
           <button
             key={dir}
@@ -198,6 +200,16 @@ export default function StocksClient() {
             {t(`direction${dir.charAt(0).toUpperCase() + dir.slice(1)}`)}
           </button>
         ))}
+        <button
+          onClick={() => setBuySignalOnly((prev) => !prev)}
+          className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+            buySignalOnly
+              ? "bg-amber-500 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          {t("buySignalOnly")}
+        </button>
       </div>
 
       {/* Filters row */}

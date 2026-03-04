@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { getAuthUser } from "@/lib/auth-utils"
 import { Prisma } from "@prisma/client"
 import { checkBuySignal } from "@/lib/recommendation-buy-filter"
+import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator"
 
 const VALID_SORT_OPTIONS = [
   "dailyChangeRate_desc",
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
   const sortBy = VALID_SORT_OPTIONS.includes(sortByParam as SortOption)
     ? (sortByParam as SortOption)
     : "dailyChangeRate_desc"
+  const buySignalOnly = searchParams.get("buySignalOnly") === "true"
 
   // WHERE条件を構築
   const where: Prisma.StockWhereInput = {
@@ -94,55 +96,62 @@ export async function GET(request: NextRequest) {
     where.latestPrice = priceFilter
   }
 
+  const stockSelect = {
+    id: true,
+    tickerCode: true,
+    name: true,
+    sector: true,
+    market: true,
+    latestPrice: true,
+    dailyChangeRate: true,
+    weekChangeRate: true,
+    isProfitable: true,
+    maDeviationRate: true,
+    volumeRatio: true,
+    profitTrend: true,
+    revenueGrowth: true,
+    volatility: true,
+    purchaseRecommendations: {
+      orderBy: { date: "desc" } as const,
+      take: 1,
+      select: {
+        recommendation: true,
+        confidence: true,
+        userFitScore: true,
+        date: true,
+      },
+    },
+    portfolioStocks: {
+      where: { userId: user.id },
+      select: {
+        id: true,
+        transactions: {
+          select: { type: true, quantity: true, price: true },
+        },
+      },
+      take: 1,
+    },
+    watchlistStocks: {
+      where: { userId: user.id },
+      select: { id: true },
+      take: 1,
+    },
+    trackedStocks: {
+      where: { userId: user.id },
+      select: { id: true },
+      take: 1,
+    },
+  }
+
+  // buySignalOnly の場合は全件取得してインメモリでフィルタ＆ページネーション
   const [stocks, total, userSettings] = await Promise.all([
     prisma.stock.findMany({
       where,
-      select: {
-        id: true,
-        tickerCode: true,
-        name: true,
-        sector: true,
-        market: true,
-        latestPrice: true,
-        dailyChangeRate: true,
-        weekChangeRate: true,
-        isProfitable: true,
-        maDeviationRate: true,
-        volumeRatio: true,
-        profitTrend: true,
-        revenueGrowth: true,
-        volatility: true,
-        purchaseRecommendations: {
-          orderBy: { date: "desc" },
-          take: 1,
-          select: {
-            recommendation: true,
-            confidence: true,
-            userFitScore: true,
-            date: true,
-          },
-        },
-        portfolioStocks: {
-          where: { userId: user.id },
-          select: { id: true },
-          take: 1,
-        },
-        watchlistStocks: {
-          where: { userId: user.id },
-          select: { id: true },
-          take: 1,
-        },
-        trackedStocks: {
-          where: { userId: user.id },
-          select: { id: true },
-          take: 1,
-        },
-      },
+      select: stockSelect,
       orderBy: buildOrderBy(sortBy),
-      skip,
-      take: limit,
+      ...(buySignalOnly ? {} : { skip, take: limit }),
     }),
-    prisma.stock.count({ where }),
+    buySignalOnly ? Promise.resolve(0) : prisma.stock.count({ where }),
     prisma.userSettings.findUnique({
       where: { userId: user.id },
       select: { investmentStyle: true },
@@ -151,7 +160,7 @@ export async function GET(request: NextRequest) {
 
   const investmentStyle = userSettings?.investmentStyle ?? null
 
-  const response = stocks.map((s) => {
+  const mapStock = (s: (typeof stocks)[number]) => {
     const signal = checkBuySignal(
       {
         weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
@@ -194,15 +203,38 @@ export async function GET(request: NextRequest) {
             date: s.purchaseRecommendations[0].date.toISOString(),
           }
         : null,
-      userStatus: s.portfolioStocks.length > 0
-        ? "portfolio" as const
-        : s.watchlistStocks.length > 0
-          ? "watchlist" as const
-          : s.trackedStocks.length > 0
-            ? "tracked" as const
-            : null,
+      userStatus: (() => {
+        if (s.portfolioStocks.length > 0) {
+          const { quantity } = calculatePortfolioFromTransactions(
+            s.portfolioStocks[0].transactions
+          )
+          if (quantity > 0) return "portfolio" as const
+        }
+        if (s.watchlistStocks.length > 0) return "watchlist" as const
+        if (s.trackedStocks.length > 0) return "tracked" as const
+        return null
+      })(),
     }
-  })
+  }
+
+  if (buySignalOnly) {
+    const allMapped = stocks.map(mapStock)
+    const filtered = allMapped.filter((s) => s.buySignal.isBuyCandidate)
+    const filteredTotal = filtered.length
+    const paginatedStocks = filtered.slice(skip, skip + limit)
+
+    return NextResponse.json({
+      stocks: paginatedStocks,
+      pagination: {
+        page,
+        limit,
+        total: filteredTotal,
+        totalPages: Math.ceil(filteredTotal / limit),
+      },
+    })
+  }
+
+  const response = stocks.map(mapStock)
 
   return NextResponse.json({
     stocks: response,
