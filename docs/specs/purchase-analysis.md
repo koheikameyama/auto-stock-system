@@ -25,6 +25,7 @@
 - セクタートレンド
 - 地政学リスク指標（VIX・WTI）
 - 決算・配当落ちスケジュール
+- 買いシグナル判定コンテキスト（チャート・ファンダメンタルのルールベース判定結果）
 
 ## AI出力スキーマ
 
@@ -185,3 +186,5 @@ AI生成後、非スタイル依存の安全補正（テクニカルブレーキ
 - `lib/correction-explanation.ts` - 補正理由の解説テキスト生成
 - `lib/trend-divergence.ts` - トレンド乖離（ねじれ）検出
 - `lib/prompts/purchase-recommendation-prompt.ts` - 購入判断プロンプト
+- `lib/recommendation-buy-filter.ts` - 買いシグナル判定（チャート・ファンダメンタル）
+- `lib/stock-analysis-context.ts` - 分析コンテキスト生成（`buildBuySignalContext`含む）

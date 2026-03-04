@@ -67,7 +67,7 @@ AI分析なしで株価だけ追いたい銘柄。上限10銘柄。
 **カード表示項目**:
 - 銘柄名、証券コード
 - 現在価格、前日比
-- テクニカルシグナル（買い/売りシグナル）
+- 買いシグナル判定（チャート・ファンダメンタルのルールベース判定結果）
 - 決算日バッジ
 
 **アクション**:
@@ -167,6 +167,37 @@ AI分析なしで株価だけ追いたい銘柄。上限10銘柄。
 #### `GET /api/tracked-stocks`
 
 追跡銘柄一覧を取得。
+
+**レスポンス**:
+```json
+[
+  {
+    "id": "xxx",
+    "stockId": "xxx",
+    "stock": {
+      "id": "xxx",
+      "tickerCode": "7203.T",
+      "name": "トヨタ自動車",
+      "sector": "輸送用機器",
+      "market": "東証プライム"
+    },
+    "buySignal": {
+      "isBuyCandidate": true,
+      "chartSignals": ["週間+3.2%の正モメンタム"],
+      "fundamentalSignals": ["黒字企業", "売上成長率+15.2%"]
+    },
+    "currentPrice": null,
+    "change": null,
+    "changePercent": null,
+    "createdAt": "2026-03-01T00:00:00.000Z"
+  }
+]
+```
+
+- `buySignal`: ユーザーの投資スタイルに応じたチャート・ファンダメンタルのルールベース買いシグナル判定結果
+  - `isBuyCandidate`: チャート・ファンダメンタル両方を通過した場合 `true`
+  - `chartSignals`: チャート分析のポジティブ/ネガティブシグナル一覧
+  - `fundamentalSignals`: ファンダメンタル分析のポジティブ/ネガティブシグナル一覧
 
 #### `POST /api/tracked-stocks`
 

@@ -30,6 +30,7 @@
 - 相対強度（市場/セクター比較）
 - ユーザー設定（投資スタイル、売却目標/撤退ライン）
 - 直近の購入判断（購入から7日以内の場合のみ）
+- 買いシグナル判定コンテキスト（チャート・ファンダメンタルのルールベース判定結果）
 
 **AI出力スキーマ**:
 
@@ -513,3 +514,5 @@ PortfolioSnapshot テーブルからの時系列データ。
 - `lib/trend-divergence.ts` - トレンド乖離（ねじれ）検出
 - `lib/prompts/portfolio-analysis-prompt.ts` - 個別分析プロンプト
 - `lib/prompts/portfolio-overall-analysis-prompt.ts` - Daily Market Navigator プロンプト
+- `lib/recommendation-buy-filter.ts` - 買いシグナル判定（チャート・ファンダメンタル）
+- `lib/stock-analysis-context.ts` - 分析コンテキスト生成（`buildBuySignalContext`含む）
