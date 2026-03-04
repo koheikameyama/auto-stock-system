@@ -136,7 +136,7 @@ AI生成後、非スタイル依存の安全補正（上記テーブルの大半
 
 ポートフォリオ全体を市場の流れと照合するカード型UIです。朝と夜の2セッションで異なる視点の分析を提供します。
 
-**前提条件**: なし（0銘柄でも表示。ポートフォリオがない場合はセクター戦略ベースの市場分析を提供）
+**前提条件**: なし（0銘柄でも表示。ポートフォリオがない場合は市場分析とセクター観点のアクションプランを提供）
 
 **表示場所**:
 - `/dashboard` の最上部
@@ -157,8 +157,6 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
 |---------|-----------------|--------------|
 | ポートフォリオあり | 「あなたのポートフォリオ」+ ステータスバッジ | 持ち株の健康診断 |
 | ポートフォリオなし | 「投資戦略ガイド」（バッジなし） | セクターから投資チャンスを探す |
-
-**セクター戦略**: SectorTrendデータ（上位10件）とAI分析のハイブリッドで、セクター別の投資方針を生成。気になるリストに該当セクターの銘柄がある場合は具体的に言及する。
 
 **分析に使用するデータ**:
 - セクター構成・集中率
@@ -190,7 +188,7 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
   "marketKeyFactor": "市場の主要因（1〜2文）",
   "portfolioStatus": "healthy | caution | warning | critical",
   "portfolioSummary": "ポートフォリオの状態（1〜2文）",
-  "actionPlan": "投資スタイルに基づく具体的なアクション（1〜2文）",
+  "actionPlan": "投資スタイルに基づく具体的なアクション。セクタートレンドに基づく戦略も含む（1〜2文）",
   "buddyMessage": "親しみやすい口調で初心者を勇気づける1文",
   "stockHighlights": [
     {
@@ -213,8 +211,7 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
         { "stockName": "東京エレクトロン", "tickerCode": "8035.T" }
       ]
     }
-  ],
-  "sectorStrategy": "セクター別投資戦略テキスト（1-3文）| null"
+  ]
 }
 ```
 
@@ -238,7 +235,7 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
 | Section 1: 市場 | `marketHeadline` + `marketTone` バッジ + `marketKeyFactor` |
 | Section 2: ポートフォリオ / 投資戦略ガイド | ポートフォリオあり: `portfolioStatus` バッジ + `portfolioSummary` + `actionPlan`。ポートフォリオなし: `portfolioSummary`（市場動向ベース）+ `actionPlan` |
 | Section 3: バディメッセージ | `buddyMessage`（紫背景の吹き出し） |
-| Section 4: 詳細（折りたたみ） | `sectorStrategy`（セクター別投資戦略）+ `stockHighlights`（銘柄ハイライト）+ `sectorHighlights`（セクターハイライト、気になるリスト銘柄バッジ付き） |
+| Section 4: 詳細（折りたたみ） | `stockHighlights`（銘柄ハイライト、銘柄名クリックで詳細ページへ遷移）+ `sectorHighlights`（セクターハイライト、気になるリスト銘柄バッジ付き） |
 | フッター | 分析日時 |
 
 ## API仕様
@@ -319,7 +316,6 @@ UIはJST 15時を境にデフォルトセッションを自動切替。タブで
       }
     ]
   },
-  "sectorStrategy": "半導体セクターが好調。気になるリストの東京エレクトロンは注目です"
 }
 ```
 
@@ -470,12 +466,12 @@ PortfolioSnapshot テーブルからの時系列データ。
 | buddyMessage | Text | バディメッセージ（AI生成） |
 | stockHighlights | Json | 銘柄ハイライト（`StockHighlight[]`） |
 | sectorHighlights | Json | セクターハイライト（`SectorHighlight[]`） |
-| sectorStrategy | Text? | セクター別投資戦略（AI生成） |
 
 **StockHighlight JSON構造**:
 
 ```json
 {
+  "stockId": "cuid（銘柄詳細ページへのリンク用、optional）",
   "stockName": "銘柄名",
   "tickerCode": "7203.T",
   "sector": "輸送用機器",

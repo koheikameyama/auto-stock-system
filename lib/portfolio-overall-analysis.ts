@@ -22,6 +22,7 @@ export type PortfolioStatus = "healthy" | "caution" | "warning" | "critical"
 export type NavigatorSession = "morning" | "pre-afternoon" | "evening"
 
 export interface StockHighlight {
+  stockId?: string
   stockName: string
   tickerCode: string
   sector: string
@@ -65,7 +66,6 @@ export interface MarketNavigatorResult {
     }
   }
   buddyMessage?: string
-  sectorStrategy?: string | null
   details?: {
     stockHighlights: StockHighlight[]
     sectorHighlights: SectorHighlight[]
@@ -258,7 +258,6 @@ async function generateAnalysisWithAI(
   buddyMessage: string
   stockHighlights: StockHighlight[]
   sectorHighlights: SectorHighlight[]
-  sectorStrategy: string | null
 }> {
   const openai = getOpenAIClient()
 
@@ -402,9 +401,8 @@ async function generateAnalysisWithAI(
               type: "array",
               items: sectorHighlightSchema,
             },
-            sectorStrategy: { type: ["string", "null"] },
           },
-          required: ["marketHeadline", "marketTone", "marketKeyFactor", "portfolioStatus", "portfolioSummary", "actionPlan", "buddyMessage", "stockHighlights", "sectorHighlights", "sectorStrategy"],
+          required: ["marketHeadline", "marketTone", "marketKeyFactor", "portfolioStatus", "portfolioSummary", "actionPlan", "buddyMessage", "stockHighlights", "sectorHighlights"],
           additionalProperties: false,
         },
       },
@@ -428,7 +426,6 @@ async function generateAnalysisWithAI(
     buddyMessage: result.buddyMessage,
     stockHighlights: result.stockHighlights || [],
     sectorHighlights: result.sectorHighlights || [],
-    sectorStrategy: result.sectorStrategy ?? null,
   }
 }
 
@@ -517,7 +514,6 @@ export async function getPortfolioOverallAnalysis(userId: string, session?: Navi
         },
       },
       buddyMessage: analysis.buddyMessage,
-      sectorStrategy: analysis.sectorStrategy ?? null,
       details: {
         stockHighlights: analysis.stockHighlights as unknown as StockHighlight[],
         sectorHighlights: analysis.sectorHighlights as unknown as SectorHighlight[],
@@ -869,6 +865,19 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     }
   )
 
+  // stockHighlightsにstockIdを付与
+  const tickerToStockId = new Map<string, string>()
+  for (const ps of user.portfolioStocks) {
+    tickerToStockId.set(ps.stock.tickerCode, ps.stockId)
+  }
+  for (const ws of user.watchlistStocks) {
+    tickerToStockId.set(ws.stock.tickerCode, ws.stockId)
+  }
+  const enrichedStockHighlights = aiResult.stockHighlights.map(sh => ({
+    ...sh,
+    stockId: tickerToStockId.get(sh.tickerCode),
+  }))
+
   // DBに保存
   const now = dayjs().toDate()
   const upsertData = {
@@ -887,9 +896,8 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     portfolioSummary: aiResult.portfolioSummary,
     actionPlan: aiResult.actionPlan,
     buddyMessage: aiResult.buddyMessage,
-    stockHighlights: aiResult.stockHighlights as unknown as Prisma.InputJsonValue,
+    stockHighlights: enrichedStockHighlights as unknown as Prisma.InputJsonValue,
     sectorHighlights: aiResult.sectorHighlights as unknown as Prisma.InputJsonValue,
-    sectorStrategy: aiResult.sectorStrategy,
   }
   await prisma.portfolioOverallAnalysis.upsert({
     where: { userId_session: { userId, session } },
@@ -925,9 +933,8 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
       },
     },
     buddyMessage: aiResult.buddyMessage,
-    sectorStrategy: aiResult.sectorStrategy,
     details: {
-      stockHighlights: aiResult.stockHighlights,
+      stockHighlights: enrichedStockHighlights,
       sectorHighlights: aiResult.sectorHighlights,
     },
   }

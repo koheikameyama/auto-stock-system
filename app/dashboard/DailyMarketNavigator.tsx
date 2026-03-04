@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useTranslations } from "next-intl"
+import Link from "next/link"
 import type { MarketNavigatorResult, MarketTone, PortfolioStatus } from "@/lib/portfolio-overall-analysis"
 import CopyableTicker from "@/app/components/CopyableTicker"
 
@@ -112,8 +113,7 @@ export default function DailyMarketNavigator({
 
   const hasDetails = data.details && (
     data.details.stockHighlights.length > 0 ||
-    data.details.sectorHighlights.length > 0 ||
-    data.sectorStrategy
+    data.details.sectorHighlights.length > 0
   )
 
   return (
@@ -199,16 +199,6 @@ export default function DailyMarketNavigator({
       {/* Section 4: Details (collapsible) */}
       {showDetails && data.details && (
         <div className="px-4 pb-4 space-y-4">
-          {/* Sector Strategy */}
-          {data.sectorStrategy && (
-            <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-              <div className="text-xs font-semibold text-emerald-700 mb-1">
-                {t("sectorStrategy")}
-              </div>
-              <p className="text-sm text-gray-700">{data.sectorStrategy}</p>
-            </div>
-          )}
-
           {/* Stock highlights */}
           {data.details.stockHighlights.length > 0 && (
             <div>
@@ -223,7 +213,13 @@ export default function DailyMarketNavigator({
                     <div key={stock.tickerCode} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">{stock.stockName}</span>
+                          {stock.stockId ? (
+                            <Link href={`/stocks/${stock.stockId}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline">
+                              {stock.stockName}
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-medium text-gray-900">{stock.stockName}</span>
+                          )}
                           <span className="text-xs text-gray-400">(<CopyableTicker tickerCode={stock.tickerCode} />)</span>
                           {stock.source && (
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${

@@ -185,15 +185,6 @@ ${watchlistStocksText}
 ${purchaseRecommendationText}`;
 }
 
-// ── セクター戦略の共通出力ルール ──
-
-function buildSectorStrategyRule(hasPortfolio: boolean): string {
-  if (hasPortfolio) {
-    return `- sectorStrategy: セクタートレンドに基づく投資戦略。セクター分散の改善提案や注目セクターへの追加投資を提案。気になるリストに対象セクターの銘柄があれば具体的に言及すること。1-3文。セクタートレンドデータがない場合はnull`;
-  }
-  return `- sectorStrategy: セクタートレンドに基づく投資戦略。注目セクターの紹介と、投資を始めるならどのセクターが良いかを提案。気になるリストに対象セクターの銘柄があれば具体的に言及すること。1-3文。セクタートレンドデータがない場合はnull`;
-}
-
 // ── Morning セッション（開場前 8:00）──
 
 function buildMorningRoleAndSteps(investmentStyle: string, hasPortfolio: boolean): string {
@@ -253,8 +244,8 @@ function buildMorningOutputRules(investmentStyle: string, hasPortfolio: boolean)
     : `- portfolioSummary: 市場動向のまとめと投資チャンスの概要を1-2文で`;
 
   const actionPlanRule = hasPortfolio
-    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、開場前の具体的な行動方針。「今日は〜してください」と断定する。1-2文`
-    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、注目セクターや銘柄探しの提案。気になるリスト銘柄があればそれを参照。1-2文`;
+    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、開場前の具体的な行動方針。「今日は〜してください」と断定する。セクタートレンドに基づく戦略も含めること。1-2文`
+    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、注目セクターや銘柄探しの提案。気になるリスト銘柄があればそれを参照。セクタートレンドに基づく注目セクターも含めること。1-2文`;
 
   const portfolioStatusRule = hasPortfolio
     ? ``
@@ -277,7 +268,6 @@ ${actionPlanRule}
 - buddyMessage: 開場前の緊張をほぐし、冷静に臨めるよう背中を押す1文。「今日も焦らず、まず30分は様子見を」のような落ち着いたトーンで
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること
-${buildSectorStrategyRule(hasPortfolio)}
 
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「ボラティリティ（値動きの激しさ）」）
@@ -349,8 +339,8 @@ function buildPreAfternoonOutputRules(investmentStyle: string, hasPortfolio: boo
     : `- portfolioSummary: 前場の市場動向と注目セクターの動きを1-2文でまとめる`;
 
   const actionPlanRule = hasPortfolio
-    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、後場の具体的な行動方針。「後場は〜してください」と断定する。1-2文`
-    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、後場の投資チャンスの提案。気になるリスト銘柄があればそれを参照。1-2文`;
+    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、後場の具体的な行動方針。「後場は〜してください」と断定する。セクタートレンドに基づく戦略も含めること。1-2文`
+    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、後場の投資チャンスの提案。気になるリスト銘柄があればそれを参照。セクタートレンドに基づく注目セクターも含めること。1-2文`;
 
   const portfolioStatusRule = hasPortfolio
     ? ``
@@ -373,7 +363,6 @@ ${actionPlanRule}
 - buddyMessage: 前場の結果を受け止め、後場に冷静に臨めるよう背中を押す1文。前場が良くても悪くても落ち着いたトーンで
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること
-${buildSectorStrategyRule(hasPortfolio)}
 
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「出来高比（通常の何倍取引されているか）」）
@@ -440,8 +429,8 @@ function buildEveningOutputRules(investmentStyle: string, hasPortfolio: boolean)
     : `- portfolioSummary: 今日の市場動向と注目セクターのまとめを1-2文で`;
 
   const actionPlanRule = hasPortfolio
-    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく明日に向けた具体的な準備。1-2文`
-    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、明日の投資チャンスの提案。気になるリスト銘柄があればそれを参照。1-2文`;
+    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく明日に向けた具体的な準備。セクタートレンドに基づく戦略も含めること。1-2文`
+    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、明日の投資チャンスの提案。気になるリスト銘柄があればそれを参照。セクタートレンドに基づく注目セクターも含めること。1-2文`;
 
   const portfolioStatusRule = hasPortfolio
     ? ``
@@ -464,7 +453,6 @@ ${actionPlanRule}
 - buddyMessage: 親しみやすい口調で今日の労いと明日への期待を込めた1文
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること
-${buildSectorStrategyRule(hasPortfolio)}
 
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「ボラティリティ（値動きの激しさ）」）
