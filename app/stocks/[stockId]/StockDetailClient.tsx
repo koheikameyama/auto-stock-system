@@ -81,13 +81,6 @@ interface SoldStockInfo {
   hypotheticalProfitPercent: number | null;
 }
 
-export interface MarketEnvironment {
-  vixClose: number | null;
-  vixChangeRate: number | null;
-  wtiClose: number | null;
-  wtiChangeRate: number | null;
-}
-
 interface Props {
   stock: StockData;
   recommendation: RecommendationData | null;
@@ -102,7 +95,6 @@ interface Props {
   };
   trackedStockId?: string;
   soldStockInfo?: SoldStockInfo | null;
-  marketEnvironment?: MarketEnvironment | null;
   sectorAvg?: {
     avgPER: number | null;
     avgPBR: number | null;
@@ -119,7 +111,6 @@ export default function StockDetailClient({
   portfolioDetails,
   trackedStockId,
   soldStockInfo,
-  marketEnvironment,
   sectorAvg,
 }: Props) {
   const router = useRouter();
@@ -556,7 +547,7 @@ export default function StockDetailClient({
               </>
             )}
             {activeTab === "analysis" && (
-              <TechnicalAnalysis stockId={stock.id} embedded gapUpRate={stock.gapUpRate} volumeSpikeRate={stock.volumeSpikeRate} turnoverValue={stock.turnoverValue} marketEnvironment={marketEnvironment} />
+              <TechnicalAnalysis stockId={stock.id} embedded gapUpRate={stock.gapUpRate} volumeSpikeRate={stock.volumeSpikeRate} turnoverValue={stock.turnoverValue} />
             )}
             {activeTab === "news" && (
               <RelatedNews stockId={stock.id} embedded />
