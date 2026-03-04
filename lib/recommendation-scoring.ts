@@ -102,6 +102,7 @@ export interface StockForScoring {
   currentRatio: number | null
   dividendGrowthRate: number | null
   payoutRatio: number | null
+  profitTrend: string | null
 }
 
 export interface ScoredStock extends StockForScoring {

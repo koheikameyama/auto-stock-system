@@ -130,6 +130,16 @@ export const PAYOUT_RATIO_THRESHOLDS = {
   HIGH: 80, // やや高め（これ以上は減配リスク注意）
 } as const;
 
+// おすすめ候補の買い候補フィルター閾値
+export const BUY_CANDIDATE_FILTER = {
+  // チャート分析: 過熱判定の閾値（MA乖離率 %、安全ルールの20%より厳しめ）
+  CHART_OVERHEAT_THRESHOLD: 15,
+  // チャート分析: ポジティブシグナルの閾値
+  POSITIVE_MOMENTUM_THRESHOLD: 0, // weekChangeRate > 0% で陽転
+  OVERSOLD_THRESHOLD: -5, // maDeviationRate < -5% で押し目買い候補
+  VOLUME_INTEREST_THRESHOLD: 1.5, // volumeRatio > 1.5 で注目度高
+} as const;
+
 // 投資観点別のスコアボーナス（スコアリングで使用）
 export const PERSPECTIVE_BONUS = {
   // 安定配当型: 配当 + バリュー + ディフェンシブ + 財務安全性

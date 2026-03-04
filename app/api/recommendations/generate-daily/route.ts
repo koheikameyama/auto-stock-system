@@ -49,6 +49,7 @@ import {
   StockForScoring,
   ScoredStock,
 } from "@/lib/recommendation-scoring";
+import { filterBuyCandidates } from "@/lib/recommendation-buy-filter";
 import { insertRecommendationOutcome } from "@/lib/outcome-utils";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
 
@@ -381,6 +382,7 @@ async function processUser(
     currentRatio: s.currentRatio ? Number(s.currentRatio) : null,
     dividendGrowthRate: s.dividendGrowthRate ? Number(s.dividendGrowthRate) : null,
     payoutRatio: s.payoutRatio ? Number(s.payoutRatio) : null,
+    profitTrend: s.profitTrend,
   }));
 
   // 予算の1.5倍までの緩いフィルタ（候補を広めに取る）
@@ -397,8 +399,18 @@ async function processUser(
     };
   }
 
+  // チャート分析・ファンダメンタル分析で買い候補の銘柄のみに絞り込み
+  const buyCandidates = filterBuyCandidates(looseFiltered, investmentStyle);
+  if (buyCandidates.length === 0) {
+    return {
+      userId,
+      success: false,
+      error: "No stocks available after buy candidate filter",
+    };
+  }
+
   const scored = calculateStockScores(
-    looseFiltered,
+    buyCandidates,
     investmentStyle,
     sectorTrendMap,
   );
