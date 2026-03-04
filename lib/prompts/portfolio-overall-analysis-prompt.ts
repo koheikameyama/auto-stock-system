@@ -188,15 +188,6 @@ ${watchlistStocksText}
 ${purchaseRecommendationText}`;
 }
 
-// ── セクター戦略の共通出力ルール ──
-
-function buildSectorStrategyRule(hasPortfolio: boolean): string {
-  if (hasPortfolio) {
-    return `- sectorStrategy: セクタートレンドに基づく投資戦略。セクター分散の改善提案や注目セクターへの追加投資を提案。気になるリストに対象セクターの銘柄があれば具体的に言及すること。1-3文。セクタートレンドデータがない場合はnull`;
-  }
-  return `- sectorStrategy: セクタートレンドに基づく投資戦略。注目セクターの紹介と、投資を始めるならどのセクターが良いかを提案。気になるリストに対象セクターの銘柄があれば具体的に言及すること。1-3文。セクタートレンドデータがない場合はnull`;
-}
-
 // ── Morning セッション（開場前 8:00）──
 
 function buildMorningRoleAndSteps(investmentStyle: string, hasPortfolio: boolean): string {
@@ -280,7 +271,6 @@ ${actionPlanRule}
 - buddyMessage: 開場前の緊張をほぐし、冷静に臨めるよう背中を押す1文。「今日も焦らず、まず30分は様子見を」のような落ち着いたトーンで
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること
-${buildSectorStrategyRule(hasPortfolio)}
 
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「ボラティリティ（値動きの激しさ）」）
@@ -376,7 +366,6 @@ ${actionPlanRule}
 - buddyMessage: 前場の結果を受け止め、後場に冷静に臨めるよう背中を押す1文。前場が良くても悪くても落ち着いたトーンで
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること
-${buildSectorStrategyRule(hasPortfolio)}
 
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「出来高比（通常の何倍取引されているか）」）
@@ -467,7 +456,6 @@ ${actionPlanRule}
 - buddyMessage: 親しみやすい口調で今日の労いと明日への期待を込めた1文
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること
-${buildSectorStrategyRule(hasPortfolio)}
 
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「ボラティリティ（値動きの激しさ）」）
