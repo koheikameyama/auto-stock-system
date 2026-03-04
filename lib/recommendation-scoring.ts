@@ -4,7 +4,7 @@
  * Pythonスクリプト (generate_personal_recommendations.py) から移植
  */
 
-import { PERSPECTIVE_BONUS, SECTOR_TREND } from "@/lib/constants"
+import { PERSPECTIVE_BONUS, SECTOR_TREND, getSectorGroup } from "@/lib/constants"
 import { getSectorScoreBonus, type SectorTrendData } from "@/lib/sector-trend"
 
 // 設定
@@ -202,8 +202,9 @@ export function calculateStockScores(
     }
 
     // セクタートレンドによるボーナス/ペナルティ
-    if (sectorTrends && stock.sector && sectorTrends[stock.sector]) {
-      const bonus = getSectorScoreBonus(sectorTrends[stock.sector])
+    const stockSectorGroup = getSectorGroup(stock.sector)
+    if (sectorTrends && stockSectorGroup && sectorTrends[stockSectorGroup]) {
+      const bonus = getSectorScoreBonus(sectorTrends[stockSectorGroup])
       if (bonus !== 0) {
         totalScore += bonus
         scoreBreakdown["sectorTrendBonus"] = bonus
@@ -351,7 +352,7 @@ export function applySectorDiversification(
   const diversified: ScoredStock[] = []
 
   for (const stock of stocks) {
-    const sector = stock.sector || "その他"
+    const sector = getSectorGroup(stock.sector) || "その他"
     const count = sectorCounts[sector] || 0
     const limit = getSectorLimit(sectorTrends?.[sector])
 

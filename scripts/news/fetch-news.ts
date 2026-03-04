@@ -20,18 +20,19 @@ const prisma = new PrismaClient()
 const parser = new Parser()
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-// セクターenum値
+// セクターenum値（SECTOR_MASTERのキーと同期）
 const SECTOR_VALUES = [
   "半導体・電子部品",
   "自動車",
   "金融",
   "医薬品",
-  "通信",
+  "IT・サービス",
+  "エネルギー",
   "小売",
   "不動産",
-  "エネルギー",
   "素材",
-  "IT・サービス",
+  "運輸",
+  "その他",
 ] as const
 
 type SectorValue = (typeof SECTOR_VALUES)[number]
@@ -77,18 +78,18 @@ const FEED_SOURCE_MAP: Record<string, string> = {
   google_news_macro: "google_news",
 }
 
-// セクター分類キーワード
+// セクター分類キーワード（SECTOR_MASTERのキーと同期）
 const SECTOR_KEYWORDS: Record<string, string[]> = {
   "半導体・電子部品": ["半導体", "電子部品", "チップ", "DRAM", "NAND", "フラッシュメモリ"],
   自動車: ["自動車", "トヨタ", "ホンダ", "日産", "マツダ", "スバル", "EV", "電気自動車"],
   金融: ["銀行", "証券", "保険", "金融", "メガバンク", "地銀", "信託"],
   医薬品: ["製薬", "医薬品", "新薬", "治験", "バイオ", "創薬"],
-  通信: ["通信", "NTT", "KDDI", "ソフトバンク", "5G", "携帯"],
+  "IT・サービス": ["IT", "ソフトウェア", "クラウド", "AI", "DX", "SaaS", "通信", "NTT", "KDDI", "ソフトバンク", "5G", "携帯"],
+  エネルギー: ["石油", "ガス", "電力", "エネルギー", "再生可能", "太陽光"],
   小売: ["小売", "百貨店", "コンビニ", "EC", "通販", "スーパー"],
   不動産: ["不動産", "マンション", "オフィス", "REIT", "商業施設"],
-  エネルギー: ["石油", "ガス", "電力", "エネルギー", "再生可能", "太陽光"],
   素材: ["鉄鋼", "化学", "素材", "建材", "セメント"],
-  "IT・サービス": ["IT", "ソフトウェア", "クラウド", "AI", "DX", "SaaS"],
+  運輸: ["鉄道", "JR", "航空", "ANA", "JAL", "海運", "物流"],
 }
 
 // センチメント分類キーワード
@@ -204,7 +205,7 @@ async function analyzeWithOpenAI(title: string, content: string): Promise<AIAnal
 1. is_stock_related: このニュースが株式・投資・金融市場に関連するかどうか（true/false）
    - 株価、企業業績、市場動向、経済指標、金融政策などに関するニュースはtrue
    - スポーツ、芸能、事件、天気など株式市場と無関係なニュースはfalse
-2. sector: セクター（半導体・電子部品、自動車、金融、医薬品、通信、小売、不動産、エネルギー、素材、IT・サービス、またはnull）
+2. sector: セクター（半導体・電子部品、自動車、金融、医薬品、IT・サービス、エネルギー、小売、不動産、素材、運輸、その他、またはnull）
 3. sentiment: センチメント（positive、neutral、negative、またはnull）
 4. ticker_codes: このニュースに登場する日本株の4桁銘柄コードの配列（例: ["7203", "6758"]）
    - 銘柄名（例：トヨタ、ソニー）から銘柄コードに変換できる場合も含める
@@ -219,7 +220,7 @@ async function analyzeWithOpenAI(title: string, content: string): Promise<AIAnal
    - "geopolitical": 地政学リスクに関するニュース（関税、制裁、戦争、紛争、外交など）
    - "macro": マクロ経済に関するニュース（金融政策、為替、金利、経済指標など）
 7. impact_sectors: 市場インパクトがある場合、影響を受けるセクターの配列
-   - セクター値: 半導体・電子部品、自動車、金融、医薬品、通信、小売、不動産、エネルギー、素材、IT・サービス
+   - セクター値: 半導体・電子部品、自動車、金融、医薬品、IT・サービス、エネルギー、小売、不動産、素材、運輸、その他
    - 影響がないまたは不明の場合は空配列 []
 8. impact_direction: 市場への影響の方向性
    - "positive": 株価にプラスの影響

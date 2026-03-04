@@ -25,6 +25,7 @@ import { useChatContext } from "@/app/contexts/ChatContext";
 import { useStockPrice } from "@/app/hooks/useStockPrice";
 import IndividualSettingsModal from "../IndividualSettingsModal";
 import PurchaseSimulation from "@/app/components/PurchaseSimulation";
+import { getSectorGroup } from "@/lib/constants";
 
 interface Transaction {
   id: string;
@@ -767,7 +768,7 @@ export default function MyStockDetailClient({
                 currentPrice > 0 && (
                   <PurchaseSimulation
                     currentPrice={currentPrice}
-                    stockSector={stock.stock.sector}
+                    stockSector={getSectorGroup(stock.stock.sector) ?? stock.stock.sector}
                     holdingsWithGains={purchaseSimulationData.holdingsWithGains}
                     currentSectors={purchaseSimulationData.currentSectors}
                     totalPortfolioValue={

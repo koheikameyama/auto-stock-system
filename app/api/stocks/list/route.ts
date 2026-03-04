@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth-utils"
 import { Prisma } from "@prisma/client"
 import { checkBuySignal } from "@/lib/recommendation-buy-filter"
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator"
+import { getTseIndustries } from "@/lib/constants"
 
 const VALID_SORT_OPTIONS = [
   "dailyChangeRate_desc",
@@ -75,7 +76,12 @@ export async function GET(request: NextRequest) {
   }
 
   if (sector) {
-    where.sector = sector
+    const tseIndustries = getTseIndustries(sector)
+    if (tseIndustries.length > 0) {
+      where.sector = { in: tseIndustries }
+    } else {
+      where.sector = sector
+    }
   }
 
   if (direction === "up") {

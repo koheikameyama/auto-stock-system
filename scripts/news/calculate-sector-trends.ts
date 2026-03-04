@@ -22,20 +22,35 @@ const prisma = new PrismaClient()
 
 const JST = "Asia/Tokyo"
 
-// --- 定数（standalone script 用にインライン定義） ---
+// --- 定数（standalone script 用にインライン定義、lib/constants.ts の SECTOR_MASTER と同期） ---
 
-const JP_SECTORS = [
-  "半導体・電子部品",
-  "自動車",
-  "金融",
-  "医薬品",
-  "IT・サービス",
-  "エネルギー",
-  "通信",
-  "小売",
-  "不動産",
-  "素材",
-] as const
+/** セクターマスタ: グループ名 → 東証業種分類 */
+const SECTOR_MASTER: Record<string, readonly string[]> = {
+  "半導体・電子部品": ["電気機器", "精密機器"],
+  "自動車": ["輸送用機器"],
+  "金融": ["銀行業", "証券、商品先物取引業", "保険業", "卸売業"],
+  "医薬品": ["医薬品"],
+  "IT・サービス": ["情報・通信業", "サービス業"],
+  "エネルギー": ["電気・ガス業", "鉱業", "石油・石炭製品"],
+  "小売": ["小売業", "食料品"],
+  "不動産": ["不動産業", "建設業"],
+  "素材": ["化学", "鉄鋼", "非鉄金属", "金属製品", "ガラス・土石製品", "繊維製品"],
+  "運輸": ["陸運業", "海運業", "空運業"],
+  "その他": ["その他製品"],
+}
+
+const JP_SECTORS = Object.keys(SECTOR_MASTER)
+
+/** 全TSE業種のフラットリスト（Stock.sector の groupBy に使用） */
+const ALL_TSE_INDUSTRIES = Object.values(SECTOR_MASTER).flat()
+
+/** TSE業種 → セクターグループの逆引き */
+const TSE_TO_SECTOR: Record<string, string> = {}
+for (const [group, industries] of Object.entries(SECTOR_MASTER)) {
+  for (const industry of industries) {
+    TSE_TO_SECTOR[industry] = group
+  }
+}
 
 const US_TO_JP_SECTOR_MAP: Record<string, string[]> = {
   "半導体・電子部品": ["半導体・電子部品", "Technology", "Semiconductor"],
@@ -44,10 +59,10 @@ const US_TO_JP_SECTOR_MAP: Record<string, string[]> = {
   医薬品: ["医薬品", "Healthcare", "Pharma"],
   "IT・サービス": ["IT・サービス", "Technology", "Software"],
   エネルギー: ["エネルギー", "Energy"],
-  通信: ["通信", "Telecom"],
   小売: ["小売", "Retail"],
   不動産: ["不動産", "Real Estate"],
   素材: ["素材", "Materials"],
+  運輸: ["運輸", "Transportation", "Airline", "Shipping"],
 }
 
 const US_INFLUENCE_WEIGHT = 0.7
@@ -261,10 +276,11 @@ async function main(): Promise<void> {
   // -------------------------------------------------------
   console.log("\n[3/4] 株価モメンタム取得中...")
 
+  // TSE業種分類で groupBy し、セクターグループに集約
   const stockGroupBy = await prisma.stock.groupBy({
     by: ["sector"],
     where: {
-      sector: { in: [...JP_SECTORS] },
+      sector: { in: ALL_TSE_INDUSTRIES },
       isDelisted: false,
       weekChangeRate: { not: null },
     },
@@ -283,7 +299,7 @@ async function main(): Promise<void> {
     },
   })
 
-  // セクター別にマッピング
+  // セクターグループ別にマッピング（複数のTSE業種を加重平均で集約）
   const priceMomentum: Record<string, SectorPriceMomentum> = {}
   for (const sector of JP_SECTORS) {
     priceMomentum[sector] = {
@@ -299,19 +315,56 @@ async function main(): Promise<void> {
     }
   }
 
+  // TSE業種の結果をセクターグループに集約（銘柄数による加重平均）
+  const groupSums: Record<string, {
+    weekChangeRate: number; dailyChangeRate: number; maDeviationRate: number;
+    volumeRatio: number; volatility: number; per: number; pbr: number; roe: number;
+    weekCount: number; dailyCount: number; maCount: number;
+    volCount: number; volatCount: number; perCount: number; pbrCount: number; roeCount: number;
+    totalCount: number;
+  }> = {}
+  for (const sector of JP_SECTORS) {
+    groupSums[sector] = {
+      weekChangeRate: 0, dailyChangeRate: 0, maDeviationRate: 0,
+      volumeRatio: 0, volatility: 0, per: 0, pbr: 0, roe: 0,
+      weekCount: 0, dailyCount: 0, maCount: 0,
+      volCount: 0, volatCount: 0, perCount: 0, pbrCount: 0, roeCount: 0,
+      totalCount: 0,
+    }
+  }
+
   for (const row of stockGroupBy) {
-    const sector = row.sector as string
-    if (sector in priceMomentum) {
+    const tseSector = row.sector as string
+    const group = TSE_TO_SECTOR[tseSector]
+    if (!group || !(group in groupSums)) continue
+
+    const s = groupSums[group]
+    const count = row._count.id
+    s.totalCount += count
+
+    if (row._avg.weekChangeRate !== null) { s.weekChangeRate += Number(row._avg.weekChangeRate) * count; s.weekCount += count }
+    if (row._avg.dailyChangeRate !== null) { s.dailyChangeRate += Number(row._avg.dailyChangeRate) * count; s.dailyCount += count }
+    if (row._avg.maDeviationRate !== null) { s.maDeviationRate += Number(row._avg.maDeviationRate) * count; s.maCount += count }
+    if (row._avg.volumeRatio !== null) { s.volumeRatio += Number(row._avg.volumeRatio) * count; s.volCount += count }
+    if (row._avg.volatility !== null) { s.volatility += Number(row._avg.volatility) * count; s.volatCount += count }
+    if (row._avg.per !== null) { s.per += Number(row._avg.per) * count; s.perCount += count }
+    if (row._avg.pbr !== null) { s.pbr += Number(row._avg.pbr) * count; s.pbrCount += count }
+    if (row._avg.roe !== null) { s.roe += Number(row._avg.roe) * count; s.roeCount += count }
+  }
+
+  for (const sector of JP_SECTORS) {
+    const s = groupSums[sector]
+    if (s.totalCount > 0) {
       priceMomentum[sector] = {
-        avgWeekChangeRate: row._avg.weekChangeRate !== null ? Number(row._avg.weekChangeRate) : null,
-        avgDailyChangeRate: row._avg.dailyChangeRate !== null ? Number(row._avg.dailyChangeRate) : null,
-        avgMaDeviationRate: row._avg.maDeviationRate !== null ? Number(row._avg.maDeviationRate) : null,
-        avgVolumeRatio: row._avg.volumeRatio !== null ? Number(row._avg.volumeRatio) : null,
-        avgVolatility: row._avg.volatility !== null ? Number(row._avg.volatility) : null,
-        stockCount: row._count.id,
-        avgPER: row._avg.per !== null ? Number(row._avg.per) : null,
-        avgPBR: row._avg.pbr !== null ? Number(row._avg.pbr) : null,
-        avgROE: row._avg.roe !== null ? Number(row._avg.roe) : null,
+        avgWeekChangeRate: s.weekCount > 0 ? s.weekChangeRate / s.weekCount : null,
+        avgDailyChangeRate: s.dailyCount > 0 ? s.dailyChangeRate / s.dailyCount : null,
+        avgMaDeviationRate: s.maCount > 0 ? s.maDeviationRate / s.maCount : null,
+        avgVolumeRatio: s.volCount > 0 ? s.volumeRatio / s.volCount : null,
+        avgVolatility: s.volatCount > 0 ? s.volatility / s.volatCount : null,
+        stockCount: s.totalCount,
+        avgPER: s.perCount > 0 ? s.per / s.perCount : null,
+        avgPBR: s.pbrCount > 0 ? s.pbr / s.pbrCount : null,
+        avgROE: s.roeCount > 0 ? s.roe / s.roeCount : null,
       }
     }
   }

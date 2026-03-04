@@ -6,6 +6,7 @@ import { getTodayForDB } from "@/lib/date-utils";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
 import { fetchStockPrices } from "@/lib/stock-price-fetcher";
 import { getSectorTrend } from "@/lib/sector-trend";
+import { getSectorGroup } from "@/lib/constants";
 import { Decimal } from "@prisma/client/runtime/library";
 import AuthenticatedLayout from "@/app/components/AuthenticatedLayout";
 import StockDetailClient from "./StockDetailClient";
@@ -102,7 +103,8 @@ async function StockDetailContent({
   }
 
   // セクター平均データを取得（相対評価用）
-  const sectorTrend = stock.sector ? await getSectorTrend(stock.sector) : null
+  const stockSectorGroup = getSectorGroup(stock.sector)
+  const sectorTrend = stockSectorGroup ? await getSectorTrend(stockSectorGroup) : null
   const sectorAvg = sectorTrend ? {
     avgPER: sectorTrend.avgPER,
     avgPBR: sectorTrend.avgPBR,

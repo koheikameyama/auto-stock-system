@@ -17,18 +17,19 @@ const prisma = new PrismaClient()
 const parser = new Parser()
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-// セクターenum値
+// セクターenum値（SECTOR_MASTERのキーと同期）
 const SECTOR_VALUES = [
   "半導体・電子部品",
   "自動車",
   "金融",
   "医薬品",
-  "通信",
+  "IT・サービス",
+  "エネルギー",
   "小売",
   "不動産",
-  "エネルギー",
   "素材",
-  "IT・サービス",
+  "運輸",
+  "その他",
 ] as const
 
 type SectorValue = (typeof SECTOR_VALUES)[number]
@@ -212,7 +213,7 @@ Determine the following items:
 1. is_stock_related: Whether this news is related to stocks, investments, or financial markets (true/false)
    - News about stock prices, corporate earnings, market trends, economic indicators, monetary policy → true
    - News about sports, entertainment, crime, weather, etc. unrelated to stock markets → false
-2. sector (Japanese): 半導体・電子部品, 自動車, 金融, 医薬品, 通信, 小売, 不動産, エネルギー, 素材, IT・サービス, or null
+2. sector (Japanese): 半導体・電子部品, 自動車, 金融, 医薬品, IT・サービス, エネルギー, 小売, 不動産, 素材, 運輸, その他, or null
 3. sentiment: positive, neutral, negative, or null
 4. is_market_impact: Whether this news could impact the overall stock market (true/false)
    - Geopolitical risks (tariffs, sanctions, war, conflict, US-China tensions) → true
@@ -224,7 +225,7 @@ Determine the following items:
    - "geopolitical": Geopolitical risk news (tariffs, sanctions, war, conflict, diplomacy)
    - "macro": Macroeconomic news (monetary policy, exchange rates, interest rates, economic indicators)
 6. impact_sectors: If there is market impact, array of affected sectors (in Japanese)
-   - Sector values: 半導体・電子部品, 自動車, 金融, 医薬品, 通信, 小売, 不動産, エネルギー, 素材, IT・サービス
+   - Sector values: 半導体・電子部品, 自動車, 金融, 医薬品, IT・サービス, エネルギー, 小売, 不動産, 素材, 運輸, その他
    - Empty array [] if no impact or unknown
 7. impact_direction: Direction of market impact
    - "positive": Positive impact on stock prices

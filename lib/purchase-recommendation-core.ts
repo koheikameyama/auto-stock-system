@@ -27,7 +27,7 @@ import {
   type GeopoliticalRiskData,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
-import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND, GAP_UP_MOMENTUM, EARNINGS_SAFETY, CROSS_STYLE_CONSENSUS, GEOPOLITICAL_RISK, AVOID_CONFIDENCE_THRESHOLD, AVOID_ESCALATION } from "@/lib/constants";
+import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND, GAP_UP_MOMENTUM, EARNINGS_SAFETY, CROSS_STYLE_CONSENSUS, GEOPOLITICAL_RISK, AVOID_CONFIDENCE_THRESHOLD, AVOID_ESCALATION, getSectorGroup } from "@/lib/constants";
 import {
   calculateDeviationRate,
   calculateSMA,
@@ -239,7 +239,7 @@ export async function executePurchaseRecommendation(
   const tickerCode = stock.tickerCode.replace(".T", "");
   const news = await getRelatedNews({
     tickerCodes: [tickerCode],
-    sectors: stock.sector ? [stock.sector] : [],
+    sectors: getSectorGroup(stock.sector) ? [getSectorGroup(stock.sector)!] : [],
     limit: 5,
     daysAgo: 7,
   });
@@ -320,8 +320,9 @@ export async function executePurchaseRecommendation(
   let sectorTrendContext = "";
   let sectorAvgWeekChangeRate: number | null = null;
   let sectorAvg: { avgPER: number | null; avgPBR: number | null; avgROE: number | null } | null = null;
-  if (stock.sector) {
-    const sectorTrend = await getSectorTrend(stock.sector);
+  const stockSectorGroup = getSectorGroup(stock.sector);
+  if (stockSectorGroup) {
+    const sectorTrend = await getSectorTrend(stockSectorGroup);
     if (sectorTrend) {
       sectorTrendContext = `\n【セクタートレンド】\n${formatSectorTrendForPrompt(sectorTrend)}\n`;
       sectorAvgWeekChangeRate = sectorTrend.avgWeekChangeRate ?? null;

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { fetchStockPrices } from "@/lib/stock-price-fetcher"
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator"
+import { getSectorGroup } from "@/lib/constants"
 
 // グラフ用カラーパレット
 const STOCK_COLORS = [
@@ -18,17 +19,18 @@ const STOCK_COLORS = [
   "#6366f1", // indigo-500
 ]
 
+// セクターグループ名でカラー定義（SECTOR_MASTERのキーと同期）
 const SECTOR_COLORS: Record<string, string> = {
-  "情報・通信": "#3b82f6",
-  "電気機器": "#10b981",
-  "サービス業": "#f59e0b",
-  "機械": "#ef4444",
-  "卸売業": "#8b5cf6",
-  "小売業": "#06b6d4",
-  "輸送用機器": "#f97316",
+  "半導体・電子部品": "#3b82f6",
+  "自動車": "#10b981",
+  "金融": "#f59e0b",
   "医薬品": "#ec4899",
-  "化学": "#84cc16",
-  "食料品": "#6366f1",
+  "IT・サービス": "#8b5cf6",
+  "エネルギー": "#ef4444",
+  "小売": "#06b6d4",
+  "不動産": "#f97316",
+  "素材": "#84cc16",
+  "運輸": "#6366f1",
   "その他": "#94a3b8",
 }
 
@@ -103,7 +105,7 @@ export async function GET() {
         stockId: ps.stockId,
         tickerCode: ps.stock.tickerCode,
         name: ps.stock.name,
-        sector: ps.stock.sector || "その他",
+        sector: getSectorGroup(ps.stock.sector) || "その他",
         value,
         cost,
       })

@@ -12,7 +12,7 @@ import {
   buildChatSystemPrompt,
   type StockPreloadedData,
 } from "@/lib/prompts/chat-system-prompt";
-import { CHAT_CONFIG } from "@/lib/constants";
+import { CHAT_CONFIG, getSectorGroup } from "@/lib/constants";
 import { getRelatedNews, type RelatedNews } from "@/lib/news-rag";
 import { getDaysAgoForDB } from "@/lib/date-utils";
 
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
           // 関連ニュース
           getRelatedNews({
             tickerCodes: [tickerCode],
-            sectors: stockContext.sector ? [stockContext.sector] : [],
+            sectors: getSectorGroup(stockContext.sector) ? [getSectorGroup(stockContext.sector)!] : [],
             limit: 5,
             daysAgo: 14,
           }),

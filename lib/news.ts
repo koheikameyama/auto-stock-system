@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { getDaysAgoForDB } from "@/lib/date-utils"
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator"
+import { getSectorGroup } from "@/lib/constants"
 import dayjs from "dayjs"
 import utc from "dayjs/plugin/utc"
 import timezone from "dayjs/plugin/timezone"
@@ -20,18 +21,18 @@ export interface GetNewsOptions {
   category?: "impact" | "all"
 }
 
-// セクターマッピング（米国→日本）
+// セクターマッピング（米国→日本、SECTOR_MASTERのキーと同期）
 const US_TO_JP_SECTOR_MAP: Record<string, string[]> = {
   "半導体・電子部品": ["半導体・電子部品", "Technology", "Semiconductor"],
   自動車: ["自動車", "Automotive", "EV"],
   金融: ["金融", "Financial", "Banking"],
   医薬品: ["医薬品", "Healthcare", "Pharma"],
-  "IT・サービス": ["IT・サービス", "Technology", "Software"],
+  "IT・サービス": ["IT・サービス", "Technology", "Software", "Telecom"],
   エネルギー: ["エネルギー", "Energy"],
-  通信: ["通信", "Telecom"],
   小売: ["小売", "Retail"],
   不動産: ["不動産", "Real Estate"],
   素材: ["素材", "Materials"],
+  運輸: ["運輸", "Transportation", "Airline", "Shipping"],
 }
 
 /**
@@ -186,9 +187,10 @@ export async function getNewsWithRelatedStocks(
         }
       }
 
-      // ユーザーの銘柄でセクターが一致するものを検索
+      // ユーザーの銘柄でセクターが一致するものを検索（TSE業種→グループ変換して比較）
       for (const stock of userStocks) {
-        if (stock.sector && matchedJpSectors.includes(stock.sector)) {
+        const stockGroup = getSectorGroup(stock.sector)
+        if (stockGroup && matchedJpSectors.includes(stockGroup)) {
           relatedStocks.push({
             id: stock.id,
             name: stock.name,
@@ -198,10 +200,11 @@ export async function getNewsWithRelatedStocks(
       }
     }
 
-    // セクターでのマッチ（日本ニュース）
+    // セクターでのマッチ（日本ニュース）— ニュースのセクター（グループ名）と銘柄のセクター（TSE業種）を変換して比較
     if (news.market === "JP" && news.sector && relatedStocks.length === 0) {
       for (const stock of userStocks) {
-        if (stock.sector === news.sector) {
+        const stockGroup = getSectorGroup(stock.sector)
+        if (stockGroup === news.sector) {
           relatedStocks.push({
             id: stock.id,
             name: stock.name,

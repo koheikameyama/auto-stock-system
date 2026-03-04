@@ -7,6 +7,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { getSectorTrend } from "@/lib/sector-trend"
+import { getSectorGroup } from "@/lib/constants"
 
 export type OutcomeType = "daily" | "purchase" | "analysis"
 export type Prediction = "buy" | "stay" | "remove" | "up" | "down" | "neutral"
@@ -38,9 +39,10 @@ export async function insertRecommendationOutcome(
     // セクタートレンドの自動取得（呼び出し元が未指定の場合）
     let trendScore = data.sectorTrendScore ?? null
     let trendDirection = data.sectorTrendDirection ?? null
-    if (trendScore === null && data.sector) {
+    const sectorGroup = data.sector ? getSectorGroup(data.sector) ?? data.sector : null
+    if (trendScore === null && sectorGroup) {
       try {
-        const trend = await getSectorTrend(data.sector)
+        const trend = await getSectorTrend(sectorGroup)
         if (trend) {
           trendScore = trend.compositeScore
           trendDirection = trend.trendDirection

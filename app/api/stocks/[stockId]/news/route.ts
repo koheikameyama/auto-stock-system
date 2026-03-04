@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { getRelatedNews } from "@/lib/news-rag"
+import { getSectorGroup } from "@/lib/constants"
 
 export async function GET(
   request: NextRequest,
@@ -33,7 +34,7 @@ export async function GET(
     const tickerCode = stock.tickerCode.replace(".T", "")
     const news = await getRelatedNews({
       tickerCodes: [tickerCode],
-      sectors: stock.sector ? [stock.sector] : [],
+      sectors: getSectorGroup(stock.sector) ? [getSectorGroup(stock.sector)!] : [],
       limit: 10,
       daysAgo: 14,
     })

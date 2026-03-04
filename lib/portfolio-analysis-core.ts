@@ -44,6 +44,7 @@ import {
   PROFIT_TAKING_PROMOTION,
   UNIT_SHARES,
   GEOPOLITICAL_RISK,
+  getSectorGroup,
 } from "@/lib/constants";
 import { getDaysAgoForDB, getTodayForDB } from "@/lib/date-utils";
 import { isDangerousStock, isPostExDividend } from "@/lib/stock-safety-rules";
@@ -729,7 +730,7 @@ export async function executePortfolioAnalysis(
   const tickerCodeSlug = portfolioStock.stock.tickerCode.replace(".T", "");
   const news = await getRelatedNews({
     tickerCodes: [tickerCodeSlug],
-    sectors: portfolioStock.stock.sector ? [portfolioStock.stock.sector] : [],
+    sectors: getSectorGroup(portfolioStock.stock.sector) ? [getSectorGroup(portfolioStock.stock.sector)!] : [],
     limit: 5,
     daysAgo: 7,
   });
@@ -777,8 +778,9 @@ export async function executePortfolioAnalysis(
   let sectorTrendContext = "";
   let sectorAvgWeekChangeRate: number | null = null;
   let sectorAvg: { avgPER: number | null; avgPBR: number | null; avgROE: number | null } | null = null;
-  if (stock.sector) {
-    const sectorTrend = await getSectorTrend(stock.sector);
+  const stockSectorGroup = getSectorGroup(stock.sector);
+  if (stockSectorGroup) {
+    const sectorTrend = await getSectorTrend(stockSectorGroup);
     if (sectorTrend) {
       sectorTrendContext = `\n【セクタートレンド】\n${formatSectorTrendForPrompt(sectorTrend)}\n`;
       sectorAvgWeekChangeRate = sectorTrend.avgWeekChangeRate ?? null;
@@ -1219,7 +1221,7 @@ export async function executeSimulatedPortfolioAnalysis(
   const tickerCodeSlug = stock.tickerCode.replace(".T", "");
   const news = await getRelatedNews({
     tickerCodes: [tickerCodeSlug],
-    sectors: stock.sector ? [stock.sector] : [],
+    sectors: getSectorGroup(stock.sector) ? [getSectorGroup(stock.sector)!] : [],
     limit: 5,
     daysAgo: 7,
   });
@@ -1260,8 +1262,9 @@ export async function executeSimulatedPortfolioAnalysis(
   let sectorTrendContext = "";
   let sectorAvgWeekChangeRate: number | null = null;
   let simSectorAvg: { avgPER: number | null; avgPBR: number | null; avgROE: number | null } | null = null;
-  if (stock.sector) {
-    const sectorTrend = await getSectorTrend(stock.sector);
+  const simStockSectorGroup = getSectorGroup(stock.sector);
+  if (simStockSectorGroup) {
+    const sectorTrend = await getSectorTrend(simStockSectorGroup);
     if (sectorTrend) {
       sectorTrendContext = `\n【セクタートレンド】\n${formatSectorTrendForPrompt(sectorTrend)}\n`;
       sectorAvgWeekChangeRate = sectorTrend.avgWeekChangeRate ?? null;

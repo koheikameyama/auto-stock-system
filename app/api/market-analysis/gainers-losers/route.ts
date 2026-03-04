@@ -4,6 +4,7 @@ import { verifyCronAuth } from "@/lib/cron-auth"
 import { prisma } from "@/lib/prisma"
 import { getRelatedNews, formatNewsForPrompt } from "@/lib/news-rag"
 import { getTodayForDB } from "@/lib/date-utils"
+import { getSectorGroup } from "@/lib/constants"
 import { getOpenAIClient } from "@/lib/openai"
 import { buildMoverAnalysisMessages } from "@/lib/prompts/mover-analysis-prompt"
 
@@ -282,7 +283,7 @@ async function analyzeMovers(
       const tickerCode = stock.tickerCode.replace(".T", "")
       const news = await getRelatedNews({
         tickerCodes: [tickerCode],
-        sectors: stock.sector ? [stock.sector] : [],
+        sectors: getSectorGroup(stock.sector) ? [getSectorGroup(stock.sector)!] : [],
         limit: 5,
         daysAgo: 3,
       })

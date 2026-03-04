@@ -1,5 +1,5 @@
 import { getNikkei225Data, getTrendDescription } from "@/lib/market-index";
-import { getPromptStyleLabel } from "@/lib/constants";
+import { getPromptStyleLabel, getSectorGroup } from "@/lib/constants";
 
 interface UserSettings {
   investmentStyle: string;
@@ -157,7 +157,8 @@ export async function buildChatSystemPrompt(
         stockInfo += `\n- getStockAnalysis: 最新のAI売買分析とアドバイス`;
       }
 
-      stockInfo += `\n- getRelatedNews: 関連ニュース（tickerCodes=["${stockContext.tickerCode.replace(".T", "")}"]${stockContext.sector ? `, sectors=["${stockContext.sector}"]` : ""}）`;
+      const sectorGroupForPrompt = getSectorGroup(stockContext.sector);
+      stockInfo += `\n- getRelatedNews: 関連ニュース（tickerCodes=["${stockContext.tickerCode.replace(".T", "")}"]${sectorGroupForPrompt ? `, sectors=["${sectorGroupForPrompt}"]` : ""}）`;
 
       if (stockContext.type === "portfolio") {
         stockInfo += `\n- getPortfolioAnalysis: 保有銘柄分析（stockId="${stockContext.stockId}"）`;

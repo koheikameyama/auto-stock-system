@@ -1,4 +1,4 @@
-import { GAP_PREDICTION } from "@/lib/constants"
+import { GAP_PREDICTION, getSectorGroup } from "@/lib/constants"
 
 export type GapDirection = "up" | "down" | "flat"
 export type GapSeverity = "high" | "medium" | "low"
@@ -112,16 +112,17 @@ export function estimateStockGap(
   let stockGapRate = marketGap.estimatedGapRate * betaFactor
 
   // セクター補正: NASDAQ感応度
-  if (stock.sector && nasdaqChangeRate !== null) {
-    const nasdaqBonus = GAP_PREDICTION.SECTOR_NASDAQ_BONUS[stock.sector] ?? 0
+  const sectorGroup = stock.sector ? getSectorGroup(stock.sector) : null
+  if (sectorGroup && nasdaqChangeRate !== null) {
+    const nasdaqBonus = GAP_PREDICTION.SECTOR_NASDAQ_BONUS[sectorGroup] ?? 0
     if (nasdaqBonus !== 0) {
       stockGapRate += nasdaqChangeRate * nasdaqBonus
     }
   }
 
   // セクター補正: 為替感応度
-  if (stock.sector && usdjpyChangeRate !== null) {
-    const fxSensitivity = GAP_PREDICTION.SECTOR_FX_SENSITIVITY[stock.sector] ?? 1.0
+  if (sectorGroup && usdjpyChangeRate !== null) {
+    const fxSensitivity = GAP_PREDICTION.SECTOR_FX_SENSITIVITY[sectorGroup] ?? 1.0
     // デフォルト感応度(1.0)との差分のみ補正
     const fxAdjustment = usdjpyChangeRate * GAP_PREDICTION.USDJPY_IMPACT_FACTOR * (fxSensitivity - 1.0)
     stockGapRate += fxAdjustment * GAP_PREDICTION.USDJPY_WEIGHT

@@ -36,6 +36,7 @@ import {
   STALE_DATA_DAYS,
   INVESTMENT_THEMES,
   getStyleLabel,
+  getSectorGroup,
 } from "@/lib/constants";
 import {
   checkRecommendationSafety,
@@ -543,7 +544,7 @@ async function buildStockContexts(
   );
   const sectors = Array.from(
     new Set(
-      candidates.map((c) => c.sector).filter((s): s is string => s !== null),
+      candidates.map((c) => getSectorGroup(c.sector)).filter((s): s is string => s !== null),
     ),
   );
 

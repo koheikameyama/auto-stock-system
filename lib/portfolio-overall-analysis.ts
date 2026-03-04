@@ -7,7 +7,7 @@ import { buildPortfolioOverallAnalysisPrompt } from "@/lib/prompts/portfolio-ove
 import { getAllSectorTrends } from "@/lib/sector-trend"
 import { getNikkei225Data, getSP500Data, getTrendDescription } from "@/lib/market-index"
 import { getTodayForDB, getDaysAgoForDB } from "@/lib/date-utils"
-import { getStyleLabel, DAILY_MARKET_NAVIGATOR } from "@/lib/constants"
+import { getStyleLabel, DAILY_MARKET_NAVIGATOR, getSectorGroup } from "@/lib/constants"
 import dayjs from "dayjs"
 import utc from "dayjs/plugin/utc"
 import timezone from "dayjs/plugin/timezone"
@@ -116,7 +116,7 @@ function calculateSectorBreakdown(stocks: PortfolioStockData[]): SectorBreakdown
   const totalValue = stocks.reduce((sum, s) => sum + s.value, 0)
 
   for (const stock of stocks) {
-    const sector = stock.sector || "その他"
+    const sector = getSectorGroup(stock.sector) || stock.sector || "その他"
     const current = sectorMap.get(sector) || { count: 0, value: 0 }
     sectorMap.set(sector, {
       count: current.count + 1,
@@ -680,7 +680,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
   // 気になるリストをセクター別にグルーピング
   const watchlistBySector = new Map<string, { name: string; tickerCode: string }[]>()
   for (const ws of user.watchlistStocks) {
-    const sector = ws.stock.sector || "その他"
+    const sector = getSectorGroup(ws.stock.sector) || ws.stock.sector || "その他"
     if (!watchlistBySector.has(sector)) watchlistBySector.set(sector, [])
     watchlistBySector.get(sector)!.push({ name: ws.stock.name, tickerCode: ws.stock.tickerCode })
   }
@@ -696,7 +696,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     : "気になるリスト銘柄なし"
 
   // セクタートレンドを取得（ポートフォリオセクター＋注目セクター）
-  const portfolioSectors = new Set(portfolioStocksData.map(s => s.sector || "その他"))
+  const portfolioSectors = new Set(portfolioStocksData.map(s => getSectorGroup(s.sector) || s.sector || "その他"))
   const { trends: allSectorTrends } = await getAllSectorTrends()
   const relevantSectorTrends = hasPortfolio
     ? allSectorTrends.filter(t =>
