@@ -96,13 +96,6 @@ interface PurchaseSimulationData {
   remainingBudget: number | null;
 }
 
-interface MarketEnvironment {
-  vixClose: number | null;
-  vixChangeRate: number | null;
-  wtiClose: number | null;
-  wtiChangeRate: number | null;
-}
-
 interface Props {
   stock: Stock;
   portfolioDetails?: {
@@ -112,14 +105,12 @@ interface Props {
     profitPercent: number;
   };
   purchaseSimulationData?: PurchaseSimulationData;
-  marketEnvironment?: MarketEnvironment | null;
 }
 
 export default function MyStockDetailClient({
   stock,
   portfolioDetails,
   purchaseSimulationData,
-  marketEnvironment,
 }: Props) {
   const router = useRouter();
   const t = useTranslations("stocks.detail");
@@ -545,7 +536,7 @@ export default function MyStockDetailClient({
                     </>
                   )}
                   {activeTab === "analysis" && (
-                    <TechnicalAnalysis stockId={stock.stockId} embedded marketEnvironment={marketEnvironment} />
+                    <TechnicalAnalysis stockId={stock.stockId} embedded />
                   )}
                   {activeTab === "news" && (
                     <RelatedNews stockId={stock.stockId} embedded />
@@ -844,7 +835,7 @@ export default function MyStockDetailClient({
                     </>
                   )}
                   {activeTab === "analysis" && (
-                    <TechnicalAnalysis stockId={stock.stockId} embedded marketEnvironment={marketEnvironment} />
+                    <TechnicalAnalysis stockId={stock.stockId} embedded />
                   )}
                   {activeTab === "news" && (
                     <RelatedNews stockId={stock.stockId} embedded />
