@@ -59,7 +59,10 @@
     "edit": "編集",
     "delete": "削除",
     "sell": "売却",
-    "buy": "購入"
+    "buy": "購入",
+    "predictedOpen": "予測寄り付き",
+    "actualOpen": "寄り付き",
+    "predicted": "予測"
   },
   "deleteConfirm": {
     "title": "銘柄を削除しますか？",

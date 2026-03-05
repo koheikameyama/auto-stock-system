@@ -86,6 +86,15 @@ interface PurchaseRecommendation {
   sellTiming?: "market" | "rebound" | null;
 }
 
+interface GapPredictionData {
+  estimatedGapRate: number;
+  gapDirection: "up" | "down" | "flat";
+  previousClose: number | null;
+  predictedOpenPrice: number | null;
+  actualOpenPrice: number | null;
+  actualGapRate: number | null;
+}
+
 interface StockCardProps {
   stock: UserStock;
   price?: StockPrice;
@@ -94,6 +103,7 @@ interface StockCardProps {
   recommendation?: PurchaseRecommendation;
   portfolioRecommendation?: "buy" | "sell" | "hold" | null;
   analyzedAt?: string | null;
+  gapPrediction?: GapPredictionData;
   onAdditionalPurchase?: () => void;
   onSell?: () => void;
   onPurchase?: () => void;
@@ -110,6 +120,7 @@ export default function StockCard({
   recommendation,
   portfolioRecommendation,
   analyzedAt,
+  gapPrediction,
   onAdditionalPurchase,
   onSell,
   onPurchase,
@@ -334,6 +345,54 @@ export default function StockCard({
               <p className="text-sm text-gray-400">読み込み中...</p>
             )}
           </div>
+
+          {/* Gap Prediction - 予測/実績寄り付き */}
+          {gapPrediction && !isDisabled && (gapPrediction.predictedOpenPrice || gapPrediction.actualOpenPrice) && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">
+                {gapPrediction.actualOpenPrice ? "寄り付き" : "予測寄り付き"}
+              </span>
+              <div className="text-right flex items-center gap-1.5">
+                {gapPrediction.actualOpenPrice ? (
+                  <>
+                    <span className="font-semibold text-gray-900">
+                      ¥{gapPrediction.actualOpenPrice.toLocaleString()}
+                    </span>
+                    <span
+                      className={`text-xs font-semibold ${
+                        (gapPrediction.actualGapRate ?? 0) >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {(gapPrediction.actualGapRate ?? 0) >= 0 ? "+" : ""}
+                      {gapPrediction.actualGapRate?.toFixed(2)}%
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      (予測: {gapPrediction.estimatedGapRate >= 0 ? "+" : ""}
+                      {gapPrediction.estimatedGapRate.toFixed(2)}%)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-gray-900">
+                      ¥{gapPrediction.predictedOpenPrice!.toLocaleString()}
+                    </span>
+                    <span
+                      className={`text-xs font-semibold ${
+                        gapPrediction.estimatedGapRate >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {gapPrediction.estimatedGapRate >= 0 ? "+" : ""}
+                      {gapPrediction.estimatedGapRate.toFixed(2)}%
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Portfolio Specific Info */}
           {isHolding && (

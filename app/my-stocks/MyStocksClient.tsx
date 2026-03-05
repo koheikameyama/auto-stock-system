@@ -14,7 +14,13 @@ import {
   UPDATE_SCHEDULES,
   MAX_PORTFOLIO_STOCKS,
   MAX_WATCHLIST_STOCKS,
+  GAP_PREDICTION_DISPLAY,
 } from "@/lib/constants";
+import dayjs from "dayjs";
+import utcPlugin from "dayjs/plugin/utc";
+import timezonePlugin from "dayjs/plugin/timezone";
+dayjs.extend(utcPlugin);
+dayjs.extend(timezonePlugin);
 import { useMarkPageSeen } from "@/app/hooks/useMarkPageSeen";
 import { useAppStore } from "@/store/useAppStore";
 import type {
@@ -71,6 +77,9 @@ export default function MyStocksClient() {
     new Set(),
   );
   const [trackedPricesLoaded, setTrackedPricesLoaded] = useState(false);
+  const [gapPredictions, setGapPredictions] = useState<
+    Record<string, { estimatedGapRate: number; gapDirection: "up" | "down" | "flat"; previousClose: number | null; predictedOpenPrice: number | null; actualOpenPrice: number | null; actualGapRate: number | null }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -280,6 +289,37 @@ export default function MyStocksClient() {
       fetchRecommendations();
     }
   }, [userStocks]);
+
+  // ギャップ予測データを取得（JST 7:00〜15:00のみ）
+  useEffect(() => {
+    const jstHour = dayjs().tz("Asia/Tokyo").hour();
+    if (jstHour < GAP_PREDICTION_DISPLAY.START_HOUR || jstHour >= GAP_PREDICTION_DISPLAY.END_HOUR) return;
+
+    async function fetchGapPredictions() {
+      try {
+        const res = await fetch("/api/gap-prediction?scope=all");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.stocks) return;
+        const map: Record<string, typeof gapPredictions[string]> = {};
+        for (const s of data.stocks) {
+          map[s.stockId] = {
+            estimatedGapRate: s.estimatedGapRate,
+            gapDirection: s.gapDirection,
+            previousClose: s.previousClose,
+            predictedOpenPrice: s.predictedOpenPrice,
+            actualOpenPrice: s.actualOpenPrice,
+            actualGapRate: s.actualGapRate,
+          };
+        }
+        setGapPredictions(map);
+      } catch (err) {
+        console.error("Error fetching gap predictions:", err);
+      }
+    }
+
+    fetchGapPredictions();
+  }, []);
 
   // 追跡銘柄をウォッチリストに追加
   const handleTrackedToWatchlist = async (
@@ -987,6 +1027,7 @@ export default function MyStocksClient() {
                     priceLoaded={pricesLoaded}
                     isStale={staleTickers.has(stock.stock.tickerCode)}
                     recommendation={recommendations[stock.stockId]}
+                    gapPrediction={gapPredictions[stock.stockId]}
                     portfolioRecommendation={
                       stock.type === "portfolio"
                         ? stock.recommendation

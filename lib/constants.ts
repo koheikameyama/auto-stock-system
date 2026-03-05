@@ -785,6 +785,33 @@ export const GAP_PREDICTION = {
   } as Record<string, number>,
 } as const;
 
+// ギャップ予測の表示設定（マイ株ページ）
+export const GAP_PREDICTION_DISPLAY = {
+  START_HOUR: 7,   // 表示開始（JST）
+  END_HOUR: 15,    // 表示終了（JST）
+  MARKET_OPEN_HOUR: 9,  // 寄り付き判定
+} as const;
+
+// CME日経先物の取引時間（JST基準）
+// CME Nikkei futures: 月曜07:00 JST ～ 土曜06:00 JST（ほぼ24時間）
+// 日次休憩: 毎日06:00～07:00 JST
+export const CME_TRADING_HOURS = {
+  DAILY_BREAK_START_HOUR_JST: 6,
+  DAILY_BREAK_END_HOUR_JST: 7,
+  WEEK_START_DAY: 1, // 月曜日
+  WEEK_END_DAY: 6,   // 土曜日
+  WEEK_END_HOUR_JST: 6,
+} as const;
+
+// 先物と現物の乖離率シグナル
+export const FUTURES_DIVERGENCE = {
+  // 乖離率の閾値（パーセントポイント）
+  BULLISH_THRESHOLD: 0.3,
+  BEARISH_THRESHOLD: -0.3,
+  STRONG_BULLISH_THRESHOLD: 1.0,
+  STRONG_BEARISH_THRESHOLD: -1.0,
+} as const;
+
 // 地政学リスク指標の閾値
 export const GEOPOLITICAL_RISK = {
   // VIX（恐怖指数）の閾値
