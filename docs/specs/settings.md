@@ -2,7 +2,7 @@
 
 ## 概要
 
-ユーザーの投資設定、通知設定、アカウント管理機能です。
+ユーザーの投資設定、通知設定、アカウント管理機能です。投資スタイルはスクリーニング条件や注目データのパーソナライズに使用されます。
 
 **ページパス**: `/settings`
 
@@ -120,12 +120,11 @@
 
 | セクション | 条件 |
 |-----------|------|
-| dashboard | 最終閲覧以降に新しい UserDailyRecommendation |
+| dashboard | 最終閲覧以降に新しい DailyHighlight |
 | myStocks | 最終閲覧以降に新しい StockAnalysis |
 | news | 最終閲覧以降に新しい MarketNews |
 | portfolioAnalysis | PortfolioOverallAnalysis.analyzedAt が最終閲覧以降 |
-| aiReport | 最終閲覧以降に新しい WeeklyAIReport |
-| menu | portfolioAnalysis or aiReport が更新 |
+| menu | portfolioAnalysis が更新 |
 
 ## データモデル
 

@@ -2,29 +2,31 @@
 
 ## 概要
 
-ダッシュボードはユーザーがログイン後に最初に表示されるメインページです。ポートフォリオの状況、市場データ、AIおすすめ銘柄、セクタートレンドを一覧で確認できます。
+ダッシュボードはユーザーがログイン後に最初に表示されるメインページです。ポートフォリオの状況、市場データ、注目データ、セクタートレンドを一覧で確認できます。
+
+> **注意**: 売買の推奨は行いません。市場データと分析結果を整理して表示し、投資判断はユーザー自身が行います。
 
 **ページパス**: `/dashboard`
 
 ## 画面構成
 
-### 1. Daily Market Navigator（最上部）
+### 1. 市場環境サマリー（最上部）
 
-ページタイトルの直下に表示される統合カード型コンポーネント。朝と夜の2セッションで異なる視点の分析を提供する。
+ページタイトルの直下に表示される統合カード型コンポーネント。朝と夜の2セッションで異なる視点の市場データを整理して表示する。
 
 **前提条件**: ポートフォリオ + ウォッチリスト合計3銘柄以上（未満の場合は案内メッセージを表示）
 
-**セッション切り替え**: カード上部にタブ（朝の戦略 / 結果診断）を表示。JST 15時以降は夜セッションがデフォルト。
+**セッション切り替え**: カード上部にタブ（朝の市場環境 / 今日の振り返り）を表示。JST 15時以降は夜セッションがデフォルト。
 
 | 項目 | 説明 |
 |------|------|
-| セッションタブ | 🧭 朝の戦略 / 🌙 結果診断 の切り替え |
+| セッションタブ | 🧭 朝の市場環境 / 🌙 今日の振り返り の切り替え |
 | 市場トーンバッジ | bullish / bearish / neutral / sector_rotation（色分けあり） |
-| マーケットヘッドライン | 朝: 今日の市況展望 / 夜: 今日の市場結果総括 |
-| 市場主要因 | 市場を動かしている主要因（1〜2文） |
+| マーケットヘッドライン | 朝: 今日の市場環境 / 夜: 今日の市場結果総括 |
+| 市場主要因 | 市場を動かしている主要因（1〜2文、事実ベース） |
 | ポートフォリオ状態バッジ | healthy / caution / warning / critical（色分けあり） |
-| ポートフォリオ総評 | 朝: 持ち株への影響予測 / 夜: 持ち株の健康診断 |
-| アクションプラン | 朝: 今日の行動指針 / 夜: 明日の予習ポイント |
+| ポートフォリオ総評 | 朝: 持ち株関連データの変化点 / 夜: 持ち株の状態サマリー |
+| 要点 | 朝: 今日の市場環境の要点 / 夜: 今日の振り返りの要点（事実ベース、行動指示なし） |
 | バディメッセージ | 朝: 前向きな激励 / 夜: 労いと明日への期待 |
 | 詳細（折りたたみ） | 銘柄ハイライト・セクターハイライト |
 
@@ -32,71 +34,60 @@
 
 詳細仕様は [portfolio-analysis.md](portfolio-analysis.md) を参照。
 
-#### マーケットシールドバナー
+#### 市場警戒アラート
 
-マーケットシールドがアクティブな場合、Daily Market Navigator 内に赤色の警告バナーを表示する。
+市場の急変を検知した場合、市場環境サマリー内にアラートバナーを表示する。売買の凍結や強制介入は行わず、事実の表示のみ。
 
 | 項目 | 説明 |
 |------|------|
-| 表示条件 | マーケットシールドがアクティブ（`deactivatedAt == null`） |
+| 表示条件 | 市場警戒条件に該当（VIX急騰、日経急落等） |
 | トリガー種別 | 日経225急落 / VIX急騰 / WTI原油急変動 / 為替急変動 |
 | トリガー値 | VIX絶対値またはパーセント変動率を表示 |
-| UI | 赤色ボーダーの警告カード（`MarketShieldBanner` コンポーネント） |
+| UI | 赤色ボーダーの警告カード（`MarketAlertBanner` コンポーネント） |
 
-**API**: `GET /api/market-shield`
-
-#### 乗り換え提案カード（Switch Proposal）
-
-Daily Market Navigator の詳細セクション内に、スマートスイッチによる乗り換え提案を表示する。
-
-| 項目 | 説明 |
-|------|------|
-| 表示条件 | 当日の乗り換え提案が存在し、ユーザーが未対応のもの |
-| 売却候補 | 含み損銘柄の名前 + 回復スコア（銘柄詳細へリンク） |
-| 購入候補 | buy判定銘柄の名前 + チャンススコア（銘柄詳細へリンク） |
-| 乗り換えメリット | switchBenefit の値を表示 |
-| 理由テキスト | テンプレート生成の乗り換え理由 |
-| アクション | 「今は見送る」（rejected）/ 「詳細を見る」（銘柄詳細へ遷移） |
-| UI | 琥珀色ボーダーのカード（`SwitchProposalCard` コンポーネント） |
+**API**: `GET /api/market/alerts`
 
 #### イブニングレビュー（eveningセッション追加機能）
 
-夜セッション（結果診断）に追加される振り返り機能。今日の売買判断・機会損失・行動パターンを分析し、投資スキルの向上を支援する。
+夜セッション（今日の振り返り）に追加される機能。今日の取引データと市場の変化を客観的に整理し、事実ベースで振り返る。
 
-**表示条件**: eveningセッション選択時に、Daily Market Navigatorの詳細（折りたたみ）内に表示
+**表示条件**: eveningセッション選択時に、市場環境サマリーの詳細（折りたたみ）内に表示
 
-##### a. 売買判断の振り返り
+##### a. 取引の振り返り
 
-今日実行した売買判断をAIが評価し、判断の質をフィードバックする。
+今日実行した取引について、取引時点のテクニカルデータを整理して表示する。
 
 | 項目 | 説明 |
 |------|------|
 | 対象銘柄 | 今日売買を実行した銘柄 |
-| 判断評価 | excellent（素晴らしい）/ good（良い）/ neutral（普通）/ questionable（要検討） |
-| 評価理由 | なぜその評価になったかの解説 |
-| 改善ポイント | 次回同様の場面での判断改善アドバイス |
+| 取引時のデータ | 取引価格、出来高、RSI、MACD等のテクニカル指標 |
+| 市場環境 | 取引時の市場全体の状況（日経225、セクタートレンド） |
 
-##### b. 機会損失の指摘
+※ 取引の良し悪しの評価や改善アドバイスは行わない。データの整理のみ。
 
-ウォッチリストやAIおすすめ銘柄のうち、ユーザーが購入しなかったが大きく上昇した銘柄を指摘する。
+##### b. ウォッチリスト銘柄の変動
 
-| 項目 | 説明 |
-|------|------|
-| ウォッチリスト急騰銘柄 | ウォッチリスト内で当日+3%以上上昇した銘柄 |
-| AI推奨見送り銘柄 | AIが買い推奨したがユーザーが購入しなかった銘柄 |
-| 見送り理由の推測 | なぜ購入に至らなかった可能性があるかの分析 |
-| 学びのポイント | 機会損失から得られる教訓 |
-
-##### c. 行動パターンの改善提案
-
-過去の売買履歴を分析し、繰り返し発生している行動パターンの傾向と改善策を提示する。
+ウォッチリスト銘柄のうち、大きな値動きがあった銘柄を表示する。
 
 | 項目 | 説明 |
 |------|------|
-| 検出パターン | 利確が早すぎる / 損切りが遅い / 高値掴み傾向 など |
-| 具体例 | 該当する過去の売買事例 |
-| 改善提案 | パターンを改善するための具体的なアドバイス |
-| 参考指標 | 改善に役立つテクニカル指標や基準値の紹介 |
+| 急騰銘柄 | ウォッチリスト内で当日+3%以上上昇した銘柄 |
+| 急落銘柄 | ウォッチリスト内で当日-3%以上下落した銘柄 |
+| 変動要因 | ニュースや出来高等の客観データ |
+
+※ 「買い逃した」等の機会損失の指摘は行わない。
+
+##### c. 改善分析
+
+過去の売買履歴から、テクニカルデータに基づくパターンを分析する。
+
+| 項目 | 説明 |
+|------|------|
+| 取引パターン | 過去の取引タイミングとテクニカル指標の傾向 |
+| データ分析 | 「利確時の平均RSI: 72」「損切り時の平均保有期間: 45日」等の統計データ |
+| 参考情報 | 関連するテクニカル指標の解説 |
+
+※ 「利確が早すぎる」等の行動評価や改善提案は行わない。データの分析結果のみ。
 
 ##### データモデル
 
@@ -109,46 +100,48 @@ Daily Market Navigator の詳細セクション内に、スマートスイッチ
       "tickerCode": "8306.T",
       "name": "三菱UFJ",
       "action": "buy",
-      "rating": "good",
-      "reason": "移動平均線のゴールデンクロス直後の購入タイミングは適切...",
-      "improvement": "出来高の確認も加えるとさらに精度が上がります"
+      "priceAtTrade": 1850,
+      "rsiAtTrade": 55.3,
+      "macdAtTrade": 12.5,
+      "marketContext": "日経225は+0.8%、銀行セクターは上昇トレンド"
     }
   ],
-  "missedOpportunities": [
+  "watchlistMovers": [
     {
       "tickerCode": "6758.T",
       "name": "ソニーグループ",
-      "source": "watchlist",
       "changeRate": 4.2,
-      "reason": "決算好調を受けて急騰。ウォッチリストに入れていたが購入に至らず",
-      "lesson": "決算前にウォッチリスト銘柄の業績予想を確認する習慣をつけましょう"
+      "volumeRatio": 2.1,
+      "factor": "好決算発表により出来高が20日平均の2.1倍に増加"
     }
   ],
-  "behavioralPatterns": [
+  "tradingPatterns": [
     {
-      "pattern": "early_profit_taking",
-      "description": "利確が早すぎる傾向があります",
-      "examples": ["過去1ヶ月で3回、+5%で利確後にさらに+10%上昇"],
-      "suggestion": "トレーリングストップ（逆指値を切り上げる手法）の活用を検討してください",
-      "referenceMetric": "ATR（平均真の値幅）を基準にした利確ラインの設定"
+      "pattern": "profit_taking_rsi",
+      "description": "過去1ヶ月の利確時の平均RSI: 72",
+      "dataPoints": ["2/15: RSI 75で利確", "2/20: RSI 68で利確"],
+      "referenceInfo": "RSI（相対力指数）: 70以上は買われすぎゾーンとされる指標"
     }
   ]
 }
 
-### 2. 寄り付きギャップ予測（morningセッションのみ表示）
+### 2. 海外市場データ（morningセッションのみ表示）
 
-海外市場の夜間データから、日本市場の寄り付きギャップ（窓開け）を予測するカード。
+海外市場の夜間データを表示するカード。予測ラベルは表示せず、事実データのみ。
 
 **表示条件**: JST 07:00〜15:00 のみ表示
 
 | 項目 | 説明 |
 |------|------|
-| 海外市場の動き | CME日経先物、USD/JPY、S&P 500、NASDAQの終値と変化率 |
-| 日本市場の予測 | ギャップアップ/ダウン/横ばいの方向と予測変動率 |
-| severity バッジ | 大きな変動 / やや変動 / 小幅 |
-| 要注意銘柄 | ポートフォリオ銘柄のうち、severity が medium 以上の銘柄リスト |
+| CME日経先物 | 終値と前日比変化率 |
+| USD/JPY | 終値と前日比変化率 |
+| S&P 500 | 終値と前日比変化率 |
+| NASDAQ | 終値と前日比変化率 |
+| 変動幅バッジ | 大幅変動 / やや変動 / 小幅（海外市場の変動幅に基づく事実表示） |
 
-**API**: `GET /api/gap-prediction`
+※ ギャップアップ/ダウンの「予測」ラベルは表示しない。海外市場データの事実表示のみ。
+
+**API**: `GET /api/market/pre-market-data`
 
 **データソース**: `PreMarketData` テーブル（毎朝07:00 JST に `pre-market-data.yml` で取得）
 
@@ -231,12 +224,12 @@ Daily Market Navigator の詳細セクション内に、スマートスイッチ
 
 ### 8. 地政学・マクロリスク（セクタートレンドの直上）
 
-直近3日の地政学・マクロ経済ニュースをコンパクトカードで表示。地政学リスクモード発動時は防御措置の情報も表示。
+直近3日の地政学・マクロ経済ニュースをコンパクトカードで表示。事実の表示のみで、防御措置や売買介入は行わない。
 
 | 項目 | 説明 |
 |------|------|
 | リスクレベルバッジ | 安定（緑）/ 注意（黄）/ 警戒（赤） |
-| リスクモード情報 | caution/alert時に表示。リスクスコア、アクションアドバイス、要因一覧 |
+| リスクデータ | リスクスコア、要因一覧 |
 | ニュース一覧 | 最大3件。タイトル + 影響セクター + 影響方向 |
 | 詳細リンク | ニュースページ（市場影響フィルター）へ遷移 |
 
@@ -248,11 +241,13 @@ VIX・WTI・地政学ニュースからリスクスコアを算出:
 - WTI急変動: |前日比|>=5%→15点
 - 地政学ネガティブニュース: 1件5点（最大3件=15点）
 
-| スコア | レベル | 防御措置 |
-|--------|--------|----------|
-| <25 | stable（安定）| なし |
-| 25-49 | caution（注意）| 損切りライン15%引き締め、confidence -0.05 |
-| >=50 | alert（警戒）| 損切りライン35%引き締め、buy→stay強制、キャッシュ増加推奨 |
+| スコア | レベル | 表示 |
+|--------|--------|------|
+| <25 | stable（安定）| 緑色バッジ |
+| 25-49 | caution（注意）| 黄色バッジ |
+| >=50 | alert（警戒）| 赤色バッジ + 要因を強調表示 |
+
+※ リスクレベルに応じた売買介入（損切りライン引き締め、buy→stay強制等）は行わない。事実の表示のみ。
 
 **API**: `GET /api/news/geopolitical`
 - レスポンス: `{ news, riskLevel, riskScore, riskFactors }`
@@ -265,30 +260,34 @@ VIX・WTI・地政学ニュースからリスクスコアを算出:
 
 **API**: `GET /api/sector-trends`
 
-### 10. あなたへのおすすめ（パーソナライズ推奨）
+### 10. 今日の注目データ（パーソナライズ）
 
-- ユーザーごとにAIが選定した5銘柄を横スクロールカードで表示
+- ユーザーごとに客観的条件でピックアップした最大5銘柄を横スクロールカードで表示
 - 各カード表示項目:
   - 銘柄名、証券コード
   - 現在価格
-  - 投資テーマ（短期成長 / 中長期安定成長 / 高配当 / 割安反発 / テクニカル好転 / 安定ディフェンシブ）
-  - AIが生成した推奨理由
-  - リスク表示（赤字企業、高ボラティリティ、直近下落）
-  - 保有状態バッジ（ポートフォリオ / ウォッチリスト / 追跡中）
+  - 注目理由の種類バッジ（出来高急増 / テクニカル変化 / 大幅な値動き / MA乖離拡大 / 決算直前 / セクタートレンド）
+  - 注目理由テキスト（事実ベース）
+  - 保有状態バッジ（保有中 / ウォッチ中 / 追跡中）
 - 古いデータの場合は警告表示
+- 「再生成」ボタンで手動再生成可能
 
-**API**: `GET /api/featured-stocks`
+※ 売買の推奨は含まない。データ変化の事実を表示するのみ。
+
+**API**: `GET /api/highlights`
+
+詳細仕様は [daily-highlights.md](daily-highlights.md) を参照。
 
 **レスポンス**:
 ```json
 {
-  "recommendations": [
+  "highlights": [
     {
       "id": "xxx",
       "stockId": "xxx",
       "position": 1,
-      "reason": "安定した業績と高い配当利回りが魅力...",
-      "investmentTheme": "高配当",
+      "highlightType": "volume_spike",
+      "highlightReason": "出来高が20日平均の3.2倍に急増",
       "stock": {
         "tickerCode": "8306.T",
         "name": "三菱UFJ",
@@ -301,58 +300,54 @@ VIX・WTI・地政学ニュースからリスクスコアを算出:
     }
   ],
   "date": "2026-02-22",
+  "session": "morning",
   "isToday": true
 }
 ```
 
-### 11. 注目の高評価銘柄（投資スタイル別）
+### 11. スクリーニング結果（プリセット条件別）
 
-- 分析済み全銘柄（PurchaseRecommendation）の中から、ユーザーの投資スタイルで「買い推奨」の銘柄を横スクロールカードで表示
-- confidence（確信度）の高い順に最大10件表示
-- 投資スタイル未設定の場合は非表示
+- プリセット条件（高配当 / 割安 / 成長株等）に基づいたスクリーニング結果を横スクロールカードで表示
+- 各プリセット条件ごとに上位5銘柄を表示
+- 投資スタイルに応じてデフォルト表示するプリセットを変更
 - 各カード表示項目:
   - 銘柄名、証券コード、セクター
   - 現在価格（リアルタイム取得）
-  - 買い推奨バッジ + 確信度（%）
+  - スクリーニング条件に関連する主要指標（例: 配当利回り、PER、売上成長率）
   - 市場シグナルバッジ（bullish / neutral / bearish）
-  - 投資スタイル別の推奨理由
-  - リスク表示（赤字企業、高ボラティリティ、直近下落）
-  - 保有状態バッジ（ポートフォリオ / ウォッチリスト / 追跡中）
-- 古いデータの場合は警告表示
+  - 保有状態バッジ（保有中 / ウォッチ中 / 追跡中）
 
-**前提条件**: 投資スタイルが設定済み、かつ PurchaseRecommendation に styleAnalyses データがあること
+※ 売買の推奨は含まない。条件に合致した銘柄をデータとして一覧表示するのみ。
 
-**API**: `GET /api/top-stocks`
+**前提条件**: 投資スタイルが設定済みであること（未設定の場合はデフォルトプリセットを表示）
+
+**API**: `GET /api/screening?preset=high_dividend`
+
+詳細仕様は [screening.md](screening.md) を参照。
 
 **レスポンス**:
 ```json
 {
   "stocks": [
     {
-      "id": "xxx",
       "stockId": "xxx",
-      "confidence": 0.85,
-      "reason": "安定した収益基盤と成長性...",
-      "caution": "決算前の注意...",
-      "advice": "現在の水準は...",
+      "tickerCode": "8306.T",
+      "name": "三菱UFJ",
+      "sector": "銀行業",
+      "latestPrice": 1850,
+      "highlights": {
+        "dividendYield": 3.5,
+        "per": 12.3,
+        "roe": 8.5
+      },
       "marketSignal": "bullish",
       "isOwned": false,
-      "isRegistered": true,
-      "isTracked": false,
-      "userStockId": "xxx",
-      "stock": {
-        "id": "xxx",
-        "tickerCode": "8306.T",
-        "name": "三菱UFJ",
-        "sector": "銀行業",
-        "currentPrice": null,
-        "isProfitable": true,
-        "volatility": 25.3,
-        "weekChangeRate": 2.5
-      }
+      "isWatched": true,
+      "isTracked": false
     }
   ],
-  "investmentStyle": "BALANCED",
+  "preset": "high_dividend",
+  "presetName": "高配当",
   "date": "2026-02-27"
 }
 ```
@@ -376,7 +371,8 @@ page.tsx（Server Component）
 └─ コンポーネント描画
     ↓
 各Client Component（並列レンダリング）
-├─ DailyMarketNavigator → GET /api/portfolio/overall-analysis
+├─ MarketSummary     → GET /api/portfolio/overall-analysis + GET /api/market/alerts
+├─ PreMarketData     → GET /api/market/pre-market-data
 ├─ NikkeiSummary     → GET /api/market/nikkei + /api/market/nikkei/historical + /api/portfolio/history
 ├─ PortfolioSummary  → GET /api/portfolio/summary + 株価取得
 ├─ BudgetSummary     → GET /api/budget/summary
@@ -384,8 +380,8 @@ page.tsx（Server Component）
 ├─ PortfolioCompositionChart → GET /api/portfolio/composition
 ├─ GeopoliticalRiskCard → GET /api/news/geopolitical
 ├─ SectorTrendHeatmap → GET /api/sector-trends
-├─ FeaturedStocksByCategory → GET /api/featured-stocks
-├─ TopStocksByStyle  → GET /api/top-stocks
+├─ DailyHighlights   → GET /api/highlights
+├─ ScreeningResults  → GET /api/screening
 └─ MarketMovers      → GET /api/market-analysis/gainers-losers
 ```
 
@@ -394,7 +390,9 @@ page.tsx（Server Component）
 | コンポーネント | ファイル | 役割 |
 |---------------|----------|------|
 | DashboardClient | `DashboardClient.tsx` | クライアントラッパー、PWAインストール促進 |
-| DailyMarketNavigator | `DailyMarketNavigator.tsx` | 市場ナビゲーター（最上部統合カード） |
+| MarketSummary | `MarketSummary.tsx` | 市場環境サマリー（最上部統合カード） |
+| MarketAlertBanner | `MarketAlertBanner.tsx` | 市場警戒アラートバナー |
+| PreMarketData | `PreMarketData.tsx` | 海外市場データ表示 |
 | NikkeiSummary | `NikkeiSummary.tsx` | 日経225指数表示 |
 | PortfolioSummary | `PortfolioSummary.tsx` | ポートフォリオKPI表示 |
 | BudgetSummary | `BudgetSummary.tsx` | 予算配分表示 |
@@ -402,17 +400,19 @@ page.tsx（Server Component）
 | PortfolioCompositionChart | `PortfolioCompositionChart.tsx` | 構成比率円グラフ |
 | GeopoliticalRiskCard | `GeopoliticalRiskCard.tsx` | 地政学・マクロリスクカード |
 | SectorTrendHeatmap | `SectorTrendHeatmap.tsx` | セクタートレンドヒートマップ |
-| FeaturedStocksByCategory | `FeaturedStocksByCategory.tsx` | おすすめ銘柄カード群 |
-| TopStocksByStyle | `TopStocksByStyle.tsx` | 投資スタイル別高評価銘柄 |
-| MarketShieldBanner | `MarketShieldBanner.tsx` | マーケットシールド警告バナー |
-| SwitchProposalCard | `SwitchProposalCard.tsx` | 乗り換え提案カード |
+| DailyHighlights | `DailyHighlights.tsx` | 今日の注目データカード群 |
+| ScreeningResults | `ScreeningResults.tsx` | スクリーニング結果カード群 |
 
 ## 関連ファイル
 
 - `app/dashboard/page.tsx` - ページエントリ（Server Component）
 - `app/dashboard/DashboardClient.tsx` - クライアントラッパー
-- `app/dashboard/DailyMarketNavigator.tsx` - Daily Market Navigator コンポーネント
-- `app/api/portfolio/overall-analysis/route.ts` - Daily Market Navigator API
+- `app/dashboard/MarketSummary.tsx` - 市場環境サマリーコンポーネント
+- `app/dashboard/MarketAlertBanner.tsx` - 市場警戒アラートバナー
+- `app/dashboard/PreMarketData.tsx` - 海外市場データコンポーネント
+- `app/api/portfolio/overall-analysis/route.ts` - 市場環境サマリー API
+- `app/api/market/alerts/route.ts` - 市場警戒アラート API
+- `app/api/market/pre-market-data/route.ts` - 海外市場データ API
 - `app/api/market/nikkei/route.ts` - 日経225 API
 - `app/api/portfolio/summary/route.ts` - ポートフォリオサマリー API
 - `app/api/portfolio/history/route.ts` - 資産推移 API
@@ -421,11 +421,8 @@ page.tsx（Server Component）
 - `app/dashboard/GeopoliticalRiskCard.tsx` - 地政学リスクカード
 - `app/api/news/geopolitical/route.ts` - 地政学ニュース API
 - `app/api/sector-trends/route.ts` - セクタートレンド API
-- `app/api/featured-stocks/route.ts` - おすすめ銘柄 API
-- `app/dashboard/TopStocksByStyle.tsx` - 投資スタイル別高評価銘柄コンポーネント
-- `app/api/top-stocks/route.ts` - 高評価銘柄 API
+- `app/api/highlights/route.ts` - 今日の注目データ API
+- `app/dashboard/DailyHighlights.tsx` - 今日の注目データコンポーネント
+- `app/dashboard/ScreeningResults.tsx` - スクリーニング結果コンポーネント
+- `app/api/screening/route.ts` - スクリーニング API
 - `app/api/market-analysis/gainers-losers/route.ts` - 市場ランキング API
-- `app/dashboard/MarketShieldBanner.tsx` - マーケットシールドバナー
-- `app/dashboard/SwitchProposalCard.tsx` - 乗り換え提案カード
-- `app/api/market-shield/route.ts` - マーケットシールド状態 API
-- `app/api/switch-proposals/[id]/action/route.ts` - 乗り換え提案アクション API
