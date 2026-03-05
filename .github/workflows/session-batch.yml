@@ -24,12 +24,12 @@ on:
 # ──────────────────────────────────────────────
 # セッション別の実行内容:
 #
-#   pre-morning (08:00):   pre-market-data + news(JP+US) + stock-news → trends → 購入判断 + PF分析 → navigator(morning)
+#   pre-morning (08:00):   pre-market-data + news(JP+US) + stock-news → trends → レポート + PF分析 → navigator(morning)
 #   market-open (09:05):   prices(user-stocks-only) ← 寄り付き値取得のみ（分析なし）
-#   morning (09:30):       prices → trends → 購入判断 + PF分析 + おすすめ（開場30分後・値動き安定後の再判定）
-#   pre-afternoon (11:40): news(JP) + prices → trends → 購入判断 + PF分析 → navigator(pre-afternoon)
-#   afternoon (13:00):     購入判断 + PF分析 + おすすめ（後場開始30分後の再判定）
-#   close (15:40):         prices → trends → 購入判断 + PF分析 + おすすめ + gainers + snapshots → navigator(evening)
+#   morning (09:30):       prices → trends → レポート + PF分析 + 注目データ（開場30分後・値動き安定後の再判定）
+#   pre-afternoon (11:40): news(JP) + prices → trends → レポート + PF分析 → navigator(pre-afternoon)
+#   afternoon (13:00):     レポート + PF分析 + 注目データ（後場開始30分後の再判定）
+#   close (15:40):         prices → trends → レポート + PF分析 + 注目データ + gainers + snapshots → navigator(evening)
 # ──────────────────────────────────────────────
 
 jobs:
@@ -69,10 +69,10 @@ jobs:
 
   # ── 分析ジョブ群（並列） ──
 
-  purchase-recommendations:
+  stock-reports:
     needs: [fetch-news, calculate-sector-trends]
     if: "!failure() && !cancelled() && inputs.session != 'market-open'"
-    uses: ./.github/workflows/session-purchase-recommendations.yml
+    uses: ./.github/workflows/session-stock-reports.yml
     with:
       session: ${{ inputs.session }}
     secrets: inherit
@@ -83,10 +83,10 @@ jobs:
     uses: ./.github/workflows/session-portfolio-analysis.yml
     secrets: inherit
 
-  personal-recommendations:
+  daily-highlights:
     needs: [fetch-news, calculate-sector-trends]
     if: "!failure() && !cancelled() && (inputs.session == 'morning' || inputs.session == 'afternoon' || inputs.session == 'close')"
-    uses: ./.github/workflows/session-personal-recommendations.yml
+    uses: ./.github/workflows/session-daily-highlights.yml
     with:
       session: ${{ inputs.session }}
     secrets: inherit
@@ -106,7 +106,7 @@ jobs:
   # ── マーケットナビゲーター ──
 
   daily-market-navigator:
-    needs: [fetch-news, calculate-sector-trends, purchase-recommendations, portfolio-analysis, personal-recommendations]
+    needs: [fetch-news, calculate-sector-trends, stock-reports, portfolio-analysis, daily-highlights]
     if: "!failure() && !cancelled() && (inputs.session == 'pre-morning' || inputs.session == 'pre-afternoon' || inputs.session == 'close')"
     uses: ./.github/workflows/session-daily-market-navigator.yml
     with:
@@ -116,7 +116,7 @@ jobs:
   # ── 通知 ──
 
   notify:
-    needs: [fetch-stock-prices, purchase-recommendations, portfolio-analysis, personal-recommendations, gainers-losers, portfolio-snapshots, daily-market-navigator]
+    needs: [fetch-stock-prices, stock-reports, portfolio-analysis, daily-highlights, gainers-losers, portfolio-snapshots, daily-market-navigator]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -132,14 +132,14 @@ jobs:
         run: pip install requests
 
       - name: Send push notification
-        if: (needs.purchase-recommendations.result == 'success' || needs.portfolio-analysis.result == 'success') && (github.event_name != 'workflow_dispatch' || inputs.notify)
+        if: (needs.stock-reports.result == 'success' || needs.portfolio-analysis.result == 'success') && (github.event_name != 'workflow_dispatch' || inputs.notify)
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           python scripts/github-actions/send_push_notification.py \
             --title "今日の株価分析が完了しました" \
-            --body "ポートフォリオ分析と購入レコメンドを更新しました" \
+            --body "ポートフォリオ分析と銘柄レポートを更新しました" \
             --url "/my-stocks"
 
       - name: Notify Slack on success

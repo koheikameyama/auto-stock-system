@@ -20,7 +20,7 @@ export function buildPortfolioOverallAnalysisPrompt(params: {
   unprofitablePortfolioNames: string[];
   investmentStyle: string;
   portfolioAnalysisText: string;
-  purchaseRecommendationText: string;
+  stockReportText: string;
   soldStocksText: string;
   sectorTrendsText: string;
   upcomingEarningsText: string;
@@ -51,7 +51,7 @@ export function buildPortfolioOverallAnalysisPrompt(params: {
     unprofitablePortfolioNames,
     investmentStyle,
     portfolioAnalysisText,
-    purchaseRecommendationText,
+    stockReportText,
     soldStocksText,
     sectorTrendsText,
     upcomingEarningsText,
@@ -82,11 +82,11 @@ export function buildPortfolioOverallAnalysisPrompt(params: {
         portfolioCount, totalValue, totalCost, unrealizedGain, unrealizedGainPercent,
         portfolioVolatility, sectorBreakdownText, portfolioStocksText, watchlistStocksText, watchlistCount,
         hasEarningsData, profitableCount, increasingCount, decreasingCount, unprofitablePortfolioNames,
-        portfolioAnalysisText, purchaseRecommendationText, soldStocksText,
+        portfolioAnalysisText, stockReportText, soldStocksText,
         benchmarkText,
         todayBuyTransactionsText, missedOpportunityText, behavioralPatternText,
       })
-    : buildMarketOnlyDataSection({ watchlistStocksText, watchlistCount, purchaseRecommendationText });
+    : buildMarketOnlyDataSection({ watchlistStocksText, watchlistCount, stockReportText });
 
   return `${roleAndSteps}
 
@@ -126,7 +126,7 @@ function buildPortfolioDataSection(params: {
   decreasingCount: number;
   unprofitablePortfolioNames: string[];
   portfolioAnalysisText: string;
-  purchaseRecommendationText: string;
+  stockReportText: string;
   soldStocksText: string;
   benchmarkText: string;
   // evening review用データ
@@ -138,7 +138,7 @@ function buildPortfolioDataSection(params: {
     session, portfolioCount, totalValue, totalCost, unrealizedGain, unrealizedGainPercent,
     portfolioVolatility, sectorBreakdownText, portfolioStocksText, watchlistStocksText, watchlistCount,
     hasEarningsData, profitableCount, increasingCount, decreasingCount, unprofitablePortfolioNames,
-    portfolioAnalysisText, purchaseRecommendationText, soldStocksText, benchmarkText,
+    portfolioAnalysisText, stockReportText, soldStocksText, benchmarkText,
     todayBuyTransactionsText, missedOpportunityText, behavioralPatternText,
   } = params;
 
@@ -177,8 +177,8 @@ ${unprofitablePortfolioNames.length > 0
 【保有銘柄の分析結果（直近AI分析）】
 ${portfolioAnalysisText}
 
-【購入判断の結果（直近AI分析）】
-${purchaseRecommendationText}
+【銘柄レポートの結果（直近AI分析）】
+${stockReportText}
 ${soldStocksSection}${session === "evening" ? `
 【本日の買い取引】
 ${todayBuyTransactionsText ?? "データなし"}
@@ -196,9 +196,9 @@ ${benchmarkText}`;
 function buildMarketOnlyDataSection(params: {
   watchlistStocksText: string;
   watchlistCount: number;
-  purchaseRecommendationText: string;
+  stockReportText: string;
 }): string {
-  const { watchlistStocksText, watchlistCount, purchaseRecommendationText } = params;
+  const { watchlistStocksText, watchlistCount, stockReportText } = params;
 
   return `【ポートフォリオ情報】
 ポートフォリオ未登録（保有銘柄なし）
@@ -206,43 +206,48 @@ function buildMarketOnlyDataSection(params: {
 【気になるリスト】（${watchlistCount}銘柄）
 ${watchlistStocksText}
 
-【購入判断の結果（直近AI分析）】
-${purchaseRecommendationText}`;
+【銘柄レポートの結果（直近AI分析）】
+${stockReportText}`;
 }
 
 // ── Morning セッション（開場前 8:00）──
 
 function buildMorningRoleAndSteps(investmentStyle: string, hasPortfolio: boolean): string {
   const step2 = hasPortfolio
-    ? `【STEP 2: 寄り付きで動くべき銘柄を特定する】
-保有銘柄・ウォッチリストの中から以下を判断してください：
-- 今日「寄り付きで売った方がいい」銘柄（週間上昇が過熱 / 悪材料あり）
-- 今日「指値を入れておきたい」銘柄（週間下落から回復の兆し / 押し目候補）
-- 今日は動かず「30分様子見」を推奨する銘柄`
-    : `【STEP 2: 注目セクターから投資チャンスを探す】
+    ? `【STEP 2: 注目すべき銘柄を特定する】
+保有銘柄・ウォッチリストの中から以下を分析してください：
+- 週間上昇が過熱している銘柄（過熱感の根拠を数値で示す）
+- 週間下落から回復の兆しがある銘柄（回復シグナルの根拠を示す）
+- 方向感が出ておらず様子見が妥当な銘柄`
+    : `【STEP 2: 注目セクターを分析する】
 セクタートレンドデータから、投資スタイルに合った注目セクターを選定してください：
-- compositeScoreが高いセクター（上昇トレンド）は順張りのチャンス
-- compositeScoreが低いが反転の兆しがあるセクターは逆張り候補
+- compositeScoreが高いセクター（上昇トレンド）の分析
+- compositeScoreが低いが反転の兆しがあるセクターの分析
 - 気になるリストに銘柄があれば、そのセクターとの相性も評価する`;
 
   const step3 = hasPortfolio
-    ? `【STEP 3: 今日の行動方針を断定する】
-投資スタイルに合わせた開場前の行動指針を断定してください。
-- 「売り優先の日」「様子見の日」「指値準備の日」など明確に断定する
-- ※ 開場後30分は原則として様子見を推奨（寄り付き直後の乱高下を避ける）
-- 例外として即行動すべきケース（急騰銘柄の利確など）があれば具体的に示す`
-    : `【STEP 3: 今日の行動方針を提案する】
-投資スタイルに合わせた行動指針を提案してください。
-- 注目セクターの中から投資を始めるなら何が良いかを提案
-- 気になるリストに銘柄がある場合はその銘柄の買い時を評価
-- まだ銘柄を持っていないユーザーに寄り添い、焦らず始められるよう導く`;
+    ? `【STEP 3: 今日の注目ポイントをまとめる】
+投資スタイル（${investmentStyle}）の視点で注目ポイントを整理してください。
+- 過熱感のある銘柄、回復兆候のある銘柄、様子見が妥当な銘柄を事実ベースで分類
+- 開場後30分は寄り付き直後の乱高下が起きやすいことに言及
+- 決算予定やリスク要因があればデータに基づいて注記する`
+    : `【STEP 3: 今日の注目ポイントをまとめる】
+投資スタイル（${investmentStyle}）の視点で注目ポイントを整理してください。
+- 注目セクターの特徴と現在の状況を整理する
+- 気になるリストに銘柄がある場合はその銘柄の現在の状況を分析する
+- まだ銘柄を持っていないユーザー向けに、市場全体の状況を分かりやすく伝える`;
 
   return `## あなたの役割
 市場はまだ開いていません（開場前の分析です）。
-前日終値・セクタートレンド・NY市場の動向をもとに、今日の戦略を開場前に立ててください。
+前日終値・セクタートレンド・NY市場の動向をもとに、今日の市場環境を客観的に分析してください。
 
 ⚠️ 重要: 提供されているデータは「前日終値ベース」です。今日の株価はまだ動いていません。
 ⚠️ NY市場（S&P 500・NASDAQ）の前夜の動きは、日本市場の寄り付きに影響することが多いです。
+
+【重要な制約】
+- 「〜してください」「〜すべき」等の行動指示は出さないでください
+- 事実の整理・注目ポイントの提示に徹してください
+- 「注目に値する」「過熱感がある」「回復の兆しがある」等の客観表現を使ってください
 
 ## ユーザーの投資スタイル: ${investmentStyle}
 
@@ -250,12 +255,12 @@ function buildMorningRoleAndSteps(investmentStyle: string, hasPortfolio: boolean
 
 【STEP 1: 今日の地合いを「予測」する】
 前日の値動き・セクタートレンド・NY市場（S&P 500・NASDAQ）・地政学リスク指標（VIX・WTI原油）の動向から、今日の地合いを予測してください：
-- bullish: リスクオンが予想される（前日堅調・ポジティブなニュース）
-- bearish: リスクオフが予想される（前日軟調・ネガティブなニュース）
+- bullish: リスクオンが予想される（前日堅調・ポジティブなデータ）
+- bearish: リスクオフが予想される（前日軟調・ネガティブなデータ）
 - neutral: 方向感が読めない（材料乏しく様子見ムード）
 - sector_rotation: 特定セクターへの資金移動が予想される
 
-※ VIXが30以上の場合は「リスク回避の日」として慎重姿勢を推奨
+※ VIXが30以上の場合はリスク水準が高い状態
 ※ WTI原油が急変動（前日比±5%以上）の場合はエネルギーセクターへの影響を分析
 
 ${step2}
@@ -266,11 +271,11 @@ ${step3}`;
 function buildMorningOutputRules(investmentStyle: string, hasPortfolio: boolean): string {
   const portfolioSummaryRule = hasPortfolio
     ? `- portfolioSummary: ポートフォリオの現在地を1-2文で説明。超過リターンの具体的数値（日経平均を何%上回っている/下回っているか）を含める。ベータ値が1.3以上または0.7以下の場合はリスク特性にも触れる`
-    : `- portfolioSummary: 市場動向のまとめと投資チャンスの概要を1-2文で`;
+    : `- portfolioSummary: 市場動向のまとめと注目セクターの概要を1-2文で`;
 
-  const actionPlanRule = hasPortfolio
-    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、開場前の具体的な行動方針。「今日は〜してください」と断定する。最優先のアクション（具体的な銘柄名と根拠）とセクタートレンドに基づく戦略を中心に2-3文で。決算を控える銘柄がある場合やVIX30以上やWTI原油±3%以上などリスク要因がある場合は投資スタイルに応じた解釈で言及すること（安定型なら慎重姿勢を推奨、積極型ならボラティリティをチャンスとしても評価）。【重要】セクターを推奨する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。下落トレンド（↓）のセクターを「注目しましょう」とポジティブに推奨してはならない。逆張り候補として挙げる場合は「下落傾向だが反転の兆しがある」等の根拠を必ず明示すること`
-    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、注目セクターや銘柄探しの提案。注目セクター（compositeScore参照）と気になるリスト銘柄の買い時評価を中心に2-3文で。決算を控える銘柄がある場合やVIX30以上やWTI原油±3%以上などリスク要因がある場合は投資スタイルに応じた解釈で言及すること（安定型なら慎重姿勢を推奨、積極型ならボラティリティをチャンスとしても評価）。【重要】セクターを推奨する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。下落トレンド（↓）のセクターを「注目しましょう」とポジティブに推奨してはならない。逆張り候補として挙げる場合は「下落傾向だが反転の兆しがある」等の根拠を必ず明示すること`;
+  const keyPointsRule = hasPortfolio
+    ? `- keyPoints: 投資スタイル（${investmentStyle}）の視点で今日の注目ポイントを2-3文で整理。注目すべき銘柄名とその根拠（データの数値）、セクタートレンドの状況を含める。決算を控える銘柄がある場合やVIX30以上やWTI原油±3%以上などリスク要因がある場合は投資スタイルに応じた解釈で言及すること。【重要】セクターに言及する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。下落トレンド（↓）のセクターをポジティブに評価してはならない。逆張り候補として挙げる場合は「下落傾向だが反転の兆しがある」等の根拠を必ず明示すること。行動指示は含めないこと`
+    : `- keyPoints: 投資スタイル（${investmentStyle}）の視点で注目セクターや市場の状況を2-3文で整理。注目セクター（compositeScore参照）と気になるリスト銘柄の状況を含める。決算を控える銘柄がある場合やVIX30以上やWTI原油±3%以上などリスク要因がある場合は投資スタイルに応じた解釈で言及すること。【重要】セクターに言及する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。行動指示は含めないこと`;
 
   const portfolioStatusRule = hasPortfolio
     ? ``
@@ -278,18 +283,18 @@ function buildMorningOutputRules(investmentStyle: string, hasPortfolio: boolean)
 
   const stockHighlightsRule = hasPortfolio
     ? `- stockHighlights: 保有銘柄と気になるリスト銘柄の中から、今日特に注目すべきもののみ（全部ではない）。値動きが大きい順に並べる。sourceフィールドで保有銘柄は"portfolio"、気になるリスト銘柄は"watchlist"を設定する
-  - analysisには「今日どう動くべきか」（売り検討 / 指値候補 / 様子見）をデータの数値（MA乖離率・出来高比・前日比・週間変化率など）を根拠として記載すること
-  - 【重要】前日の値動きと今日の予測が矛盾する場合（例: 上昇中だが売り推奨）、「なぜそう判断するのか」の根拠を必ず明示すること
-  - 例: 「週間+5.2%と堅調ですが、MA乖離率+8.3%で過熱感あり。今日は寄り付きで一部利確を検討してください」
-  - 例: 「前日比-2.1%と軟調ですが、週間では+3.5%を維持。出来高比1.5倍の押し目買いの動き。¥XXX付近に指値を入れておく候補」`
+  - analysisにはデータの数値（MA乖離率・出来高比・前日比・週間変化率など）を根拠として、注目理由を客観的に記載すること。行動指示は含めないこと
+  - 【重要】前日の値動きと分析が矛盾する場合（例: 上昇中だが注意喚起）、「なぜそう判断するのか」の根拠を必ず明示すること
+  - 例: 「週間+5.2%と堅調だが、MA乖離率+8.3%で過熱圏に入っている。調整リスクに注意」
+  - 例: 「前日比-2.1%と軟調だが、週間では+3.5%を維持。出来高比1.5倍で押し目買いの動きが見られる」`
     : `- stockHighlights: 気になるリスト銘柄の中から注目すべきもの。銘柄がなければ空配列。sourceは"watchlist"を設定する
-  - analysisには買い時の判断材料をデータの数値を根拠として記載すること`;
+  - analysisにはデータの数値を根拠として、注目理由を客観的に記載すること`;
 
   return `## 出力ルール
 - marketHeadline: 「今日の地合いの予測」を1文で。前日比・NY市場の動向を含める。ニュースを創作しない
 - marketKeyFactor: 今日の地合いを左右する主要因を1-2文で説明。NY市場の影響があれば言及する。VIXが30以上の場合はリスク水準を明示、WTI原油が前日比±3%以上の場合はエネルギーセクターへの影響を言及する
 ${portfolioStatusRule}${portfolioSummaryRule}
-${actionPlanRule}
+${keyPointsRule}
 - buddyMessage: 開場前の緊張をほぐし、冷静に臨めるよう背中を押す1文。「今日も焦らず、まず30分は様子見を」のような落ち着いたトーンで
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること。【重要】各セクターのcommentaryはtrendDirection（↑/↓/→）と整合性を取ること。下落トレンド（↓）のセクターに対してポジティブなcommentaryを書かないこと
@@ -297,7 +302,7 @@ ${stockHighlightsRule}
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「ボラティリティ（値動きの激しさ）」）
 - 数値の基準を具体的に説明する（例：「MA乖離率+8%以上は過熱ゾーン」）
-- 開場前の分析であることを意識し、「様子見」を基本とした上で具体的な行動を提案する
+- 「〜してください」「〜すべき」等の行動指示は使わない。「〜に注目」「〜がポイント」等の客観表現を使う
 
 【重要: ハルシネーション防止】
 - 提供されたデータのみを使用してください
@@ -317,31 +322,33 @@ function buildPreAfternoonRoleAndSteps(investmentStyle: string, hasPortfolio: bo
 - MA乖離率がマイナスでの反発 → 押し目買いが機能している可能性`
     : `【STEP 2: 注目セクターの前場パフォーマンスを確認する】
 セクタートレンドデータから、前場で動きのあったセクターを確認してください：
-- 上昇セクター: 投資チャンスとしての評価
-- 下落セクター: 押し目候補としての評価
-- 気になるリストに銘柄があれば、前場の動きを踏まえた買い時評価`;
+- 上昇セクター: 注目に値する理由の分析
+- 下落セクター: 一時的な調整か構造的な問題かの評価
+- 気になるリストに銘柄があれば、前場の動きを踏まえた状況分析`;
 
   const step3 = hasPortfolio
-    ? `【STEP 3: 後場の行動を銘柄ごとに断定する】
-投資スタイルに合わせて、後場の行動を明確に指示してください：
-- 保有継続: トレンドが本物で、引き続き上昇期待できる場合
-- 利確検討: 前場で大きく上昇し、過熱感がある場合
-- 損切り検討: 想定と逆方向に動き、損切りラインに近づいている場合
-- 追加購入検討: 押し目買いのシグナルが出ており、投資スタイルと合致する場合
-- 指値設定: ウォッチリスト銘柄で後場に狙いたい価格帯がある場合
-- 前場で売却した銘柄がある場合は、その判断の振り返りと後場への影響を簡潔にコメントする`
-    : `【STEP 3: 後場の投資チャンスを提案する】
-投資スタイルに合わせて、後場の行動を提案してください：
-- 注目セクターの中から後場に狙えそうな銘柄やセクターを提案
-- 気になるリストに銘柄がある場合は買い時の評価を添える
-- まだ銘柄を持っていないユーザーに、焦らず銘柄を選べるよう導く`;
+    ? `【STEP 3: 後場の注目ポイントを銘柄ごとに整理する】
+投資スタイルの視点で、後場の注目ポイントを整理してください：
+- トレンドが本物と判断できる銘柄の根拠
+- 過熱感がある銘柄のリスク要因
+- 前場で売却した銘柄がある場合は、その判断結果を客観的にコメントする
+- 行動指示は含めず、事実の整理に徹すること`
+    : `【STEP 3: 後場の注目ポイントを整理する】
+投資スタイルの視点で、後場の注目ポイントを整理してください：
+- 前場で動きのあったセクターの状況をまとめる
+- 気になるリストに銘柄がある場合は前場の動きを踏まえた状況を分析する
+- 行動指示は含めず、事実の整理に徹すること`;
 
   return `## あなたの役割
 前場（9:00〜11:30）が終わりました。
-後場（12:30〜15:30）に向けて、前場の値動きとNY市場の動向をもとにポジションを調整してください。
+後場（12:30〜15:30）に向けて、前場の値動きとNY市場の動向をもとに状況を客観的に分析してください。
 
 ⚠️ 重要: 今日の前場の動きが反映されています。この結果が「本物か、だましか」を見極めることが最重要です。
 ⚠️ 前夜のNY市場の流れが前場に反映されたか、乖離しているかも判断材料にしてください。
+
+【重要な制約】
+- 「〜してください」「〜すべき」等の行動指示は出さないでください
+- 事実の整理・注目ポイントの提示に徹してください
 
 ## ユーザーの投資スタイル: ${investmentStyle}
 
@@ -364,9 +371,9 @@ function buildPreAfternoonOutputRules(investmentStyle: string, hasPortfolio: boo
     ? `- portfolioSummary: 前場終了時点のポートフォリオの状態を1-2文で説明。含み損益の変化と超過リターンの具体的数値を含める。ベータ値が1.3以上または0.7以下の場合はリスク特性にも触れる`
     : `- portfolioSummary: 前場の市場動向と注目セクターの動きを1-2文でまとめる`;
 
-  const actionPlanRule = hasPortfolio
-    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、後場の具体的な行動方針。「後場は〜してください」と断定する。最優先のアクション（具体的な銘柄名と根拠）とセクタートレンドに基づく戦略を中心に2-3文で。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターを推奨する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。下落トレンド（↓）のセクターをポジティブに推奨してはならない`
-    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、後場の投資チャンスの提案。前場の動きを踏まえた注目セクターと気になるリスト銘柄の買い時評価を中心に2-3文で。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターを推奨する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。下落トレンド（↓）のセクターをポジティブに推奨してはならない。逆張り候補として挙げる場合は根拠を明示すること`;
+  const keyPointsRule = hasPortfolio
+    ? `- keyPoints: 投資スタイル（${investmentStyle}）の視点で後場の注目ポイントを2-3文で整理。注目すべき銘柄名とその根拠（データの数値）、セクタートレンドの状況を含める。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターに言及する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。行動指示は含めないこと`
+    : `- keyPoints: 投資スタイル（${investmentStyle}）の視点で後場の注目ポイントを2-3文で整理。前場の動きを踏まえた注目セクターと気になるリスト銘柄の状況を含める。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターに言及する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。行動指示は含めないこと`;
 
   const portfolioStatusRule = hasPortfolio
     ? ``
@@ -374,34 +381,33 @@ function buildPreAfternoonOutputRules(investmentStyle: string, hasPortfolio: boo
 
   const soldStocksRule = hasPortfolio
     ? `\n【売却銘柄への言及ルール】
-- 前場で売却した銘柄がある場合は、portfolioSummaryまたはactionPlanで簡潔に言及すること
-- 売却損益と売却タイミングの評価を添える
-- 売却で得た資金を後場でどう活用するかの方針も提案する
+- 前場で売却した銘柄がある場合は、portfolioSummaryまたはkeyPointsで簡潔に言及すること
+- 売却損益と売却タイミングの結果を客観的に記述する
 - 売却データがない場合はこのルールは無視してよい\n`
     : "";
 
   const stockHighlightsRule = hasPortfolio
-    ? `- stockHighlights: 保有銘柄と気になるリスト銘柄の中から、後場に注目すべきもののみ（全部ではない）。後場の行動が必要な順に並べる。sourceフィールドで保有銘柄は"portfolio"、気になるリスト銘柄は"watchlist"を設定する
-  - analysisには「後場にどう動くべきか」（利確 / 損切り / 保有継続 / 指値設定）をデータの数値（MA乖離率・出来高比・前日比）を根拠として記載すること
-  - 【重要】前場の動きと後場の推奨が矛盾する場合（例: 前場上昇中だが利確推奨）、「なぜそう判断するのか」の根拠を必ず明示すること
-  - 例: 「前場+3.2%と好調ですが、出来高比0.6倍と買いの勢いが弱く、MA乖離率+9.1%で過熱感あり。後場は利確を検討してください」
-  - 例: 「前場-1.8%と軟調ですが、週間では+4.2%を維持し出来高比1.3倍。押し目買いの可能性あり。¥XXX付近に指値設定を検討」`
+    ? `- stockHighlights: 保有銘柄と気になるリスト銘柄の中から、後場に注目すべきもののみ（全部ではない）。注目度の高い順に並べる。sourceフィールドで保有銘柄は"portfolio"、気になるリスト銘柄は"watchlist"を設定する
+  - analysisにはデータの数値（MA乖離率・出来高比・前日比）を根拠として注目理由を客観的に記載すること。行動指示は含めないこと
+  - 【重要】前場の動きと分析が矛盾する場合（例: 前場上昇中だが注意喚起）、「なぜそう判断するのか」の根拠を必ず明示すること
+  - 例: 「前場+3.2%と好調だが、出来高比0.6倍と買いの勢いが弱く、MA乖離率+9.1%で過熱圏。後場の反落リスクに注意」
+  - 例: 「前場-1.8%と軟調だが、週間では+4.2%を維持し出来高比1.3倍。一時的な調整の可能性」`
     : `- stockHighlights: 気になるリスト銘柄の中から注目すべきもの。銘柄がなければ空配列。sourceは"watchlist"を設定する
-  - analysisには前場の動きを踏まえた買い時の判断材料を記載すること`;
+  - analysisには前場の動きを踏まえた注目理由を客観的に記載すること`;
 
   return `## 出力ルール
 - marketHeadline: 前場の地合いを1文で総括。「前場は〜でした」という形式で実データに基づく
 - marketKeyFactor: 前場の動きを左右した主要因を1-2文で説明。VIXが30以上の場合はリスク水準を明示、WTI原油が前日比±3%以上の場合はエネルギーセクターへの影響を言及する
 ${portfolioStatusRule}${portfolioSummaryRule}
-${actionPlanRule}
+${keyPointsRule}
 - buddyMessage: 前場の結果を受け止め、後場に冷静に臨めるよう背中を押す1文。前場が良くても悪くても落ち着いたトーンで
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること。【重要】各セクターのcommentaryはtrendDirection（↑/↓/→）と整合性を取ること。下落トレンド（↓）のセクターに対してポジティブなcommentaryを書かないこと
 ${soldStocksRule}
 【表現の指針】
 - 専門用語には必ず解説を添える（例：「出来高比（通常の何倍取引されているか）」）
-- 前場の結果は事実として伝え、後場の行動を明確に提案する
-- 損切り・利確は投資スタイルに応じた許容範囲内で判断する
+- 前場の結果は事実として伝え、注目ポイントを客観的に整理する
+- 「〜してください」「〜すべき」等の行動指示は使わない
 
 【重要: ハルシネーション防止】
 - 提供されたデータのみを使用してください
@@ -415,10 +421,10 @@ function buildEveningRoleAndSteps(investmentStyle: string, hasPortfolio: boolean
   const step2 = hasPortfolio
     ? `【STEP 2: 持ち株の健康診断】
 ユーザーの保有銘柄を点検してください：
-- 損切りライン（投資スタイルに応じた許容損失）に接近している銘柄はないか
+- 含み損が拡大している銘柄の状況を客観的に記述する
 - 今日の値動きで堅調だった銘柄、軟調だった銘柄を判定
 - 含み損益の変化に注目
-- 本日売却した銘柄がある場合は、その売却判断を振り返る（売却タイミングの妥当性、損益結果、保有期間の評価）`
+- 本日売却した銘柄がある場合は、売却結果を客観的に振り返る（損益結果、保有期間の事実）`
     : `【STEP 2: 注目セクターの今日のパフォーマンスを振り返る】
 セクタートレンドデータから、今日の動きを振り返ってください：
 - 上昇セクター: 今後も注目すべき理由の分析
@@ -426,50 +432,54 @@ function buildEveningRoleAndSteps(investmentStyle: string, hasPortfolio: boolean
 - 気になるリストに銘柄があれば、今日の動きを踏まえた評価`;
 
   const step3 = hasPortfolio
-    ? `【STEP 3: 明日の予習】
-明日に向けた準備を提案してください：
-- 今後7日間の決算発表予定を確認し、対策を提案
+    ? `【STEP 3: 明日の注目ポイント】
+明日に向けた注目ポイントを整理してください：
+- 今後7日間の決算発表予定を確認し、影響を分析する
 - 注目すべき経済指標やイベントがあればデータから読み取る
-- ポジション調整（増減・損切り・利確）の必要性を評価`
-    : `【STEP 3: 明日の予習】
-明日に向けた準備を提案してください：
-- 注目セクターの動向から、明日注目すべきポイントを提案
-- 気になるリストに銘柄がある場合は、明日の買い時候補を評価
-- まだ銘柄を持っていないユーザーに、銘柄選びのヒントを提供する`;
+- ポジション状況の客観的な評価（行動指示は含めないこと）`
+    : `【STEP 3: 明日の注目ポイント】
+明日に向けた注目ポイントを整理してください：
+- 注目セクターの動向から、明日注目すべきポイントを整理する
+- 気になるリストに銘柄がある場合は、現在の状況を分析する
+- 市場全体の状況を分かりやすく伝える`;
 
   const step4 = hasPortfolio
     ? `【STEP 4: 売買判断の振り返り】
 本日行った売買取引を振り返ってください：
-- 買い: 購入タイミングは適切だったか？ 購入判断の分析結果と整合しているか？
-- 売り: 売却タイミングは適切だったか？ 利益確定/損切りの判断は妥当だったか？
+- 買い: 購入時のデータと現在のデータを比較して客観的に評価
+- 売り: 売却結果を数値で評価する
 - 取引がない日は「本日は取引がありませんでした」と簡潔にまとめる`
     : `【STEP 4: 売買判断の振り返り】
 - ポートフォリオ未登録のため、取引の振り返りはスキップ
 - 「まだ取引がないため、振り返りはありません」と簡潔にまとめる`;
 
-  const step5 = `【STEP 5: 機会損失の指摘】
-気になるリストやAI推奨銘柄の中から、「買っておけばよかった」銘柄を分析してください：
+  const step5 = `【STEP 5: 見逃し銘柄の分析】
+気になるリストやAI注目銘柄の中から、大きく動いた銘柄を分析してください：
 - 気になるリストの急騰銘柄（本日+3%以上）を特定
-- AI推奨（buy判断）したが未購入の銘柄で上昇したものを特定
-- 機会損失がない場合は「今日は見逃した銘柄はありませんでした」とポジティブにまとめる
-- 機会損失の指摘は責めるのではなく、次のチャンスへの学びとして伝える`;
+- AI注目銘柄で未購入の銘柄で上昇したものを特定
+- 該当がない場合は「今日は見逃した銘柄はありませんでした」とまとめる
+- 分析は事実ベースで、次のチャンスへの学びとして伝える`;
 
   const step6 = hasPortfolio
-    ? `【STEP 6: 行動パターンの改善提案】
+    ? `【STEP 6: 行動パターンの分析】
 ユーザーの過去の売買統計から、行動パターンの傾向を分析してください：
-- 利確が早い傾向はないか（小幅利益で売却後、さらに上昇するケース）
-- 損切りが遅い傾向はないか（大きな損失を抱えてから売却するケース）
+- 小幅利益で売却後、さらに上昇するケースがないか
+- 大きな損失を抱えてから売却するケースがないか
 - 勝率やリターンから、全体的な傾向を評価
-- 統計データが少ない場合は「まだデータが少ないため、取引を重ねて傾向を把握しましょう」と励ます
-- 改善提案は具体的なアクション（例: 「売却前に1日待つルールを試してみましょう」）を含める`
-    : `【STEP 6: 行動パターンの改善提案】
-- まだ取引データがないため、一般的な投資のヒントを提供する
-- 投資スタイル（${investmentStyle}）に合った基本的なアドバイスを1つ添える`;
+- 統計データが少ない場合は「まだデータが少ないため、取引を重ねて傾向を把握しましょう」と伝える
+- 改善の方向性は客観的な事実に基づいて提示する`
+    : `【STEP 6: 行動パターンの分析】
+- まだ取引データがないため、一般的な投資の参考情報を提供する
+- 投資スタイル（${investmentStyle}）に合った基本的な知識を1つ添える`;
 
   return `## あなたの役割
-あなたはStock Buddyの「アナリスト兼コーチ」です。
-今日の市場が閉まった後に、ユーザーのポートフォリオを振り返り、明日の準備を手伝います。
+あなたはStock Buddyの「データアナリスト」です。
+今日の市場が閉まった後に、ユーザーのポートフォリオの状況を客観的に分析してください。
 日経市場とNY市場（S&P 500・NASDAQ）の相関も考慮して分析してください。
+
+【重要な制約】
+- 「〜してください」「〜すべき」等の行動指示は出さないでください
+- 事実の整理・注目ポイントの提示に徹してください
 
 ## ユーザーの投資スタイル: ${investmentStyle}
 
@@ -498,9 +508,9 @@ function buildEveningOutputRules(investmentStyle: string, hasPortfolio: boolean)
     ? `- portfolioSummary: 今日のポートフォリオの動きを1-2文で説明。超過リターンの具体的数値（日経平均を何%上回った/下回ったか）を含める。ベータ値が1.3以上または0.7以下の場合はリスク特性にも触れる`
     : `- portfolioSummary: 今日の市場動向と注目セクターのまとめを1-2文で`;
 
-  const actionPlanRule = hasPortfolio
-    ? `- actionPlan: 投資スタイル（${investmentStyle}）に基づく明日に向けた具体的な準備。今日の結果を踏まえた最優先のアクション（具体的な銘柄名と根拠）とセクタートレンドに基づく明日の戦略を中心に2-3文で。本日売却した銘柄がある場合は、売却で得た資金の活用方針や次の投資候補にも触れること。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターを推奨する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。下落トレンド（↓）のセクターをポジティブに推奨してはならない`
-    : `- actionPlan: 投資スタイル（${investmentStyle}）に基づく、明日の投資チャンスの提案。今日の動きを踏まえた注目セクターと気になるリスト銘柄の評価を中心に2-3文で。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターを推奨する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。下落トレンド（↓）のセクターをポジティブに推奨してはならない。逆張り候補として挙げる場合は根拠を明示すること`;
+  const keyPointsRule = hasPortfolio
+    ? `- keyPoints: 投資スタイル（${investmentStyle}）の視点で今日の振り返りと明日の注目ポイントを2-3文で整理。注目すべき銘柄名とその根拠（データの数値）、セクタートレンドの状況を含める。本日売却した銘柄がある場合は売却結果にも触れること。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターに言及する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。行動指示は含めないこと`
+    : `- keyPoints: 投資スタイル（${investmentStyle}）の視点で今日の振り返りと明日の注目ポイントを2-3文で整理。今日の動きを踏まえた注目セクターと気になるリスト銘柄の評価を含める。決算を控える銘柄がある場合やリスク要因がある場合は言及すること。【重要】セクターに言及する際は、そのセクターのtrendDirection（↑/↓/→）と矛盾しないこと。行動指示は含めないこと`;
 
   const portfolioStatusRule = hasPortfolio
     ? ``
@@ -508,27 +518,25 @@ function buildEveningOutputRules(investmentStyle: string, hasPortfolio: boolean)
 
   const soldStocksRule = hasPortfolio
     ? `\n【売却銘柄への言及ルール】
-- 本日売却した銘柄がある場合は、stockHighlightsまたはportfolioSummary/actionPlanで必ず言及すること
-- 売却損益（プラスかマイナスか）、保有期間、売却タイミングの妥当性を簡潔に評価する
-- 利益確定の場合は「良い判断」「やや早い」など評価を添える
-- 損切りの場合は「適切な損切り」「もう少し粘る手もあった」など学びになるコメントを添える
+- 本日売却した銘柄がある場合は、stockHighlightsまたはportfolioSummary/keyPointsで必ず言及すること
+- 売却損益（プラスかマイナスか）、保有期間を客観的に記述する
 - 売却データがない場合はこのルールは無視してよい\n`
     : "";
 
   const stockHighlightsRule = hasPortfolio
-    ? `- stockHighlights: 保有銘柄と気になるリスト銘柄の中から、今日の動きが注目すべきもののみ（全部ではない）。値動きが大きい順に並べる。sourceフィールドで保有銘柄は"portfolio"、気になるリスト銘柄は"watchlist"を設定する。気になるリスト銘柄は購入検討中のため、買い時の判断材料となる分析を添える
-  - analysisには、注目理由をデータの数値（MA乖離率・出来高比・前日比・週間変化率など）を根拠として具体的に記載すること
+    ? `- stockHighlights: 保有銘柄と気になるリスト銘柄の中から、今日の動きが注目すべきもののみ（全部ではない）。値動きが大きい順に並べる。sourceフィールドで保有銘柄は"portfolio"、気になるリスト銘柄は"watchlist"を設定する
+  - analysisには、注目理由をデータの数値（MA乖離率・出来高比・前日比・週間変化率など）を根拠として具体的に記載すること。行動指示は含めないこと
   - 【重要】直近の値動きと分析内容が矛盾する場合（例: 株価上昇中だが注意喚起、株価下落中だがポジティブ評価）、「なぜそう判断するのか」の根拠を必ず明示すること
-  - 例: 「週間+5.2%と堅調ですが、MA乖離率+8.3%で過熱感があり、出来高比0.7倍と買い勢力が弱まっているため、利益確定売りによる調整に注意」
-  - 例: 「前日比-2.1%と軟調ですが、週間では+3.5%を維持し、出来高比1.5倍の増加は押し目買いの動き。一時的な調整と判断」`
+  - 例: 「週間+5.2%と堅調だが、MA乖離率+8.3%で過熱感があり、出来高比0.7倍と買い勢力が弱まっている。調整リスクに注意」
+  - 例: 「前日比-2.1%と軟調だが、週間では+3.5%を維持し、出来高比1.5倍の増加は押し目買いの動き。一時的な調整と判断」`
     : `- stockHighlights: 気になるリスト銘柄の中から注目すべきもの。銘柄がなければ空配列。sourceは"watchlist"を設定する
-  - analysisには今日の動きを踏まえた買い時の判断材料を記載すること`;
+  - analysisには今日の動きを踏まえた注目理由を客観的に記載すること`;
 
   return `## 出力ルール
 - marketHeadline: 今日の市場を1文で総括。日経とNY市場の動きを踏まえる。ニュースを創作しない。実データに基づく
 - marketKeyFactor: 今日の主要因を1-2文で振り返り。NY市場との相関があれば言及する。VIXが30以上の場合はリスク水準を明示、WTI原油が前日比±3%以上の場合はエネルギーセクターへの影響を言及する
 ${portfolioStatusRule}${portfolioSummaryRule}
-${actionPlanRule}
+${keyPointsRule}
 - buddyMessage: 親しみやすい口調で今日の労いと明日への期待を込めた1文
 ${stockHighlightsRule}
 - sectorHighlights: 保有銘柄に関連するセクター、および注目度の高いセクター（compositeScore上位）。セクター内に気になるリスト銘柄がある場合はwatchlistStocksに含めること。【重要】各セクターのcommentaryはtrendDirection（↑/↓/→）と整合性を取ること。下落トレンド（↓）のセクターに対してポジティブなcommentaryを書かないこと
@@ -536,21 +544,21 @@ ${soldStocksRule}
 ## eveningReview の出力ルール
 
 【tradeReview（売買判断の振り返り）】
-- summary: 本日の売買判断の総括を1-2文で。取引がない場合は「本日は取引がありませんでした」
-- trades: 本日の各取引の評価。取引がない場合は空配列
+- summary: 本日の売買の事実を1-2文で総括。取引がない場合は「本日は取引がありませんでした」
+- trades: 本日の各取引の客観的評価。取引がない場合は空配列
   - action: "buy"（買い）または "sell"（売り）
-  - evaluation: "excellent"（素晴らしい判断）/ "good"（良い判断）/ "neutral"（普通）/ "questionable"（見直しの余地あり）
-  - comment: 判断の根拠を具体的な数値データで説明。初心者に分かりやすく
+  - evaluation: "excellent"（結果的に好タイミング）/ "good"（妥当なタイミング）/ "neutral"（判断が難しいタイミング）/ "questionable"（結果的に不利なタイミング）
+  - comment: 判断の根拠を具体的な数値データで客観的に説明。行動指示は含めないこと
 
-【missedOpportunities（機会損失の指摘）】
-- summary: 機会損失の総括を1文で。なければ「今日は見逃した銘柄はありませんでした」
-- stocks: 買っておけばよかった銘柄。なければ空配列
-  - source: "watchlist"（気になるリスト）または "recommendation"（AI推奨）
-  - comment: なぜ買っておくべきだったかを簡潔に。責めるのではなく学びとして伝える
+【missedOpportunities（見逃し銘柄の分析）】
+- summary: 見逃し銘柄の総括を1文で。なければ「今日は見逃した銘柄はありませんでした」
+- stocks: 大きく動いた未保有の注目銘柄。なければ空配列
+  - source: "watchlist"（気になるリスト）または "highlight"（AI注目銘柄）
+  - comment: 事実ベースで動きの分析を簡潔に。責めるのではなく学びとして伝える
 
-【improvementSuggestion（行動パターンの改善提案）】
+【improvementSuggestion（行動パターンの分析）】
 - pattern: 検出された行動パターン。データ不足の場合は「まだ売買データが少なく、傾向を判断するには早い段階です」
-- suggestion: 具体的な改善提案（例: 「売却前に1日待つルールを試してみましょう」）。データ不足の場合は投資スタイルに合った一般的なアドバイスを1つ
+- suggestion: パターンに基づく客観的な分析（例: 「小幅利益での売却後、さらに上昇するケースが見られる」）。データ不足の場合は投資スタイルに合った一般的な知識を1つ
 - encouragement: 励ましのメッセージ。ネガティブにならず、成長を実感できるような言葉を
 
 【表現の指針】
@@ -558,6 +566,7 @@ ${soldStocksRule}
 - 数値の基準を具体的に説明する（例：「20%以下は比較的安定」）
 - ネガティブな内容も前向きな表現で伝える
 - 1日の終わりなので落ち着いたトーンで
+- 「〜してください」「〜すべき」等の行動指示は使わない
 
 【重要: ハルシネーション防止】
 - 提供されたデータのみを使用してください

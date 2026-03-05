@@ -14,7 +14,6 @@ interface BadgeState {
   dashboard: boolean
   "my-stocks": boolean
   news: boolean
-  "ai-report": boolean
   menu: boolean
 }
 
@@ -28,7 +27,6 @@ const defaultBadges: BadgeState = {
   dashboard: false,
   "my-stocks": false,
   news: false,
-  "ai-report": false,
   menu: false,
 }
 
@@ -50,7 +48,6 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       if (lastSeen.dashboard) params.set("dashboard", lastSeen.dashboard)
       if (lastSeen["my-stocks"]) params.set("my-stocks", lastSeen["my-stocks"])
       if (lastSeen.news) params.set("news", lastSeen.news)
-      if (lastSeen["ai-report"]) params.set("ai-report", lastSeen["ai-report"])
 
       const response = await fetch(`/api/badges?${params.toString()}`)
       if (!response.ok) return
@@ -82,15 +79,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
   const markPageSeen = useCallback(
     (key: BadgeKey) => {
       markAsSeen(key)
-      // バッジを即座に更新
-      setBadges((prev) => {
-        const newBadges = { ...prev, [key]: false }
-        // menuは ai-report の状態
-        if (key === "ai-report") {
-          newBadges.menu = newBadges["ai-report"]
-        }
-        return newBadges
-      })
+      setBadges((prev) => ({ ...prev, [key]: false }))
     },
     []
   )

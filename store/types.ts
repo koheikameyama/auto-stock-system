@@ -17,8 +17,8 @@ export interface UserStock {
   shortTerm?: string | null;
   mediumTerm?: string | null;
   longTerm?: string | null;
-  recommendation?: "buy" | "sell" | "hold" | null;
-  confidence?: number | null;
+  riskLevel?: string | null;
+  riskFlags?: unknown[] | null;
   analyzedAt?: string | null;
   takeProfitPrice?: number | null; // 旧形式（価格）
   stopLossPrice?: number | null; // 旧形式（価格）

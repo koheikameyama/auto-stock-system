@@ -6,13 +6,11 @@ export type BadgeKey =
   | "dashboard"
   | "my-stocks"
   | "news"
-  | "ai-report"
 
 interface LastSeenData {
   dashboard?: string
   "my-stocks"?: string
   news?: string
-  "ai-report"?: string
 }
 
 // 最終閲覧時刻を取得

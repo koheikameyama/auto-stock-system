@@ -62,7 +62,7 @@ def fetch_stocks(conn, user_stocks_only: bool = False) -> list[dict]:
                     UNION
                     SELECT "stockId" FROM "TrackedStock"
                     UNION
-                    SELECT "stockId" FROM "UserDailyRecommendation" WHERE date = CURRENT_DATE
+                    SELECT "stockId" FROM "DailyHighlight" WHERE date = CURRENT_DATE
                     UNION
                     SELECT "stockId" FROM "DailyFeaturedStock" WHERE date = CURRENT_DATE
                 )

@@ -15,32 +15,26 @@ export async function GET(request: NextRequest) {
     const dashboardLastSeen = searchParams.get("dashboard")
     const myStocksLastSeen = searchParams.get("my-stocks")
     const newsLastSeen = searchParams.get("news")
-    const aiReportLastSeen = searchParams.get("ai-report")
 
     // 並列でバッジカウントを取得
     const [
       dashboardBadge,
       myStocksBadge,
       newsBadge,
-      aiReportBadge,
     ] = await Promise.all([
-      // ホーム: 新しいおすすめ銘柄
+      // ホーム: 新しい注目データ
       getDashboardBadge(userId, dashboardLastSeen),
       // マイ銘柄: 新しい分析
       getMyStocksBadge(userId, myStocksLastSeen),
       // ニュース: 新しいニュース
       getNewsBadge(newsLastSeen),
-      // AI精度レポート: 更新あり
-      getAIReportBadge(aiReportLastSeen),
     ])
 
     return NextResponse.json({
       dashboard: dashboardBadge,
       "my-stocks": myStocksBadge,
       news: newsBadge,
-      "ai-report": aiReportBadge,
-      // その他タブ用
-      menu: aiReportBadge,
+      menu: false,
     })
   } catch (error) {
     console.error("Error fetching badges:", error)
@@ -51,7 +45,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ホーム: 新しいおすすめ銘柄があるか
+// ホーム: 新しい注目データがあるか
 async function getDashboardBadge(
   userId: string,
   lastSeen: string | null
@@ -60,8 +54,7 @@ async function getDashboardBadge(
 
   const lastSeenDate = new Date(lastSeen)
 
-  // ユーザー向けおすすめが更新されているか
-  const userRec = await prisma.userDailyRecommendation.findFirst({
+  const highlight = await prisma.dailyHighlight.findFirst({
     where: {
       userId,
       createdAt: { gt: lastSeenDate },
@@ -69,7 +62,7 @@ async function getDashboardBadge(
     select: { id: true },
   })
 
-  return !!userRec
+  return !!highlight
 }
 
 // マイ銘柄: 新しい分析があるか
@@ -137,21 +130,4 @@ async function getNewsBadge(lastSeen: string | null): Promise<boolean> {
   })
 
   return !!newNews
-}
-
-// AI精度レポート: 更新があるか
-async function getAIReportBadge(lastSeen: string | null): Promise<boolean> {
-  if (!lastSeen) return false
-
-  const lastSeenDate = new Date(lastSeen)
-
-  const report = await prisma.weeklyAIReport.findFirst({
-    where: {
-      createdAt: { gt: lastSeenDate },
-    },
-    orderBy: { createdAt: "desc" },
-    select: { id: true },
-  })
-
-  return !!report
 }

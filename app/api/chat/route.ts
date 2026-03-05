@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     try {
       const tickerCode = stockContext.tickerCode.replace(".T", "");
 
-      const [stockData, analysisData, newsData, portfolioData, purchaseData] =
+      const [stockData, analysisData, newsData, portfolioData, reportData] =
         await Promise.all([
           // 財務データ
           prisma.stock.findUnique({
@@ -111,17 +111,15 @@ export async function POST(request: Request) {
                   shortTerm: true,
                   mediumTerm: true,
                   longTerm: true,
-                  suggestedSellPrice: true,
-                  suggestedSellPercent: true,
-                  sellCondition: true,
-                  sellReason: true,
+                  riskLevel: true,
+                  riskFlags: true,
                   lastAnalysis: true,
                 },
               })
             : Promise.resolve(null),
-          // 購入推奨（ウォッチリスト/閲覧中の場合）
+          // 銘柄レポート（ウォッチリスト/閲覧中の場合）
           stockContext.type !== "portfolio"
-            ? prisma.purchaseRecommendation.findFirst({
+            ? prisma.stockReport.findFirst({
                 where: {
                   stockId: stockContext.stockId,
                   date: { gte: getDaysAgoForDB(7) },
@@ -135,7 +133,7 @@ export async function POST(request: Request) {
         foundStock: !!stockData,
         foundAnalysis: !!analysisData,
         foundPortfolio: !!portfolioData,
-        foundPurchase: !!purchaseData,
+        foundReport: !!reportData,
         newsCount: newsData.length,
       });
 
@@ -177,19 +175,13 @@ export async function POST(request: Request) {
           ? {
               shortTermTrend: analysisData.shortTermTrend,
               shortTermText: analysisData.shortTermText,
-              shortTermPriceLow: Number(analysisData.shortTermPriceLow),
-              shortTermPriceHigh: Number(analysisData.shortTermPriceHigh),
               midTermTrend: analysisData.midTermTrend,
               midTermText: analysisData.midTermText,
-              midTermPriceLow: Number(analysisData.midTermPriceLow),
-              midTermPriceHigh: Number(analysisData.midTermPriceHigh),
               longTermTrend: analysisData.longTermTrend,
               longTermText: analysisData.longTermText,
-              longTermPriceLow: Number(analysisData.longTermPriceLow),
-              longTermPriceHigh: Number(analysisData.longTermPriceHigh),
-              recommendation: analysisData.recommendation,
+              healthScore: analysisData.healthScore,
+              riskLevel: analysisData.riskLevel,
               advice: analysisData.advice,
-              confidence: analysisData.confidence,
               analyzedAt: analysisData.analyzedAt,
               daysAgo: Math.floor(
                 (Date.now() - analysisData.analyzedAt.getTime()) /
@@ -209,36 +201,33 @@ export async function POST(request: Request) {
               shortTerm: portfolioData.shortTerm,
               mediumTerm: portfolioData.mediumTerm,
               longTerm: portfolioData.longTerm,
-              suggestedSellPrice: portfolioData.suggestedSellPrice
-                ? Number(portfolioData.suggestedSellPrice)
-                : null,
-              suggestedSellPercent: portfolioData.suggestedSellPercent,
-              sellCondition: portfolioData.sellCondition,
-              sellReason: portfolioData.sellReason,
+              riskLevel: portfolioData.riskLevel,
+              riskFlags: portfolioData.riskFlags,
               lastAnalysis: portfolioData.lastAnalysis,
             }
           : null,
-        purchaseRecommendation: purchaseData
+        stockReport: reportData
           ? {
-              recommendation: purchaseData.recommendation,
-              confidence: purchaseData.confidence,
-              reason: purchaseData.reason,
-              positives: purchaseData.positives
-                ? purchaseData.positives
+              technicalScore: reportData.technicalScore,
+              fundamentalScore: reportData.fundamentalScore,
+              healthRank: reportData.healthRank,
+              alerts: reportData.alerts,
+              reason: reportData.reason,
+              positives: reportData.positives
+                ? reportData.positives
                     .split("\n")
-                    .map((p) => p.replace(/^[・\-\*]\s*/, "").trim())
+                    .map((p: string) => p.replace(/^[・\-\*]\s*/, "").trim())
                     .filter(Boolean)
                 : null,
-              concerns: purchaseData.concerns
-                ? purchaseData.concerns
+              concerns: reportData.concerns
+                ? reportData.concerns
                     .split("\n")
-                    .map((c) => c.replace(/^[・\-\*]\s*/, "").trim())
+                    .map((c: string) => c.replace(/^[・\-\*]\s*/, "").trim())
                     .filter(Boolean)
                 : null,
-              buyCondition: purchaseData.buyCondition,
-              personalizedReason: purchaseData.personalizedReason,
-              marketSignal: purchaseData.marketSignal,
-              date: purchaseData.date,
+              keyCondition: reportData.keyCondition,
+              marketSignal: reportData.marketSignal,
+              date: reportData.date,
             }
           : null,
       };

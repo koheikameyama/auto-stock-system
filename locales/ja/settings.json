@@ -24,8 +24,8 @@
   },
   "notificationSchedule": {
     "title": "通知スケジュール",
-    "stockAnalysis": "保有銘柄分析・購入レコメンド（平日）",
-    "personalRecommendations": "あなたへのおすすめ更新（平日）"
+    "stockAnalysis": "保有銘柄分析・銘柄レポート（平日）",
+    "dailyHighlights": "注目データ更新（平日）"
   },
   "investmentStyleSection": {
     "title": "投資スタイル",

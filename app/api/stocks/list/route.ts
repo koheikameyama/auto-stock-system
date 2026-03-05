@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getAuthUser } from "@/lib/auth-utils"
 import { Prisma } from "@prisma/client"
-import { checkBuySignal } from "@/lib/recommendation-buy-filter"
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator"
 import { getTseIndustries } from "@/lib/constants"
 
@@ -60,7 +59,6 @@ export async function GET(request: NextRequest) {
   const sortBy = VALID_SORT_OPTIONS.includes(sortByParam as SortOption)
     ? (sortByParam as SortOption)
     : "dailyChangeRate_desc"
-  const buySignalOnly = searchParams.get("buySignalOnly") === "true"
 
   // WHERE条件を構築
   const where: Prisma.StockWhereInput = {
@@ -117,13 +115,13 @@ export async function GET(request: NextRequest) {
     profitTrend: true,
     revenueGrowth: true,
     volatility: true,
-    purchaseRecommendations: {
+    stockReports: {
       orderBy: { date: "desc" } as const,
       take: 1,
       select: {
-        recommendation: true,
-        confidence: true,
-        userFitScore: true,
+        healthRank: true,
+        technicalScore: true,
+        fundamentalScore: true,
         date: true,
       },
     },
@@ -149,37 +147,18 @@ export async function GET(request: NextRequest) {
     },
   }
 
-  // buySignalOnly の場合は全件取得してインメモリでフィルタ＆ページネーション
-  const [stocks, total, userSettings] = await Promise.all([
+  const [stocks, total] = await Promise.all([
     prisma.stock.findMany({
       where,
       select: stockSelect,
       orderBy: buildOrderBy(sortBy),
-      ...(buySignalOnly ? {} : { skip, take: limit }),
+      skip,
+      take: limit,
     }),
-    buySignalOnly ? Promise.resolve(0) : prisma.stock.count({ where }),
-    prisma.userSettings.findUnique({
-      where: { userId: user.id },
-      select: { investmentStyle: true },
-    }),
+    prisma.stock.count({ where }),
   ])
 
-  const investmentStyle = userSettings?.investmentStyle ?? null
-
   const mapStock = (s: (typeof stocks)[number]) => {
-    const signal = checkBuySignal(
-      {
-        weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
-        maDeviationRate: s.maDeviationRate ? Number(s.maDeviationRate) : null,
-        volumeRatio: s.volumeRatio ? Number(s.volumeRatio) : null,
-        isProfitable: s.isProfitable,
-        profitTrend: s.profitTrend,
-        revenueGrowth: s.revenueGrowth ? Number(s.revenueGrowth) : null,
-        volatility: s.volatility ? Number(s.volatility) : null,
-      },
-      investmentStyle,
-    )
-
     return {
       id: s.id,
       tickerCode: s.tickerCode,
@@ -190,23 +169,12 @@ export async function GET(request: NextRequest) {
       dailyChangeRate: s.dailyChangeRate ? Number(s.dailyChangeRate) : null,
       weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
       isProfitable: s.isProfitable,
-      buySignal: {
-        isBuyCandidate: signal.isBuyCandidate,
-        chartSignals: [
-          ...signal.chart.positiveSignals,
-          ...signal.chart.negativeSignals,
-        ],
-        fundamentalSignals: [
-          ...signal.fundamental.positiveSignals,
-          ...signal.fundamental.negativeSignals,
-        ],
-      },
-      latestRecommendation: s.purchaseRecommendations[0]
+      latestReport: s.stockReports[0]
         ? {
-            recommendation: s.purchaseRecommendations[0].recommendation,
-            confidence: s.purchaseRecommendations[0].confidence,
-            userFitScore: s.purchaseRecommendations[0].userFitScore,
-            date: s.purchaseRecommendations[0].date.toISOString(),
+            healthRank: s.stockReports[0].healthRank,
+            technicalScore: s.stockReports[0].technicalScore,
+            fundamentalScore: s.stockReports[0].fundamentalScore,
+            date: s.stockReports[0].date.toISOString(),
           }
         : null,
       userStatus: (() => {
@@ -221,23 +189,6 @@ export async function GET(request: NextRequest) {
         return null
       })(),
     }
-  }
-
-  if (buySignalOnly) {
-    const allMapped = stocks.map(mapStock)
-    const filtered = allMapped.filter((s) => s.buySignal.isBuyCandidate)
-    const filteredTotal = filtered.length
-    const paginatedStocks = filtered.slice(skip, skip + limit)
-
-    return NextResponse.json({
-      stocks: paginatedStocks,
-      pagination: {
-        page,
-        limit,
-        total: filteredTotal,
-        totalPages: Math.ceil(filteredTotal / limit),
-      },
-    })
   }
 
   const response = stocks.map(mapStock)

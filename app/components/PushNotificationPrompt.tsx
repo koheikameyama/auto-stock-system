@@ -166,7 +166,7 @@ export default function PushNotificationPrompt() {
             <li className="flex items-start gap-2">
               <span className="text-blue-500">•</span>
               <span>
-                <strong>{UPDATE_SCHEDULES.PERSONAL_RECOMMENDATIONS}</strong> -
+                <strong>{UPDATE_SCHEDULES.DAILY_HIGHLIGHTS}</strong> -
                 {t("scheduleRecommendations")}
               </span>
             </li>

@@ -66,15 +66,7 @@ async function StockDetailContent({
         userId: user.id,
       },
       include: {
-        stock: {
-          include: {
-            analyses: {
-              orderBy: { analyzedAt: "desc" },
-              take: 1,
-              select: { limitPrice: true },
-            },
-          },
-        },
+        stock: true,
       },
     }),
   ]);
@@ -252,10 +244,6 @@ async function StockDetailContent({
     // Watchlist fields
     targetBuyPrice: watchlistStock?.targetBuyPrice
       ? Number(watchlistStock.targetBuyPrice)
-      : null,
-    // AI suggested limit price (fallback for buy alert)
-    limitPrice: watchlistStock?.stock.analyses?.[0]?.limitPrice
-      ? Number(watchlistStock.stock.analyses[0].limitPrice)
       : null,
     transactions: portfolioStock?.transactions.map((t) => ({
       id: t.id,

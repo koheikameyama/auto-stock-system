@@ -50,21 +50,21 @@ def cleanup_old_data():
                 print(f"  Deleted: {cur.rowcount}")
                 total_deleted += cur.rowcount
 
-            # 2. PurchaseRecommendation（ウォッチリスト購入推奨）
-            cur.execute('SELECT COUNT(*) FROM "PurchaseRecommendation" WHERE date < %s', (cutoff_date.date(),))
+            # 2. StockReport（銘柄レポート）
+            cur.execute('SELECT COUNT(*) FROM "StockReport" WHERE date < %s', (cutoff_date.date(),))
             count = cur.fetchone()[0]
-            print(f"\n[2/6] PurchaseRecommendation: {count} records to delete")
+            print(f"\n[2/6] StockReport: {count} records to delete")
             if count > 0:
-                cur.execute('DELETE FROM "PurchaseRecommendation" WHERE date < %s', (cutoff_date.date(),))
+                cur.execute('DELETE FROM "StockReport" WHERE date < %s', (cutoff_date.date(),))
                 print(f"  Deleted: {cur.rowcount}")
                 total_deleted += cur.rowcount
 
-            # 3. UserDailyRecommendation（あなたへのおすすめ）
-            cur.execute('SELECT COUNT(*) FROM "UserDailyRecommendation" WHERE date < %s', (cutoff_date.date(),))
+            # 3. DailyHighlight（注目銘柄）
+            cur.execute('SELECT COUNT(*) FROM "DailyHighlight" WHERE date < %s', (cutoff_date.date(),))
             count = cur.fetchone()[0]
-            print(f"\n[3/6] UserDailyRecommendation: {count} records to delete")
+            print(f"\n[3/6] DailyHighlight: {count} records to delete")
             if count > 0:
-                cur.execute('DELETE FROM "UserDailyRecommendation" WHERE date < %s', (cutoff_date.date(),))
+                cur.execute('DELETE FROM "DailyHighlight" WHERE date < %s', (cutoff_date.date(),))
                 print(f"  Deleted: {cur.rowcount}")
                 total_deleted += cur.rowcount
 
@@ -125,8 +125,8 @@ def cleanup_old_data():
             conn.autocommit = True  # VACUUMはトランザクション外で実行
             with conn.cursor() as cur:
                 cur.execute('VACUUM ANALYZE "StockAnalysis"')
-                cur.execute('VACUUM ANALYZE "PurchaseRecommendation"')
-                cur.execute('VACUUM ANALYZE "UserDailyRecommendation"')
+                cur.execute('VACUUM ANALYZE "StockReport"')
+                cur.execute('VACUUM ANALYZE "DailyHighlight"')
                 cur.execute('VACUUM ANALYZE "MarketNews"')
                 cur.execute('VACUUM ANALYZE "SectorTrend"')
                 cur.execute('VACUUM ANALYZE "Stock"')

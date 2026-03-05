@@ -28,10 +28,6 @@
       "label": "買い時",
       "icon": "💰"
     },
-    "buy_recommendation": {
-      "label": "買い推奨",
-      "icon": "📊"
-    },
     "surge": {
       "label": "急騰",
       "icon": "📈"
@@ -56,20 +52,12 @@
       "label": "利確タイミング",
       "icon": "💹"
     },
-    "switch_proposal": {
-      "label": "乗り換え提案",
-      "icon": "💡"
+    "market_alert": {
+      "label": "市場警戒",
+      "icon": "🚨"
     },
-    "market_shield_activated": {
-      "label": "マーケットシールド発動",
-      "icon": "🛡️"
-    },
-    "market_shield_deactivated": {
-      "label": "マーケットシールド解除",
-      "icon": "✅"
-    },
-    "trend_convergence": {
-      "label": "トレンド収束",
+    "daily_highlights": {
+      "label": "注目データ",
       "icon": "📊"
     },
     "default": {
@@ -110,8 +98,8 @@
     "title": "通知をオンにしませんか？",
     "description": "毎日の分析結果や注目銘柄の更新をお知らせします",
     "scheduleTitle": "通知スケジュール",
-    "scheduleAnalysis": "ポートフォリオ分析・購入レコメンド（平日）",
-    "scheduleRecommendations": "あなたへのおすすめ更新（平日）",
+    "scheduleAnalysis": "ポートフォリオ分析・銘柄レポート（平日）",
+    "scheduleRecommendations": "注目データ更新（平日）",
     "enableButton": "通知をオンにする",
     "enabling": "設定中...",
     "goToSettings": "設定で詳しく見る",

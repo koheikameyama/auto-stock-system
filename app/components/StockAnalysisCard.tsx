@@ -5,107 +5,59 @@ import { useTranslations } from "next-intl";
 import AnalysisTimestamp from "./AnalysisTimestamp";
 import {
   UPDATE_SCHEDULES,
-  PORTFOLIO_RECOMMENDATION_CONFIG,
+  HEALTH_RANK_CONFIG,
+  RISK_LEVEL_CONFIG,
   MARKET_SIGNAL_CONFIG,
 } from "@/lib/constants";
-import InvestmentStyleTabs from "./InvestmentStyleTabs";
 
 interface StockAnalysisCardProps {
   stockId: string;
-  quantity?: number; // 保有数量（売却提案で使用）
-  // 買いアラート関連（ウォッチリスト用）
-  onBuyAlertClick?: (limitPrice: number | null) => void;
-  currentTargetBuyPrice?: number | null;
+  quantity?: number;
   embedded?: boolean;
   onAnalysisDateLoaded?: (date: string | null) => void;
-  // シミュレーション用
-  isSimulation?: boolean;
-  autoGenerate?: boolean;
-  // AI推奨価格を個別利確・損切り設定に反映（ポートフォリオ用）
-  onApplyAIPrices?: (params: { takeProfitPrice: number | null; stopLossPrice: number | null; averagePurchasePrice: number }) => void;
 }
 
 interface AnalysisData {
-  // PortfolioStock
+  // Common
+  currentPrice: number | null;
+  analyzedAt: string | null;
   lastAnalysis: string | null;
-  marketSignal: string | null;
-  suggestedSellPrice: number | null;
-  suggestedSellPercent: number | null;
-  sellReason: string | null;
-  sellCondition: string | null;
-  sellTiming?: string | null;
-  sellTargetPrice?: number | null;
+  advice: string | null;
+  shortTermTrend: string | null;
+  shortTermText: string | null;
+  midTermTrend: string | null;
+  midTermText: string | null;
+  longTermTrend: string | null;
+  longTermText: string | null;
+  // Portfolio-specific
   averagePurchasePrice: number | null;
   stopLossRate: number | null;
-  buyTiming?: string | null;
   targetReturnRate: number | null;
   userTargetPrice: number | null;
   userStopLossPrice: number | null;
-  // StockAnalysis（価格帯予測）
-  currentPrice: number | null;
-  recommendation: string | null;
-  advice: string | null;
-  confidence: number | null;
-  limitPrice: number | null;
-  stopLossPrice: number | null;
-  analyzedAt: string | null;
-  shortTermTrend: string | null;
-  shortTermPriceLow: number | null;
-  shortTermPriceHigh: number | null;
-  shortTermText: string | null;
-  midTermTrend: string | null;
-  midTermPriceLow: number | null;
-  midTermPriceHigh: number | null;
-  midTermText: string | null;
-  longTermTrend: string | null;
-  longTermPriceLow: number | null;
-  longTermPriceHigh: number | null;
-  longTermText: string | null;
-  // 投資スタイル別分析
-  styleAnalyses: Record<string, StyleAnalysisData> | null;
-  // リスク管理率（スタイル別）
-  suggestedExitRate?: number | null;
-  suggestedSellTargetRate?: number | null;
+  riskLevel: string | null;
+  riskFlags: unknown[] | null;
+  // Report-specific (watchlist)
+  healthRank: string | null;
+  technicalScore: number | null;
+  fundamentalScore: number | null;
+  alerts: unknown[] | null;
+  healthScore: number | null;
+  reason: string | null;
+  caution: string | null;
+  positives: string | null;
+  concerns: string | null;
+  keyCondition: string | null;
+  supportLevel: number | null;
+  resistanceLevel: number | null;
+  marketSignal: string | null;
 }
-
-interface StyleAnalysisData {
-  recommendation: string;
-  confidence: number;
-  marketSignal: string;
-  advice: string;
-  reason?: string;
-  caution?: string;
-  buyCondition?: string | null;
-  buyTiming?: string | null;
-  dipTargetPrice?: number | null;
-  holdCondition?: string | null;
-  sellTiming?: string | null;
-  sellTargetPrice?: number | null;
-  shortTerm?: string;
-  sellReason?: string | null;
-  sellCondition?: string | null;
-  suggestedSellPercent?: number | null;
-  suggestedSellPrice?: number | null;
-  suggestedStopLossPrice?: number | null;
-  suggestedExitRate?: number | null;
-  suggestedSellTargetRate?: number | null;
-  correctionExplanation?: string | null;
-  divergenceType?: string | null;
-  divergenceLabel?: string | null;
-  divergenceExplanation?: string | null;
-}
-
 
 export default function StockAnalysisCard({
   stockId,
   quantity,
-  onBuyAlertClick,
-  currentTargetBuyPrice,
   embedded = false,
   onAnalysisDateLoaded,
-  isSimulation = false,
-  autoGenerate = false,
-  onApplyAIPrices,
 }: StockAnalysisCardProps) {
 
   const tAC = useTranslations("stocks.analysisCard");
@@ -115,21 +67,16 @@ export default function StockAnalysisCard({
   const [generating, setGenerating] = useState(false);
   const [noData, setNoData] = useState(false);
   const [error, setError] = useState("");
-  const [userInvestmentStyle, setUserInvestmentStyle] = useState<string>("BALANCED");
-  const [selectedStyle, setSelectedStyle] = useState<string>("BALANCED");
 
   async function fetchData() {
     setLoading(true);
     setError("");
     try {
-      // シミュレーション → simulated-portfolio-analysis
-      // ポートフォリオ（quantity有） → portfolio-analysis
-      // ウォッチリスト（quantity無） → purchase-recommendation
-      const endpoint = isSimulation
-        ? `/api/stocks/${stockId}/simulated-portfolio-analysis`
-        : quantity
-          ? `/api/stocks/${stockId}/portfolio-analysis`
-          : `/api/stocks/${stockId}/purchase-recommendation`;
+      // portfolio (quantity > 0) -> portfolio-analysis
+      // watchlist (no quantity) -> report
+      const endpoint = quantity
+        ? `/api/stocks/${stockId}/portfolio-analysis`
+        : `/api/stocks/${stockId}/report`;
 
       const response = await fetch(endpoint);
 
@@ -139,24 +86,13 @@ export default function StockAnalysisCard({
         if (!data.lastAnalysis && !data.analyzedAt) {
           setNoData(true);
           onAnalysisDateLoaded?.(null);
-          // 自動生成が有効な場合は即実行
-          if (autoGenerate) {
-            generateAnalysis();
-          }
         } else {
           setNoData(false);
           onAnalysisDateLoaded?.(data.analyzedAt || data.lastAnalysis);
-          // シミュレーションモードで自動生成が有効な場合、既存データがあっても最新を生成
-          if (isSimulation && autoGenerate) {
-            generateAnalysis();
-          }
         }
       } else if (response.status === 404) {
         setNoData(true);
         onAnalysisDateLoaded?.(null);
-        if (autoGenerate) {
-          generateAnalysis();
-        }
       } else {
         setNoData(true);
         onAnalysisDateLoaded?.(null);
@@ -169,18 +105,13 @@ export default function StockAnalysisCard({
   }
 
   async function generateAnalysis() {
-    setLoading(false); // スケルトン表示を解除
+    setLoading(false);
     setGenerating(true);
     setError("");
     try {
-      // ポートフォリオ用かウォッチリスト用か、あるいはシミュレーション用かで分岐
-      let endpoint = quantity
+      const endpoint = quantity
         ? `/api/stocks/${stockId}/portfolio-analysis`
-        : `/api/stocks/${stockId}/purchase-recommendation`;
-
-      if (isSimulation) {
-        endpoint = `/api/stocks/${stockId}/simulated-portfolio-analysis`;
-      }
+        : `/api/stocks/${stockId}/report`;
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -192,16 +123,12 @@ export default function StockAnalysisCard({
         throw new Error(errData.error || tAC("generateFailed"));
       }
 
-      // 結果を反映
       const data = await response.json();
       setAnalysis(data);
       setNoData(false);
       onAnalysisDateLoaded?.(data.analyzedAt || data.lastAnalysis);
 
-      // シミュレーションでない場合のみ再取得（通常はPOSTで保存されているためGETで同期可能）
-      if (!isSimulation) {
-        await fetchData();
-      }
+      await fetchData();
     } catch (err) {
       console.error("Error generating analysis:", err);
       setError(err instanceof Error ? err.message : tAC("generateFailed"));
@@ -211,23 +138,7 @@ export default function StockAnalysisCard({
   }
 
   useEffect(() => {
-    // ユーザーの投資スタイル設定を取得
-    fetch("/api/settings")
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (data?.settings?.investmentStyle) {
-          setUserInvestmentStyle(data.settings.investmentStyle);
-          setSelectedStyle(data.settings.investmentStyle);
-        }
-      })
-      .catch(() => {});
-
-    if (isSimulation && autoGenerate) {
-      // シミュレーションかつ自動分析の場合は、GETをスキップして直接生成
-      generateAnalysis();
-    } else {
-      fetchData();
-    }
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stockId]);
 
@@ -257,18 +168,16 @@ export default function StockAnalysisCard({
     }
   };
 
-  const getStatusBadge = (recommendation: string | null | undefined) => {
-    if (!recommendation) return null;
-    const config = PORTFOLIO_RECOMMENDATION_CONFIG[recommendation];
-    if (!config) return null;
-
-    return (
-      <span
-        className={`inline-block px-3 py-1 ${config.bg} ${config.color} rounded-full text-sm font-semibold`}
-      >
-        {config.text}
-      </span>
-    );
+  const getHealthBadge = () => {
+    if (analysis?.healthRank) {
+      const config = HEALTH_RANK_CONFIG[analysis.healthRank];
+      if (config) return <span className={`inline-block px-3 py-1 ${config.bg} ${config.color} rounded-full text-sm font-semibold`}>{config.text}</span>;
+    }
+    if (analysis?.riskLevel) {
+      const config = RISK_LEVEL_CONFIG[analysis.riskLevel];
+      if (config) return <span className={`inline-block px-3 py-1 ${config.bg} ${config.color} rounded-full text-sm font-semibold`}>{config.text}</span>;
+    }
+    return null;
   };
 
   const getMarketSignalBadge = (signal: string | null | undefined) => {
@@ -306,25 +215,22 @@ export default function StockAnalysisCard({
     );
   }
 
-  // 分析中の場合
   if (generating) {
     return (
       <div className="bg-gray-50 rounded-lg p-6 text-center">
         <div className="text-4xl mb-3">📊</div>
         <p className="text-sm text-gray-600 mb-4">
-          {isSimulation ? tAC("generatingPostPurchase") : tAC("aiAnalyzing")}
+          {tAC("aiAnalyzing")}
         </p>
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-400 text-white text-sm font-medium rounded-lg cursor-not-allowed">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-          {isSimulation ? tAC("generating") : tAC("analyzing")}
+          {tAC("analyzing")}
         </div>
       </div>
     );
   }
 
-  // noDataはlastAnalysisがnullの場合にtrueになる
-  // analysisのrecommendationがない場合は生成ボタンを表示
-  if ((noData || error) && !analysis?.recommendation) {
+  if ((noData || error) && !analysis?.advice) {
     return (
       <div className="bg-gray-50 rounded-lg p-6 text-center">
         <div className="text-4xl mb-3">📊</div>
@@ -354,126 +260,123 @@ export default function StockAnalysisCard({
     );
   }
 
-  // 分析日時（より新しい方を表示）
   const analysisDate = analysis?.analyzedAt || analysis?.lastAnalysis;
-
-  // 選択中のスタイルのデータを取得（スタイル別データがある場合はオーバーレイ）
-  const styleData = analysis?.styleAnalyses?.[selectedStyle] ?? null;
-  const isUserStyle = selectedStyle === userInvestmentStyle;
-  const hasStyleAnalyses = analysis?.styleAnalyses && Object.keys(analysis.styleAnalyses).length > 0;
-
-  // スタイル別データがある場合、分析データにマージ
-  const effectiveAnalysis = analysis
-    ? {
-        ...analysis,
-        ...(styleData && !isUserStyle
-          ? {
-              recommendation: styleData.recommendation,
-              confidence: styleData.confidence,
-              marketSignal: styleData.marketSignal,
-              advice: styleData.advice,
-              ...(styleData.sellReason !== undefined ? { sellReason: styleData.sellReason } : {}),
-              ...(styleData.sellCondition !== undefined ? { sellCondition: styleData.sellCondition } : {}),
-              ...(styleData.holdCondition !== undefined ? { holdCondition: styleData.holdCondition } : {}),
-              ...(styleData.suggestedSellPercent !== undefined ? { suggestedSellPercent: styleData.suggestedSellPercent } : {}),
-              ...(styleData.sellTiming !== undefined ? { sellTiming: styleData.sellTiming } : {}),
-              ...(styleData.sellTargetPrice !== undefined ? { sellTargetPrice: styleData.sellTargetPrice } : {}),
-              ...(styleData.buyTiming !== undefined ? { buyTiming: styleData.buyTiming } : {}),
-              ...(styleData.suggestedSellPrice !== undefined
-                ? { suggestedSellPrice: styleData.suggestedSellPrice, limitPrice: styleData.suggestedSellPrice }
-                : {}),
-              ...(styleData.suggestedStopLossPrice !== undefined
-                ? { stopLossPrice: styleData.suggestedStopLossPrice }
-                : {}),
-              ...((styleData.suggestedExitRate ?? (styleData as any).suggestedStopLossRate) !== undefined
-                ? { suggestedExitRate: styleData.suggestedExitRate ?? (styleData as any).suggestedStopLossRate }
-                : {}),
-              ...((styleData.suggestedSellTargetRate ?? (styleData as any).suggestedTakeProfitRate) !== undefined
-                ? { suggestedSellTargetRate: styleData.suggestedSellTargetRate ?? (styleData as any).suggestedTakeProfitRate }
-                : {}),
-            }
-          : {}),
-        // ユーザースタイルの場合もstyleDataからrateを取得
-        ...(styleData && isUserStyle
-          ? {
-              ...((styleData.suggestedExitRate ?? (styleData as any).suggestedStopLossRate) !== undefined
-                ? { suggestedExitRate: styleData.suggestedExitRate ?? (styleData as any).suggestedStopLossRate }
-                : {}),
-              ...((styleData.suggestedSellTargetRate ?? (styleData as any).suggestedTakeProfitRate) !== undefined
-                ? { suggestedSellTargetRate: styleData.suggestedSellTargetRate ?? (styleData as any).suggestedTakeProfitRate }
-                : {}),
-            }
-          : {}),
-      }
-    : null;
-
-  // セーフティルール補正の解説テキスト
-  const correctionExplanation = styleData?.correctionExplanation ?? null;
 
   return (
     <div className="space-y-4">
-      {/* シミュレーションバッジ */}
-      {isSimulation && (
-        <div className="bg-amber-100 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2">
-          <span>🧪 {tAC("simulationBadge")}</span>
+      {/* Header */}
+      <div className="flex items-center justify-between -mt-2 mb-2">
+        <h3 className="text-base font-bold text-gray-800">
+          {tAC("aiAnalysis")}
+        </h3>
+        <button
+          onClick={generateAnalysis}
+          disabled={generating}
+          className="text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center gap-1"
+        >
+          {generating ? (
+            <>
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+              {tAC("analyzing")}
+            </>
+          ) : (
+            <>
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span>{tAC("refresh")}</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Health/Risk badge + Market signal badge */}
+      {(getHealthBadge() || getMarketSignalBadge(analysis?.marketSignal)) && (
+        <div className="flex items-center gap-2">
+          {getHealthBadge()}
+          {getMarketSignalBadge(analysis?.marketSignal)}
         </div>
       )}
 
-      {/* 投資スタイル切り替えタブ */}
-      {hasStyleAnalyses && (
-        <InvestmentStyleTabs
-          selectedStyle={selectedStyle}
-          onSelectStyle={setSelectedStyle}
-          userInvestmentStyle={userInvestmentStyle}
-          styleResults={analysis?.styleAnalyses ?? undefined}
-        />
+      {/* Score bars (watchlist: technicalScore + fundamentalScore) */}
+      {!quantity && (analysis?.technicalScore !== null || analysis?.fundamentalScore !== null) && (
+        <div className="bg-white rounded-lg shadow-md p-4 space-y-3">
+          {analysis?.technicalScore !== null && analysis?.technicalScore !== undefined && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs text-gray-600">{tAC("technicalScore")}</span>
+                <span className="text-sm font-bold text-gray-800">{analysis.technicalScore}/100</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full ${analysis.technicalScore >= 70 ? "bg-green-500" : analysis.technicalScore >= 40 ? "bg-yellow-500" : "bg-red-500"}`}
+                  style={{ width: `${Math.min(analysis.technicalScore, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+          {analysis?.fundamentalScore !== null && analysis?.fundamentalScore !== undefined && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs text-gray-600">{tAC("fundamentalScore")}</span>
+                <span className="text-sm font-bold text-gray-800">{analysis.fundamentalScore}/100</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full ${analysis.fundamentalScore >= 70 ? "bg-green-500" : analysis.fundamentalScore >= 40 ? "bg-yellow-500" : "bg-red-500"}`}
+                  style={{ width: `${Math.min(analysis.fundamentalScore, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between -mt-2 mb-2">
-        <h3 className="text-base font-bold text-gray-800">
-          {quantity || isSimulation ? tAC("aiTradeJudgment") : tAC("aiPricePrediction")}
-        </h3>
-        {!isSimulation && (
-          <button
-            onClick={generateAnalysis}
-            disabled={generating}
-            className="text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center gap-1"
-          >
-            {generating ? (
-              <>
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                {tAC("analyzing")}
-              </>
-            ) : (
-              <>
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                <span>{tAC("refresh")}</span>
-              </>
-            )}
-          </button>
-        )}
-      </div>
+      {/* Alerts */}
+      {analysis?.alerts && Array.isArray(analysis.alerts) && analysis.alerts.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-sm font-semibold text-amber-800 mb-2">
+            {tAC("alerts")}
+          </p>
+          <ul className="space-y-1">
+            {analysis.alerts.map((alert, i) => (
+              <li key={i} className="text-sm text-amber-700 flex items-start gap-1">
+                <span className="flex-shrink-0">⚠️</span>
+                <span>{typeof alert === "string" ? alert : (alert as { message?: string })?.message || JSON.stringify(alert)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-      {/* 撤退ラインアラート（ユーザーが撤退ラインを設定している場合のみ表示） */}
+      {/* Advice */}
+      {analysis?.advice && (
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+          <p className="font-semibold text-gray-800 mb-2">
+            💡 {tAC("aiAdvice")}
+          </p>
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {analysis.advice}
+          </p>
+        </div>
+      )}
+
+      {/* Stop loss alert (portfolio with stopLossRate) */}
       {(() => {
-        const currentPrice = effectiveAnalysis?.currentPrice;
-        const avgPrice = effectiveAnalysis?.averagePurchasePrice;
-        const stopLossRate = effectiveAnalysis?.stopLossRate;
+        const currentPrice = analysis?.currentPrice;
+        const avgPrice = analysis?.averagePurchasePrice;
+        const stopLossRate = analysis?.stopLossRate;
 
-        // 撤退ラインが未設定の場合は表示しない
         if (
           !currentPrice ||
           !avgPrice ||
@@ -525,391 +428,21 @@ export default function StockAnalysisCard({
         );
       })()}
 
-      {/* AIアドバイス */}
-      {effectiveAnalysis?.recommendation && (
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
-          <div className="mb-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="font-semibold text-gray-800">
-                💡 {tAC("aiAdvice")}
-              </p>
-              {effectiveAnalysis.confidence !== null && (() => {
-                const pct = Math.round(effectiveAnalysis.confidence * 100);
-                return (
-                  <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${pct >= 75 ? "bg-green-200 text-green-800" : pct >= 50 ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
-                    {tAC("confidence", { percent: pct })}
-                  </span>
-                );
-              })()}
-            </div>
-            <div className="flex items-center gap-2">
-              {getStatusBadge(effectiveAnalysis.recommendation)}
-              {getMarketSignalBadge(effectiveAnalysis.marketSignal)}
-            </div>
-          </div>
-          <p className="text-sm text-gray-700 leading-relaxed mb-3">
-            {effectiveAnalysis.advice}
-          </p>
-          {/* セーフティルール補正の解説 */}
-          {correctionExplanation && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3">
-              <p className="text-xs font-semibold text-indigo-700 mb-1">
-                {tAC("safetyRuleCorrection")}
-              </p>
-              <p className="text-xs text-indigo-600 leading-relaxed">
-                {correctionExplanation}
-              </p>
-            </div>
-          )}
-          {/* トレンド乖離の解説 */}
-          {styleData?.divergenceExplanation && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
-              <p className="text-xs font-semibold text-amber-700 mb-1">
-                {tAC("trendTwistDetected")}
-              </p>
-              <p className="text-xs text-amber-600 leading-relaxed">
-                {styleData.divergenceExplanation}
-              </p>
-            </div>
-          )}
-          {/* 指値・逆指値（推奨に応じて表示を切り替え） */}
-          {(() => {
-            // sell推奨時は「AI推奨価格」セクションを非表示（「売却検討」セクションに統合）
-            if (effectiveAnalysis.recommendation === "sell") return null;
-
-            // buy → 指値 + 撤退ライン、hold → 売却目標 + 撤退ライン
-            const showLimitPrice =
-              effectiveAnalysis.recommendation === "buy" ||
-              effectiveAnalysis.recommendation === "hold";
-            const showStopLossPrice = true; // buy/holdで撤退ラインを表示
-            const hasPrice =
-              (showLimitPrice && effectiveAnalysis.limitPrice) ||
-              (showStopLossPrice && effectiveAnalysis.stopLossPrice);
-
-            if (!hasPrice) return null;
-
-            return (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
-                <p className="text-sm font-semibold text-gray-800 mb-2">
-                  🎯 {tAC("aiRecommendedPrice")}
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {showLimitPrice && effectiveAnalysis.limitPrice && (
-                    <div>
-                      {(() => {
-                        const limitPriceNum = effectiveAnalysis.limitPrice;
-                        const currentPrice = effectiveAnalysis.currentPrice;
-
-                        // buy/hold共通: 売却目標として表示
-                        // 含み損がある場合は「成行で売却OK」を表示しない（売却目標は含み益がある場合のみ目標到達と判定）
-                        const avgPrice = effectiveAnalysis.averagePurchasePrice;
-                        const hasLoss =
-                          avgPrice && currentPrice && currentPrice < avgPrice;
-                        const priceDiff = currentPrice
-                          ? limitPriceNum - currentPrice
-                          : 0;
-                        const priceDiffPercent = currentPrice
-                          ? ((priceDiff / currentPrice) * 100).toFixed(1)
-                          : "0";
-
-                        const isTargetReached =
-                          !hasLoss && currentPrice && priceDiff <= 0;
-                        const isNearTarget =
-                          !hasLoss &&
-                          currentPrice &&
-                          !isTargetReached &&
-                          Math.abs(priceDiff / currentPrice) < 0.01;
-
-                        const takeProfitRate = effectiveAnalysis?.suggestedSellTargetRate;
-                        const takeProfitPercent = takeProfitRate ? Math.round(takeProfitRate * 100) : null;
-
-                        return (
-                          <>
-                            <p className="text-xs text-gray-500">{tAC("sellTarget")}</p>
-                            <p className="text-base font-bold text-green-600">
-                              {`${formatPrice(limitPriceNum)}${tAC("yen")}`}
-                            </p>
-                            {takeProfitPercent && (
-                              <p className="text-xs text-gray-400">
-                                {tAC("takeProfitPercent", { percent: takeProfitPercent })}
-                              </p>
-                            )}
-                            {currentPrice &&
-                              priceDiff > 0 &&
-                              !isNearTarget && (
-                                <p className="text-xs text-green-600">
-                                  {tAC("remainToTarget", { amount: priceDiff.toLocaleString(), percent: priceDiffPercent })}
-                                </p>
-                              )}
-                            {isNearTarget && (
-                              <p className="text-xs text-green-600 font-semibold">
-                                {tAC("nearTarget")}
-                              </p>
-                            )}
-                            {isTargetReached && (
-                              <p className="text-xs text-green-600 font-bold">
-                                {tAC("targetReached")}
-                              </p>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-                  {showStopLossPrice && effectiveAnalysis.stopLossPrice && (
-                    <div>
-                      {(() => {
-                        const stopLossPriceNum = effectiveAnalysis.stopLossPrice;
-                        const currentPrice = effectiveAnalysis.currentPrice;
-                        const priceDiff = currentPrice
-                          ? stopLossPriceNum - currentPrice
-                          : 0;
-                        const priceDiffPercent = currentPrice
-                          ? ((priceDiff / currentPrice) * 100).toFixed(1)
-                          : "0";
-                        const isNearStopLoss =
-                          currentPrice &&
-                          Math.abs(priceDiff / currentPrice) < 0.03; // 3%以内なら注意
-
-                        const stopLossRate = effectiveAnalysis?.suggestedExitRate;
-                        const stopLossRatePercent = stopLossRate ? Math.round(stopLossRate * 100) : null;
-
-                        return (
-                          <>
-                            <p className="text-xs text-gray-500">
-                              {tAC("stopLossLine")}
-                            </p>
-                            <p className="text-base font-bold text-red-600">
-                              {formatPrice(stopLossPriceNum)}{tAC("yen")}
-                            </p>
-                            {stopLossRatePercent && (
-                              <p className="text-xs text-gray-400">
-                                {tAC("stopLossPercent", { percent: stopLossRatePercent })}
-                              </p>
-                            )}
-                            {currentPrice && priceDiff < 0 && (
-                              <p
-                                className={`text-xs ${isNearStopLoss ? "text-red-600 font-semibold" : "text-gray-500"}`}
-                              >
-                                {isNearStopLoss ? "⚠️ " : ""}{tAC("remainToStopLoss", { amount: Math.abs(priceDiff).toLocaleString(), percent: Math.abs(Number(priceDiffPercent)) })}
-                              </p>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-                {onApplyAIPrices && effectiveAnalysis.averagePurchasePrice && (
-                  <button
-                    onClick={() => onApplyAIPrices({
-                      takeProfitPrice: effectiveAnalysis.limitPrice,
-                      stopLossPrice: effectiveAnalysis.stopLossPrice,
-                      averagePurchasePrice: effectiveAnalysis.averagePurchasePrice!,
-                    })}
-                    className="mt-3 w-full text-xs text-blue-600 hover:text-blue-800 font-semibold py-1.5 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {tAC("applyAIPrices")}
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-          {/* 買い推奨（好調時） */}
-          {effectiveAnalysis.recommendation === "buy" && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
-                <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                  📈 {tAC("buyRecommendation")}
-                </p>
-                <p className="text-sm text-gray-700">
-                  {effectiveAnalysis.buyTiming === "dip"
-                    ? tAC("buyDipText")
-                    : tAC("buyStrongText")}
-                </p>
-              </div>
-            )}
-          {/* ホールド（様子見） */}
-          {effectiveAnalysis.recommendation === "hold" && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-              <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                👀 {tAC("holdRecommendation")}
-              </p>
-              <p className="text-sm text-gray-700">
-                {effectiveAnalysis.holdCondition || tAC("holdDefaultText")}
-              </p>
-            </div>
-          )}
-          {/* 売却検討 */}
-          {effectiveAnalysis.recommendation === "sell" && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-              <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                ⚠️ {tAC("sellConsideration")}
-              </p>
-              <div className="space-y-2">
-                {effectiveAnalysis.suggestedSellPercent && (
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">{tAC("recommendedSell")}</span>
-                      <span
-                        className={`font-bold ${
-                          effectiveAnalysis.suggestedSellPercent === 100
-                            ? "text-red-600"
-                            : "text-amber-600"
-                        }`}
-                      >
-                        {effectiveAnalysis.suggestedSellPercent}%
-                      </span>
-                    </div>
-                    {quantity && quantity > 0 && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {tAC("sharesCount", { total: quantity, sell: Math.round((quantity * effectiveAnalysis.suggestedSellPercent) / 100) })}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {effectiveAnalysis.recommendation === "sell" ? (
-                  effectiveAnalysis.sellTiming === "rebound" ? (
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">{tAC("sellMethod")}</span>
-                        <span className="font-bold text-amber-600">
-                          {tAC("reboundSellRecommended")}
-                        </span>
-                      </div>
-                      {effectiveAnalysis.sellTargetPrice ? (
-                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-amber-700">
-                              {tAC("reboundTarget")}
-                            </span>
-                            <span className="text-base font-bold text-amber-800">
-                              {effectiveAnalysis.sellTargetPrice.toLocaleString()}{tAC("yen")}
-                            </span>
-                          </div>
-                          {effectiveAnalysis.currentPrice && (
-                            <p className="text-xs text-amber-600 mt-1">
-                              {tAC("priceFromCurrent", {
-                                diff: effectiveAnalysis.sellTargetPrice > effectiveAnalysis.currentPrice
-                                  ? `+${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}${tAC("yen")}（+${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`
-                                  : `${(effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice).toLocaleString()}${tAC("yen")}（${(((effectiveAnalysis.sellTargetPrice - effectiveAnalysis.currentPrice) / effectiveAnalysis.currentPrice) * 100).toFixed(1)}%）`
-                              })}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-yellow-800 mt-1">
-                          {tAC("reboundOversoldText")}
-                        </p>
-                      )}
-                      <p className="text-xs text-yellow-600 mt-1">
-                        {tAC("reboundExplain")}
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">{tAC("sellMethod")}</span>
-                        <span className="font-bold text-red-600">
-                          {tAC("marketSellConsider")}
-                        </span>
-                      </div>
-                      {effectiveAnalysis.suggestedSellPrice && effectiveAnalysis.averagePurchasePrice && effectiveAnalysis.suggestedSellPrice > effectiveAnalysis.averagePurchasePrice ? (
-                        <p className="text-xs text-blue-600 mt-0.5">
-                          💡 {tAC("limitOrderProfit", { price: effectiveAnalysis.suggestedSellPrice.toLocaleString(), diff: (effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice).toLocaleString(), percent: ((effectiveAnalysis.suggestedSellPrice - effectiveAnalysis.averagePurchasePrice) / effectiveAnalysis.averagePurchasePrice * 100).toFixed(1) })}
-                        </p>
-                      ) : effectiveAnalysis.currentPrice ? (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {tAC("currentPriceLabel", { price: effectiveAnalysis.currentPrice.toLocaleString() })}
-                        </p>
-                      ) : null}
-                    </div>
-                  )
-                ) : (
-                  effectiveAnalysis.suggestedSellPrice && (
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">{tAC("sellPriceLabel")}</span>
-                        <span className="font-bold text-gray-800">
-                          {effectiveAnalysis.suggestedSellPrice.toLocaleString()}{tAC("yen")}
-                        </span>
-                      </div>
-                      {effectiveAnalysis.currentPrice && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {tAC("currentPriceLabel", { price: effectiveAnalysis.currentPrice.toLocaleString() })}
-                        </p>
-                      )}
-                    </div>
-                  )
-                )}
-                {effectiveAnalysis.sellReason && (
-                  <div className="mt-2 p-2 bg-white rounded border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">{tAC("reasonLabel")}</p>
-                    <p className="text-sm text-gray-700">
-                      {effectiveAnalysis.sellReason}
-                    </p>
-                  </div>
-                )}
-                {effectiveAnalysis.sellCondition && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    💡 {effectiveAnalysis.sellCondition}
-                  </div>
-                )}
-                {onApplyAIPrices && effectiveAnalysis.averagePurchasePrice && (
-                  (() => {
-                    // rebound → sellTargetPrice
-                    // 即時売却 → suggestedSellPrice（AIの推奨売却価格）
-                    // それ以外 → suggestedSellPrice
-                    const sellPrice = effectiveAnalysis.sellTiming === "rebound"
-                      ? effectiveAnalysis.sellTargetPrice
-                      : effectiveAnalysis.suggestedSellPrice;
-                    if (!sellPrice && !effectiveAnalysis.stopLossPrice) return null;
-                    return (
-                      <button
-                        onClick={() => onApplyAIPrices({
-                          takeProfitPrice: sellPrice ?? null,
-                          stopLossPrice: effectiveAnalysis.stopLossPrice,
-                          averagePurchasePrice: effectiveAnalysis.averagePurchasePrice!,
-                        })}
-                        className="mt-3 w-full text-xs text-blue-600 hover:text-blue-800 font-semibold py-1.5 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        {tAC("applyAIPrices")}
-                      </button>
-                    );
-                  })()
-                )}
-              </div>
-            </div>
-          )}
-
-        </div>
-      )}
-
-      {/* 価格帯予測 */}
+      {/* Trend analysis (short/mid/long) */}
       {analysis?.shortTermTrend && (
         <>
-          {/* 短期予測 */}
-          <div className={`bg-gradient-to-br ${styleData?.divergenceLabel ? "from-amber-50 to-orange-50" : "from-purple-50 to-indigo-50"} rounded-lg shadow-md p-4`}>
+          {/* Short-term */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow-md p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-xl">
-                {styleData?.divergenceLabel ? "⚡" : getTrendIcon(analysis.shortTermTrend)}
+                {getTrendIcon(analysis.shortTermTrend)}
               </span>
               <div className="flex-1">
-                <h4 className={`text-sm font-bold ${styleData?.divergenceLabel ? "text-amber-800" : "text-purple-800"}`}>
+                <h4 className="text-sm font-bold text-purple-800">
                   {tAC("shortTermPrediction")}
                 </h4>
-                <p className={`text-xs ${styleData?.divergenceLabel ? "text-amber-600" : "text-purple-600"}`}>
-                  {styleData?.divergenceLabel || getTrendText(analysis.shortTermTrend)}{" "}
-                  {analysis.shortTermPriceLow &&
-                    analysis.shortTermPriceHigh &&
-                    `¥${formatPrice(analysis.shortTermPriceLow)}〜¥${formatPrice(analysis.shortTermPriceHigh)}`}
+                <p className="text-xs text-purple-600">
+                  {getTrendText(analysis.shortTermTrend)}
                 </p>
               </div>
             </div>
@@ -920,7 +453,7 @@ export default function StockAnalysisCard({
             )}
           </div>
 
-          {/* 中期予測 */}
+          {/* Mid-term */}
           {analysis.midTermTrend && (
             <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg shadow-md p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -932,10 +465,7 @@ export default function StockAnalysisCard({
                     {tAC("midTermPrediction")}
                   </h4>
                   <p className="text-xs text-blue-600">
-                    {getTrendText(analysis.midTermTrend)}{" "}
-                    {analysis.midTermPriceLow &&
-                      analysis.midTermPriceHigh &&
-                      `¥${formatPrice(analysis.midTermPriceLow)}〜¥${formatPrice(analysis.midTermPriceHigh)}`}
+                    {getTrendText(analysis.midTermTrend)}
                   </p>
                 </div>
               </div>
@@ -947,7 +477,7 @@ export default function StockAnalysisCard({
             </div>
           )}
 
-          {/* 長期予測 */}
+          {/* Long-term */}
           {analysis.longTermTrend && (
             <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg shadow-md p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -959,10 +489,7 @@ export default function StockAnalysisCard({
                     {tAC("longTermPrediction")}
                   </h4>
                   <p className="text-xs text-emerald-600">
-                    {getTrendText(analysis.longTermTrend)}{" "}
-                    {analysis.longTermPriceLow &&
-                      analysis.longTermPriceHigh &&
-                      `¥${formatPrice(analysis.longTermPriceLow)}〜¥${formatPrice(analysis.longTermPriceHigh)}`}
+                    {getTrendText(analysis.longTermTrend)}
                   </p>
                 </div>
               </div>
@@ -976,7 +503,36 @@ export default function StockAnalysisCard({
         </>
       )}
 
-      {/* 分析日時・更新スケジュール */}
+      {/* Key condition (watchlist) */}
+      {!quantity && analysis?.keyCondition && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+          <p className="text-sm font-semibold text-indigo-800 mb-1">
+            🔑 {tAC("keyCondition")}
+          </p>
+          <p className="text-sm text-indigo-700 leading-relaxed">
+            {analysis.keyCondition}
+          </p>
+        </div>
+      )}
+
+      {/* Risk flags (portfolio) */}
+      {quantity && analysis?.riskFlags && Array.isArray(analysis.riskFlags) && analysis.riskFlags.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="text-sm font-semibold text-red-800 mb-2">
+            {tAC("riskFlags")}
+          </p>
+          <ul className="space-y-1">
+            {analysis.riskFlags.map((flag, i) => (
+              <li key={i} className="text-sm text-red-700 flex items-start gap-1">
+                <span className="flex-shrink-0">🚩</span>
+                <span>{typeof flag === "string" ? flag : (flag as { message?: string })?.message || JSON.stringify(flag)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Analysis timestamp + update schedule */}
       <div className="text-center space-y-1">
         {analysisDate && <AnalysisTimestamp dateString={analysisDate} />}
         <p className="text-xs text-gray-400">
