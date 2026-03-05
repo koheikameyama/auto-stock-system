@@ -6,7 +6,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { calculatePortfolioFromTransactions } from "@/lib/portfolio-calculator";
 import { MAX_WATCHLIST_STOCKS, MAX_PORTFOLIO_STOCKS } from "@/lib/constants";
 import { fetchStockPrices } from "@/lib/stock-price-fetcher";
-import { executePurchaseRecommendation } from "@/lib/purchase-recommendation-core";
+import { executeStockReport } from "@/lib/stock-report-core";
 import { executePortfolioAnalysis } from "@/lib/portfolio-analysis-core";
 import {
   fetchDefaultTpSlRates,
@@ -28,23 +28,17 @@ export interface UserStockResponse {
   shortTerm?: string | null;
   mediumTerm?: string | null;
   longTerm?: string | null;
-  // AI推奨（StockAnalysisから取得）
-  recommendation?: "buy" | "sell" | "hold" | null;
-  // AI分析の信頼度（StockAnalysisから取得）
-  confidence?: number | null;
-  // 分析日時（StockAnalysisから取得）
-  analyzedAt?: string | null;
-  // 売却提案（Portfolio only）
-  suggestedSellPrice?: number | null;
-  sellCondition?: string | null;
+  // リスク評価（Portfolio only）
+  riskLevel?: string | null;
+  riskFlags?: unknown;
   // 買い時通知（Watchlist only）
   targetBuyPrice?: number | null;
   // 個別設定率（Portfolio only）
   takeProfitRate?: number | null;
   stopLossRate?: number | null;
-  // おすすめ経由の情報（Watchlist only）
-  investmentTheme?: string | null;
-  recommendationReason?: string | null;
+  // 注目データ経由の情報（Watchlist only）
+  highlightType?: string | null;
+  highlightReason?: string | null;
   // Transaction data
   transactions?: {
     id: string;
@@ -76,9 +70,9 @@ interface CreateUserStockRequest {
   quantity?: number;
   averagePurchasePrice?: number;
   purchaseDate?: string;
-  // おすすめ経由の場合
-  investmentTheme?: string;
-  recommendationReason?: string;
+  // 注目データ経由の場合
+  highlightType?: string;
+  highlightReason?: string;
 }
 
 /**
@@ -198,8 +192,8 @@ export async function GET(request: NextRequest) {
         stockId: ws.stockId,
         type: "watchlist" as const,
         targetBuyPrice: ws.targetBuyPrice ? Number(ws.targetBuyPrice) : null,
-        investmentTheme: ws.investmentTheme,
-        recommendationReason: ws.recommendationReason,
+        highlightType: ws.highlightType,
+        highlightReason: ws.highlightReason,
         stock: {
           id: ws.stock.id,
           tickerCode: ws.stock.tickerCode,
@@ -223,17 +217,6 @@ export async function GET(request: NextRequest) {
       const firstBuyTransaction = ps.transactions.find((t) => t.type === "buy");
       const purchaseDate = firstBuyTransaction?.transactionDate || ps.createdAt;
 
-      // PortfolioStockから直接推奨情報を取得（購入判断バッチの混入を防ぐ）
-      const recommendation = ps.recommendation as
-        | "buy"
-        | "sell"
-        | "hold"
-        | null;
-      const confidence = null;
-      const analyzedAt = ps.lastAnalysis
-        ? ps.lastAnalysis.toISOString()
-        : null;
-
       return {
         id: ps.id,
         userId: ps.userId,
@@ -248,15 +231,8 @@ export async function GET(request: NextRequest) {
         longTerm: ps.longTerm,
         takeProfitRate: ps.takeProfitRate != null ? Number(ps.takeProfitRate) : null,
         stopLossRate: ps.stopLossRate != null ? Number(ps.stopLossRate) : null,
-        recommendation,
-        confidence,
-        analyzedAt,
-        // 売却提案
-        suggestedSellPrice: ps.suggestedSellPrice
-          ? Number(ps.suggestedSellPrice)
-          : null,
-        sellCondition: ps.sellCondition,
-        marketSignal: ps.marketSignal,
+        riskLevel: ps.riskLevel,
+        riskFlags: ps.riskFlags,
         transactions: ps.transactions.map((t) => ({
           id: t.id,
           type: t.type,
@@ -484,11 +460,11 @@ export async function POST(request: NextRequest) {
         data: {
           userId,
           stockId: stock.id,
-          ...(body.investmentTheme && {
-            investmentTheme: body.investmentTheme,
+          ...(body.highlightType && {
+            highlightType: body.highlightType,
           }),
-          ...(body.recommendationReason && {
-            recommendationReason: body.recommendationReason,
+          ...(body.highlightReason && {
+            highlightReason: body.highlightReason,
           }),
         },
         include: {
@@ -504,9 +480,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 非同期でAI分析（購入判断）を実行（レスポンスをブロックしない）
-      executePurchaseRecommendation(userId, stock.id).catch((error) => {
-        console.error("Failed to run purchase recommendation analysis:", error);
+      // 非同期でAI分析（銘柄レポート）を実行（レスポンスをブロックしない）
+      executeStockReport(userId, stock.id).catch((error) => {
+        console.error("Failed to run stock report analysis:", error);
       });
 
       // リアルタイム株価を取得
@@ -569,8 +545,8 @@ export async function POST(request: NextRequest) {
         portfolioStock: Awaited<
           ReturnType<typeof createPortfolioStockWithTransaction>
         >["portfolioStock"] & {
-          suggestedSellPrice?: Decimal | null;
-          sellCondition?: string | null;
+          riskLevel?: string | null;
+          riskFlags?: unknown;
         };
         allTransactions: {
           id: string;

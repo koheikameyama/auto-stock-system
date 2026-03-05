@@ -31,8 +31,8 @@ export interface CreatePortfolioStockResult {
     longTerm: string | null;
     takeProfitRate: Decimal | null;
     stopLossRate: Decimal | null;
-    suggestedSellPrice: Decimal | null;
-    sellCondition: string | null;
+    riskLevel: string | null;
+    riskFlags: unknown;
     createdAt: Date;
     updatedAt: Date;
     stock: {
@@ -212,10 +212,8 @@ export function buildPortfolioStockResponse(params: {
     stopLossRate: portfolioStock.stopLossRate != null
       ? Number(portfolioStock.stopLossRate)
       : null,
-    suggestedSellPrice: portfolioStock.suggestedSellPrice
-      ? Number(portfolioStock.suggestedSellPrice)
-      : null,
-    sellCondition: portfolioStock.sellCondition,
+    riskLevel: portfolioStock.riskLevel,
+    riskFlags: portfolioStock.riskFlags,
     transactions: transactions.map((t) => ({
       id: t.id,
       type: t.type,

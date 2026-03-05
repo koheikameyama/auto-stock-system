@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import PurchaseRecommendation from "@/app/components/PurchaseRecommendation";
+import StockReport from "@/app/components/StockReport";
 import StockAnalysisCard from "@/app/components/StockAnalysisCard";
 import FinancialMetrics from "@/app/components/FinancialMetrics";
 import EarningsInfo from "@/app/components/EarningsInfo";
@@ -275,28 +275,6 @@ export default function MyStockDetailClient({
     }
   };
 
-  const handleSetDipBuyAlert = async (price: number) => {
-    try {
-      const response = await fetch(`/api/user-stocks/${stock.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetBuyPrice: price }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || t("dipBuyAlertError"));
-      }
-
-      setCurrentTargetBuyPrice(price);
-      setTargetBuyPrice(String(price));
-      toast.success(t("dipBuyAlertSet", { price: price.toLocaleString() }));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t("dipBuyAlertError");
-      toast.error(message);
-    }
-  };
-
   return (
     <StockDetailLayout
       name={stock.stock.name}
@@ -545,53 +523,6 @@ export default function MyStockDetailClient({
               stockId={stock.stockId}
               quantity={quantity}
               onAnalysisDateLoaded={setAnalysisDate}
-              onApplyAIPrices={async ({
-                takeProfitPrice,
-                stopLossPrice,
-                averagePurchasePrice: avgPrice,
-              }) => {
-                const updates: {
-                  takeProfitRate?: number | null;
-                  stopLossRate?: number | null;
-                } = {};
-
-                if (takeProfitPrice != null && avgPrice > 0) {
-                  updates.takeProfitRate =
-                    Math.round(
-                      ((takeProfitPrice - avgPrice) / avgPrice) * 1000,
-                    ) / 10;
-                }
-                if (stopLossPrice != null && avgPrice > 0) {
-                  updates.stopLossRate =
-                    Math.round(((stopLossPrice - avgPrice) / avgPrice) * 1000) /
-                    10;
-                }
-
-                if (
-                  updates.takeProfitRate === undefined &&
-                  updates.stopLossRate === undefined
-                )
-                  return;
-
-                try {
-                  const response = await fetch(`/api/user-stocks/${stock.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(updates),
-                  });
-
-                  if (!response.ok) throw new Error();
-
-                  if (updates.takeProfitRate !== undefined)
-                    setCurrentTpRate(updates.takeProfitRate);
-                  if (updates.stopLossRate !== undefined)
-                    setCurrentSlRate(updates.stopLossRate);
-                  toast.success(t("aiPriceApplied"));
-                  router.refresh();
-                } catch {
-                  toast.error(t("aiPriceApplyFailed"));
-                }
-              }}
             />
           </section>
 
@@ -875,11 +806,9 @@ export default function MyStockDetailClient({
             <div className="p-4 sm:p-6">
               {watchlistTab === "ai-judgment" && (
                 <>
-                  <PurchaseRecommendation
+                  <StockReport
                     stockId={stock.stockId}
                     onAnalysisDateLoaded={setAnalysisDate}
-                    onSetBuyAlert={handleSetDipBuyAlert}
-                    currentTargetBuyPrice={currentTargetBuyPrice}
                   />
                 </>
               )}
@@ -929,14 +858,6 @@ export default function MyStockDetailClient({
                   <div className="text-left">
                     <StockAnalysisCard
                       stockId={stock.stockId}
-                      isSimulation={true}
-                      autoGenerate={true}
-                      onBuyAlertClick={(limitPrice) => {
-                        setCurrentTargetBuyPrice(limitPrice);
-                        setShowBuyAlertModal(true);
-                        setIsSimulating(false); // モーダルを閉じて通知設定を開く
-                      }}
-                      currentTargetBuyPrice={currentTargetBuyPrice}
                     />
                   </div>
                 </div>

@@ -62,8 +62,8 @@ async function StockDetailContent({
     prisma.stock.findUnique({
       where: { id: stockId },
     }),
-    // Get today's personal recommendation for this user
-    prisma.userDailyRecommendation.findFirst({
+    // Get today's highlight for this user
+    prisma.dailyHighlight.findFirst({
       where: { stockId, userId, date: getTodayForDB() },
     }),
     // Get today's featured stock (if this is from "みんなが注目")
@@ -87,8 +87,8 @@ async function StockDetailContent({
         },
       },
     }),
-    // Get latest purchase recommendation for marketSignal
-    prisma.purchaseRecommendation.findFirst({
+    // Get latest stock report for marketSignal
+    prisma.stockReport.findFirst({
       where: { stockId },
       orderBy: { date: "desc" },
       select: { marketSignal: true },
@@ -235,7 +235,7 @@ async function StockDetailContent({
     ? {
         type: "personal" as const,
         category: null,
-        reason: personalRec.reason,
+        reason: personalRec.highlightReason,
         date: personalRec.date.toISOString(),
       }
     : featuredStock
@@ -282,7 +282,7 @@ async function StockDetailContent({
       trackedStockId={trackedEntry?.id}
       soldStockInfo={soldStockInfo}
       sectorAvg={sectorAvg}
-      marketSignal={portfolioEntry?.marketSignal ?? latestRecommendation?.marketSignal ?? null}
+      marketSignal={latestRecommendation?.marketSignal ?? null}
       trendConvergence={latestAnalysis?.trendConvergence as Record<string, unknown> | null | undefined}
     />
   );

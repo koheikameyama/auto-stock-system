@@ -370,8 +370,8 @@ export default function SettingsPage() {
                 <li className="flex items-start gap-2">
                   <span>•</span>
                   <span>
-                    <strong>{UPDATE_SCHEDULES.PERSONAL_RECOMMENDATIONS}</strong>{" "}
-                    - {tSchedule('personalRecommendations')}
+                    <strong>{UPDATE_SCHEDULES.DAILY_HIGHLIGHTS}</strong>{" "}
+                    - {tSchedule('dailyHighlights')}
                   </span>
                 </li>
               </ul>

@@ -91,10 +91,6 @@ async function cleanupAndMigrateAll() {
                 where: { tickerCode: stock.tickerCode },
                 data: { tickerCode: result.actualTicker },
               }),
-              prisma.recommendationOutcome.updateMany({
-                where: { tickerCode: stock.tickerCode },
-                data: { tickerCode: result.actualTicker },
-              }),
             ]);
             updatedCount++;
           } else {

@@ -12,7 +12,32 @@ import {
 } from "@/lib/stock-safety-rules";
 import { MA_DEVIATION, MOMENTUM, MARKET_DEFENSIVE_MODE, GEOPOLITICAL_DEFENSIVE_MODE } from "@/lib/constants";
 import type { GeopoliticalRiskLevel } from "@/lib/stock-safety-rules";
-import { generateCorrectionExplanation, getStyleNameJa } from "@/lib/correction-explanation";
+/** 投資スタイル名の日本語変換 */
+export function getStyleNameJa(style: string): string {
+  switch (style) {
+    case "CONSERVATIVE": return "安定配当型";
+    case "BALANCED": return "成長投資型";
+    case "AGGRESSIVE": return "アクティブ型";
+    default: return style;
+  }
+}
+
+/** セーフティルール補正の解説テキスト生成 */
+function generateCorrectionExplanation(params: {
+  ruleId: string;
+  styleName: string;
+  originalRecommendation: string;
+  correctedRecommendation: string;
+  thresholdValue?: string;
+  actualValue?: string;
+}): string {
+  const { ruleId, styleName, originalRecommendation, correctedRecommendation, thresholdValue, actualValue } = params;
+  let explanation = `[${styleName}] ${originalRecommendation} → ${correctedRecommendation}（ルール: ${ruleId}`;
+  if (thresholdValue) explanation += `、閾値: ${thresholdValue}`;
+  if (actualValue) explanation += `、実際値: ${actualValue}`;
+  explanation += "）";
+  return explanation;
+}
 
 /** 投資スタイル別の購入判断結果 */
 export interface PurchaseStyleAnalysis {
@@ -60,6 +85,14 @@ export interface PortfolioStyleAnalysis {
   divergenceType?: string | null;
   divergenceLabel?: string | null;
   divergenceExplanation?: string | null;
+}
+
+/** 投資スタイル別の銘柄レポート結果（スコア型） */
+export interface ReportStyleAnalysis {
+  score: number; // 0-100
+  outlook: string;
+  caution: string;
+  keyCondition: string | null;
 }
 
 /** 全3スタイルの分析結果マップ */

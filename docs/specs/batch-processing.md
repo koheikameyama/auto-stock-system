@@ -19,10 +19,10 @@ AIコスト削減のため、**7日以上ログインしていないユーザー
 
 | バッチ | フィルタ方法 |
 |--------|------------|
-| ポートフォリオ総評（`generate_portfolio_overall_analysis.py`） | SQLで User JOIN + フィルタ |
+| 市場環境サマリー（`generate_portfolio_overall_analysis.py`） | SQLで User JOIN + フィルタ |
 | ポートフォリオ分析（`generate_portfolio_analysis.py`） | SQLで User JOIN + フィルタ |
-| 購入判断（`generate_purchase_recommendations.py`） | SQLで User JOIN + フィルタ |
-| おすすめ生成（`generate-daily/route.ts`） | Prismaクエリでフィルタ |
+| 銘柄分析レポート（`generate_stock_reports.py`） | SQLで User JOIN + フィルタ |
+| 注目データ生成（`generate-daily/route.ts`） | Prismaクエリでフィルタ |
 
 **フィルタ対象外（AIコストなし）**:
 
@@ -47,15 +47,13 @@ SESSION (08:00 / 09:30 / 11:40 / 13:00 / 15:40 / 17:00 JST) ── session-batch
   └─ calculate-sector-trends（Phase 1 完了後）
 
   Phase 3: 分析ジョブ群（並列、Phase 2 完了後）
-  ├─ purchase-recommendations（常に）
+  ├─ stock-reports（常に）
   ├─ portfolio-analysis（常に）
-  ├─ personal-recommendations（常に）
+  ├─ daily-highlights（常に）
   ├─ gainers-losers（引けのみ）
   ├─ portfolio-snapshots（引けのみ）
-  └─ daily-market-navigator（朝・引けのみ）
-      ├─ morningセッション: 期限切れマーケットシールドの自動解除
-      ├─ マーケットシールド トリガーチェック（PreMarketData基準）
-      └─ スマートスイッチ: 乗り換え提案生成（総評生成後）
+  ├─ market-summary（朝・引けのみ）
+  └─ market-alerts（常に）
 
   Phase 4: 通知
   └─ notify（プッシュ通知 + Slack）
@@ -64,9 +62,7 @@ SESSION (08:00 / 09:30 / 11:40 / 13:00 / 15:40 / 17:00 JST) ── session-batch
 ├─ 06:00: 業績データ取得（7日ローテーション）
 ├─ 07:00: 事業内容取得（30日ローテーション）
 ├─ 09:00/15:30: 取引時間通知
-├─ 10:00: OpenAI使用量チェック
-├─ 16:00: 推奨結果評価
-└─ 18:00: AI精度レポート生成
+└─ 10:00: OpenAI使用量チェック
 
 WEEKLY
 └─ 日曜 03:00: 古いデータ削除
@@ -75,17 +71,19 @@ MONTHLY
 └─ 1日 09:00: JPX銘柄マスタ同期
 ```
 
+※ 廃止されたバッチ: 推奨結果評価（`evaluate-outcomes`）、AI精度レポート（`ai-accuracy-report`）、スマートスイッチ提案生成、マーケットシールド自動解除/トリガーチェック
+
 ## cron-job.org スケジュール
 
 セッション系は6トリガー:
 
-| JST | ワークフロー | 入力 | 目的 | 買い推奨通知 |
-|-----|------------|------|------|-------------|
-| 08:00 | session-batch | session=pre-morning | 寄り前分析（前日終値+米国市場+ニュース） | 抑制（情報提供モード） |
-| 09:30 | session-batch | session=morning | 株価取得+開場30分後の再判定（値動き安定後） | 送信 |
-| 11:40 | session-batch | session=pre-afternoon | 前場株価取得+ニュース更新+分析 | 送信 |
-| 13:00 | session-batch | session=afternoon | 後場開始30分後の再判定 | 送信 |
-| 15:40 | session-batch | session=close | 大引け後の最終分析+ランキング+スナップショット+Navigator(evening) | 抑制（情報提供モード） |
+| JST | ワークフロー | 入力 | 目的 |
+|-----|------------|------|------|
+| 08:00 | session-batch | session=pre-morning | 寄り前分析（前日終値+米国市場+ニュース） |
+| 09:30 | session-batch | session=morning | 株価取得+開場30分後の分析（値動き安定後） |
+| 11:40 | session-batch | session=pre-afternoon | 前場株価取得+ニュース更新+分析 |
+| 13:00 | session-batch | session=afternoon | 後場開始30分後の分析 |
+| 15:40 | session-batch | session=close | 大引け後の最終分析+ランキング+スナップショット+市場環境サマリー(evening) |
 
 ## ワークフロー一覧
 
@@ -110,20 +108,13 @@ fetch-news + fetch-stock-prices（並列）
 | `session-fetch-news.yml` | ニュース取得 | morning(JP+US) + afternoon(JP) のみ |
 | `session-fetch-stock-prices.yml` | 株価更新 | morning + pre-afternoon + close |
 | `session-calculate-sector-trends.yml` | セクタートレンド計算 | pre-morning + morning + pre-afternoon + close |
-| `session-purchase-recommendations.yml` | 購入判断生成 | 常に |
+| `session-stock-reports.yml` | 銘柄分析レポート生成 | 常に |
 | `session-portfolio-analysis.yml` | ポートフォリオ分析 | 常に |
-| `session-personal-recommendations.yml` | おすすめ銘柄生成 | 常に |
+| `session-daily-highlights.yml` | 今日の注目データ生成 | 常に |
 | `session-gainers-losers.yml` | 市場ランキング生成 | close のみ |
 | `session-portfolio-snapshots.yml` | 資産スナップショット | close のみ |
-| `session-daily-market-navigator.yml` | ポートフォリオ総評 | morning + close |
-
-**ポートフォリオ総評（daily-market-navigator）に含まれるサブ処理**:
-
-| 処理 | タイミング | 説明 |
-|------|-----------|------|
-| マーケットシールド自動解除 | morningセッション開始時 | 前日以前に発動されたShieldを自動解除（`autoDeactivateExpiredShields`） |
-| マーケットシールド トリガーチェック | 総評生成中 | PreMarketData（VIX/WTI/為替/日経先物）の急変を検知し、閾値超過でShield発動（`checkMarketShieldTriggers` → `activateMarketShield`） |
-| スマートスイッチ 乗り換え提案 | 総評生成後 | 含み損銘柄とウォッチリストのbuy判定銘柄を比較し、乗り換え提案を生成（`generateSwitchProposals`） |
+| `session-market-summary.yml` | 市場環境サマリー | morning + close |
+| `session-market-alerts.yml` | 市場警戒アラート | 常に |
 
 各ワークフローは `workflow_dispatch` で単独実行も可能。
 
@@ -161,23 +152,7 @@ fetch-news + fetch-stock-prices（並列）
 
 **除外**: 昼休み（11:30-12:30）、取引時間外
 
-### 5. 推奨結果評価（evaluate-outcomes.yml）
-
-| スケジュール | JST |
-|-------------|-----|
-| `0 7 * * 1-5` | 16:00 |
-
-**評価内容**: 過去の推奨に対して1日/3日/7日/14日後のリターンを計算
-
-### 6. AI精度レポート（ai-accuracy-report.yml）
-
-| スケジュール | JST |
-|-------------|-----|
-| `0 9 * * 1-5` | 18:00 |
-
-**内容**: 過去7日間の推奨精度を集計、OpenAIで改善提案を生成
-
-### 7. データクリーンアップ（cleanup-old-data.yml）
+### 5. データクリーンアップ（cleanup-old-data.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -185,8 +160,8 @@ fetch-news + fetch-stock-prices（並列）
 
 **対象テーブル（30日以上のデータを削除）**:
 - StockAnalysis
-- PurchaseRecommendation
-- UserDailyRecommendation
+- StockReport
+- DailyHighlight
 - MarketNews
 - SectorTrend
 
@@ -194,7 +169,7 @@ fetch-news + fetch-stock-prices（並列）
 
 **目的**: Railway DB容量上限（500MB）の管理
 
-### 8. JPX銘柄マスタ週次更新（jpx-weekly-scrape.yml）
+### 6. JPX銘柄マスタ週次更新（jpx-weekly-scrape.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -202,13 +177,13 @@ fetch-news + fetch-stock-prices（並列）
 
 **内容**: JPXサイトから最新銘柄リストをスクレイピング → 銘柄マスタ更新
 
-### 9. JPX銘柄マスタ月次同期（jpx-monthly-sync.yml）
+### 7. JPX銘柄マスタ月次同期（jpx-monthly-sync.yml）
 
 | スケジュール | JST |
 |-------------|-----|
 | `0 0 1 * *` | 毎月1日 09:00 |
 
-### 10. OpenAI使用量チェック（check-openai-usage.yml）
+### 8. OpenAI使用量チェック（check-openai-usage.yml）
 
 | スケジュール | JST |
 |-------------|-----|
@@ -216,14 +191,14 @@ fetch-news + fetch-stock-prices（並列）
 
 **内容**: OpenAI API使用量を確認、予算上限に近づいたらSlackアラート
 
-### 11. 取引時間通知（trading-hours-notification.yml）
+### 9. 取引時間通知（trading-hours-notification.yml）
 
 | スケジュール | JST |
 |-------------|-----|
 | `0 0 * * 1-5` | 09:00（開場通知） |
 | `30 6 * * 1-5` | 15:30（引け通知） |
 
-### 12. CI/CD（ci.yml）
+### 10. CI/CD（ci.yml）
 
 **トリガー**: main/develop ブランチへのプッシュ
 
@@ -235,18 +210,17 @@ fetch-news + fetch-stock-prices（並列）
 |-----------|------|--------|
 | `fetch_pre_market_data.py` | 海外市場データ取得 | yf.download（バッチ） |
 | `fetch_stock_prices.py` | 株価一括更新 | yf.download（バッチ） |
-| `generate_personal_recommendations.py` | 日次おすすめ生成 | API呼び出し |
-| `generate_purchase_recommendations.py` | 購入判断生成 | 逐次処理 |
+| `generate_daily_highlights.py` | 今日の注目データ生成 | API呼び出し |
+| `generate_stock_reports.py` | 銘柄分析レポート生成 | 逐次処理 |
 | `generate_portfolio_analysis.py` | ポートフォリオ分析 | API呼び出し |
-| `generate_portfolio_overall_analysis.py` | ポートフォリオ総評 | API呼び出し |
+| `generate_portfolio_overall_analysis.py` | 市場環境サマリー | API呼び出し |
+| `generate_market_alerts.py` | 市場警戒アラート生成 | API呼び出し |
 | `generate_gainers_losers_analysis.py` | 市場ランキング生成 | バッチ処理 |
 | `generate_portfolio_snapshots.py` | 資産スナップショット | バッチINSERT |
 | `fetch_earnings_data.py` | 業績データ取得 | 7日ローテーション |
 | `fetch_business_descriptions.py` | 事業内容取得+翻訳 | Producer-Consumer（5スレッド） |
 | `cleanup_old_data.py` | 古いデータ削除 | 単一トランザクション |
 | `check_price_alerts.py` | 株価アラート監視 | DBクエリ |
-| `evaluate_recommendation_outcomes.py` | 推奨結果評価 | バッチ価格取得+更新 |
-| `generate_recommendation_report.py` | AI精度レポート | ThreadPool |
 | `check_openai_usage.py` | API使用量チェック | HTTP呼び出し |
 
 
@@ -271,7 +245,7 @@ fetch-news + fetch-stock-prices（並列）
 `hasChartData = false` の銘柄は以下の処理から除外される:
 - 日次おすすめ生成（`generate-daily`）
 - 市場ランキング生成（`gainers-losers`）
-- 購入判断生成（`generate_purchase_recommendations.py`）
+- 銘柄分析レポート生成（`generate_stock_reports.py`）
 - ポートフォリオ分析（`generate_portfolio_analysis.py`）
 
 ## Slack通知
@@ -287,12 +261,10 @@ fetch-news + fetch-stock-prices（並列）
 
 | ワークフロー | 操作テーブル |
 |-------------|-------------|
-| session-batch（統合） | Stock（価格）, MarketNews, SectorTrend, PurchaseRecommendation, StockAnalysis, UserDailyRecommendation, DailyMarketMover, PortfolioSnapshot, PortfolioOverallAnalysis, PreMarketData, MarketShield, SwitchProposal |
+| session-batch（統合） | Stock（価格）, MarketNews, SectorTrend, StockReport, StockAnalysis, DailyHighlight, DailyMarketMover, PortfolioSnapshot, PortfolioOverallAnalysis, PreMarketData |
 | 業績データ | Stock（業績カラム群） |
 | 事業内容 | Stock.businessDescription |
-| クリーンアップ | StockAnalysis, PurchaseRecommendation, UserDailyRecommendation, MarketNews, SectorTrend |
-| 精度レポート | DailyAIReport |
-| 結果評価 | RecommendationOutcome |
+| クリーンアップ | StockAnalysis, StockReport, DailyHighlight, MarketNews, SectorTrend |
 | JPX更新 | Stock（マスタカラム） |
 
 ## 関連ファイル

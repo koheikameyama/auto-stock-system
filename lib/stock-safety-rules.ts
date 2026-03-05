@@ -423,3 +423,173 @@ export function shouldAvoidProlongedDecline(
   const threshold = AVOID_ESCALATION.PROLONGED_DECLINE_DEVIATION[investmentStyle] ?? AVOID_ESCALATION.PROLONGED_DECLINE_DEVIATION.BALANCED;
   return deviationRate <= threshold;
 }
+
+// --- アラート生成 ---
+
+export interface StockAlert {
+  type: string;
+  severity: "high" | "medium" | "low";
+  message: string;
+}
+
+/**
+ * 銘柄の客観的なリスクアラートを生成する
+ * 旧「強制補正ルール」をアラート形式に変換したもの
+ */
+export function generateStockAlerts(params: {
+  isProfitable: boolean | null;
+  profitTrend: string | null;
+  volatility: number | null;
+  weekChangeRate: number | null;
+  deviationRate: number | null;
+  nextEarningsDate: Date | null;
+  gapUpRate: number | null;
+  volumeSpikeRate: number | null;
+  isMarketCrash: boolean;
+  geopoliticalRiskLevel: GeopoliticalRiskLevel;
+  technicalSignal: { signal: string; strength: number } | null;
+}): StockAlert[] {
+  const {
+    isProfitable, profitTrend, volatility, weekChangeRate, deviationRate,
+    nextEarningsDate, gapUpRate, volumeSpikeRate,
+    isMarketCrash, geopoliticalRiskLevel, technicalSignal,
+  } = params;
+  const alerts: StockAlert[] = [];
+
+  // 危険銘柄（赤字×高ボラ）
+  if (isDangerousStock(isProfitable, volatility)) {
+    alerts.push({
+      type: "dangerous_stock",
+      severity: "high",
+      message: `赤字企業かつボラティリティ${volatility?.toFixed(0)}%と高く、値動きが不安定です`,
+    });
+  }
+
+  // 赤字×急騰（仕手株リスク）
+  if (isUnprofitableSurge(isProfitable, weekChangeRate)) {
+    alerts.push({
+      type: "unprofitable_surge",
+      severity: "high",
+      message: `赤字銘柄が週間+${weekChangeRate?.toFixed(0)}%急騰しており、投機的な値動きの可能性があります`,
+    });
+  }
+
+  // 極端な急騰
+  if (weekChangeRate !== null && weekChangeRate >= MOMENTUM.EXTREME_SURGE_THRESHOLD) {
+    alerts.push({
+      type: "extreme_surge",
+      severity: "high",
+      message: `週間+${weekChangeRate.toFixed(0)}%の急騰で、高値圏リスクが非常に高い状態です`,
+    });
+  }
+
+  // 急騰銘柄
+  if (isSurgeStock(weekChangeRate)) {
+    alerts.push({
+      type: "surge",
+      severity: "medium",
+      message: `週間+${weekChangeRate?.toFixed(0)}%の急騰で、高値圏のリスクがあります`,
+    });
+  }
+
+  // 過熱圏
+  if (isOverheated(deviationRate)) {
+    alerts.push({
+      type: "overheat",
+      severity: "medium",
+      message: `25日移動平均線から+${deviationRate?.toFixed(1)}%乖離しており過熱圏です`,
+    });
+  }
+
+  // 下落トレンド
+  if (isInDecline(weekChangeRate)) {
+    alerts.push({
+      type: "decline",
+      severity: "medium",
+      message: `週間${weekChangeRate?.toFixed(0)}%の下落トレンドが続いています`,
+    });
+  }
+
+  // 業績悪化トレンド
+  if (isProfitable === false && profitTrend === "decreasing") {
+    alerts.push({
+      type: "deteriorating_performance",
+      severity: "medium",
+      message: "赤字かつ減益トレンドが続いており、業績改善の兆候が見られません",
+    });
+  }
+
+  // 決算直前
+  if (isPreEarningsBlock(nextEarningsDate)) {
+    const days = getDaysUntilEarnings(nextEarningsDate);
+    alerts.push({
+      type: "pre_earnings",
+      severity: "medium",
+      message: `決算発表まであと${days}日で、決算結果による大きな値動きの可能性があります`,
+    });
+  } else if (isEarningsNear(nextEarningsDate)) {
+    const days = getDaysUntilEarnings(nextEarningsDate);
+    alerts.push({
+      type: "earnings_near",
+      severity: "low",
+      message: `決算発表まであと${days}日です`,
+    });
+  }
+
+  // ギャップアップ
+  if (gapUpRate !== null && gapUpRate >= TIMING_INDICATORS.GAP_UP_SURGE_THRESHOLD) {
+    alerts.push({
+      type: "gap_up",
+      severity: "medium",
+      message: `当日ギャップアップ率+${gapUpRate.toFixed(1)}%で、急騰後の反落リスクがあります`,
+    });
+  }
+
+  // 異常出来高
+  if (
+    volumeSpikeRate !== null && gapUpRate !== null &&
+    volumeSpikeRate >= TIMING_INDICATORS.VOLUME_SPIKE_EXTREME_THRESHOLD &&
+    gapUpRate >= TIMING_INDICATORS.GAP_UP_WARNING_THRESHOLD
+  ) {
+    alerts.push({
+      type: "volume_manipulation",
+      severity: "high",
+      message: `出来高が通常の${volumeSpikeRate.toFixed(1)}倍に急増し、投機的な値動きの可能性があります`,
+    });
+  }
+
+  // テクニカルブレーキ
+  if (technicalSignal && technicalSignal.signal === "sell" && technicalSignal.strength >= TECHNICAL_BRAKE.BALANCED) {
+    alerts.push({
+      type: "technical_sell_signal",
+      severity: technicalSignal.strength >= TECHNICAL_BRAKE.CONSERVATIVE ? "high" : "medium",
+      message: `テクニカル指標で強い下落シグナル（強度${technicalSignal.strength}%）が出ています`,
+    });
+  }
+
+  // 市場急落
+  if (isMarketCrash) {
+    alerts.push({
+      type: "market_crash",
+      severity: "high",
+      message: "市場全体が急落しており、全般的にリスクが高い状態です",
+    });
+  }
+
+  // 地政学リスク
+  if (geopoliticalRiskLevel === "alert") {
+    alerts.push({
+      type: "geopolitical_risk",
+      severity: "high",
+      message: "地政学リスクが警戒レベルに達しており、市場全体が不安定です",
+    });
+  } else if (geopoliticalRiskLevel === "caution") {
+    alerts.push({
+      type: "geopolitical_caution",
+      severity: "low",
+      message: "地政学リスクが注意レベルです",
+    });
+  }
+
+  return alerts;
+}

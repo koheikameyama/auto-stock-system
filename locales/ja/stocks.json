@@ -19,12 +19,17 @@
   "sector": "セクター",
   "industry": "業種",
   "description": "概要",
-  "recommendation": {
-    "buy": "買い推奨",
-    "sell": "売り推奨",
-    "hold": "様子見",
-    "strongBuy": "強い買い推奨",
-    "strongSell": "強い売り推奨"
+  "healthRank": {
+    "A": "健全性A",
+    "B": "健全性B",
+    "C": "健全性C",
+    "D": "健全性D",
+    "E": "健全性E"
+  },
+  "riskLevel": {
+    "low": "低リスク",
+    "medium": "中リスク",
+    "high": "高リスク"
   },
   "analysis": {
     "title": "分析",
@@ -93,27 +98,8 @@
       "BALANCED": "成長",
       "AGGRESSIVE": "アクティブ"
     },
-    "labels": {
-      "buy": "買い",
-      "stay": "様子見",
-      "hold": "保有",
-      "avoid": "見送り",
-      "sell": "売却",
-      "rebound": "戻り待ち"
-    },
-    "correctionExplanation": {
-      "title": "セーフティルールによる補正",
-      "description": "AIの判断がセーフティルールにより補正されました"
-    },
-    "divergence": {
-      "title": "トレンドのねじれ検出"
-    },
-    "simulation": "購入シミュレーション",
-    "simulationTitle": "購入後分析シミュレーション",
-    "setDipBuyAlert": "🔔 ¥{price} で通知を設定",
-    "buyAlertAlreadySet": "🔔 ¥{price} で通知設定済み",
     "riskManagement": {
-      "title": "購入後のリスク管理（目安）",
+      "title": "リスク管理（目安）",
       "portfolioTitle": "リスク管理目安",
       "stopLoss": "撤退ライン",
       "stopLossDesc": "購入価格から{rate}%下落で撤退目安",
@@ -126,10 +112,10 @@
   },
   "featured": {
     "title": "今日の注目銘柄",
-    "buyOpportunity": "今日の買いチャンス",
-    "sellAlert": "売却検討",
-    "highGrowth": "高成長期待",
-    "undervalued": "割安銘柄"
+    "volumeSpike": "出来高急増",
+    "technicalChange": "テクニカル変化",
+    "priceMovement": "価格変動",
+    "maDivergence": "移動平均乖離"
   },
   "detail": {
     "currentStatus": "現在の状況",
@@ -427,8 +413,14 @@
     "noDataYet": "分析データはまだ生成されていません",
     "analyzeNow": "今すぐ分析する",
     "simulationBadge": "シミュレーションモード: 100株保有として分析",
+    "aiAnalysis": "AI分析",
     "aiTradeJudgment": "AI売買判断",
     "aiPricePrediction": "AI価格予測",
+    "technicalScore": "テクニカルスコア",
+    "fundamentalScore": "ファンダメンタルスコア",
+    "alerts": "アラート",
+    "keyCondition": "注目ポイント",
+    "riskFlags": "リスクフラグ",
     "refresh": "更新",
     "stopLossReached": "撤退ライン到達（{percent}%）",
     "buyPrice": "買値",

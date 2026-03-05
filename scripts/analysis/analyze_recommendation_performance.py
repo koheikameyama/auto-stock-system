@@ -47,7 +47,7 @@ def get_recommendations(conn, days_ago: int = 7) -> list[dict]:
                 s."tickerCode",
                 s.name,
                 s.sector
-            FROM "UserDailyRecommendation" r
+            FROM "DailyHighlight" r
             JOIN "Stock" s ON r."stockId" = s.id
             WHERE r.date >= %s
             ORDER BY r.date DESC, r.position

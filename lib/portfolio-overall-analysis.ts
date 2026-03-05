@@ -56,7 +56,7 @@ export interface MissedOpportunityItem {
   stockName: string
   tickerCode: string
   dailyChangeRate: number
-  source: "watchlist" | "recommendation"
+  source: "watchlist" | "highlight"
   comment: string
 }
 
@@ -89,7 +89,7 @@ export interface MarketNavigatorResult {
   portfolio?: {
     status: PortfolioStatus
     summary: string
-    actionPlan: string
+    keyPoints: string
     metrics: {
       totalValue: number
       totalCost: number
@@ -209,7 +209,7 @@ export function getCurrentSession(): NavigatorSession {
  */
 async function buildAnalysisResultsContext(userId: string): Promise<{
   portfolioAnalysisText: string
-  purchaseRecommendationText: string
+  stockReportText: string
 }> {
   const todayForDB = getTodayForDB()
 
@@ -217,46 +217,43 @@ async function buildAnalysisResultsContext(userId: string): Promise<{
   const portfolioStocks = await prisma.portfolioStock.findMany({
     where: { userId, lastAnalysis: { not: null } },
     select: {
-      recommendation: true,
+      riskLevel: true,
       shortTerm: true,
-      sellReason: true,
       stock: { select: { name: true, tickerCode: true, sector: true } },
     },
   })
 
   const portfolioAnalysisLines = portfolioStocks.map(ps => {
-    const rec = ps.recommendation ?? "不明"
+    const risk = ps.riskLevel ?? "不明"
     const short = ps.shortTerm ?? ""
-    const sell = ps.sellReason ?? ""
-    const detail = [short, sell].filter(Boolean).join(" / ")
-    return `- ${ps.stock.name}（${ps.stock.tickerCode}）[${ps.stock.sector ?? "その他"}]: 推奨=${rec}${detail ? ` — ${detail}` : ""}`
+    return `- ${ps.stock.name}（${ps.stock.tickerCode}）[${ps.stock.sector ?? "その他"}]: リスク=${risk}${short ? ` — ${short}` : ""}`
   })
 
   const portfolioAnalysisText = portfolioAnalysisLines.length > 0
     ? portfolioAnalysisLines.join("\n")
     : "ポートフォリオ分析データなし（未分析）"
 
-  // 購入判断の分析結果（当日分）
-  const purchaseRecs = await prisma.purchaseRecommendation.findMany({
+  // 銘柄レポートの分析結果（当日分）
+  const stockReports = await prisma.stockReport.findMany({
     where: { date: todayForDB },
     select: {
-      recommendation: true,
-      confidence: true,
+      healthRank: true,
+      technicalScore: true,
+      fundamentalScore: true,
       reason: true,
       stock: { select: { name: true, tickerCode: true } },
     },
   })
 
-  const purchaseRecLines = purchaseRecs.map(pr => {
-    const conf = Math.round(pr.confidence * 100)
-    return `- ${pr.stock.name}（${pr.stock.tickerCode}）: ${pr.recommendation}（確信度${conf}%） — ${pr.reason}`
+  const stockReportLines = stockReports.map(sr => {
+    return `- ${sr.stock.name}（${sr.stock.tickerCode}）: ランク${sr.healthRank}（テクニカル${sr.technicalScore}/ファンダ${sr.fundamentalScore}） — ${sr.reason}`
   })
 
-  const purchaseRecommendationText = purchaseRecLines.length > 0
-    ? purchaseRecLines.join("\n")
-    : "購入判断データなし（未分析）"
+  const stockReportText = stockReportLines.length > 0
+    ? stockReportLines.join("\n")
+    : "銘柄レポートデータなし（未分析）"
 
-  return { portfolioAnalysisText, purchaseRecommendationText }
+  return { portfolioAnalysisText, stockReportText }
 }
 
 /**
@@ -274,7 +271,7 @@ async function generateAnalysisWithAI(
   investmentStyle: string,
   dailyContext: {
     portfolioAnalysisText: string
-    purchaseRecommendationText: string
+    stockReportText: string
     soldStocksText: string
     sectorTrendsText: string
     upcomingEarningsText: string
@@ -294,7 +291,7 @@ async function generateAnalysisWithAI(
   marketKeyFactor: string
   portfolioStatus: PortfolioStatus
   portfolioSummary: string
-  actionPlan: string
+  keyPoints: string
   buddyMessage: string
   stockHighlights: StockHighlight[]
   sectorHighlights: SectorHighlight[]
@@ -348,7 +345,7 @@ async function generateAnalysisWithAI(
     unprofitablePortfolioNames: unprofitablePortfolioStocks.map(s => s.name),
     investmentStyle,
     portfolioAnalysisText: dailyContext.portfolioAnalysisText,
-    purchaseRecommendationText: dailyContext.purchaseRecommendationText,
+    stockReportText: dailyContext.stockReportText,
     soldStocksText: dailyContext.soldStocksText,
     sectorTrendsText: dailyContext.sectorTrendsText,
     upcomingEarningsText: dailyContext.upcomingEarningsText,
@@ -440,7 +437,7 @@ async function generateAnalysisWithAI(
                 stockName: { type: "string" as const },
                 tickerCode: { type: "string" as const },
                 dailyChangeRate: { type: "number" as const },
-                source: { type: "string" as const, enum: ["watchlist", "recommendation"] },
+                source: { type: "string" as const, enum: ["watchlist", "highlight"] },
                 comment: { type: "string" as const },
               },
               required: ["stockName", "tickerCode", "dailyChangeRate", "source", "comment"] as const,
@@ -472,12 +469,12 @@ async function generateAnalysisWithAI(
     marketKeyFactor: { type: "string" },
     portfolioStatus: { type: "string", enum: ["healthy", "caution", "warning", "critical"] },
     portfolioSummary: { type: "string" },
-    actionPlan: { type: "string" },
+    keyPoints: { type: "string" },
     buddyMessage: { type: "string" },
     stockHighlights: { type: "array", items: stockHighlightSchema },
     sectorHighlights: { type: "array", items: sectorHighlightSchema },
   }
-  const baseRequired = ["marketHeadline", "marketTone", "marketKeyFactor", "portfolioStatus", "portfolioSummary", "actionPlan", "buddyMessage", "stockHighlights", "sectorHighlights"]
+  const baseRequired = ["marketHeadline", "marketTone", "marketKeyFactor", "portfolioStatus", "portfolioSummary", "keyPoints", "buddyMessage", "stockHighlights", "sectorHighlights"]
 
   if (session === "evening") {
     baseProperties.eveningReview = eveningReviewSchema
@@ -490,12 +487,14 @@ async function generateAnalysisWithAI(
       {
         role: "system",
         content: session === "evening"
-          ? `あなたはStock Buddyの「アナリスト兼コーチ」です。
-投資初心者のパートナーとして、今日の市場を振り返り、ユーザーのポートフォリオを点検し、明日の準備を手伝ってください。
+          ? `あなたはStock Buddyの「データアナリスト」です。
+今日の市場データを振り返り、ユーザーのポートフォリオの状況を客観的に分析してください。
+行動指示は出さず、事実の整理・注目ポイントの提示に徹してください。
 
 【重要】提供されたデータのみを使用し、ニュースや決算情報など提供されていない情報は創作しないでください。`
           : `あなたはStock Buddyの「Daily Market Navigator」です。
-投資初心者のパートナーとして、市場の流れとユーザーのポートフォリオを分析し、今日何をすべきかを結論から伝えてください。
+市場データとポートフォリオを客観的に分析し、注目ポイントを事実ベースで提示してください。
+「〜してください」「〜すべき」等の行動指示は出さないでください。
 
 【重要】提供されたデータのみを使用し、ニュースや決算情報など提供されていない情報は創作しないでください。`,
       },
@@ -533,7 +532,7 @@ async function generateAnalysisWithAI(
     marketKeyFactor: result.marketKeyFactor,
     portfolioStatus: result.portfolioStatus,
     portfolioSummary: result.portfolioSummary,
-    actionPlan: result.actionPlan,
+    keyPoints: result.keyPoints,
     buddyMessage: result.buddyMessage,
     stockHighlights: result.stockHighlights || [],
     sectorHighlights: result.sectorHighlights || [],
@@ -610,7 +609,7 @@ export async function getPortfolioOverallAnalysis(userId: string, session?: Navi
       portfolio: {
         status: analysis.portfolioStatus as PortfolioStatus,
         summary: analysis.portfolioSummary,
-        actionPlan: analysis.actionPlan,
+        keyPoints: analysis.keyPoints,
         metrics: {
           totalValue: analysis.totalValue ? Number(analysis.totalValue) : 0,
           totalCost: analysis.totalCost ? Number(analysis.totalCost) : 0,
@@ -646,16 +645,6 @@ export async function getPortfolioOverallAnalysis(userId: string, session?: Navi
  * ポートフォリオ総評分析を生成
  */
 export async function generatePortfolioOverallAnalysis(userId: string, session: NavigatorSession = "morning"): Promise<MarketNavigatorResult> {
-  // morningセッション開始時にマーケットシールドの期限切れを自動解除
-  if (session === "morning") {
-    try {
-      const { autoDeactivateExpiredShields } = await import("@/lib/market-shield")
-      await autoDeactivateExpiredShields()
-    } catch (e) {
-      console.error("マーケットシールド自動解除エラー:", e)
-    }
-  }
-
   // ポートフォリオ、ウォッチリスト、ユーザー設定を取得
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -782,7 +771,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
   })
 
   // 分析結果をDBから取得（集約型ナビゲーター用）
-  const { portfolioAnalysisText, purchaseRecommendationText } = await buildAnalysisResultsContext(userId)
+  const { portfolioAnalysisText, stockReportText } = await buildAnalysisResultsContext(userId)
 
   const soldStocksText = todaySellTransactions.length > 0
     ? todaySellTransactions.map(tx => {
@@ -831,27 +820,26 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
       .map(ws => `- ${ws.stock.name}（${ws.stock.tickerCode}）: 日次+${Number(ws.stock.dailyChangeRate).toFixed(1)}%${ws.stock.weekChangeRate ? `（週間${Number(ws.stock.weekChangeRate) >= 0 ? "+" : ""}${Number(ws.stock.weekChangeRate).toFixed(1)}%）` : ""}`)
       .slice(0, DAILY_MARKET_NAVIGATOR.MAX_MISSED_OPPORTUNITY_STOCKS)
 
-    // AI推奨したが未購入の銘柄（直近7日間）
-    const recentBuyRecs = await prisma.userDailyRecommendation.findMany({
+    // AI注目銘柄で未購入のもの（直近7日間）
+    const recentHighlights = await prisma.dailyHighlight.findMany({
       where: {
         userId,
         date: { gte: getDaysAgoForDB(DAILY_MARKET_NAVIGATOR.MISSED_OPPORTUNITY_REC_LOOKBACK_DAYS) },
-        purchaseJudgment: "buy",
       },
       include: { stock: true },
     })
-    const missedRecs = recentBuyRecs
+    const missedRecs = recentHighlights
       .filter(rec => !portfolioStockIds.has(rec.stockId))
       .filter(rec => {
         const dailyChange = rec.stock.dailyChangeRate ? Number(rec.stock.dailyChangeRate) : 0
         return dailyChange > 0
       })
-      .map(rec => `- ${rec.stock.name}（${rec.stock.tickerCode}）: AI推奨（buy）→ 現在日次+${Number(rec.stock.dailyChangeRate).toFixed(1)}%`)
+      .map(rec => `- ${rec.stock.name}（${rec.stock.tickerCode}）: AI注目銘柄 → 現在日次+${Number(rec.stock.dailyChangeRate).toFixed(1)}%`)
       .slice(0, DAILY_MARKET_NAVIGATOR.MAX_MISSED_OPPORTUNITY_STOCKS)
 
     const missedParts: string[] = []
     if (watchlistMoves.length > 0) missedParts.push(`気になるリストの急騰銘柄（本日+${DAILY_MARKET_NAVIGATOR.MISSED_OPPORTUNITY_DAILY_CHANGE_THRESHOLD}%以上）:\n${watchlistMoves.join("\n")}`)
-    if (missedRecs.length > 0) missedParts.push(`AI推奨したが未購入の上昇銘柄:\n${missedRecs.join("\n")}`)
+    if (missedRecs.length > 0) missedParts.push(`AI注目銘柄で未購入の上昇銘柄:\n${missedRecs.join("\n")}`)
     missedOpportunityText = missedParts.length > 0 ? missedParts.join("\n\n") : "該当する機会損失銘柄はありません"
 
     // 行動パターン統計（全売却済み銘柄）
@@ -1105,7 +1093,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     investmentStyleLabel,
     {
       portfolioAnalysisText: hasPortfolio ? portfolioAnalysisText : "ポートフォリオ未登録",
-      purchaseRecommendationText,
+      stockReportText,
       soldStocksText: hasPortfolio ? soldStocksText : "ポートフォリオ未登録のため売却データなし",
       sectorTrendsText,
       upcomingEarningsText,
@@ -1137,23 +1125,6 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     userStockId: tickerToUserStockId.get(sh.tickerCode),
   }))
 
-  // マーケットシールド: トリガーチェック＆発動
-  try {
-    const { checkMarketShieldTriggers, activateMarketShield, isMarketShieldActive } = await import("@/lib/market-shield")
-    const trigger = await checkMarketShieldTriggers()
-    if (trigger) {
-      await activateMarketShield(trigger.type, trigger.value)
-      console.log(`⚠️ マーケットシールド発動: ${trigger.description}`)
-    }
-    // Shield発動中はmarketToneをbearishに強制、actionPlanに防御メッセージを追加
-    if (await isMarketShieldActive()) {
-      aiResult.marketTone = "bearish"
-      aiResult.actionPlan = `⚠️ マーケットシールド発動中: 市場急変が検知されました。新規購入推奨は一時停止し、撤退ラインを引き上げています。\n\n${aiResult.actionPlan}`
-    }
-  } catch (e) {
-    console.error("マーケットシールドチェックエラー:", e)
-  }
-
   // DBに保存
   const now = dayjs().toDate()
   const upsertData = {
@@ -1170,7 +1141,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     marketKeyFactor: aiResult.marketKeyFactor,
     portfolioStatus: aiResult.portfolioStatus,
     portfolioSummary: aiResult.portfolioSummary,
-    actionPlan: aiResult.actionPlan,
+    keyPoints: aiResult.keyPoints,
     buddyMessage: aiResult.buddyMessage,
     stockHighlights: enrichedStockHighlights as unknown as Prisma.InputJsonValue,
     sectorHighlights: aiResult.sectorHighlights as unknown as Prisma.InputJsonValue,
@@ -1183,14 +1154,6 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     create: { userId, session, ...upsertData },
     update: upsertData,
   })
-
-  // スマートスイッチ: 乗り換え提案を生成
-  try {
-    const { generateSwitchProposals } = await import("@/lib/smart-switch")
-    await generateSwitchProposals(userId, session)
-  } catch (e) {
-    console.error("スマートスイッチ生成エラー:", e)
-  }
 
   return {
     hasAnalysis: true,
@@ -1208,7 +1171,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     portfolio: {
       status: aiResult.portfolioStatus,
       summary: aiResult.portfolioSummary,
-      actionPlan: aiResult.actionPlan,
+      keyPoints: aiResult.keyPoints,
       metrics: {
         totalValue,
         totalCost,

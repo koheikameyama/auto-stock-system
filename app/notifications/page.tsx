@@ -9,7 +9,7 @@ import BottomNavigation from "@/app/components/BottomNavigation"
 
 type Notification = {
   id: string
-  type: "ideal_entry_price" | "buy_recommendation" | "surge" | "plunge" | "sell_target" | "stop_loss"
+  type: string
   stockId: string | null
   stock: {
     id: string
@@ -38,7 +38,6 @@ export default function NotificationsPage() {
 
   const typeConfig: Record<string, { icon: string; color: string; label: string }> = {
     ideal_entry_price: { icon: tTypes('ideal_entry_price.icon'), color: "bg-green-100 text-green-800", label: tTypes('ideal_entry_price.label') },
-    buy_recommendation: { icon: tTypes('buy_recommendation.icon'), color: "bg-green-100 text-green-800", label: tTypes('buy_recommendation.label') },
     surge: { icon: tTypes('surge.icon'), color: "bg-blue-100 text-blue-800", label: tTypes('surge.label') },
     plunge: { icon: tTypes('plunge.icon'), color: "bg-red-100 text-red-800", label: tTypes('plunge.label') },
     sell_target: { icon: tTypes('sell_target.icon'), color: "bg-purple-100 text-purple-800", label: tTypes('sell_target.label') },

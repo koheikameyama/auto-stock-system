@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import CopyableTicker from "@/app/components/CopyableTicker"
 import AddStockDialog from "@/app/my-stocks/AddStockDialog"
-import { SECTORS, PURCHASE_JUDGMENT_CONFIG } from "@/lib/constants"
+import { SECTORS, HEALTH_RANK_CONFIG } from "@/lib/constants"
 import { StocksListSkeleton } from "@/components/skeletons"
 
 interface StockListItem {
@@ -312,7 +312,7 @@ export default function StocksClient() {
             const isDown = changeRate !== null && changeRate < 0
             const rec = stock.latestRecommendation
             const recConfig = rec
-              ? PURCHASE_JUDGMENT_CONFIG[rec.recommendation]
+              ? HEALTH_RANK_CONFIG[rec.recommendation]
               : null
 
             return (

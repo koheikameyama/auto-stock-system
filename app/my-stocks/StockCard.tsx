@@ -13,10 +13,9 @@ import {
   CARD_FOOTER_STYLES,
 } from "@/lib/ui-config";
 import {
-  PORTFOLIO_RECOMMENDATION_CONFIG,
-  PURCHASE_JUDGMENT_CONFIG,
+  HEALTH_RANK_CONFIG,
+  RISK_LEVEL_CONFIG,
   FETCH_FAIL_WARNING_THRESHOLD,
-  INVESTMENT_THEME_CONFIG,
   EARNINGS_DATE_BADGE,
 } from "@/lib/constants";
 import dayjs from "dayjs";
@@ -46,17 +45,14 @@ interface UserStock {
   quantity?: number;
   averagePurchasePrice?: number;
   purchaseDate?: string;
-  // AI推奨アクション
-  recommendation?: string | null;
-  // AI分析の信頼度（Portfolio: StockAnalysisから取得）
-  confidence?: number | null;
+  // リスクレベル（Portfolio）
+  riskLevel?: string | null;
+  // リスクフラグ（Portfolio）
+  riskFlags?: unknown[] | null;
   // AI分析テキスト（Portfolio）
   shortTerm?: string | null;
   // 市場シグナル
   marketSignal?: string | null;
-  // おすすめ経由の情報（Watchlist only）
-  investmentTheme?: string | null;
-  recommendationReason?: string | null;
   transactions?: Transaction[];
   stock: {
     id: string;
@@ -82,23 +78,15 @@ interface StockPrice {
   marketTime?: number | null;
 }
 
-interface PurchaseRecommendation {
-  recommendation: "buy" | "stay" | "avoid";
-  confidence: number;
+interface StockReportData {
+  healthRank: string;
+  technicalScore: number;
+  fundamentalScore: number;
+  alerts: unknown[];
   reason: string;
   caution: string;
-  buyTiming?: "market" | "dip" | null;
-  sellTiming?: "market" | "rebound" | null;
+  analyzedAt?: string;
   marketSignal?: string | null;
-}
-
-interface GapPredictionData {
-  estimatedGapRate: number;
-  gapDirection: "up" | "down" | "flat";
-  previousClose: number | null;
-  predictedOpenPrice: number | null;
-  actualOpenPrice: number | null;
-  actualGapRate: number | null;
 }
 
 interface StockCardProps {
@@ -106,10 +94,9 @@ interface StockCardProps {
   price?: StockPrice;
   priceLoaded?: boolean;
   isStale?: boolean;
-  recommendation?: PurchaseRecommendation;
-  portfolioRecommendation?: "buy" | "sell" | "hold" | null;
+  recommendation?: StockReportData;
+  riskLevel?: string | null;
   analyzedAt?: string | null;
-  gapPrediction?: GapPredictionData;
   sectorTrend?: { compositeScore: number; trendDirection: string };
   onAdditionalPurchase?: () => void;
   onSell?: () => void;
@@ -125,9 +112,8 @@ export default function StockCard({
   priceLoaded = false,
   isStale = false,
   recommendation,
-  portfolioRecommendation,
+  riskLevel,
   analyzedAt,
-  gapPrediction,
   sectorTrend,
   onAdditionalPurchase,
   onSell,
@@ -162,17 +148,17 @@ export default function StockCard({
   const profit = currentValue - totalCost;
   const profitPercent = totalCost > 0 ? (profit / totalCost) * 100 : 0;
 
-  // AI Purchase Judgment using real recommendations (for watchlist)
+  // AI Health Rank badge (for watchlist)
   const getAIPurchaseJudgment = () => {
     if (!recommendation) return null;
-    return PURCHASE_JUDGMENT_CONFIG[recommendation.recommendation] || null;
+    return HEALTH_RANK_CONFIG[recommendation.healthRank] || null;
   };
 
-  // AI Status Badge using recommendation (for portfolio)
+  // AI Risk Level badge (for portfolio)
   const getAIStatusBadge = () => {
-    const rec = stock.recommendation || portfolioRecommendation;
+    const rec = stock.riskLevel || riskLevel;
     if (!rec) return null;
-    return PORTFOLIO_RECOMMENDATION_CONFIG[rec] || null;
+    return RISK_LEVEL_CONFIG[rec] || null;
   };
 
   const aiJudgment = isWatchlist ? getAIPurchaseJudgment() : getAIStatusBadge();
@@ -206,69 +192,18 @@ export default function StockCard({
         {/* AI推奨バッジ - 右上（無効化時は非表示） */}
         {aiJudgment && !isDisabled && (
           <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex flex-col items-end gap-1">
-            {isWatchlist &&
-            recommendation?.recommendation === "buy" &&
-            recommendation.buyTiming ? (
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                  recommendation.buyTiming === "market"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-yellow-100 text-yellow-700"
-                }`}
-              >
-                {recommendation.buyTiming === "market"
-                  ? "成り行きOK"
-                  : "押し目待ち"}
-              </span>
-            ) : isWatchlist &&
-              recommendation?.recommendation === "avoid" &&
-              recommendation.sellTiming === "market" ? (
-              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                見送り推奨
-              </span>
-            ) : (
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${aiJudgment.bg} ${aiJudgment.color}`}
-              >
-                {aiJudgment.text}
-              </span>
-            )}
-            {/* 信頼度バッジ - ステータスの下に表示 */}
-            {(() => {
-              const conf = isWatchlist ? recommendation?.confidence : stock.confidence;
-              if (conf == null) return null;
-              const pct = Math.round(conf * 100);
-              const badgeColor = pct >= 75 ? "bg-green-100 text-green-700" : pct >= 50 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600";
-              return (
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${badgeColor}`}>
-                  信頼度:{pct}%
-                </span>
-              );
-            })()}
-            {/* テクニカルシグナルバッジ - 信頼度の下に表示 */}
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-semibold ${aiJudgment.bg} ${aiJudgment.color}`}
+            >
+              {aiJudgment.text}
+            </span>
+            {/* テクニカルシグナルバッジ */}
             {(() => {
               const signal = recommendation?.marketSignal || stock.marketSignal;
               return signal && signal !== "neutral" ? <TechnicalSignalBadge marketSignal={signal} /> : null;
             })()}
           </div>
         )}
-
-        {/* 投資テーマバッジ（おすすめ経由のウォッチリストのみ、無効化時は非表示） */}
-        {isWatchlist &&
-          !isDisabled &&
-          stock.investmentTheme &&
-          INVESTMENT_THEME_CONFIG[stock.investmentTheme] && (
-            <div className="mb-2">
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${INVESTMENT_THEME_CONFIG[stock.investmentTheme].bg} ${INVESTMENT_THEME_CONFIG[stock.investmentTheme].color}`}
-              >
-                <span>
-                  {INVESTMENT_THEME_CONFIG[stock.investmentTheme].icon}
-                </span>
-                {INVESTMENT_THEME_CONFIG[stock.investmentTheme].text}
-              </span>
-            </div>
-          )}
 
         {/* 決算発表日バッジ（無効化時は非表示） */}
         {!isDisabled && (() => {
@@ -360,54 +295,6 @@ export default function StockCard({
               <p className="text-sm text-gray-400">読み込み中...</p>
             )}
           </div>
-
-          {/* Gap Prediction - 予測/実績寄り付き */}
-          {gapPrediction && !isDisabled && (gapPrediction.predictedOpenPrice || gapPrediction.actualOpenPrice) && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">
-                {gapPrediction.actualOpenPrice ? "寄り付き" : "予測寄り付き"}
-              </span>
-              <div className="text-right flex items-center gap-1.5">
-                {gapPrediction.actualOpenPrice ? (
-                  <>
-                    <span className="font-semibold text-gray-900">
-                      ¥{gapPrediction.actualOpenPrice.toLocaleString()}
-                    </span>
-                    <span
-                      className={`text-xs font-semibold ${
-                        (gapPrediction.actualGapRate ?? 0) >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {(gapPrediction.actualGapRate ?? 0) >= 0 ? "+" : ""}
-                      {gapPrediction.actualGapRate?.toFixed(2)}%
-                    </span>
-                    <span className="text-[10px] text-gray-400">
-                      (予測: {gapPrediction.estimatedGapRate >= 0 ? "+" : ""}
-                      {gapPrediction.estimatedGapRate.toFixed(2)}%)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold text-gray-900">
-                      ¥{gapPrediction.predictedOpenPrice!.toLocaleString()}
-                    </span>
-                    <span
-                      className={`text-xs font-semibold ${
-                        gapPrediction.estimatedGapRate >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {gapPrediction.estimatedGapRate >= 0 ? "+" : ""}
-                      {gapPrediction.estimatedGapRate.toFixed(2)}%
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Portfolio Specific Info */}
           {isHolding && (

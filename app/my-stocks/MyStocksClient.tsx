@@ -14,14 +14,8 @@ import {
   UPDATE_SCHEDULES,
   MAX_PORTFOLIO_STOCKS,
   MAX_WATCHLIST_STOCKS,
-  GAP_PREDICTION_DISPLAY,
   getSectorGroup,
 } from "@/lib/constants";
-import dayjs from "dayjs";
-import utcPlugin from "dayjs/plugin/utc";
-import timezonePlugin from "dayjs/plugin/timezone";
-dayjs.extend(utcPlugin);
-dayjs.extend(timezonePlugin);
 import { useMarkPageSeen } from "@/app/hooks/useMarkPageSeen";
 import { useAppStore } from "@/store/useAppStore";
 import type {
@@ -33,15 +27,14 @@ import type {
 import { MyStocksSkeleton } from "@/components/skeletons/my-stocks-skeleton";
 import { useTranslations } from 'next-intl';
 
-interface PurchaseRecommendation {
-  recommendation: "buy" | "stay" | "avoid";
-  confidence: number;
+interface StockReportData {
+  healthRank: string;
+  technicalScore: number;
+  fundamentalScore: number;
+  alerts: unknown[];
   reason: string;
   caution: string;
   analyzedAt?: string;
-  buyTiming?: "market" | "dip" | null;
-  sellTiming?: "market" | "rebound" | null;
-  userFitScore?: number | null;
   marketSignal?: string | null;
 }
 
@@ -59,7 +52,6 @@ export default function MyStocksClient() {
     fetchSoldStocks,
     fetchStockPrices,
     staleTickers,
-    updateUserStock,
     removeTrackedStock,
     invalidateUserStocks,
     invalidateSoldStocks,
@@ -73,16 +65,13 @@ export default function MyStocksClient() {
   const [prices, setPrices] = useState<Record<string, StockPrice>>({});
   const [pricesLoaded, setPricesLoaded] = useState(false);
   const [recommendations, setRecommendations] = useState<
-    Record<string, PurchaseRecommendation>
+    Record<string, StockReportData>
   >({});
   const [sectorTrends, setSectorTrends] = useState<Record<string, { compositeScore: number; trendDirection: string }>>({});
   const [trackedStaleTickers, setTrackedStaleTickers] = useState<Set<string>>(
     new Set(),
   );
   const [trackedPricesLoaded, setTrackedPricesLoaded] = useState(false);
-  const [gapPredictions, setGapPredictions] = useState<
-    Record<string, { estimatedGapRate: number; gapDirection: "up" | "down" | "flat"; previousClose: number | null; predictedOpenPrice: number | null; actualOpenPrice: number | null; actualGapRate: number | null }>
-  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -261,24 +250,23 @@ export default function MyStocksClient() {
         // Fetch recommendations for each watchlist stock
         const results = await Promise.allSettled(
           watchlistStocks.map((stock) =>
-            fetch(`/api/stocks/${stock.stockId}/purchase-recommendation`)
+            fetch(`/api/stocks/${stock.stockId}/report`)
               .then((res) => (res.ok ? res.json() : null))
               .then((data) => ({ stockId: stock.stockId, data })),
           ),
         );
 
-        const recommendationMap: Record<string, PurchaseRecommendation> = {};
+        const recommendationMap: Record<string, StockReportData> = {};
         results.forEach((result) => {
           if (result.status === "fulfilled" && result.value.data) {
             recommendationMap[result.value.stockId] = {
-              recommendation: result.value.data.recommendation,
-              confidence: result.value.data.confidence,
+              healthRank: result.value.data.healthRank,
+              technicalScore: result.value.data.technicalScore,
+              fundamentalScore: result.value.data.fundamentalScore,
+              alerts: result.value.data.alerts ?? [],
               reason: result.value.data.reason,
               caution: result.value.data.caution,
               analyzedAt: result.value.data.analyzedAt,
-              buyTiming: result.value.data.buyTiming,
-              sellTiming: result.value.data.sellTiming,
-              userFitScore: result.value.data.userFitScore ?? null,
               marketSignal: result.value.data.marketSignal ?? null,
             };
           }
@@ -315,37 +303,6 @@ export default function MyStocksClient() {
       }
     }
     fetchSectorTrends();
-  }, []);
-
-  // ギャップ予測データを取得（JST 7:00〜15:00のみ）
-  useEffect(() => {
-    const jstHour = dayjs().tz("Asia/Tokyo").hour();
-    if (jstHour < GAP_PREDICTION_DISPLAY.START_HOUR || jstHour >= GAP_PREDICTION_DISPLAY.END_HOUR) return;
-
-    async function fetchGapPredictions() {
-      try {
-        const res = await fetch("/api/gap-prediction?scope=all");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data?.stocks) return;
-        const map: Record<string, typeof gapPredictions[string]> = {};
-        for (const s of data.stocks) {
-          map[s.stockId] = {
-            estimatedGapRate: s.estimatedGapRate,
-            gapDirection: s.gapDirection,
-            previousClose: s.previousClose,
-            predictedOpenPrice: s.predictedOpenPrice,
-            actualOpenPrice: s.actualOpenPrice,
-            actualGapRate: s.actualGapRate,
-          };
-        }
-        setGapPredictions(map);
-      } catch (err) {
-        console.error("Error fetching gap predictions:", err);
-      }
-    }
-
-    fetchGapPredictions();
   }, []);
 
   // 追跡銘柄をウォッチリストに追加
@@ -664,70 +621,46 @@ export default function MyStocksClient() {
 
   // Filter stocks by type
   // quantity > 0 のものだけを保有中として表示（0株は「過去の保有」に表示される）
-  // ポートフォリオを売り推奨順に並び替え
-  // 1. 売り推奨の銘柄を上に
-  // 2. 売り推奨同士は損益率の悪い順
-  // 3. それ以外は保有金額の大きい順
+  // ポートフォリオをリスクレベル順に並び替え
+  // 1. リスクの高い銘柄を上に（high > medium > low）
+  // 2. 同じリスクレベルの場合は保有金額の大きい順
   const portfolioStocks = useMemo(() => {
     const filtered = userStocks.filter(
       (s) => s.type === "portfolio" && (s.quantity ?? 0) > 0,
     );
+    const riskOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
     return filtered.sort((a, b) => {
-      const isSellA = a.recommendation === "sell";
-      const isSellB = b.recommendation === "sell";
+      const riskA = riskOrder[a.riskLevel ?? "medium"] ?? 1;
+      const riskB = riskOrder[b.riskLevel ?? "medium"] ?? 1;
+      if (riskA !== riskB) return riskA - riskB;
 
-      // 売り推奨を上に
-      if (isSellA && !isSellB) return -1;
-      if (!isSellA && isSellB) return 1;
-
-      // 損益率を計算（現在価格がない場合は0）
+      // 保有金額の大きい順
       const priceA =
         prices[a.stock.tickerCode]?.currentPrice ?? a.averagePurchasePrice ?? 0;
       const priceB =
         prices[b.stock.tickerCode]?.currentPrice ?? b.averagePurchasePrice ?? 0;
-      const profitRateA = a.averagePurchasePrice
-        ? (priceA - a.averagePurchasePrice) / a.averagePurchasePrice
-        : 0;
-      const profitRateB = b.averagePurchasePrice
-        ? (priceB - b.averagePurchasePrice) / b.averagePurchasePrice
-        : 0;
-
-      // 両方売り推奨の場合は損益率の悪い順（損失が大きい方が上）
-      if (isSellA && isSellB) {
-        return profitRateA - profitRateB;
-      }
-
-      // それ以外は保有金額の大きい順
       const holdingA = (a.quantity ?? 0) * priceA;
       const holdingB = (b.quantity ?? 0) * priceB;
       return holdingB - holdingA;
     });
   }, [userStocks, prices]);
 
-  // ウォッチリストを buyTiming × セクター順位で並び替え
-  // 1. buy > stay > avoid の順
-  // 2. buyTiming: market(成行OK) > dip(押し目) > null の順
-  // 3. セクター compositeScore の高い順
+  // ウォッチリストを healthRank × セクター順位で並び替え
+  // 1. healthRank: A > B > C > D > E の順
+  // 2. セクター compositeScore の高い順
   const watchlistStocks = useMemo(() => {
     const filtered = userStocks.filter((s) => s.type === "watchlist");
 
-    const recOrder: Record<string, number> = { buy: 0, stay: 1, avoid: 2 };
-    const timingOrder: Record<string, number> = { market: 0, dip: 1 };
+    const rankOrder: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
     return filtered.sort((a, b) => {
       const recA = recommendations[a.stockId];
       const recB = recommendations[b.stockId];
 
-      const orderA = recOrder[recA?.recommendation ?? "stay"] ?? 1;
-      const orderB = recOrder[recB?.recommendation ?? "stay"] ?? 1;
-
-      // ステータスが異なる場合はステータス順
+      // healthRankの良い順（A > B > C > D > E）
+      const orderA = rankOrder[recA?.healthRank ?? "C"] ?? 2;
+      const orderB = rankOrder[recB?.healthRank ?? "C"] ?? 2;
       if (orderA !== orderB) return orderA - orderB;
-
-      // buyTiming: market > dip > null
-      const timingA = timingOrder[recA?.buyTiming ?? ""] ?? 2;
-      const timingB = timingOrder[recB?.buyTiming ?? ""] ?? 2;
-      if (timingA !== timingB) return timingA - timingB;
 
       // セクター compositeScore の高い順
       const sectorA = a.stock.sector ? (sectorTrends[a.stock.sector]?.compositeScore ?? -Infinity) : -Infinity;
@@ -1031,14 +964,13 @@ export default function MyStocksClient() {
                     priceLoaded={pricesLoaded}
                     isStale={staleTickers.has(stock.stock.tickerCode)}
                     recommendation={recommendations[stock.stockId]}
-                    gapPrediction={gapPredictions[stock.stockId]}
                     sectorTrend={(() => {
                       const group = getSectorGroup(stock.stock.sector);
                       return group ? sectorTrends[group] : undefined;
                     })()}
-                    portfolioRecommendation={
+                    riskLevel={
                       stock.type === "portfolio"
-                        ? stock.recommendation
+                        ? stock.riskLevel
                         : undefined
                     }
                     analyzedAt={

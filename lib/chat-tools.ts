@@ -188,7 +188,7 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
 
     getStockAnalysis: tool({
       description:
-        "指定された銘柄の最新AI売買分析を取得します。短期・中期・長期の予測と売買判断を含みます。今後の見通しや売り時・買い時の質問に使ってください。",
+        "指定された銘柄の最新AIトレンド分析を取得します。短期・中期・長期の見通しと健全性スコアを含みます。今後の見通しの質問に使ってください。",
       inputSchema: z.object({
         stockId: z.string().describe("銘柄ID"),
       }),
@@ -206,20 +206,15 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
 
         return {
           shortTermTrend: analysis.shortTermTrend,
-          shortTermPriceLow: Number(analysis.shortTermPriceLow),
-          shortTermPriceHigh: Number(analysis.shortTermPriceHigh),
           shortTermText: analysis.shortTermText,
           midTermTrend: analysis.midTermTrend,
-          midTermPriceLow: Number(analysis.midTermPriceLow),
-          midTermPriceHigh: Number(analysis.midTermPriceHigh),
           midTermText: analysis.midTermText,
           longTermTrend: analysis.longTermTrend,
-          longTermPriceLow: Number(analysis.longTermPriceLow),
-          longTermPriceHigh: Number(analysis.longTermPriceHigh),
           longTermText: analysis.longTermText,
-          recommendation: analysis.recommendation,
+          healthScore: analysis.healthScore,
+          riskLevel: analysis.riskLevel,
+          riskFlags: analysis.riskFlags,
           advice: analysis.advice,
-          confidence: analysis.confidence,
           analyzedAt: analysis.analyzedAt.toISOString(),
           daysAgo,
           freshness:
@@ -234,15 +229,15 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
       },
     }),
 
-    getPurchaseRecommendations: tool({
+    getStockReport: tool({
       description:
-        "購入推奨を取得します。stockIdsを指定すると特定銘柄の推奨を返します。省略するとウォッチリスト全体の購入推奨を比較できます。「どれを優先？」「買い推奨の比較」などの質問に使ってください。",
+        "銘柄レポートを取得します。stockIdsを指定すると特定銘柄のレポートを返します。省略するとウォッチリスト全体のレポートを比較できます。「どの銘柄がいい？」「銘柄の比較」などの質問に使ってください。",
       inputSchema: z.object({
         stockIds: z
           .array(z.string())
           .optional()
           .describe(
-            "比較したい銘柄IDの配列。省略するとウォッチリスト全体の推奨を取得"
+            "比較したい銘柄IDの配列。省略するとウォッチリスト全体のレポートを取得"
           ),
       }),
       execute: async ({ stockIds }) => {
@@ -258,10 +253,10 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
         }
 
         if (targetStockIds.length === 0) {
-          return { recommendations: [], message: "対象銘柄がありません" }
+          return { reports: [], message: "対象銘柄がありません" }
         }
 
-        const recommendations = await prisma.purchaseRecommendation.findMany({
+        const reports = await prisma.stockReport.findMany({
           where: {
             stockId: { in: targetStockIds },
             date: { gte: getDaysAgoForDB(7) },
@@ -272,25 +267,22 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
         })
 
         return {
-          recommendations: recommendations.map((rec) => ({
-            stockId: rec.stockId,
-            stockName: rec.stock.name,
-            tickerCode: rec.stock.tickerCode,
-            sector: rec.stock.sector,
-            recommendation: rec.recommendation,
-            confidence: rec.confidence,
-            reason: rec.reason,
-            positives: rec.positives,
-            concerns: rec.concerns,
-            caution: rec.caution,
-            userFitScore: rec.userFitScore,
-            budgetFit: rec.budgetFit,
-            periodFit: rec.periodFit,
-            riskFit: rec.riskFit,
-            personalizedReason: rec.personalizedReason,
-            marketSignal: rec.marketSignal,
-            buyCondition: rec.buyCondition,
-            date: rec.date.toISOString(),
+          reports: reports.map((rep) => ({
+            stockId: rep.stockId,
+            stockName: rep.stock.name,
+            tickerCode: rep.stock.tickerCode,
+            sector: rep.stock.sector,
+            technicalScore: rep.technicalScore,
+            fundamentalScore: rep.fundamentalScore,
+            healthRank: rep.healthRank,
+            alerts: rep.alerts,
+            reason: rep.reason,
+            positives: rep.positives,
+            concerns: rep.concerns,
+            caution: rep.caution,
+            keyCondition: rep.keyCondition,
+            marketSignal: rep.marketSignal,
+            date: rep.date.toISOString(),
           })),
         }
       },
@@ -298,7 +290,7 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
 
     getPortfolioAnalysis: tool({
       description:
-        "指定された保有銘柄のポートフォリオ分析を取得します。短期・中期・長期の展望、売却提案、売却条件を含みます。保有銘柄の売り時判断に使ってください。",
+        "指定された保有銘柄のポートフォリオ分析を取得します。短期・中期・長期の展望、リスク評価を含みます。保有銘柄の状況把握に使ってください。",
       inputSchema: z.object({
         stockId: z.string().describe("銘柄ID"),
       }),
@@ -318,13 +310,8 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
           shortTerm: portfolioStock.shortTerm,
           mediumTerm: portfolioStock.mediumTerm,
           longTerm: portfolioStock.longTerm,
-          marketSignal: portfolioStock.marketSignal,
-          suggestedSellPrice: portfolioStock.suggestedSellPrice
-            ? Number(portfolioStock.suggestedSellPrice)
-            : null,
-          suggestedSellPercent: portfolioStock.suggestedSellPercent,
-          sellCondition: portfolioStock.sellCondition,
-          sellReason: portfolioStock.sellReason,
+          riskLevel: portfolioStock.riskLevel,
+          riskFlags: portfolioStock.riskFlags,
           lastAnalysis: portfolioStock.lastAnalysis?.toISOString() ?? null,
         }
       },
@@ -392,15 +379,15 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
       },
     }),
 
-    getDailyRecommendations: tool({
+    getDailyHighlights: tool({
       description:
-        "ユーザー向けの本日のおすすめ銘柄を取得します。AIが選んだ最適な銘柄と理由を含みます。「今日のおすすめは？」「どれを優先すべき？」という質問に使ってください。",
+        "ユーザー向けの本日の注目銘柄を取得します。客観的な条件に基づいて選ばれた銘柄と注目理由を含みます。「今日の注目銘柄は？」「気になる銘柄は？」という質問に使ってください。",
       inputSchema: z.object({}),
       execute: async () => {
         const today = getTodayForDB()
 
-        const recommendations =
-          await prisma.userDailyRecommendation.findMany({
+        const highlights =
+          await prisma.dailyHighlight.findMany({
             where: { userId, date: today },
             include: {
               stock: {
@@ -415,21 +402,21 @@ export function createChatTools(userId: string, stockContext?: StockContext) {
             orderBy: { position: "asc" },
           })
 
-        if (recommendations.length === 0) {
-          return { recommendations: [], message: "本日のおすすめ銘柄はまだ生成されていません" }
+        if (highlights.length === 0) {
+          return { highlights: [], message: "本日の注目銘柄はまだ生成されていません" }
         }
 
         return {
-          recommendations: recommendations.map((rec) => ({
-            position: rec.position,
-            stockName: rec.stock.name,
-            tickerCode: rec.stock.tickerCode,
-            sector: rec.stock.sector,
-            currentPrice: rec.stock.latestPrice
-              ? Number(rec.stock.latestPrice)
+          highlights: highlights.map((h) => ({
+            position: h.position,
+            stockName: h.stock.name,
+            tickerCode: h.stock.tickerCode,
+            sector: h.stock.sector,
+            currentPrice: h.stock.latestPrice
+              ? Number(h.stock.latestPrice)
               : null,
-            reason: rec.reason,
-            investmentTheme: rec.investmentTheme,
+            highlightType: h.highlightType,
+            highlightReason: h.highlightReason,
           })),
         }
       },

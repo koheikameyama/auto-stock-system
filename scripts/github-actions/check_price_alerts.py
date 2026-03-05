@@ -12,11 +12,9 @@
 - 買い時到達（ウォッチリスト）
 """
 
-import json
 import os
 import sys
 import logging
-from decimal import Decimal
 import psycopg2
 import requests
 
@@ -40,26 +38,6 @@ def get_env_variable(name: str, required: bool = True) -> str | None:
         sys.exit(1)
     return value
 
-
-def fetch_latest_stock_analyses(conn, stock_ids: list[str]) -> dict[str, dict]:
-    """最新のStockAnalysisのstyleAnalysesを一括取得"""
-    if not stock_ids:
-        return {}
-    with conn.cursor() as cur:
-        cur.execute('''
-            SELECT DISTINCT ON ("stockId")
-                "stockId", "styleAnalyses"
-            FROM "StockAnalysis"
-            WHERE "stockId" = ANY(%s)
-              AND "styleAnalyses" IS NOT NULL
-            ORDER BY "stockId", "analyzedAt" DESC
-        ''', (stock_ids,))
-        rows = cur.fetchall()
-    result = {}
-    for row in rows:
-        if row[1]:
-            result[row[0]] = row[1] if isinstance(row[1], dict) else json.loads(row[1])
-    return result
 
 
 def fetch_portfolio_surge_plunge_alerts(conn, surge_threshold: float, plunge_threshold: float) -> list[dict]:
@@ -303,7 +281,7 @@ def fetch_watchlist_buy_target_alerts(conn) -> list[dict]:
     - ユーザーが targetBuyPrice を設定している
     - 現在価格 <= 目標買値
 
-    AIの買い判断（PurchaseRecommendation.recommendation）も取得し、通知メッセージを分岐させる
+    StockReportの健全性ランクも参考情報として取得する
     """
     alerts = []
 
@@ -316,17 +294,17 @@ def fetch_watchlist_buy_target_alerts(conn) -> list[dict]:
                 s."tickerCode",
                 s."latestPrice",
                 w."targetBuyPrice",
-                pr.recommendation,
+                sr."healthRank",
                 w.id as "watchlistStockId"
             FROM "WatchlistStock" w
             JOIN "Stock" s ON w."stockId" = s.id
             LEFT JOIN LATERAL (
-                SELECT recommendation
-                FROM "PurchaseRecommendation"
+                SELECT "healthRank"
+                FROM "StockReport"
                 WHERE "stockId" = s.id
                 ORDER BY date DESC
                 LIMIT 1
-            ) pr ON true
+            ) sr ON true
             WHERE s."latestPrice" IS NOT NULL
               AND w."targetBuyPrice" IS NOT NULL
         ''')
@@ -334,7 +312,7 @@ def fetch_watchlist_buy_target_alerts(conn) -> list[dict]:
         for row in cur.fetchall():
             latest_price = float(row[4]) if row[4] else 0
             user_target_price = float(row[5]) if row[5] else None
-            purchase_recommendation = row[6]  # "buy" or "stay"
+            health_rank = row[6]  # "A", "B", "C", "D", "E"
             watchlist_stock_id = row[7]
 
             if user_target_price is None:
@@ -354,7 +332,7 @@ def fetch_watchlist_buy_target_alerts(conn) -> list[dict]:
                     "latestPrice": latest_price,
                     "targetPrice": target_price,
                     "discountPercent": discount_percent,
-                    "purchaseRecommendation": purchase_recommendation,
+                    "healthRank": health_rank,
                     "type": "buy_target",
                     "watchlistStockId": watchlist_stock_id,
                 })
@@ -530,24 +508,8 @@ def main():
         stop_loss_alerts = fetch_portfolio_stop_loss_alerts(conn)
         logger.info(f"  Found {len(stop_loss_alerts)} stop loss alerts")
 
-        # sell_target/stop_loss対象銘柄のStockAnalysis（スタイル別分析）を一括取得
-        portfolio_alert_stock_ids = list(set(
-            a["stockId"] for a in sell_target_alerts + stop_loss_alerts
-        ))
-        stock_analyses = fetch_latest_stock_analyses(conn, portfolio_alert_stock_ids)
-        logger.info(f"  Fetched style analyses for {len(stock_analyses)} stocks")
-
         for alert in sell_target_alerts:
             body = f"現在価格 {alert['latestPrice']:,.0f}円（+{alert['gainPercent']:.1f}%）が売却目標価格 {alert['targetPrice']:,.0f}円 を超えました"
-
-            # スタイル別AI分析をメッセージに付加
-            user_style = alert.get("investmentStyle", "BALANCED")
-            style_data = stock_analyses.get(alert["stockId"], {}).get(user_style, {})
-            style_rec = style_data.get("recommendation", "")
-            if style_rec == "sell":
-                body += "。AIも売却を推奨しています"
-            elif style_rec == "buy":
-                body += "。※AIはまだ保有継続を推奨しています"
 
             notifications.append({
                 "userId": alert["userId"],
@@ -563,15 +525,6 @@ def main():
 
         for alert in stop_loss_alerts:
             body = f"現在価格 {alert['latestPrice']:,.0f}円（{alert['lossPercent']:.1f}%）が撤退ライン {alert['stopLossPrice']:,.0f}円 を下回りました"
-
-            # スタイル別AI分析をメッセージに付加
-            user_style = alert.get("investmentStyle", "BALANCED")
-            style_data = stock_analyses.get(alert["stockId"], {}).get(user_style, {})
-            style_rec = style_data.get("recommendation", "")
-            if style_rec == "sell":
-                body += "。AIも売却を推奨しています"
-            elif style_rec == "buy":
-                body += "。※AIは回復を予測しています"
 
             notifications.append({
                 "userId": alert["userId"],
@@ -591,14 +544,11 @@ def main():
         logger.info(f"  Found {len(buy_target_alerts)} buy target alerts")
 
         for alert in buy_target_alerts:
-            is_buy = alert.get("purchaseRecommendation") == "buy"
-
-            if is_buy:
-                title = f"💰 {alert['stockName']}が買い時です"
-                body = f"現在価格 {alert['latestPrice']:,.0f}円 が目標買値 {alert['targetPrice']:,.0f}円 以下になりました"
-            else:
-                title = f"📍 {alert['stockName']}が目標買値に到達"
-                body = f"現在価格 {alert['latestPrice']:,.0f}円（目標買値 {alert['targetPrice']:,.0f}円）※現在は様子見判断です"
+            health_rank = alert.get("healthRank", "")
+            title = f"📍 {alert['stockName']}が目標買値に到達"
+            body = f"現在価格 {alert['latestPrice']:,.0f}円 が目標買値 {alert['targetPrice']:,.0f}円 以下になりました"
+            if health_rank:
+                body += f"（健全性ランク: {health_rank}）"
 
             notifications.append({
                 "userId": alert["userId"],
@@ -616,44 +566,11 @@ def main():
         profit_milestone_alerts = fetch_portfolio_profit_milestone_alerts(conn, PROFIT_MILESTONES)
         logger.info(f"  Found {len(profit_milestone_alerts)} profit milestone alerts")
 
-        # 利確マイルストーン対象のStockAnalysis（スタイル別分析）を一括取得
-        milestone_stock_ids = list(set(
-            a["stockId"] for a in profit_milestone_alerts
-        ))
-        milestone_analyses = fetch_latest_stock_analyses(conn, milestone_stock_ids)
-
         for alert in profit_milestone_alerts:
             milestone = alert["milestone"]
-            user_style = alert.get("investmentStyle", "BALANCED")
 
             title = f"💹 {alert['stockName']}が+{milestone}%に到達"
-
-            body = f"含み益が+{alert['profitPercent']:.1f}%（{alert['latestPrice']:,.0f}円 / 取得単価{alert['averageCost']:,.0f}円）になりました。"
-
-            # 投資スタイル別のアドバイス
-            if user_style == "CONSERVATIVE":
-                if milestone >= 20:
-                    body += "利益確定をおすすめします"
-                else:
-                    body += "一部利確を検討してみましょう"
-            elif user_style == "BALANCED":
-                if milestone >= 30:
-                    body += "利益確定のタイミングです"
-                elif milestone >= 20:
-                    body += "半分利確して残りはトレーリングストップで守る方法もあります"
-                else:
-                    body += "利確の検討時期です。一部売却でリスクを減らせます"
-            else:  # AGGRESSIVE
-                if milestone >= 30:
-                    body += "大幅な利益が出ています。一部利確も選択肢です"
-                else:
-                    body += "まだ上昇余地があるかもしれません。撤退ラインの引き上げを検討しましょう"
-
-            # AI分析がある場合は付加
-            style_data = milestone_analyses.get(alert["stockId"], {}).get(user_style, {})
-            style_rec = style_data.get("recommendation", "")
-            if style_rec == "sell":
-                body += "。AIも利益確定を推奨しています"
+            body = f"含み益が+{alert['profitPercent']:.1f}%（{alert['latestPrice']:,.0f}円 / 取得単価{alert['averageCost']:,.0f}円）になりました"
 
             notifications.append({
                 "userId": alert["userId"],

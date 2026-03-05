@@ -5,14 +5,11 @@ import { prisma } from "@/lib/prisma";
 import Header from "@/app/components/Header";
 import BottomNavigation from "@/app/components/BottomNavigation";
 import DashboardClient from "./DashboardClient";
-import FeaturedStocksByCategory from "./FeaturedStocksByCategory";
-import TopStocksByStyle from "./TopStocksByStyle";
 import PortfolioSummary from "./PortfolioSummary";
 import PortfolioHistoryChart from "./PortfolioHistoryChart";
 import PortfolioCompositionChart from "./PortfolioCompositionChart";
 import DailyMarketNavigator from "./DailyMarketNavigator";
 import NikkeiSummary from "./NikkeiSummary";
-import GapPredictionCard from "./GapPredictionCard";
 import BudgetSummary from "./BudgetSummary";
 import GeopoliticalRiskCard from "./GeopoliticalRiskCard"
 import { SectorTrendHeatmap } from "./SectorTrendHeatmap";
@@ -89,9 +86,6 @@ export default async function DashboardPage() {
             portfolioCount={portfolioCount}
             watchlistCount={watchlistCount}
           />
-
-          {/* 寄り付きギャップ予測（morningセッションのみ表示） */}
-          <GapPredictionCard />
 
           {/* 投資スタイル未設定の場合のプロンプト */}
           {!user.settings && (
@@ -234,17 +228,7 @@ export default async function DashboardPage() {
           {/* セクタートレンドヒートマップ */}
           <SectorTrendHeatmap />
 
-          {/* 今日の注目銘柄（カテゴリ別） */}
-          <div className="mt-4 sm:mt-6">
-            <FeaturedStocksByCategory />
-          </div>
 
-          {/* 注目の高評価銘柄（投資スタイル別） */}
-          {user.settings && (
-            <div className="mt-4 sm:mt-6">
-              <TopStocksByStyle />
-            </div>
-          )}
         </div>
       </main>
       <BottomNavigation />

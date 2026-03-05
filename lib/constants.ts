@@ -295,20 +295,11 @@ export const CHAT_CONFIG = {
   MAX_TOKENS: 3000,
 } as const;
 
-// 購入判断の表示モード判定用
-// 取引時間中（09:30-15:30）は actionable、それ以外は informational
-export const PURCHASE_RECOMMENDATION_SESSION = {
-  ACTIONABLE_START_HOUR: 9,
-  ACTIONABLE_START_MINUTE: 30,
-  ACTIONABLE_END_HOUR: 15,
-  ACTIONABLE_END_MINUTE: 30,
-} as const;
-
 // AI分析の更新スケジュール（平日のみ、session-batch.yml で一括実行）
 export const UPDATE_SCHEDULES = {
-  // あなたへのおすすめ（session-personal-recommendations.yml）
-  PERSONAL_RECOMMENDATIONS: "9:30 / 13:00 / 15:40",
-  // ポートフォリオ分析・購入レコメンド（session-batch.yml）
+  // 注目データ（session-daily-highlights.yml）
+  DAILY_HIGHLIGHTS: "9:30 / 13:00 / 15:40",
+  // ポートフォリオ分析・銘柄レポート（session-batch.yml）
   STOCK_ANALYSIS: "9:30 / 10:30 / 13:00 / 14:00 / 15:40",
 } as const;
 
@@ -374,99 +365,40 @@ export const GEOPOLITICAL_DEFENSIVE_MODE = {
 // バッジ表示設定
 // 各種ステータスの英語キーから表示テキスト・色を一元管理
 
-// ポートフォリオ個別銘柄ステータス
-// ポートフォリオ推奨アクション表示設定（recommendationベース）
-export const PORTFOLIO_RECOMMENDATION_CONFIG: Record<
+// 健全性ランク（StockReport.healthRank）
+export const HEALTH_RANK_CONFIG: Record<
   string,
-  {
-    text: string;
-    color: string;
-    bg: string;
-  }
+  { text: string; color: string; bg: string }
 > = {
-  buy: { text: "買い推奨", color: "text-green-700", bg: "bg-green-50" },
-  hold: { text: "ホールド", color: "text-blue-700", bg: "bg-blue-50" },
-  sell: { text: "売却検討", color: "text-red-700", bg: "bg-red-50" },
+  A: { text: "健全性A", color: "text-green-700", bg: "bg-green-50" },
+  B: { text: "健全性B", color: "text-blue-700", bg: "bg-blue-50" },
+  C: { text: "健全性C", color: "text-gray-700", bg: "bg-gray-100" },
+  D: { text: "健全性D", color: "text-yellow-700", bg: "bg-yellow-50" },
+  E: { text: "健全性E", color: "text-red-700", bg: "bg-red-50" },
 };
 
-// ウォッチリスト購入判断
-export const PURCHASE_JUDGMENT_CONFIG: Record<
+// リスクレベル（PortfolioStock.riskLevel / StockAnalysis.riskLevel）
+export const RISK_LEVEL_CONFIG: Record<
   string,
-  {
-    text: string;
-    color: string;
-    bg: string;
-  }
+  { text: string; color: string; bg: string }
 > = {
-  buy: { text: "買い推奨", color: "text-green-700", bg: "bg-green-50" },
-  stay: { text: "様子見", color: "text-blue-700", bg: "bg-blue-50" },
-  avoid: { text: "見送り推奨", color: "text-red-700", bg: "bg-red-50" },
+  low: { text: "低リスク", color: "text-green-700", bg: "bg-green-50" },
+  medium: { text: "中リスク", color: "text-yellow-700", bg: "bg-yellow-50" },
+  high: { text: "高リスク", color: "text-red-700", bg: "bg-red-50" },
 };
 
-
-// 指標評価バッジ
-export const EVALUATION_BADGE_CONFIG: Record<
+// 注目タイプ（DailyHighlight.highlightType）
+export const HIGHLIGHT_TYPE_CONFIG: Record<
   string,
-  {
-    color: string;
-    bg: string;
-  }
+  { text: string; color: string; bg: string; icon: string }
 > = {
-  good: { color: "text-green-700", bg: "bg-green-100" },
-  neutral: { color: "text-gray-700", bg: "bg-gray-100" },
-  warning: { color: "text-yellow-700", bg: "bg-yellow-100" },
+  volume_spike: { text: "出来高急増", color: "text-orange-700", bg: "bg-orange-50", icon: "📊" },
+  technical_change: { text: "テクニカル変化", color: "text-cyan-700", bg: "bg-cyan-50", icon: "📈" },
+  price_movement: { text: "価格変動", color: "text-purple-700", bg: "bg-purple-50", icon: "💹" },
+  ma_divergence: { text: "移動平均乖離", color: "text-blue-700", bg: "bg-blue-50", icon: "📉" },
+  earnings_upcoming: { text: "決算間近", color: "text-emerald-700", bg: "bg-emerald-50", icon: "📅" },
+  sector_trend: { text: "セクタートレンド", color: "text-teal-700", bg: "bg-teal-50", icon: "🏭" },
 };
-
-// 投資テーマバッジ（おすすめの根拠）
-export const INVESTMENT_THEME_CONFIG: Record<
-  string,
-  {
-    text: string;
-    color: string;
-    bg: string;
-    icon: string;
-  }
-> = {
-  短期成長: {
-    text: "短期成長",
-    color: "text-orange-700",
-    bg: "bg-orange-50",
-    icon: "🚀",
-  },
-  中長期安定成長: {
-    text: "中長期安定成長",
-    color: "text-blue-700",
-    bg: "bg-blue-50",
-    icon: "📈",
-  },
-  高配当: {
-    text: "高配当",
-    color: "text-emerald-700",
-    bg: "bg-emerald-50",
-    icon: "💰",
-  },
-  割安反発: {
-    text: "割安反発",
-    color: "text-purple-700",
-    bg: "bg-purple-50",
-    icon: "💎",
-  },
-  テクニカル好転: {
-    text: "テクニカル好転",
-    color: "text-cyan-700",
-    bg: "bg-cyan-50",
-    icon: "📊",
-  },
-  安定ディフェンシブ: {
-    text: "安定ディフェンシブ",
-    color: "text-teal-700",
-    bg: "bg-teal-50",
-    icon: "🛡️",
-  },
-};
-
-// 投資テーマのenumリスト（AI生成用）
-export const INVESTMENT_THEMES = Object.keys(INVESTMENT_THEME_CONFIG);
 
 // 市場シグナルバッジ
 export const MARKET_SIGNAL_CONFIG: Record<
@@ -881,32 +813,6 @@ export const GEOPOLITICAL_RISK = {
   WTI_CRASH_THRESHOLD: -5,
 } as const;
 
-// スマートスイッチ（乗り換え提案）
-export const SMART_SWITCH = {
-  // 含み損閾値（%）: この率以下の銘柄が対象
-  MIN_LOSS_RATE: -5,
-  // 乗り換えメリット閾値: この値以上で提案
-  MIN_SWITCH_BENEFIT: 30,
-  // 通知閾値: この値以上でプッシュ通知
-  NOTIFICATION_THRESHOLD: 40,
-  // 1日1ユーザーあたりの最大提案数
-  MAX_PROPOSALS_PER_DAY: 3,
-  // 回復スコアの重み
-  RECOVERY_WEIGHTS: {
-    LOSS_DEPTH: 0.30,
-    AI_RECOMMENDATION: 0.30,
-    TREND_DIRECTION: 0.20,
-    SECTOR_TREND: 0.20,
-  },
-  // チャンススコアの重み
-  OPPORTUNITY_WEIGHTS: {
-    PURCHASE_JUDGMENT: 0.30,
-    COMPOSITE_SCORE: 0.25,
-    TREND_DIRECTION: 0.25,
-    SECTOR_TREND: 0.20,
-  },
-} as const;
-
 // トレンド収束予測
 export const TREND_CONVERGENCE = {
   DIVERGENCE_TYPES: {
@@ -916,20 +822,4 @@ export const TREND_CONVERGENCE = {
   },
   HIGH_CONFIDENCE_THRESHOLD: 0.7,
   MEDIUM_CONFIDENCE_THRESHOLD: 0.4,
-} as const;
-
-// マーケットシールド（市場急変時の緊急防御モード）
-export const MARKET_SHIELD = {
-  // 発動トリガー
-  TRIGGERS: {
-    NIKKEI_CRASH_RATE: -3,   // 日経225 日中変動率 ≤ -3%
-    VIX_ABSOLUTE: 30,        // VIX絶対値 > 30
-    VIX_SPIKE_RATE: 20,      // VIX 前日比 +20%以上
-    WTI_SHOCK_RATE: 10,      // WTI 前日比 ±10%以上
-    FX_SHOCK_RATE: 3,        // USD/JPY 前日比 ±3%以上
-  },
-  // Shield中の撤退ライン引き上げ（ATR乗数を短縮）
-  SHIELD_ATR_MULTIPLIER: 1.0,
-  // 自動解除セッション
-  AUTO_DEACTIVATE_SESSION: "morning",
 } as const;

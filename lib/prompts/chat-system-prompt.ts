@@ -47,19 +47,13 @@ export interface StockPreloadedData {
   analysis: {
     shortTermTrend: string | null;
     shortTermText: string | null;
-    shortTermPriceLow: number;
-    shortTermPriceHigh: number;
     midTermTrend: string | null;
     midTermText: string | null;
-    midTermPriceLow: number;
-    midTermPriceHigh: number;
     longTermTrend: string | null;
     longTermText: string | null;
-    longTermPriceLow: number;
-    longTermPriceHigh: number;
-    recommendation: string | null;
+    healthScore: number;
+    riskLevel: string | null;
     advice: string | null;
-    confidence: number | null;
     analyzedAt: Date;
     daysAgo: number;
   } | null;
@@ -74,20 +68,19 @@ export interface StockPreloadedData {
     shortTerm: string | null;
     mediumTerm: string | null;
     longTerm: string | null;
-    suggestedSellPrice: number | null;
-    suggestedSellPercent: number | null;
-    sellCondition: string | null;
-    sellReason: string | null;
+    riskLevel: string | null;
+    riskFlags: unknown;
     lastAnalysis: Date | null;
   } | null;
-  purchaseRecommendation: {
-    recommendation: string;
-    confidence: number | null;
+  stockReport: {
+    technicalScore: number;
+    fundamentalScore: number;
+    healthRank: string;
+    alerts: unknown;
     reason: string | null;
     positives: string[] | null;
     concerns: string[] | null;
-    buyCondition: string | null;
-    personalizedReason: string | null;
+    keyCondition: string | null;
     marketSignal: string | null;
     date: Date;
   } | null;
@@ -109,9 +102,10 @@ export async function buildChatSystemPrompt(
   const sections: string[] = [];
 
   // ペルソナ
-  sections.push(`あなたは投資初心者向けのAIコーチです。
-専門用語は使わず、中学生でも分かる言葉で説明してください。
-ユーザーの質問に答えるために、必要に応じてツールを使ってデータを取得してください。`);
+  sections.push(`あなたは株式データアナリスト兼投資教育者です。
+専門用語には必ず解説を添え、初心者にも分かりやすく説明してください。
+ユーザーの質問に答えるために、必要に応じてツールを使ってデータを取得してください。
+重要: 具体的な売買の指示（「今すぐ買うべき」「売るべき」等）は行わず、データに基づく客観的な分析を提供してください。`);
 
   // 銘柄コンテキスト
   if (stockContext) {
@@ -154,7 +148,7 @@ export async function buildChatSystemPrompt(
         stockInfo += `\n- getStockFinancials: 財務指標（PBR, PER, 配当利回りなど）`;
       }
       if (!hasAnalysis) {
-        stockInfo += `\n- getStockAnalysis: 最新のAI売買分析とアドバイス`;
+        stockInfo += `\n- getStockAnalysis: 最新のAIトレンド分析とアドバイス`;
       }
 
       const sectorGroupForPrompt = getSectorGroup(stockContext.sector);
@@ -163,7 +157,7 @@ export async function buildChatSystemPrompt(
       if (stockContext.type === "portfolio") {
         stockInfo += `\n- getPortfolioAnalysis: 保有銘柄分析（stockId="${stockContext.stockId}"）`;
       } else {
-        stockInfo += `\n- getPurchaseRecommendations: 購入推奨（stockIds=["${stockContext.stockId}"]）`;
+        stockInfo += `\n- getStockReport: 銘柄レポート（stockIds=["${stockContext.stockId}"]）`;
       }
     }
 
@@ -242,25 +236,18 @@ export async function buildChatSystemPrompt(
               ? `${a.daysAgo}日前（やや古い）`
               : `${a.daysAgo}日前（古い）`;
 
+      const riskLabel = a.riskLevel === "high" ? "高" : a.riskLevel === "medium" ? "中" : "低";
+
       const anaLines = [`\n### AI分析（${freshnessText}）`];
-      if (a.recommendation) {
-        anaLines.push(
-          `推奨: ${a.recommendation}${a.confidence ? `（信頼度: ${a.confidence}%）` : ""}`,
-        );
-      }
-      anaLines.push(
-        `- 短期見通し（1-3ヶ月）: ${trendLabel(a.shortTermTrend)} ¥${a.shortTermPriceLow.toLocaleString()}〜¥${a.shortTermPriceHigh.toLocaleString()}`,
-      );
+      anaLines.push(`- 健全性スコア: ${a.healthScore}/100`);
+      if (a.riskLevel) anaLines.push(`- リスクレベル: ${riskLabel}`);
+      anaLines.push(`- 短期見通し（1-3ヶ月）: ${trendLabel(a.shortTermTrend)}`);
       if (a.shortTermText) anaLines.push(`  ${a.shortTermText}`);
-      anaLines.push(
-        `- 中期見通し（3-12ヶ月）: ${trendLabel(a.midTermTrend)} ¥${a.midTermPriceLow.toLocaleString()}〜¥${a.midTermPriceHigh.toLocaleString()}`,
-      );
+      anaLines.push(`- 中期見通し（3-12ヶ月）: ${trendLabel(a.midTermTrend)}`);
       if (a.midTermText) anaLines.push(`  ${a.midTermText}`);
-      anaLines.push(
-        `- 長期見通し（1年以上）: ${trendLabel(a.longTermTrend)} ¥${a.longTermPriceLow.toLocaleString()}〜¥${a.longTermPriceHigh.toLocaleString()}`,
-      );
+      anaLines.push(`- 長期見通し（1年以上）: ${trendLabel(a.longTermTrend)}`);
       if (a.longTermText) anaLines.push(`  ${a.longTermText}`);
-      if (a.advice) anaLines.push(`アドバイス: ${a.advice}`);
+      if (a.advice) anaLines.push(`分析コメント: ${a.advice}`);
       dataLines.push(anaLines.join("\n"));
     }
 
@@ -294,37 +281,40 @@ export async function buildChatSystemPrompt(
       if (pa.shortTerm) paLines.push(`- 短期展望: ${pa.shortTerm}`);
       if (pa.mediumTerm) paLines.push(`- 中期展望: ${pa.mediumTerm}`);
       if (pa.longTerm) paLines.push(`- 長期展望: ${pa.longTerm}`);
-      if (pa.suggestedSellPrice) {
-        paLines.push(
-          `- 売却推奨価格: ¥${pa.suggestedSellPrice.toLocaleString()}${pa.suggestedSellPercent ? `（+${pa.suggestedSellPercent}%）` : ""}`,
-        );
+      if (pa.riskLevel) {
+        const riskLabel = pa.riskLevel === "high" ? "高" : pa.riskLevel === "medium" ? "中" : "低";
+        paLines.push(`- リスクレベル: ${riskLabel}`);
       }
-      if (pa.sellCondition) paLines.push(`- 売却条件: ${pa.sellCondition}`);
-      if (pa.sellReason) paLines.push(`- 売却理由: ${pa.sellReason}`);
+      if (pa.riskFlags && Array.isArray(pa.riskFlags) && (pa.riskFlags as unknown[]).length > 0) {
+        paLines.push("- リスクフラグ:");
+        (pa.riskFlags as { message: string }[]).forEach((f) => paLines.push(`  • ${f.message}`));
+      }
       dataLines.push(paLines.join("\n"));
     }
 
-    // 購入推奨（ウォッチリスト/閲覧中の場合）
-    if (preloadedData.purchaseRecommendation) {
-      const pr = preloadedData.purchaseRecommendation;
-      const prLines = ["\n### 購入推奨"];
-      prLines.push(
-        `推奨: ${pr.recommendation}${pr.confidence ? `（信頼度: ${pr.confidence}%）` : ""}`,
-      );
-      if (pr.reason) prLines.push(`理由: ${pr.reason}`);
-      if (pr.positives && pr.positives.length > 0) {
-        prLines.push("ポジティブ:");
-        pr.positives.forEach((p) => prLines.push(`  • ${p}`));
+    // 銘柄レポート（ウォッチリスト/閲覧中の場合）
+    if (preloadedData.stockReport) {
+      const sr = preloadedData.stockReport;
+      const srLines = ["\n### 銘柄レポート"];
+      srLines.push(`- テクニカルスコア: ${sr.technicalScore}/100`);
+      srLines.push(`- ファンダメンタルスコア: ${sr.fundamentalScore}/100`);
+      srLines.push(`- 健全性ランク: ${sr.healthRank}`);
+      if (sr.reason) srLines.push(`分析: ${sr.reason}`);
+      if (sr.positives && sr.positives.length > 0) {
+        srLines.push("ポジティブ要因:");
+        sr.positives.forEach((p) => srLines.push(`  • ${p}`));
       }
-      if (pr.concerns && pr.concerns.length > 0) {
-        prLines.push("注意点:");
-        pr.concerns.forEach((c) => prLines.push(`  • ${c}`));
+      if (sr.concerns && sr.concerns.length > 0) {
+        srLines.push("注意点:");
+        sr.concerns.forEach((c) => srLines.push(`  • ${c}`));
       }
-      if (pr.buyCondition) prLines.push(`買い条件: ${pr.buyCondition}`);
-      if (pr.personalizedReason)
-        prLines.push(`あなたに合う理由: ${pr.personalizedReason}`);
-      if (pr.marketSignal) prLines.push(`市場シグナル: ${pr.marketSignal}`);
-      dataLines.push(prLines.join("\n"));
+      if (sr.keyCondition) srLines.push(`注目条件: ${sr.keyCondition}`);
+      if (sr.marketSignal) srLines.push(`市場シグナル: ${sr.marketSignal}`);
+      if (sr.alerts && Array.isArray(sr.alerts) && (sr.alerts as unknown[]).length > 0) {
+        srLines.push("アラート:");
+        (sr.alerts as { message: string }[]).forEach((a) => srLines.push(`  ⚠️ ${a.message}`));
+      }
+      dataLines.push(srLines.join("\n"));
     }
 
     sections.push(dataLines.join(""));
@@ -355,9 +345,9 @@ export async function buildChatSystemPrompt(
 
   // 回答ルール
   sections.push(`\n## 回答のルール
-1. 専門用語は使わず、「上がりそう」「下がりそう」「今が買い時かも」など分かりやすい言葉で
+1. 専門用語には解説を添えて初心者にも分かりやすく説明する
 2. 断定的な表現は避け、「〜と考えられます」「〜の可能性があります」を使う
-3. ユーザーの投資スタイルに合わせたアドバイスをする
+3. 具体的な売買指示は行わない。「買うべき」「売るべき」ではなく、データに基づく分析を提供する
 4. 親しみやすく丁寧な「ですます調」で話す
 5. 回答は簡潔に（300字以内を目安）
 6. 具体的な数字を引用して説得力を持たせる
