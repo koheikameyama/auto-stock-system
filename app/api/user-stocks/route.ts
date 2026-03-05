@@ -132,11 +132,6 @@ export async function GET(request: NextRequest) {
                 market: true;
                 fetchFailCount: true;
                 isDelisted: true;
-                analyses: {
-                  select: { recommendation: true; confidence: true; analyzedAt: true };
-                  orderBy: { analyzedAt: "desc" };
-                  take: 1;
-                };
               };
             };
             transactions: { orderBy: { transactionDate: "asc" } };
@@ -180,16 +175,6 @@ export async function GET(request: NextRequest) {
               market: true,
               fetchFailCount: true,
               isDelisted: true,
-              // 最新のStockAnalysisからrecommendationとanalyzedAtを取得
-              analyses: {
-                select: {
-                  recommendation: true,
-                  confidence: true,
-                  analyzedAt: true,
-                },
-                orderBy: { analyzedAt: "desc" },
-                take: 1,
-              },
             },
           },
           transactions: {
@@ -238,16 +223,15 @@ export async function GET(request: NextRequest) {
       const firstBuyTransaction = ps.transactions.find((t) => t.type === "buy");
       const purchaseDate = firstBuyTransaction?.transactionDate || ps.createdAt;
 
-      // 最新のStockAnalysisからrecommendationとanalyzedAtを取得
-      const latestAnalysis = ps.stock.analyses?.[0];
-      const recommendation = latestAnalysis?.recommendation as
+      // PortfolioStockから直接推奨情報を取得（購入判断バッチの混入を防ぐ）
+      const recommendation = ps.recommendation as
         | "buy"
         | "sell"
         | "hold"
         | null;
-      const confidence = latestAnalysis?.confidence ?? null;
-      const analyzedAt = latestAnalysis?.analyzedAt
-        ? latestAnalysis.analyzedAt.toISOString()
+      const confidence = null;
+      const analyzedAt = ps.lastAnalysis
+        ? ps.lastAnalysis.toISOString()
         : null;
 
       return {
