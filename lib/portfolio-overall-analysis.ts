@@ -751,17 +751,22 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
 
   // === 日次コメンタリー用データ収集 ===
 
-  // 本日の売却取引を取得
+  // @db.Date カラム用（PurchaseRecommendation, UserDailyRecommendation等）
   const todayForDB = getTodayForDB()
-  const tomorrowForDB = new Date(todayForDB.getTime() + 86400000)
+
+  // DateTime カラム用（Transaction.transactionDate）: JST 00:00〜翌JST 00:00
+  const jstTodayStart = dayjs().tz("Asia/Tokyo").startOf("day").toDate()
+  const jstTomorrowStart = dayjs().tz("Asia/Tokyo").add(1, "day").startOf("day").toDate()
+
+  // 本日の売却取引を取得
 
   const todaySellTransactions = !hasPortfolio ? [] : await prisma.transaction.findMany({
     where: {
       portfolioStock: { userId },
       type: "sell",
       transactionDate: {
-        gte: todayForDB,
-        lt: tomorrowForDB,
+        gte: jstTodayStart,
+        lt: jstTomorrowStart,
       },
     },
     include: {
@@ -805,7 +810,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
       where: {
         portfolioStock: { userId },
         type: "buy",
-        transactionDate: { gte: todayForDB, lt: tomorrowForDB },
+        transactionDate: { gte: jstTodayStart, lt: jstTomorrowStart },
       },
       include: { stock: true },
     })
