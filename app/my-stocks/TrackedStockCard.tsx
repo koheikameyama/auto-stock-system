@@ -175,8 +175,6 @@ export default function TrackedStockCard({ trackedStock, isStale = false, priceL
                 {new Date(trackedStock.marketTime * 1000).toLocaleString("ja-JP", {
                   month: "numeric",
                   day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
                 })}
                 {t("asOf")}
               </p>

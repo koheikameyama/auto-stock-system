@@ -62,7 +62,8 @@
     "buy": "購入",
     "predictedOpen": "予測寄り付き",
     "actualOpen": "寄り付き",
-    "predicted": "予測"
+    "predicted": "予測",
+    "asOf": "時点"
   },
   "deleteConfirm": {
     "title": "銘柄を削除しますか？",

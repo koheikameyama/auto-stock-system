@@ -236,8 +236,6 @@ export default function TopStocksByStyle() {
                   {
                     month: "numeric",
                     day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
                   }
                 )}
                 {t("asOf")}

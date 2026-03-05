@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { formatAnalysisTime } from "@/lib/analysis-time";
 import SectorTrendBadge from "@/app/components/SectorTrendBadge";
 import TechnicalSignalBadge from "@/app/components/TechnicalSignalBadge";
@@ -135,6 +136,7 @@ export default function StockCard({
   onDelete,
   onTransactionUpdated,
 }: StockCardProps) {
+  const t = useTranslations("portfolio.stockCard");
   const [showTransactions, setShowTransactions] = useState(false);
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
@@ -339,10 +341,8 @@ export default function StockCard({
                     {new Date(price.marketTime * 1000).toLocaleString("ja-JP", {
                       month: "numeric",
                       day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
                     })}
-                    時点
+                    {t("asOf")}
                   </p>
                 )}
               </div>

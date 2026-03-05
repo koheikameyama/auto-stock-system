@@ -235,8 +235,6 @@ export default function FeaturedStocksByCategory() {
                 {new Date(stock.stock.marketTime * 1000).toLocaleString("ja-JP", {
                   month: "numeric",
                   day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
                 })}
                 {tTop("asOf")}
               </p>
