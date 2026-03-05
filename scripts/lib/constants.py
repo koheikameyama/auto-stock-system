@@ -156,6 +156,9 @@ GPT4O_MINI_PRICING = {"input": 0.15, "output": 0.60}
 # =============================================================================
 
 # yfinanceティッカー
+# プレマーケットデータ取得スケジュール（cron-job.org）:
+# - 06:00 JST: 大証ナイトセッション終了後のデータ取得
+# - 08:00 JST: プレモーニングセッション（session-batch経由）
 PRE_MARKET_TICKERS = {
     "nikkei_futures": "NKD=F",
     "usdjpy": "USDJPY=X",

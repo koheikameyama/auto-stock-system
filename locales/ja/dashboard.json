@@ -112,7 +112,19 @@
     "evalNormal": "普通",
     "evalCaution": "注意",
     "evalExcellent": "優秀",
-    "evalNeedsImprovement": "改善の余地あり"
+    "evalNeedsImprovement": "改善の余地あり",
+    "futures": "CME日経先物",
+    "futuresDesc": "シカゴで取引されるドル建ての日経225先物。日本市場の休場中も取引されるため、翌日の値動きの先行指標になります",
+    "cmeOpen": "取引中",
+    "cmeClosed": "休場",
+    "cmeBreak": "休憩中",
+    "divergence": "先物乖離",
+    "divergenceDesc": "先物と現物の変化率の差。プラスなら先物が現物より強気（上昇期待）、マイナスなら弱気（下落懸念）を示します",
+    "futuresPremium": "先物プレミアム",
+    "futuresDiscount": "先物ディスカウント",
+    "divergenceNeutral": "乖離なし",
+    "strongBullish": "強い上昇シグナル",
+    "strongBearish": "強い下落シグナル"
   },
   "latestNews": {
     "title": "最新のニュース",

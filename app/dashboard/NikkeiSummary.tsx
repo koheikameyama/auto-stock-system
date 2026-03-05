@@ -12,6 +12,7 @@ import {
 } from "recharts"
 import { useTranslations } from "next-intl"
 import { BENCHMARK_METRICS } from "@/lib/constants"
+import { calculateDivergence, type CMEStatus, type DivergenceSignal } from "@/lib/market-hours"
 
 type Period = "1m" | "3m" | "1y"
 
@@ -20,6 +21,15 @@ interface NikkeiData {
   previousClose: number
   change: number
   changePercent: number
+  timestamp: string
+}
+
+interface FuturesData {
+  currentPrice: number
+  previousClose: number
+  change: number
+  changePercent: number
+  cmeStatus: CMEStatus
   timestamp: string
 }
 
@@ -55,6 +65,7 @@ interface BenchmarkMetrics {
 export default function NikkeiSummary() {
   const t = useTranslations("dashboard.nikkei")
   const [nikkei, setNikkei] = useState<NikkeiData | null>(null)
+  const [futures, setFutures] = useState<FuturesData | null>(null)
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [chartLoading, setChartLoading] = useState(false)
@@ -65,20 +76,29 @@ export default function NikkeiSummary() {
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchNikkei = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch("/api/market/nikkei")
-        const data = await response.json()
-        if (response.ok) {
-          setNikkei(data)
+        const [nikkeiRes, futuresRes] = await Promise.all([
+          fetch("/api/market/nikkei"),
+          fetch("/api/market/nikkei-futures"),
+        ])
+
+        if (nikkeiRes.ok) {
+          const nikkeiData = await nikkeiRes.json()
+          setNikkei(nikkeiData)
+        }
+
+        if (futuresRes.ok) {
+          const futuresData = await futuresRes.json()
+          setFutures(futuresData)
         }
       } catch (error) {
-        console.error("Error fetching Nikkei 225:", error)
+        console.error("Error fetching market data:", error)
       } finally {
         setLoading(false)
       }
     }
-    fetchNikkei()
+    fetchData()
   }, [])
 
   const fetchChartData = useCallback(async (p: Period) => {
@@ -188,6 +208,32 @@ export default function NikkeiSummary() {
     return { label: t("evalNeedsImprovement"), color: "text-red-600" }
   }
 
+  const getDivergenceDisplay = (signal: DivergenceSignal) => {
+    switch (signal) {
+      case "strong_bullish":
+        return { label: t("strongBullish"), color: "text-green-600", bg: "bg-green-50" }
+      case "bullish":
+        return { label: t("futuresPremium"), color: "text-green-600", bg: "bg-green-50" }
+      case "strong_bearish":
+        return { label: t("strongBearish"), color: "text-red-600", bg: "bg-red-50" }
+      case "bearish":
+        return { label: t("futuresDiscount"), color: "text-red-600", bg: "bg-red-50" }
+      default:
+        return { label: t("divergenceNeutral"), color: "text-gray-500", bg: "bg-gray-50" }
+    }
+  }
+
+  const getCMEStatusDisplay = (status: CMEStatus) => {
+    switch (status) {
+      case "open":
+        return { label: t("cmeOpen"), color: "text-green-600", dot: "bg-green-500" }
+      case "break":
+        return { label: t("cmeBreak"), color: "text-yellow-600", dot: "bg-yellow-500" }
+      case "closed":
+        return { label: t("cmeClosed"), color: "text-gray-400", dot: "bg-gray-400" }
+    }
+  }
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     return `${date.getMonth() + 1}/${date.getDate()}`
@@ -205,6 +251,12 @@ export default function NikkeiSummary() {
   const outperformance =
     lastPoint && lastPoint.portfolioPercent !== null
       ? lastPoint.portfolioPercent - lastPoint.nikkeiPercent
+      : null
+
+  // Calculate divergence
+  const divergence =
+    nikkei && futures
+      ? calculateDivergence(futures.changePercent, nikkei.changePercent)
       : null
 
   if (loading) {
@@ -276,6 +328,83 @@ export default function NikkeiSummary() {
           ▼
         </span>
       </button>
+
+      {/* CME Futures row */}
+      {futures && (
+        <div className="mt-2 pt-2 border-t border-gray-50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setExpandedMetric(expandedMetric === "futures" ? null : "futures")}
+                className="text-[11px] text-gray-500 hover:text-gray-700"
+              >
+                {t("futures")}
+              </button>
+              {/* CME Status badge */}
+              {(() => {
+                const status = getCMEStatusDisplay(futures.cmeStatus)
+                return (
+                  <span className={`inline-flex items-center gap-1 text-[10px] ${status.color}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}></span>
+                    {status.label}
+                  </span>
+                )
+              })()}
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-semibold text-gray-900">
+                ${Math.round(futures.currentPrice).toLocaleString()}
+              </span>
+              <span
+                className={`text-[11px] font-medium ${
+                  futures.change >= 0 ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {futures.change >= 0 ? "+" : ""}
+                {futures.changePercent.toFixed(2)}%
+              </span>
+            </div>
+          </div>
+
+          {/* Futures description (expandable) */}
+          {expandedMetric === "futures" && (
+            <div className="mt-1.5 p-2 bg-blue-50 rounded-lg text-[11px] text-gray-700">
+              {t("futuresDesc")}
+            </div>
+          )}
+
+          {/* Divergence indicator */}
+          {divergence && divergence.signal !== "neutral" && (
+            <div className="mt-1.5 flex items-center justify-between">
+              <button
+                onClick={() => setExpandedMetric(expandedMetric === "divergence" ? null : "divergence")}
+                className="text-[11px] text-gray-500 hover:text-gray-700"
+              >
+                {t("divergence")}
+              </button>
+              {(() => {
+                const display = getDivergenceDisplay(divergence.signal)
+                return (
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${display.color} ${display.bg}`}>
+                    {display.label}
+                    <span>
+                      {divergence.value >= 0 ? "+" : ""}
+                      {divergence.value.toFixed(2)}%
+                    </span>
+                  </span>
+                )
+              })()}
+            </div>
+          )}
+
+          {/* Divergence description (expandable) */}
+          {expandedMetric === "divergence" && (
+            <div className="mt-1.5 p-2 bg-blue-50 rounded-lg text-[11px] text-gray-700">
+              {t("divergenceDesc")}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chart area */}
       {showChart && (
