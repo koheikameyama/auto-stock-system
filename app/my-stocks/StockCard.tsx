@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { formatAnalysisTime } from "@/lib/analysis-time";
 import SectorTrendBadge from "@/app/components/SectorTrendBadge";
+import TechnicalSignalBadge from "@/app/components/TechnicalSignalBadge";
 import {
   getActionButtonClass,
   ACTION_BUTTON_LABELS,
@@ -50,6 +51,8 @@ interface UserStock {
   confidence?: number | null;
   // AI分析テキスト（Portfolio）
   shortTerm?: string | null;
+  // 市場シグナル
+  marketSignal?: string | null;
   // おすすめ経由の情報（Watchlist only）
   investmentTheme?: string | null;
   recommendationReason?: string | null;
@@ -85,6 +88,7 @@ interface PurchaseRecommendation {
   caution: string;
   buyTiming?: "market" | "dip" | null;
   sellTiming?: "market" | "rebound" | null;
+  marketSignal?: string | null;
 }
 
 interface GapPredictionData {
@@ -285,6 +289,10 @@ export default function StockCard({
               {stock.stock.sector && ` • ${stock.stock.sector}`}
             </span>
             {sectorTrend && <SectorTrendBadge compositeScore={sectorTrend.compositeScore} trendDirection={sectorTrend.trendDirection} />}
+            {(() => {
+              const signal = recommendation?.marketSignal || stock.marketSignal;
+              return signal && signal !== "neutral" ? <TechnicalSignalBadge marketSignal={signal} /> : null;
+            })()}
           </p>
         </div>
 

@@ -3,17 +3,19 @@
 import { useTranslations } from "next-intl"
 import CopyableTicker, { copyTicker } from "./CopyableTicker"
 import SectorTrendBadge from "./SectorTrendBadge"
+import TechnicalSignalBadge from "./TechnicalSignalBadge"
 
 interface StockHeaderProps {
   name: string
   tickerCode: string
   sector?: string | null
   sectorTrend?: { compositeScore: number; trendDirection: string }
+  marketSignal?: string | null
   badge?: string
   badgeClassName?: string
 }
 
-export default function StockHeader({ name, tickerCode, sector, sectorTrend, badge, badgeClassName }: StockHeaderProps) {
+export default function StockHeader({ name, tickerCode, sector, sectorTrend, marketSignal, badge, badgeClassName }: StockHeaderProps) {
   const t = useTranslations("stocks.stockHeader")
   const handleNameClick = () => {
     copyTicker(tickerCode)
@@ -41,6 +43,7 @@ export default function StockHeader({ name, tickerCode, sector, sectorTrend, bad
           {sector && ` • ${sector}`}
         </span>
         {sectorTrend && <SectorTrendBadge compositeScore={sectorTrend.compositeScore} trendDirection={sectorTrend.trendDirection} />}
+        {marketSignal && marketSignal !== "neutral" && <TechnicalSignalBadge marketSignal={marketSignal} />}
       </p>
     </div>
   )

@@ -56,6 +56,7 @@ async function StockDetailContent({
     watchlistEntry,
     trackedEntry,
     portfolioEntry,
+    latestRecommendation,
   ] = await Promise.all([
     prisma.stock.findUnique({
       where: { id: stockId },
@@ -84,6 +85,12 @@ async function StockDetailContent({
           orderBy: { transactionDate: "asc" },
         },
       },
+    }),
+    // Get latest purchase recommendation for marketSignal
+    prisma.purchaseRecommendation.findFirst({
+      where: { stockId },
+      orderBy: { date: "desc" },
+      select: { marketSignal: true },
     }),
   ]);
 
@@ -268,6 +275,7 @@ async function StockDetailContent({
       trackedStockId={trackedEntry?.id}
       soldStockInfo={soldStockInfo}
       sectorAvg={sectorAvg}
+      marketSignal={portfolioEntry?.marketSignal ?? latestRecommendation?.marketSignal ?? null}
     />
   );
 }

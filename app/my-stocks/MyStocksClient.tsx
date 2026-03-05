@@ -42,6 +42,7 @@ interface PurchaseRecommendation {
   buyTiming?: "market" | "dip" | null;
   sellTiming?: "market" | "rebound" | null;
   userFitScore?: number | null;
+  marketSignal?: string | null;
 }
 
 type TabType = "portfolio" | "watchlist" | "tracked" | "sold";
@@ -278,6 +279,7 @@ export default function MyStocksClient() {
               buyTiming: result.value.data.buyTiming,
               sellTiming: result.value.data.sellTiming,
               userFitScore: result.value.data.userFitScore ?? null,
+              marketSignal: result.value.data.marketSignal ?? null,
             };
           }
         });

@@ -102,6 +102,7 @@ interface Props {
     compositeScore: number | null;
     trendDirection: string;
   } | null;
+  marketSignal?: string | null;
 }
 
 export default function StockDetailClient({
@@ -114,6 +115,7 @@ export default function StockDetailClient({
   trackedStockId,
   soldStockInfo,
   sectorAvg,
+  marketSignal,
 }: Props) {
   const router = useRouter();
   const t = useTranslations("stocks.detailClient");
@@ -286,6 +288,7 @@ export default function StockDetailClient({
       tickerCode={stock.tickerCode}
       sector={stock.sector}
       sectorTrend={sectorAvg?.compositeScore != null ? { compositeScore: sectorAvg.compositeScore, trendDirection: sectorAvg.trendDirection } : undefined}
+      marketSignal={marketSignal}
       badge={badgeInfo.badge}
       badgeClassName={badgeInfo.className}
       backHref="/dashboard"

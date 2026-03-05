@@ -11,6 +11,7 @@ interface StockDetailLayoutProps {
   tickerCode: string
   sector?: string | null
   sectorTrend?: { compositeScore: number; trendDirection: string }
+  marketSignal?: string | null
   badge?: string
   badgeClassName?: string
   backHref?: string
@@ -22,6 +23,7 @@ export default function StockDetailLayout({
   tickerCode,
   sector,
   sectorTrend,
+  marketSignal,
   badge,
   badgeClassName,
   backHref,
@@ -78,6 +80,7 @@ export default function StockDetailLayout({
         tickerCode={tickerCode}
         sector={sector}
         sectorTrend={sectorTrend}
+        marketSignal={marketSignal}
         badge={badge}
         badgeClassName={badgeClassName}
       />

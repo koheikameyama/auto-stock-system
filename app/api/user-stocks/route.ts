@@ -256,6 +256,7 @@ export async function GET(request: NextRequest) {
           ? Number(ps.suggestedSellPrice)
           : null,
         sellCondition: ps.sellCondition,
+        marketSignal: ps.marketSignal,
         transactions: ps.transactions.map((t) => ({
           id: t.id,
           type: t.type,

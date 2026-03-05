@@ -285,6 +285,10 @@
     "headwind": "逆風",
     "neutral": "中立"
   },
+  "technicalSignal": {
+    "bullish": "買い傾向",
+    "bearish": "売り傾向"
+  },
   "sectorComparison": {
     "title": "セクター内の位置づけ",
     "subtitle": "同じセクターの平均と比較",
