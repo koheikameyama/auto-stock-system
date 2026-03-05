@@ -26,6 +26,8 @@ interface TrackedStock {
     fetchFailCount?: number
     isDelisted?: boolean
     nextEarningsDate?: string | null
+    delistingNewsDetectedAt?: string | null
+    delistingNewsReason?: string | null
   }
   currentPrice: number | null
   change: number | null

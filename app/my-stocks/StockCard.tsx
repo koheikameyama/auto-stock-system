@@ -64,6 +64,8 @@ interface UserStock {
     fetchFailCount?: number;
     isDelisted?: boolean;
     nextEarningsDate?: string | null;
+    delistingNewsDetectedAt?: string | null;
+    delistingNewsReason?: string | null;
   };
 }
 
