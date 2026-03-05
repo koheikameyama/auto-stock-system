@@ -63,18 +63,37 @@ export async function GET() {
         ps.transactions
       )
 
+      const buyTransactions = ps.transactions.filter((t) => t.type === "buy")
+      const sellTransactions = ps.transactions.filter((t) => t.type === "sell")
+
       if (quantity > 0) {
-        // 保有中: 含み損益の計算（既存ロジック）
+        // 保有中: 含み損益の計算
         const currentPrice = priceMap.get(ps.stock.tickerCode)
         if (currentPrice == null) continue
 
         totalValue += currentPrice * quantity
         totalCost += averagePurchasePrice.toNumber() * quantity
-      } else {
-        // 売却済み: 確定損益の計算
-        const buyTransactions = ps.transactions.filter((t) => t.type === "buy")
-        const sellTransactions = ps.transactions.filter((t) => t.type === "sell")
 
+        // 部分売却がある場合: 確定損益も計算
+        if (sellTransactions.length > 0 && buyTransactions.length > 0) {
+          const totalBuyAmount = buyTransactions.reduce(
+            (sum, t) => sum.plus(t.totalAmount),
+            new Decimal(0)
+          )
+          const totalSellAmount = sellTransactions.reduce(
+            (sum, t) => sum.plus(t.totalAmount),
+            new Decimal(0)
+          )
+          // 売却分のコスト = 総購入額 - 残りの保有コスト
+          const remainingCost = averagePurchasePrice.times(quantity)
+          const costOfSold = totalBuyAmount.minus(remainingCost)
+          const partialProfit = totalSellAmount.minus(costOfSold).toNumber()
+
+          realizedGain += partialProfit
+          totalRealizedCost += costOfSold.toNumber()
+        }
+      } else {
+        // 全量売却済み: 確定損益の計算
         if (buyTransactions.length === 0 || sellTransactions.length === 0) continue
 
         const totalBuyAmount = buyTransactions.reduce(
