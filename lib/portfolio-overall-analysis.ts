@@ -732,6 +732,7 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
     prisma.preMarketData.findFirst({
       where: { date: todayForDB },
       select: {
+        nikkeiFuturesClose: true, nikkeiFuturesChangeRate: true,
         nasdaqClose: true, nasdaqChangeRate: true,
         vixClose: true, vixChangeRate: true,
         wtiClose: true, wtiChangeRate: true,
@@ -746,6 +747,11 @@ export async function generatePortfolioOverallAnalysis(userId: string, session: 
   }
   if (sp500Data) {
     marketParts.push(`- S&P 500: $${sp500Data.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / 週間変動: ${sp500Data.weekChangeRate >= 0 ? "+" : ""}${sp500Data.weekChangeRate.toFixed(1)}% / トレンド: ${getTrendDescription(sp500Data.trend)}`)
+  }
+  if (preMarketData?.nikkeiFuturesClose) {
+    const futuresChange = Number(preMarketData.nikkeiFuturesChangeRate)
+    const futuresSignal = futuresChange >= 1.0 ? "（強い強気シグナル）" : futuresChange >= 0.3 ? "（強気シグナル）" : futuresChange <= -1.0 ? "（強い弱気シグナル）" : futuresChange <= -0.3 ? "（弱気シグナル）" : ""
+    marketParts.push(`- CME日経先物: $${Number(preMarketData.nikkeiFuturesClose).toLocaleString()} / 前日比: ${futuresChange >= 0 ? "+" : ""}${futuresChange.toFixed(1)}%${futuresSignal}`)
   }
   if (preMarketData?.nasdaqClose) {
     const nasdaqChange = Number(preMarketData.nasdaqChangeRate)

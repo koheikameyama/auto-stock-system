@@ -30,6 +30,7 @@ import {
   VOLUME_ANALYSIS,
   RELATIVE_STRENGTH,
   GEOPOLITICAL_RISK,
+  FUTURES_DIVERGENCE,
 } from "@/lib/constants";
 import { MarketIndexData } from "@/lib/market-index";
 import {
@@ -640,6 +641,52 @@ export function buildGeopoliticalRiskContext(data: GeopoliticalRiskData): string
 
   return `
 【地政学リスク指標】
+${parts.join("\n")}
+`;
+}
+
+/**
+ * 先物データを含むプレマーケットコンテキスト
+ */
+export interface FuturesContextData {
+  nikkeiFuturesChangeRate: number | null;
+  sp500ChangeRate: number | null;
+}
+
+/**
+ * CME日経先物・S&P 500の動向コンテキスト文字列を生成する
+ * 購入判断プロンプトに海外市場の方向性を提供する
+ */
+export function buildFuturesContext(data: FuturesContextData): string {
+  const parts: string[] = [];
+
+  if (data.nikkeiFuturesChangeRate != null) {
+    const rate = data.nikkeiFuturesChangeRate;
+    const signal =
+      rate >= FUTURES_DIVERGENCE.STRONG_BULLISH_THRESHOLD ? "強い強気シグナル" :
+      rate >= FUTURES_DIVERGENCE.BULLISH_THRESHOLD ? "強気シグナル" :
+      rate <= FUTURES_DIVERGENCE.STRONG_BEARISH_THRESHOLD ? "強い弱気シグナル" :
+      rate <= FUTURES_DIVERGENCE.BEARISH_THRESHOLD ? "弱気シグナル" :
+      "中立";
+
+    parts.push(`- CME日経先物: 前日比 ${rate >= 0 ? "+" : ""}${rate.toFixed(1)}%（${signal}）`);
+
+    if (rate >= FUTURES_DIVERGENCE.STRONG_BULLISH_THRESHOLD) {
+      parts.push(`  → 翌日の寄り付きは大幅ギャップアップの可能性があります`);
+    } else if (rate <= FUTURES_DIVERGENCE.STRONG_BEARISH_THRESHOLD) {
+      parts.push(`  ⚠️ 翌日の寄り付きは大幅ギャップダウンの可能性があります。新規購入は慎重に判断してください`);
+    }
+  }
+
+  if (data.sp500ChangeRate != null) {
+    const rate = data.sp500ChangeRate;
+    parts.push(`- S&P 500: 前日比 ${rate >= 0 ? "+" : ""}${rate.toFixed(1)}%`);
+  }
+
+  if (parts.length === 0) return "";
+
+  return `
+【海外市場・先物動向】
 ${parts.join("\n")}
 `;
 }

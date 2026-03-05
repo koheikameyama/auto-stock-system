@@ -22,9 +22,11 @@ import {
   buildEarningsContext,
   buildExDividendContext,
   buildGeopoliticalRiskContext,
+  buildFuturesContext,
   buildSectorComparisonContext,
   buildBuySignalContext,
   type GeopoliticalRiskData,
+  type FuturesContextData,
 } from "@/lib/stock-analysis-context";
 import { buildPurchaseRecommendationPrompt } from "@/lib/prompts/purchase-recommendation-prompt";
 import { MA_DEVIATION, SELL_TIMING, TIMING_INDICATORS, AGGRESSIVE_REBOUND, GAP_UP_MOMENTUM, EARNINGS_SAFETY, CROSS_STYLE_CONSENSUS, GEOPOLITICAL_RISK, AVOID_CONFIDENCE_THRESHOLD, AVOID_ESCALATION, getSectorGroup } from "@/lib/constants";
@@ -304,6 +306,7 @@ export async function executePurchaseRecommendation(
     select: {
       vixClose: true, vixChangeRate: true,
       wtiClose: true, wtiChangeRate: true,
+      nikkeiFuturesChangeRate: true, sp500ChangeRate: true,
     },
   });
   const geopoliticalRiskData: GeopoliticalRiskData = {
@@ -312,9 +315,13 @@ export async function executePurchaseRecommendation(
     wtiClose: preMarketData?.wtiClose ? Number(preMarketData.wtiClose) : null,
     wtiChangeRate: preMarketData?.wtiChangeRate ? Number(preMarketData.wtiChangeRate) : null,
   };
+  const futuresData: FuturesContextData = {
+    nikkeiFuturesChangeRate: preMarketData?.nikkeiFuturesChangeRate ? Number(preMarketData.nikkeiFuturesChangeRate) : null,
+    sp500ChangeRate: preMarketData?.sp500ChangeRate ? Number(preMarketData.sp500ChangeRate) : null,
+  };
 
   // 市場全体の状況コンテキスト
-  const marketContext = buildMarketContext(marketData) + buildGeopoliticalRiskContext(geopoliticalRiskData);
+  const marketContext = buildMarketContext(marketData) + buildGeopoliticalRiskContext(geopoliticalRiskData) + buildFuturesContext(futuresData);
   const defensiveModeContext = buildDefensiveModeContext(marketData);
 
   // セクタートレンド

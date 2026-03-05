@@ -174,6 +174,45 @@ def save_to_db(conn, data: dict) -> None:
     print(f"✅ PreMarketData saved for {today}")
 
 
+def log_divergence(conn, data: dict) -> None:
+    """先物変化率と前日の日経225終値変化率の乖離をログ出力"""
+    nikkei_futures = data.get("nikkei_futures", {})
+    futures_change = nikkei_futures.get("changeRate")
+    if futures_change is None:
+        print("\n[乖離率] CME日経先物データなし — スキップ")
+        return
+
+    # 前日のPortfolioSnapshotからnikkeiChangePercentを取得
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT "nikkeiChangePercent"
+            FROM "PortfolioSnapshot"
+            WHERE "nikkeiChangePercent" IS NOT NULL
+            ORDER BY date DESC
+            LIMIT 1
+            """
+        )
+        row = cur.fetchone()
+
+    if not row or row[0] is None:
+        print("\n[乖離率] 前日の日経変化率データなし — スキップ")
+        return
+
+    spot_change = float(row[0])
+    divergence = round(futures_change - spot_change, 2)
+
+    signal = (
+        "強い強気" if divergence >= 1.0
+        else "強気" if divergence >= 0.3
+        else "強い弱気" if divergence <= -1.0
+        else "弱気" if divergence <= -0.3
+        else "中立"
+    )
+
+    print(f"\n[乖離率] CME日経先物: {futures_change:+.2f}% / 日経現物(前日): {spot_change:+.2f}% / 乖離: {divergence:+.2f}%（{signal}）")
+
+
 def main():
     print("=" * 60)
     print("Pre-market data fetch started")
@@ -191,6 +230,8 @@ def main():
     conn = psycopg2.connect(get_database_url())
     try:
         save_to_db(conn, data)
+        # 3. 先物乖離率をログ出力
+        log_divergence(conn, data)
     finally:
         conn.close()
 
