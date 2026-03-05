@@ -194,11 +194,11 @@ function postProcessPortfolioAnalysis(params: {
     // CONSERVATIVE: 長期upの場合のみ保護（中期upだけでは保護しない）
     //   ※ 含み益あり + 短期下落予兆の場合は保護を無効化（利確を優先）
     // BALANCED: 中期 or 長期がupなら保護
-    // AGGRESSIVE: 保護なし（AIの売り判断を尊重）
+    // AGGRESSIVE: 長期upの場合のみ保護（短期モメンタム重視だが、長期上昇中の狼狽売りは防ぐ）
     const shouldProtectFromSell = (() => {
       if (result.isCriticalChange) return false;
       if (profitPercent !== null && profitPercent <= SELL_TIMING.TREND_OVERRIDE_LOSS_THRESHOLD) return false;
-      if (styleKey === "AGGRESSIVE") return false;
+      if (styleKey === "AGGRESSIVE") return result.longTermTrend === "up";
       if (styleKey === "CONSERVATIVE") {
         // 含み益あり + 短期下落予兆 → トレンド保護を無効化し、AIの売り判断（利確）を通す
         if (
