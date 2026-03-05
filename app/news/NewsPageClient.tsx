@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl"
 import { getRelativeTime, getMarketFlag } from "@/lib/news-utils"
 import type { NewsItem } from "@/lib/news-utils"
 import { useMarkPageSeen } from "@/app/hooks/useMarkPageSeen"
+import { SECTORS } from "@/lib/constants"
 
 type MarketFilter = "ALL" | "JP" | "US" | "IMPACT"
 
@@ -16,16 +17,29 @@ export default function NewsPageClient() {
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<MarketFilter>("ALL")
+  const [sector, setSector] = useState<string>("")
+  const [daysAgo, setDaysAgo] = useState<number>(7)
+  const [sentiment, setSentiment] = useState<string>("")
 
   useEffect(() => {
     async function fetchNews() {
       setLoading(true)
       try {
-        const params = new URLSearchParams({ limit: "50", withRelated: "true" });
+        const params = new URLSearchParams({
+          limit: "50",
+          withRelated: "true",
+          daysAgo: String(daysAgo),
+        });
         if (filter === "IMPACT") {
           params.set("category", "impact");
         } else if (filter !== "ALL") {
           params.set("market", filter);
+        }
+        if (sector) {
+          params.set("sector", sector);
+        }
+        if (sentiment) {
+          params.set("sentiment", sentiment);
         }
         const response = await fetch(`/api/news?${params.toString()}`)
         const data = await response.json()
@@ -41,12 +55,12 @@ export default function NewsPageClient() {
     }
 
     fetchNews()
-  }, [filter])
+  }, [filter, sector, daysAgo, sentiment])
 
   return (
     <div>
-      {/* フィルター */}
-      <div className="mb-4 flex gap-2">
+      {/* 市場フィルター */}
+      <div className="mb-3 flex gap-2">
         <FilterButton
           active={filter === "ALL"}
           onClick={() => setFilter("ALL")}
@@ -71,6 +85,41 @@ export default function NewsPageClient() {
         >
           {t('filters.impact')}
         </FilterButton>
+      </div>
+
+      {/* 詳細フィルター */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <select
+          value={sector}
+          onChange={(e) => setSector(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">{t('filters.sectorAll')}</option>
+          {SECTORS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+
+        <select
+          value={daysAgo}
+          onChange={(e) => setDaysAgo(Number(e.target.value))}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {([1, 3, 7, 14, 30] as const).map((d) => (
+            <option key={d} value={d}>{t(`filters.period.days${d}`)}</option>
+          ))}
+        </select>
+
+        <select
+          value={sentiment}
+          onChange={(e) => setSentiment(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">{t('filters.sentimentAll')}</option>
+          <option value="positive">{t('sentiment.positive')}</option>
+          <option value="negative">{t('sentiment.negative')}</option>
+          <option value="neutral">{t('sentiment.neutral')}</option>
+        </select>
       </div>
 
       {/* ニュース一覧 */}

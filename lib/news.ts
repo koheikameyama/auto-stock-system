@@ -19,6 +19,8 @@ export interface GetNewsOptions {
   userId?: string // 保有銘柄との関連付け用
   daysAgo?: number
   category?: "impact" | "all"
+  sector?: string
+  sentiment?: string
 }
 
 // セクターマッピング（米国→日本、SECTOR_MASTERのキーと同期）
@@ -39,7 +41,7 @@ const US_TO_JP_SECTOR_MAP: Record<string, string[]> = {
  * ニュース一覧を取得する
  */
 export async function getNews(options: GetNewsOptions = {}): Promise<NewsItem[]> {
-  const { limit = 20, market = "ALL", daysAgo = 7, category } = options
+  const { limit = 20, market = "ALL", daysAgo = 7, category, sector, sentiment } = options
 
   const cutoffDate = dayjs().subtract(daysAgo, "day").toDate()
 
@@ -55,6 +57,14 @@ export async function getNews(options: GetNewsOptions = {}): Promise<NewsItem[]>
 
   if (category === "impact") {
     whereClause.category = { in: ["geopolitical", "macro"] }
+  }
+
+  if (sector) {
+    whereClause.sector = sector
+  }
+
+  if (sentiment) {
+    whereClause.sentiment = sentiment
   }
 
   const news = await prisma.marketNews.findMany({
@@ -90,7 +100,7 @@ export async function getNewsWithRelatedStocks(
   userId: string,
   options: GetNewsOptions = {}
 ): Promise<NewsItem[]> {
-  const { limit = 10, market = "ALL", daysAgo = 7, category } = options
+  const { limit = 10, market = "ALL", daysAgo = 7, category, sector, sentiment } = options
 
   // ユーザーの保有銘柄を取得
   const portfolioStocks = await prisma.portfolioStock.findMany({
@@ -148,6 +158,14 @@ export async function getNewsWithRelatedStocks(
 
   if (category === "impact") {
     whereClause.category = { in: ["geopolitical", "macro"] }
+  }
+
+  if (sector) {
+    whereClause.sector = sector
+  }
+
+  if (sentiment) {
+    whereClause.sentiment = sentiment
   }
 
   const allNews = await prisma.marketNews.findMany({

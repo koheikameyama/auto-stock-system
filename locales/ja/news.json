@@ -24,7 +24,16 @@
     "all": "すべて",
     "japan": "🇯🇵 日本",
     "us": "🇺🇸 米国",
-    "impact": "🌍 市場影響"
+    "impact": "🌍 市場影響",
+    "sectorAll": "セクター: すべて",
+    "sentimentAll": "センチメント: すべて",
+    "period": {
+      "days1": "1日以内",
+      "days3": "3日以内",
+      "days7": "7日以内",
+      "days14": "14日以内",
+      "days30": "30日以内"
+    }
   },
   "relatedStocks": {
     "moreCount": "+{count}件"
