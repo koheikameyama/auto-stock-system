@@ -1,5 +1,5 @@
 /**
- * 注文マネージャー（9:00 JST / 平日）
+ * 注文マネージャー（9:20 JST / 平日）
  *
  * 1. 今日のMarketAssessmentを確認（shouldTrade = true のみ）
  * 2. 選定済み銘柄に対してAI売買判断
@@ -148,7 +148,7 @@ export async function main() {
     let expiresAt: Date;
 
     if (decision.strategy === "day_trade") {
-      // デイトレ: 当日14:30まで
+      // デイトレ: 当日14:50まで
       expiresAt = now
         .hour(TRADING_SCHEDULE.DAY_TRADE_FORCE_EXIT.hour)
         .minute(TRADING_SCHEDULE.DAY_TRADE_FORCE_EXIT.minute)
