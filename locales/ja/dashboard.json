@@ -278,6 +278,7 @@
     "staleWarning": "最新のデータではありません（{date}時点）",
     "regenerate": "再生成",
     "regenerating": "生成中...",
+    "viewDetail": "詳細を見る →",
     "badge": {
       "owned": "保有中",
       "watched": "ウォッチ中",
