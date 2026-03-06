@@ -1,0 +1,159 @@
+/**
+ * 週次レビュー（土曜 10:00 JST）
+ *
+ * 1. 週間パフォーマンス集計
+ * 2. AIによる戦略レビュー
+ * 3. Slackにレポート送信
+ */
+
+import { prisma } from "../lib/prisma";
+import { OPENAI_CONFIG } from "../lib/constants";
+import { getOpenAIClient } from "../lib/openai";
+import { notifySlack } from "../lib/slack";
+import dayjs from "dayjs";
+
+async function main() {
+  console.log("=== Weekly Review 開始 ===");
+
+  // 直近7日間のサマリーを取得
+  const weekAgo = dayjs().subtract(7, "day").toDate();
+
+  const dailySummaries = await prisma.tradingDailySummary.findMany({
+    where: { date: { gte: weekAgo } },
+    orderBy: { date: "asc" },
+  });
+
+  if (dailySummaries.length === 0) {
+    console.log("今週の取引データがありません。");
+    await notifySlack({
+      title: "📊 週次レビュー",
+      message: "今週は取引がありませんでした。",
+      color: "#808080",
+    });
+    return;
+  }
+
+  // 集計
+  const totalTrades = dailySummaries.reduce((s, d) => s + d.totalTrades, 0);
+  const totalWins = dailySummaries.reduce((s, d) => s + d.wins, 0);
+  const totalLosses = dailySummaries.reduce((s, d) => s + d.losses, 0);
+  const totalPnl = dailySummaries.reduce(
+    (s, d) => s + Number(d.totalPnl),
+    0,
+  );
+  const winRate =
+    totalTrades > 0 ? Math.round((totalWins / totalTrades) * 100) : 0;
+  const tradingDays = dailySummaries.length;
+
+  const latestSummary = dailySummaries[dailySummaries.length - 1];
+  const portfolioValue = Number(latestSummary.portfolioValue);
+  const cashBalance = Number(latestSummary.cashBalance);
+
+  // 直近の注文履歴
+  const recentOrders = await prisma.tradingOrder.findMany({
+    where: {
+      createdAt: { gte: weekAgo },
+      status: "filled",
+    },
+    include: { stock: true },
+    orderBy: { filledAt: "asc" },
+  });
+
+  // 直近のクローズポジション
+  const closedPositions = await prisma.tradingPosition.findMany({
+    where: {
+      status: "closed",
+      exitedAt: { gte: weekAgo },
+    },
+    include: { stock: true },
+    orderBy: { exitedAt: "asc" },
+  });
+
+  console.log(`  取引日数: ${tradingDays}, 取引数: ${totalTrades}, PnL: ¥${totalPnl.toLocaleString()}`);
+
+  // AIレビュー生成
+  console.log("AI週次レビュー生成中...");
+
+  const positionSummary = closedPositions
+    .map((p) => {
+      const pnl = p.realizedPnl ? Number(p.realizedPnl) : 0;
+      return `${p.stock.tickerCode} ${p.stock.name}: ${p.strategy}, 損益 ¥${pnl.toLocaleString()}`;
+    })
+    .join("\n");
+
+  let aiReview = "";
+  try {
+    const openai = getOpenAIClient();
+    const response = await openai.chat.completions.create({
+      model: OPENAI_CONFIG.MODEL,
+      temperature: 0.5,
+      messages: [
+        {
+          role: "user",
+          content: `週次の自動売買シミュレーション結果をレビューしてください。
+
+【週間サマリー】
+- 取引日数: ${tradingDays}日
+- 取引数: ${totalTrades}件（${totalWins}勝 ${totalLosses}敗）
+- 勝率: ${winRate}%
+- 確定損益: ¥${totalPnl.toLocaleString()}
+- ポートフォリオ時価: ¥${portfolioValue.toLocaleString()}
+- 現金残高: ¥${cashBalance.toLocaleString()}
+
+【クローズポジション詳細】
+${positionSummary || "なし"}
+
+以下を200文字以内で簡潔に述べてください:
+1. 今週のパフォーマンス評価
+2. 良かった点・改善すべき点
+3. 来週の戦略提案`,
+        },
+      ],
+      max_tokens: 500,
+    });
+
+    aiReview = response.choices[0].message.content ?? "";
+  } catch (error) {
+    console.error("AIレビュー生成エラー:", error);
+  }
+
+  // Slack通知
+  const pnlEmoji = totalPnl >= 0 ? "📈" : "📉";
+
+  await notifySlack({
+    title: `📊 週次レビュー（${dayjs().subtract(7, "day").format("MM/DD")}〜${dayjs().format("MM/DD")}）`,
+    message: aiReview,
+    color: totalPnl >= 0 ? "good" : "danger",
+    fields: [
+      {
+        title: "週間損益",
+        value: `${pnlEmoji} ¥${totalPnl.toLocaleString()}`,
+        short: true,
+      },
+      {
+        title: "勝率",
+        value: `${totalWins}勝${totalLosses}敗 (${winRate}%)`,
+        short: true,
+      },
+      {
+        title: "取引日数",
+        value: `${tradingDays}日`,
+        short: true,
+      },
+      {
+        title: "ポートフォリオ",
+        value: `¥${portfolioValue.toLocaleString()}`,
+        short: true,
+      },
+    ],
+  });
+
+  console.log("=== Weekly Review 終了 ===");
+}
+
+main()
+  .catch((error) => {
+    console.error("Weekly Review エラー:", error);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

@@ -1,80 +1,38 @@
 {
-  "name": "stock-buddy",
-  "version": "0.1.0",
+  "name": "auto-stock-trader",
+  "version": "1.0.0",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
-    "postinstall": "prisma generate",
-    "migrate:deploy": "prisma migrate deploy",
-    "lint": "eslint .",
+    "scan": "tsx src/jobs/market-scanner.ts",
+    "order": "tsx src/jobs/order-manager.ts",
+    "monitor": "tsx src/jobs/position-monitor.ts",
+    "eod": "tsx src/jobs/end-of-day.ts",
+    "weekly": "tsx src/jobs/weekly-review.ts",
+    "backfill": "tsx src/jobs/backfill-prices.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "python scripts/data/init_data.py",
-    "db:sync": "bash scripts/data/sync-stocks-from-production.sh",
-    "db:sync-prod": "bash scripts/sync_db_from_prod.sh",
-    "calculate-scores": "tsx scripts/github-actions/calculate-stock-scores.ts",
-    "fetch-news": "tsx scripts/github-actions/fetch-market-news.ts",
-    "generate-reports": "tsx scripts/generate-daily-reports.ts",
-    "record-snapshots": "tsx scripts/github-actions/record-portfolio-snapshots.ts",
-    "generate-coach-messages": "tsx scripts/github-actions/generate-coach-messages-direct.ts",
-    "prepare": "husky"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.30",
-    "@ai-sdk/react": "^3.0.96",
-    "@auth/prisma-adapter": "^2.11.1",
     "@prisma/client": "^6.19.2",
-    "@types/cheerio": "^0.22.35",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "ai": "^6.0.94",
-    "cheerio": "^1.2.0",
     "dayjs": "^1.11.19",
-    "next": "^15.1.7",
-    "next-auth": "^5.0.0-beta.30",
-    "next-intl": "^4.8.3",
-    "next-pwa": "^5.6.0",
     "openai": "^6.17.0",
     "p-limit": "^7.3.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-markdown": "^10.1.0",
-    "recharts": "^3.7.0",
-    "rss-parser": "^3.13.0",
-    "sonner": "^2.0.7",
+    "technicalindicators": "^3.1.0",
     "typescript": "^5",
-    "web-push": "^3.6.7",
-    "xlsx": "^0.18.5",
     "yahoo-finance2": "^3.13.0",
-    "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/web-push": "^3.6.4",
-    "autoprefixer": "^10.4.23",
-    "eslint": "^9.39.2",
-    "eslint-config-next": "^15.5.10",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
     "prisma": "^6.19.2",
-    "sharp": "^0.34.5",
-    "tailwindcss": "^3.4.1",
-    "tsx": "^4.21.0"
-  },
-  "lint-staged": {
-    "*.{ts,tsx}": [
-      "eslint --fix",
-      "bash -c 'npx tsc --noEmit'"
-    ]
+    "tsx": "^4.21.0",
+    "@types/node": "^20"
   }
 }

@@ -1,6 +1,0 @@
-# Run lint-staged (lint and type check on staged files)
-npx lint-staged
-
-# Run build to ensure everything compiles
-echo "🔨 Running build..."
-npm run build

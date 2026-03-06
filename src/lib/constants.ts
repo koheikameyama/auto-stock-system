@@ -1,0 +1,161 @@
+/**
+ * 自動売買システム定数
+ */
+
+// 単元株数（日本株の最小取引単位）
+export const UNIT_SHARES = 100;
+
+// ========================================
+// 取引設定のデフォルト値
+// ========================================
+
+export const TRADING_DEFAULTS = {
+  TOTAL_BUDGET: 1_000_000, // 100万円
+  MAX_POSITIONS: 5, // 最大同時保有数
+  MAX_POSITION_PCT: 30, // 1銘柄あたり最大比率(%)
+  MAX_DAILY_LOSS_PCT: 3, // 日次最大損失率(%)
+} as const;
+
+// ========================================
+// OpenAI設定
+// ========================================
+
+export const OPENAI_CONFIG = {
+  MODEL: "gpt-4o",
+  TEMPERATURE: 0.3, // 取引判断は低めの温度で安定性重視
+  MAX_TOKENS: 2000,
+} as const;
+
+// ========================================
+// テクニカル指標の閾値
+// ========================================
+
+export const RSI_THRESHOLDS = {
+  OVERBOUGHT: 70,
+  OVERSOLD: 30,
+} as const;
+
+// トレンドライン検出の閾値
+export const TRENDLINE = {
+  MIN_DATA_POINTS: 15,
+  WINDOW_SIZE: 3,
+  TOUCH_TOLERANCE: 0.02,
+  MAX_VIOLATION_RATIO: 0.15,
+  MIN_TOUCHES: 2,
+  SIGNIFICANT_SLOPE: 0.001,
+  MIN_SPAN_RATIO: 0.3,
+} as const;
+
+// ========================================
+// 市場指標
+// ========================================
+
+export const MARKET_INDEX = {
+  CRASH_THRESHOLD: -5, // 急落判定（週間変化率%）
+  PANIC_THRESHOLD: -7, // パニック閾値
+} as const;
+
+// CME日経先物の取引時間（JST基準）
+export const CME_TRADING_HOURS = {
+  DAILY_BREAK_START_HOUR_JST: 6,
+  DAILY_BREAK_END_HOUR_JST: 7,
+  WEEK_START_DAY: 1,
+  WEEK_END_DAY: 6,
+  WEEK_END_HOUR_JST: 6,
+} as const;
+
+// 先物と現物の乖離率シグナル
+export const FUTURES_DIVERGENCE = {
+  BULLISH_THRESHOLD: 0.3,
+  BEARISH_THRESHOLD: -0.3,
+  STRONG_BULLISH_THRESHOLD: 1.0,
+  STRONG_BEARISH_THRESHOLD: -1.0,
+} as const;
+
+// VIX閾値
+export const VIX_THRESHOLDS = {
+  HIGH: 30,
+  ELEVATED: 25,
+  NORMAL: 20,
+} as const;
+
+// ========================================
+// 取引スケジュール（JST）
+// ========================================
+
+export const TRADING_SCHEDULE = {
+  MARKET_OPEN: { hour: 9, minute: 0 },
+  MORNING_CLOSE: { hour: 11, minute: 30 },
+  AFTERNOON_OPEN: { hour: 12, minute: 30 },
+  MARKET_CLOSE: { hour: 15, minute: 0 },
+  // デイトレの強制決済時刻
+  DAY_TRADE_FORCE_EXIT: { hour: 14, minute: 30 },
+} as const;
+
+// ========================================
+// yahoo-finance2 設定
+// ========================================
+
+export const YAHOO_FINANCE = {
+  HISTORICAL_PERIOD: "3mo", // テクニカル分析用データ期間
+  HISTORICAL_DAYS: 60, // データポイント数
+  BATCH_SIZE: 10, // バッチ取得サイズ
+  RATE_LIMIT_DELAY_MS: 1000, // レート制限用ディレイ
+} as const;
+
+// ========================================
+// セクターマスタ
+// ========================================
+
+export const SECTOR_MASTER: Record<string, readonly string[]> = {
+  "半導体・電子部品": ["電気機器", "精密機器"],
+  自動車: ["輸送用機器"],
+  金融: ["銀行業", "証券、商品先物取引業", "保険業", "卸売業"],
+  医薬品: ["医薬品"],
+  "IT・サービス": ["情報・通信業", "サービス業"],
+  エネルギー: ["電気・ガス業", "鉱業", "石油・石炭製品"],
+  小売: ["小売業", "食料品"],
+  不動産: ["不動産業", "建設業"],
+  素材: [
+    "化学",
+    "鉄鋼",
+    "非鉄金属",
+    "金属製品",
+    "ガラス・土石製品",
+    "繊維製品",
+  ],
+  運輸: ["陸運業", "海運業", "空運業"],
+  その他: ["その他製品"],
+};
+
+// TSE業種 → セクターグループの逆引き
+export const TSE_TO_SECTOR: Record<string, string> = Object.entries(
+  SECTOR_MASTER,
+).reduce(
+  (acc, [group, industries]) => {
+    for (const industry of industries) {
+      acc[industry] = group;
+    }
+    return acc;
+  },
+  {} as Record<string, string>,
+);
+
+export function getSectorGroup(tseSector: string | null): string | null {
+  if (!tseSector) return null;
+  return TSE_TO_SECTOR[tseSector] ?? null;
+}
+
+// ========================================
+// 銘柄スクリーニング対象
+// ========================================
+
+// 日経225構成銘柄 + 主要中小型株から取引対象を選定
+// 初期は日経225のティッカーコードリストを外部から読み込む想定
+export const SCREENING = {
+  // スクリーニング対象の最低条件
+  MIN_MARKET_CAP: 100, // 最低時価総額（億円）
+  MIN_DAILY_VOLUME: 100_000, // 最低出来高（株）
+  MIN_PRICE: 100, // 最低株価（円）
+  MAX_PRICE: 50_000, // 最高株価（円）- 資金効率
+} as const;
