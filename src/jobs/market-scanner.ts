@@ -47,7 +47,7 @@ export async function main() {
       type: "データ取得エラー",
       message: "市場指標データの取得に失敗しました。手動確認してください。",
     });
-    process.exit(1);
+    throw new Error("市場データの取得に失敗しました（nikkei/vix が null）");
   }
 
   // 2. AI市場評価
