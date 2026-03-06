@@ -10,7 +10,7 @@ export const UNIT_SHARES = 100;
 // ========================================
 
 export const TRADING_DEFAULTS = {
-  TOTAL_BUDGET: 1_000_000, // 100万円
+  TOTAL_BUDGET: 500_000, // 50万円
   MAX_POSITIONS: 5, // 最大同時保有数
   MAX_POSITION_PCT: 30, // 1銘柄あたり最大比率(%)
   MAX_DAILY_LOSS_PCT: 3, // 日次最大損失率(%)

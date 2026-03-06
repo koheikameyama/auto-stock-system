@@ -247,7 +247,7 @@ checkOrderFill(order, currentHigh, currentLow):
 
 | 項目 | 値 | 定数名 |
 |------|-----|--------|
-| 総予算 | 1,000,000円 | `TRADING_DEFAULTS.TOTAL_BUDGET` |
+| 総予算 | 500,000円 | `TRADING_DEFAULTS.TOTAL_BUDGET` |
 | 最大ポジション数 | 5 | `TRADING_DEFAULTS.MAX_POSITIONS` |
 | 最大ポジション比率 | 30% | `TRADING_DEFAULTS.MAX_POSITION_PCT` |
 | 最大日次損失率 | 3% | `TRADING_DEFAULTS.MAX_DAILY_LOSS_PCT` |
