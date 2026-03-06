@@ -3,7 +3,7 @@
  */
 
 import { Hono } from "hono";
-import { authMiddleware } from "./middleware/auth";
+
 import dashboardRoute from "./routes/dashboard";
 import positionsRoute from "./routes/positions";
 import ordersRoute from "./routes/orders";
@@ -92,22 +92,6 @@ app.get("/icon-512.png", (c) => {
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="64" fill="#0f172a"/><text x="256" y="350" text-anchor="middle" font-size="300">📈</text></svg>',
       ),
   );
-});
-
-// Authenticated routes
-app.use("/*", async (c, next) => {
-  // Skip auth for already handled routes
-  const path = c.req.path;
-  if (
-    path === "/api/health" ||
-    path === "/manifest.json" ||
-    path === "/sw.js" ||
-    path === "/icon-192.png" ||
-    path === "/icon-512.png"
-  ) {
-    return next();
-  }
-  return authMiddleware(c, next);
 });
 
 // Page routes
