@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
 import { prisma } from "../../lib/prisma";
+import { QUERY_LIMITS } from "../../lib/constants";
 import { layout } from "../views/layout";
 import {
   formatYen,
@@ -35,7 +36,7 @@ app.get("/", async (c) => {
       },
       include: { stock: true },
       orderBy: { updatedAt: "desc" },
-      take: 30,
+      take: QUERY_LIMITS.ORDERS_TODAY,
     }),
   ]);
 

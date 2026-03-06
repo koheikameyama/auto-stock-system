@@ -14,7 +14,7 @@
 
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
-import { SCREENING, YAHOO_FINANCE } from "../lib/constants";
+import { SCREENING, YAHOO_FINANCE, JOB_CONCURRENCY, TECHNICAL_MIN_DATA } from "../lib/constants";
 import {
   fetchMarketData,
   fetchHistoricalData,
@@ -126,7 +126,7 @@ export async function main() {
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 
   // テクニカル分析（並列、バッチ制御）
-  const limit = pLimit(5);
+  const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
   const analysisResults: StockCandidateInput[] = [];
 
   for (let i = 0; i < candidates.length; i += YAHOO_FINANCE.BATCH_SIZE) {
@@ -137,7 +137,7 @@ export async function main() {
         limit(async () => {
           try {
             const historical = await fetchHistoricalData(stock.tickerCode);
-            if (!historical || historical.length < 15) return null;
+            if (!historical || historical.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) return null;
 
             const summary = analyzeTechnicals(historical);
             const formatted = formatTechnicalForAI(summary);

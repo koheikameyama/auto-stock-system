@@ -7,7 +7,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { TRADING_DEFAULTS, YAHOO_FINANCE, SCREENING } from "../lib/constants";
+import { TRADING_DEFAULTS, YAHOO_FINANCE, SCREENING, STOCK_FETCH, TECHNICAL_MIN_DATA, JOB_CONCURRENCY } from "../lib/constants";
 import { fetchStockQuote, fetchHistoricalData } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
 import { normalizeTickerCode } from "../lib/ticker-utils";
@@ -154,7 +154,7 @@ export async function main() {
   // 2. 株価データ更新
   console.log("[2/3] 株価データ更新中...");
   const allStocks = await prisma.stock.findMany({ where: { isDelisted: false } });
-  const limit = pLimit(5);
+  const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
   let updated = 0;
   let failed = 0;
 
@@ -173,7 +173,7 @@ export async function main() {
                 where: { id: stock.id },
                 data: {
                   fetchFailCount: stock.fetchFailCount + 1,
-                  isDelisted: stock.fetchFailCount + 1 >= 5,
+                  isDelisted: stock.fetchFailCount + 1 >= STOCK_FETCH.FAIL_THRESHOLD,
                 },
               });
               return;
@@ -185,12 +185,12 @@ export async function main() {
             let volatility: number | null = null;
 
             const historical = await fetchHistoricalData(stock.tickerCode);
-            if (historical && historical.length >= 15) {
+            if (historical && historical.length >= TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) {
               const summary = analyzeTechnicals(historical);
               atr14 = summary.atr14;
 
               // 週間変化率
-              if (historical.length >= 5) {
+              if (historical.length >= STOCK_FETCH.WEEKLY_CHANGE_MIN_DAYS) {
                 const current = historical[0].close;
                 const weekAgo = historical[4].close;
                 weekChange =

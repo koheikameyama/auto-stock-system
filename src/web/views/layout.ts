@@ -5,6 +5,7 @@
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { CSS } from "./styles";
+import { MARKET_HOURS_CLIENT, REFRESH_INTERVALS } from "../../lib/constants";
 
 type HtmlContent = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -96,9 +97,9 @@ export function layout(
             const now = new Date();
             const h = now.getHours();
             const d = now.getDay();
-            return d >= 1 && d <= 5 && h >= 9 && h < 16;
+            return d >= ${MARKET_HOURS_CLIENT.START_DAY} && d <= ${MARKET_HOURS_CLIENT.END_DAY} && h >= ${MARKET_HOURS_CLIENT.START_HOUR} && h < ${MARKET_HOURS_CLIENT.END_HOUR};
           })();
-          const interval = isMarketHours ? 30000 : 60000;
+          const interval = isMarketHours ? ${REFRESH_INTERVALS.MARKET_HOURS} : ${REFRESH_INTERVALS.OFF_HOURS};
           setTimeout(() => location.reload(), interval);
 
           // Register SW

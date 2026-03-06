@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { TRADING_SCHEDULE } from "../lib/constants";
+import { TRADING_SCHEDULE, POSITION_DEFAULTS } from "../lib/constants";
 import { fetchStockQuote } from "../core/market-data";
 import {
   checkOrderFill,
@@ -77,12 +77,11 @@ export async function main() {
           const sel = selections.find(
             (s) => s.tickerCode === order.stock.tickerCode,
           );
-          takeProfitPrice = sel?.takeProfitPrice ?? filledPrice * 1.03;
-          stopLossPrice = sel?.stopLossPrice ?? filledPrice * 0.98;
+          takeProfitPrice = sel?.takeProfitPrice ?? filledPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
+          stopLossPrice = sel?.stopLossPrice ?? filledPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
         } else {
-          // デフォルト: 3%利確、2%損切り
-          takeProfitPrice = filledPrice * 1.03;
-          stopLossPrice = filledPrice * 0.98;
+          takeProfitPrice = filledPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
+          stopLossPrice = filledPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
         }
 
         const position = await openPosition(

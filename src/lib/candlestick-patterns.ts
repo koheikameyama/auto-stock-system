@@ -6,6 +6,14 @@
  */
 
 import { ChartPatternResult, detectChartPatterns, PricePoint } from "./chart-patterns"
+import {
+  RSI_THRESHOLDS,
+  CANDLE_BODY,
+  CANDLE_WICK,
+  CANDLE_STRENGTH,
+  CANDLE_SIGNAL,
+  COMBINED_SIGNAL,
+} from "./constants"
 
 export interface CandlestickData {
   date: string
@@ -48,7 +56,7 @@ export interface PatternsResponse {
  */
 export function calculateClosingStrength(candle: CandlestickData): number {
   const range = candle.high - candle.low;
-  if (range === 0) return 50; // 値動きなしは中立
+  if (range === 0) return CANDLE_STRENGTH.NEUTRAL_CLOSING;
   return ((candle.close - candle.low) / range) * 100;
 }
 
@@ -63,11 +71,11 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
   const isUp = candle.close >= candle.open
 
   // レンジがほぼゼロの場合（横ばい）
-  if (range < 0.01) {
+  if (range < CANDLE_BODY.DOJI_THRESHOLD) {
     return {
       pattern: "doji",
       signal: "neutral",
-      strength: 30,
+      strength: CANDLE_STRENGTH.DOJI,
       description: "様子見",
       learnMore:
         "始値と終値がほぼ同じで、相場が迷っている状態です。次の動きを見守りましょう。",
@@ -76,12 +84,12 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
 
   // 実体の大きさ判定
   const bodyRatio = body / range
-  const isLargeBody = bodyRatio >= 0.6
-  const isSmallBody = bodyRatio <= 0.2
+  const isLargeBody = bodyRatio >= CANDLE_BODY.LARGE_RATIO
+  const isSmallBody = bodyRatio <= CANDLE_BODY.SMALL_RATIO
 
   // ヒゲの判定
-  const hasLongUpperWick = upperWick / range >= 0.3
-  const hasLongLowerWick = lowerWick / range >= 0.3
+  const hasLongUpperWick = upperWick / range >= CANDLE_WICK.LONG_RATIO
+  const hasLongLowerWick = lowerWick / range >= CANDLE_WICK.LONG_RATIO
 
   // 陽線パターン（買いシグナル）
   if (isUp) {
@@ -90,7 +98,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
       return {
         pattern: "bullish_strong",
         signal: "buy",
-        strength: 80,
+        strength: CANDLE_STRENGTH.LARGE_BODY,
         description: "強い上昇",
         learnMore:
           "大きく上がっています。買い手が優勢で、上昇が続く可能性が高いです。",
@@ -102,7 +110,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
       return {
         pattern: "bullish_hammer",
         signal: "buy",
-        strength: 75,
+        strength: CANDLE_STRENGTH.HAMMER,
         description: "底打ち反発",
         learnMore:
           "一度下がったものの、買い戻されて上昇しました。反発のサインです。",
@@ -114,7 +122,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
       return {
         pattern: "bullish_shooting",
         signal: "buy",
-        strength: 60,
+        strength: CANDLE_STRENGTH.SHOOTING_STAR,
         description: "押し目",
         learnMore:
           "上昇後に少し戻しました。押し目買いのチャンスかもしれません。",
@@ -126,7 +134,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
       return {
         pattern: "bullish_small",
         signal: "buy",
-        strength: 50,
+        strength: CANDLE_STRENGTH.SMALL_BODY,
         description: "じわじわ上昇",
         learnMore:
           "少しずつ上がっています。上昇トレンドが続いている可能性があります。",
@@ -137,7 +145,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
     return {
       pattern: "bullish_normal",
       signal: "buy",
-      strength: 55,
+      strength: CANDLE_STRENGTH.NORMAL,
       description: "上昇",
       learnMore: "株価が上がりました。買い手がやや優勢です。",
     }
@@ -149,7 +157,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
     return {
       pattern: "bearish_strong",
       signal: "sell",
-      strength: 80,
+      strength: CANDLE_STRENGTH.LARGE_BODY,
       description: "強い下落",
       learnMore:
         "大きく下がっています。売り手が優勢で、下落が続く可能性があります。",
@@ -161,7 +169,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
     return {
       pattern: "bearish_shooting",
       signal: "sell",
-      strength: 75,
+      strength: CANDLE_STRENGTH.BEARISH_SHOOTING_STAR,
       description: "戻り売り",
       learnMore:
         "一度上がったものの、売り戻されて下落しました。下落のサインです。",
@@ -173,7 +181,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
     return {
       pattern: "bearish_hammer",
       signal: "sell",
-      strength: 65,
+      strength: CANDLE_STRENGTH.BEARISH_HAMMER,
       description: "高値からの下落",
       learnMore:
         "下で買い支えられたものの、最終的には下がりました。弱気のサインです。",
@@ -185,7 +193,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
     return {
       pattern: "bearish_small",
       signal: "sell",
-      strength: 50,
+      strength: CANDLE_STRENGTH.SMALL_BODY,
       description: "下落の始まり",
       learnMore:
         "少し下がっています。下落トレンドの始まりかもしれません。注意が必要です。",
@@ -196,7 +204,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
   return {
     pattern: "bearish_normal",
     signal: "sell",
-    strength: 55,
+    strength: CANDLE_STRENGTH.NORMAL,
     description: "下落",
     learnMore: "株価が下がりました。売り手がやや優勢です。",
   }
@@ -207,7 +215,7 @@ export function analyzeSingleCandle(candle: CandlestickData): PatternResult {
  */
 export function analyzePatterns(
   candles: CandlestickData[],
-  maxSignals: number = 10
+  maxSignals: number = CANDLE_SIGNAL.MAX_SIGNALS
 ): Array<{
   date: string
   pattern: string
@@ -227,7 +235,7 @@ export function analyzePatterns(
     const result = analyzeSingleCandle(candle)
 
     // strength 60以上のシグナルのみ記録
-    if (result.strength >= 60) {
+    if (result.strength >= CANDLE_SIGNAL.MIN_STRENGTH) {
       signals.push({
         date: candle.date,
         pattern: result.pattern,
@@ -283,29 +291,29 @@ export function getCombinedSignal(
 
   // RSIのシグナル
   if (rsi !== undefined && rsi !== null) {
-    if (rsi <= 30) {
-      buyScore += 70
+    if (rsi <= RSI_THRESHOLDS.OVERSOLD) {
+      buyScore += COMBINED_SIGNAL.RSI_STRONG_SCORE
       reasons.push(`売られすぎ（RSI: ${rsi.toFixed(1)}）`)
-    } else if (rsi >= 70) {
-      sellScore += 70
+    } else if (rsi >= RSI_THRESHOLDS.OVERBOUGHT) {
+      sellScore += COMBINED_SIGNAL.RSI_STRONG_SCORE
       reasons.push(`買われすぎ（RSI: ${rsi.toFixed(1)}）`)
-    } else if (rsi <= 40) {
-      buyScore += 30
-    } else if (rsi >= 60) {
-      sellScore += 30
+    } else if (rsi <= COMBINED_SIGNAL.RSI_MODERATE_LOW) {
+      buyScore += COMBINED_SIGNAL.RSI_MODERATE_SCORE
+    } else if (rsi >= COMBINED_SIGNAL.RSI_MODERATE_HIGH) {
+      sellScore += COMBINED_SIGNAL.RSI_MODERATE_SCORE
     }
   }
 
   // MACDヒストグラムのシグナル
   if (macdHistogram !== undefined && macdHistogram !== null) {
     if (macdHistogram > 0) {
-      buyScore += 40
-      if (macdHistogram > 1) {
+      buyScore += COMBINED_SIGNAL.MACD_BASE_SCORE
+      if (macdHistogram > COMBINED_SIGNAL.MACD_STRONG_THRESHOLD) {
         reasons.push("上昇トレンド（MACD）")
       }
     } else if (macdHistogram < 0) {
-      sellScore += 40
-      if (macdHistogram < -1) {
+      sellScore += COMBINED_SIGNAL.MACD_BASE_SCORE
+      if (macdHistogram < COMBINED_SIGNAL.MACD_WEAK_THRESHOLD) {
         reasons.push("下落トレンド（MACD）")
       }
     }
@@ -323,13 +331,13 @@ export function getCombinedSignal(
 
   const diff = buyScore - sellScore
 
-  if (diff > 50) {
+  if (diff > COMBINED_SIGNAL.SIGNAL_BUY_THRESHOLD) {
     return {
       signal: "buy",
       strength: Math.min(100, Math.round((buyScore / totalScore) * 100)),
       reasons,
     }
-  } else if (diff < -50) {
+  } else if (diff < -COMBINED_SIGNAL.SIGNAL_SELL_THRESHOLD) {
     return {
       signal: "sell",
       strength: Math.min(100, Math.round((sellScore / totalScore) * 100)),
@@ -339,7 +347,7 @@ export function getCombinedSignal(
 
   return {
     signal: "neutral",
-    strength: 50,
+    strength: COMBINED_SIGNAL.NEUTRAL_STRENGTH,
     reasons: reasons.length > 0 ? reasons : ["様子見"],
   }
 }
@@ -389,7 +397,7 @@ export function generatePatternsResponse(
     low: d.low,
     close: d.close,
   }))
-  const signals = analyzePatterns([...candles].reverse(), 10)
+  const signals = analyzePatterns([...candles].reverse(), CANDLE_SIGNAL.MAX_SIGNALS)
 
   // チャートパターン（複数足フォーメーション）を検出
   const pricePoints: PricePoint[] = chartData.map((d) => ({

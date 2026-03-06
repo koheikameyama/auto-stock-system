@@ -19,6 +19,12 @@ import {
   detectTrendlines,
 } from "../lib/technical-indicators";
 import { ATR } from "technicalindicators";
+import {
+  SMA_PERIODS,
+  MACD_CONFIG,
+  VOLUME_ANALYSIS,
+  TECHNICAL_MIN_DATA,
+} from "../lib/constants";
 
 // ========================================
 // 型定義
@@ -99,7 +105,7 @@ export interface TechnicalSummary {
  * @param data - OHLCVデータ（新しい順）
  */
 export function analyzeTechnicals(data: OHLCVData[]): TechnicalSummary {
-  if (data.length < 2) {
+  if (data.length < TECHNICAL_MIN_DATA.BASIC) {
     throw new Error("テクニカル分析には最低2日分のデータが必要です");
   }
 
@@ -115,11 +121,11 @@ export function analyzeTechnicals(data: OHLCVData[]): TechnicalSummary {
 
   // 基本指標
   const rsi = calculateRSI(priceData);
-  const sma5 = calculateSMA(priceData, 5);
-  const sma25 = calculateSMA(priceData, 25);
-  const sma75 = calculateSMA(priceData, 75);
-  const ema12 = calculateEMA(priceData, 12);
-  const ema26 = calculateEMA(priceData, 26);
+  const sma5 = calculateSMA(priceData, SMA_PERIODS.SHORT);
+  const sma25 = calculateSMA(priceData, SMA_PERIODS.MEDIUM);
+  const sma75 = calculateSMA(priceData, SMA_PERIODS.LONG);
+  const ema12 = calculateEMA(priceData, MACD_CONFIG.FAST_PERIOD);
+  const ema26 = calculateEMA(priceData, MACD_CONFIG.SLOW_PERIOD);
   const macd = calculateMACD(priceData);
   const bollingerBands = calculateBollingerBands(priceData);
 
@@ -128,7 +134,7 @@ export function analyzeTechnicals(data: OHLCVData[]): TechnicalSummary {
 
   // 移動平均分析
   const maAlignment = calculateMAAlignment(priceData);
-  const deviationRate25 = calculateDeviationRate(priceData, 25);
+  const deviationRate25 = calculateDeviationRate(priceData, SMA_PERIODS.MEDIUM);
 
   // 総合シグナル
   const signal = getTechnicalSignal(priceData);
@@ -152,8 +158,8 @@ export function analyzeTechnicals(data: OHLCVData[]): TechnicalSummary {
   // 出来高分析
   const volumes = data.map((d) => d.volume);
   const avgVolume20 =
-    volumes.length >= 20
-      ? volumes.slice(0, 20).reduce((sum, v) => sum + v, 0) / 20
+    volumes.length >= VOLUME_ANALYSIS.AVERAGE_PERIOD
+      ? volumes.slice(0, VOLUME_ANALYSIS.AVERAGE_PERIOD).reduce((sum, v) => sum + v, 0) / VOLUME_ANALYSIS.AVERAGE_PERIOD
       : null;
   const currentVolume = volumes[0];
   const volumeRatio = avgVolume20 ? currentVolume / avgVolume20 : null;
@@ -214,7 +220,7 @@ export function analyzeTechnicals(data: OHLCVData[]): TechnicalSummary {
  * @param data - OHLCVデータ（新しい順）
  */
 function calculateATR14(data: OHLCVData[]): number | null {
-  if (data.length < 15) return null;
+  if (data.length < TECHNICAL_MIN_DATA.ATR) return null;
 
   // technicalindicators は oldest-first を期待
   const reversed = [...data].reverse();

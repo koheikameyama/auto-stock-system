@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
 import { prisma } from "../../lib/prisma";
+import { QUERY_LIMITS, ROUTE_LOOKBACK_DAYS } from "../../lib/constants";
 import { layout } from "../views/layout";
 import {
   formatYen,
@@ -27,11 +28,11 @@ app.get("/", async (c) => {
     prisma.tradingPosition.findMany({
       where: {
         status: "closed",
-        exitedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        exitedAt: { gte: new Date(Date.now() - ROUTE_LOOKBACK_DAYS.POSITIONS_CLOSED * 24 * 60 * 60 * 1000) },
       },
       include: { stock: true },
       orderBy: { exitedAt: "desc" },
-      take: 20,
+      take: QUERY_LIMITS.POSITIONS_CLOSED,
     }),
   ]);
 

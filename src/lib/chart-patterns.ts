@@ -50,12 +50,19 @@ export interface ChartPatternResult {
   endIndex: number
 }
 
+import {
+  PATTERN_CONFIG,
+  CHART_PATTERNS_MIN_DATA,
+  CHART_PATTERN_WINDOW_SIZE,
+  DEFAULT_PRICE_TOLERANCE,
+} from "./constants"
+
 /**
  * ローカルの極値（高値・安値のピーク）を検出する
  */
 function findLocalExtremes(
   prices: PricePoint[],
-  windowSize: number = 3
+  windowSize: number = CHART_PATTERN_WINDOW_SIZE
 ): { peaks: number[]; troughs: number[] } {
   const peaks: number[] = []
   const troughs: number[] = []
@@ -83,7 +90,7 @@ function findLocalExtremes(
 /**
  * 2つの価格が「ほぼ同じ水準」かを判定
  */
-function isSimilarPrice(price1: number, price2: number, tolerance: number = 0.03): boolean {
+function isSimilarPrice(price1: number, price2: number, tolerance: number = DEFAULT_PRICE_TOLERANCE): boolean {
   const avg = (price1 + price2) / 2
   return Math.abs(price1 - price2) / avg <= tolerance
 }
@@ -116,9 +123,10 @@ function calculateSlope(values: number[]): number {
  * ネックラインを上抜けると強い上昇シグナル。
  */
 function detectInverseHeadAndShoulders(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.inverse_head_and_shoulders
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { troughs, peaks } = findLocalExtremes(prices, 2)
+  const { troughs, peaks } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (troughs.length < 3 || peaks.length < 2) return null
 
@@ -133,7 +141,7 @@ function detectInverseHeadAndShoulders(prices: PricePoint[]): ChartPatternResult
     if (prices[head].low >= prices[rightShoulder].low) continue
 
     // 両ショルダーがほぼ同じ水準
-    if (!isSimilarPrice(prices[leftShoulder].low, prices[rightShoulder].low, 0.05)) continue
+    if (!isSimilarPrice(prices[leftShoulder].low, prices[rightShoulder].low, cfg.shoulderTolerance)) continue
 
     // ショルダー間のピークを見つける（ネックライン）
     const necklinePeaks = peaks.filter(p => p > leftShoulder && p < rightShoulder)
@@ -151,10 +159,10 @@ function detectInverseHeadAndShoulders(prices: PricePoint[]): ChartPatternResult
       pattern: "inverse_head_and_shoulders",
       patternName: "逆三尊（ぎゃくさんぞん）",
       signal: "buy",
-      rank: "S",
-      winRate: 89,
-      strength: breakout ? 95 : 80,
-      confidence: breakout ? 0.85 : 0.65,
+      rank: cfg.rank,
+      winRate: cfg.winRate,
+      strength: breakout ? cfg.strength.breakout : cfg.strength.noBreakout,
+      confidence: breakout ? cfg.confidence.breakout : cfg.confidence.noBreakout,
       description: breakout
         ? "逆三尊が完成し、ネックラインを上抜けました。強い上昇転換のサインです"
         : "逆三尊が形成中です。ネックラインを超えれば上昇転換の可能性があります",
@@ -178,9 +186,10 @@ function detectInverseHeadAndShoulders(prices: PricePoint[]): ChartPatternResult
  * ネックラインを上抜けると上昇トレンドへ転換。
  */
 function detectDoubleBottom(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 10) return null
+  const cfg = PATTERN_CONFIG.double_bottom
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { troughs, peaks } = findLocalExtremes(prices, 2)
+  const { troughs, peaks } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (troughs.length < 2 || peaks.length < 1) return null
 
@@ -189,10 +198,10 @@ function detectDoubleBottom(prices: PricePoint[]): ChartPatternResult | null {
     const second = troughs[i + 1]
 
     // 2つの谷の間にある程度の距離
-    if (second - first < 5) continue
+    if (second - first < cfg.minPeakDistance) continue
 
     // 2つの底がほぼ同じ水準
-    if (!isSimilarPrice(prices[first].low, prices[second].low, 0.04)) continue
+    if (!isSimilarPrice(prices[first].low, prices[second].low, cfg.priceTolerance)) continue
 
     // 間にピーク（ネックライン）がある
     const middlePeaks = peaks.filter(p => p > first && p < second)
@@ -210,10 +219,10 @@ function detectDoubleBottom(prices: PricePoint[]): ChartPatternResult | null {
       pattern: "double_bottom",
       patternName: "ダブルボトム",
       signal: "buy",
-      rank: "S",
-      winRate: 88,
-      strength: breakout ? 92 : 78,
-      confidence: breakout ? 0.82 : 0.62,
+      rank: cfg.rank,
+      winRate: cfg.winRate,
+      strength: breakout ? cfg.strength.breakout : cfg.strength.noBreakout,
+      confidence: breakout ? cfg.confidence.breakout : cfg.confidence.noBreakout,
       description: breakout
         ? "ダブルボトムが完成しました。W字型の底打ちから上昇転換が期待できます"
         : "ダブルボトムを形成中です。2回同じ水準で底を打ち、反発が期待できます",
@@ -237,44 +246,45 @@ function detectDoubleBottom(prices: PricePoint[]): ChartPatternResult | null {
  * 調整後に再び上昇する可能性が高い。
  */
 function detectBullFlag(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.bull_flag
+  if (prices.length < cfg.minDataPoints) return null
 
   // 前半: 急上昇（ポール）を探す
-  const poleEnd = Math.floor(prices.length * 0.5)
-  const poleStart = Math.max(0, poleEnd - 10)
+  const poleEnd = Math.floor(prices.length * cfg.poleEndRatio)
+  const poleStart = Math.max(0, poleEnd - cfg.poleLookback)
   const poleRise =
     (prices[poleEnd].close - prices[poleStart].close) / prices[poleStart].close
 
-  // 最低5%の上昇が必要
-  if (poleRise < 0.05) return null
+  // 最低限の上昇が必要
+  if (poleRise < cfg.minPoleRise) return null
 
   // 後半: フラッグ部分（やや下向きの狭いレンジ）
   const flagPrices = prices.slice(poleEnd)
-  if (flagPrices.length < 5) return null
+  if (flagPrices.length < cfg.minFlagLength) return null
 
   const flagCloses = flagPrices.map(p => p.close)
   const flagSlope = calculateSlope(flagCloses)
   const avgPrice = flagCloses.reduce((a, b) => a + b, 0) / flagCloses.length
   const normalizedSlope = flagSlope / avgPrice
 
-  // フラッグは緩やかに下降（-3%〜0%の傾き）
-  if (normalizedSlope > 0.001 || normalizedSlope < -0.005) return null
+  // フラッグは緩やかに下降
+  if (normalizedSlope > cfg.flagSlopeMax || normalizedSlope < cfg.flagSlopeMin) return null
 
   // フラッグのレンジが狭い（ボラティリティが低い）
   const flagHigh = Math.max(...flagPrices.map(p => p.high))
   const flagLow = Math.min(...flagPrices.map(p => p.low))
   const flagRange = (flagHigh - flagLow) / avgPrice
 
-  if (flagRange > 0.10) return null // レンジが10%以上なら違う
+  if (flagRange > cfg.maxFlagRange) return null
 
   return {
     pattern: "bull_flag",
     patternName: "上昇フラッグ（ブルフラッグ）",
     signal: "buy",
-    rank: "C",
-    winRate: 54,
-    strength: 58,
-    confidence: 0.50,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: cfg.strength.breakout,
+    confidence: cfg.confidence.breakout,
     description:
       "上昇フラッグを形成中です。急上昇後の小休止で、再上昇の準備段階の可能性があります",
     explanation:
@@ -294,9 +304,10 @@ function detectBullFlag(prices: PricePoint[]): ChartPatternResult | null {
  * 上値抵抗線を上抜けると上昇。
  */
 function detectAscendingTriangle(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.ascending_triangle
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 2 || troughs.length < 2) return null
 
@@ -306,7 +317,7 @@ function detectAscendingTriangle(prices: PricePoint[]): ChartPatternResult | nul
   const avgPeak = peakPrices.reduce((a, b) => a + b, 0) / peakPrices.length
   const normalizedPeakSlope = Math.abs(peakSlope / avgPeak)
 
-  if (normalizedPeakSlope > 0.003) return null // 高値が水平でない
+  if (normalizedPeakSlope > cfg.peakSlopeMax) return null // 高値が水平でない
 
   // 安値が切り上がっているか確認
   const troughPrices = troughs.map(i => prices[i].low)
@@ -314,7 +325,7 @@ function detectAscendingTriangle(prices: PricePoint[]): ChartPatternResult | nul
   const avgTrough = troughPrices.reduce((a, b) => a + b, 0) / troughPrices.length
   const normalizedTroughSlope = troughSlope / avgTrough
 
-  if (normalizedTroughSlope <= 0.001) return null // 安値が切り上がっていない
+  if (normalizedTroughSlope <= cfg.troughSlopeMin) return null // 安値が切り上がっていない
 
   const resistanceLevel = avgPeak
   const latestClose = prices[prices.length - 1].close
@@ -324,10 +335,10 @@ function detectAscendingTriangle(prices: PricePoint[]): ChartPatternResult | nul
     pattern: "ascending_triangle",
     patternName: "上昇トライアングル（アセンディング・トライアングル）",
     signal: "buy",
-    rank: "A",
-    winRate: 83,
-    strength: breakout ? 85 : 70,
-    confidence: breakout ? 0.75 : 0.55,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: breakout ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: breakout ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: breakout
       ? "上昇トライアングルの上値抵抗線を突破しました。上昇の勢いが強まっています"
       : "上昇トライアングルを形成中。安値が切り上がっており、上放れの可能性があります",
@@ -346,9 +357,10 @@ function detectAscendingTriangle(prices: PricePoint[]): ChartPatternResult | nul
  * 同じ水準で3回底を打つパターン。ダブルボトムより信頼度が高い。
  */
 function detectTripleBottom(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 20) return null
+  const cfg = PATTERN_CONFIG.triple_bottom
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { troughs, peaks } = findLocalExtremes(prices, 2)
+  const { troughs, peaks } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (troughs.length < 3 || peaks.length < 2) return null
 
@@ -362,13 +374,13 @@ function detectTripleBottom(prices: PricePoint[]): ChartPatternResult | null {
     const low2 = prices[t2].low
     const low3 = prices[t3].low
 
-    if (!isSimilarPrice(low1, low2, 0.04)) continue
-    if (!isSimilarPrice(low2, low3, 0.04)) continue
-    if (!isSimilarPrice(low1, low3, 0.04)) continue
+    if (!isSimilarPrice(low1, low2, cfg.priceTolerance)) continue
+    if (!isSimilarPrice(low2, low3, cfg.priceTolerance)) continue
+    if (!isSimilarPrice(low1, low3, cfg.priceTolerance)) continue
 
     // 間にピークがある
     const middlePeaks = peaks.filter(p => p > t1 && p < t3)
-    if (middlePeaks.length < 2) continue
+    if (middlePeaks.length < cfg.minMiddlePeaks) continue
 
     const necklinePrice = Math.max(...middlePeaks.map(p => prices[p].high))
     const bottomPrice = Math.min(low1, low2, low3)
@@ -379,10 +391,10 @@ function detectTripleBottom(prices: PricePoint[]): ChartPatternResult | null {
       pattern: "triple_bottom",
       patternName: "トリプルボトム",
       signal: "buy",
-      rank: "A",
-      winRate: 87,
-      strength: breakout ? 88 : 72,
-      confidence: breakout ? 0.78 : 0.58,
+      rank: cfg.rank,
+      winRate: cfg.winRate,
+      strength: breakout ? cfg.strength.breakout : cfg.strength.noBreakout,
+      confidence: breakout ? cfg.confidence.breakout : cfg.confidence.noBreakout,
       description: breakout
         ? "トリプルボトムが完成しました。3回同じ底で跳ね返され、強い買い転換です"
         : "トリプルボトムを形成中。3回同じ水準で底を打っており、非常に強い下値支持があります",
@@ -406,9 +418,10 @@ function detectTripleBottom(prices: PricePoint[]): ChartPatternResult | null {
  * ネックラインを下抜けると下落トレンドへ転換。
  */
 function detectDoubleTop(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 10) return null
+  const cfg = PATTERN_CONFIG.double_top
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 2 || troughs.length < 1) return null
 
@@ -416,10 +429,10 @@ function detectDoubleTop(prices: PricePoint[]): ChartPatternResult | null {
     const first = peaks[i]
     const second = peaks[i + 1]
 
-    if (second - first < 5) continue
+    if (second - first < cfg.minPeakDistance) continue
 
     // 2つの高値がほぼ同じ水準
-    if (!isSimilarPrice(prices[first].high, prices[second].high, 0.04)) continue
+    if (!isSimilarPrice(prices[first].high, prices[second].high, cfg.priceTolerance)) continue
 
     // 間にトラフ（ネックライン）がある
     const middleTroughs = troughs.filter(t => t > first && t < second)
@@ -437,10 +450,10 @@ function detectDoubleTop(prices: PricePoint[]): ChartPatternResult | null {
       pattern: "double_top",
       patternName: "ダブルトップ",
       signal: "sell",
-      rank: "B",
-      winRate: 73,
-      strength: breakdown ? 78 : 65,
-      confidence: breakdown ? 0.70 : 0.55,
+      rank: cfg.rank,
+      winRate: cfg.winRate,
+      strength: breakdown ? cfg.strength.breakout : cfg.strength.noBreakout,
+      confidence: breakdown ? cfg.confidence.breakout : cfg.confidence.noBreakout,
       description: breakdown
         ? "ダブルトップが完成しました。M字型の天井から下落転換が始まっています"
         : "ダブルトップを形成中です。2回同じ高値で跳ね返されており、上値が重い状況です",
@@ -464,9 +477,10 @@ function detectDoubleTop(prices: PricePoint[]): ChartPatternResult | null {
  * ネックラインを下抜けると強い下落シグナル。
  */
 function detectHeadAndShoulders(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.head_and_shoulders
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 3 || troughs.length < 2) return null
 
@@ -480,7 +494,7 @@ function detectHeadAndShoulders(prices: PricePoint[]): ChartPatternResult | null
     if (prices[head].high <= prices[rightShoulder].high) continue
 
     // 両ショルダーがほぼ同じ水準
-    if (!isSimilarPrice(prices[leftShoulder].high, prices[rightShoulder].high, 0.05)) continue
+    if (!isSimilarPrice(prices[leftShoulder].high, prices[rightShoulder].high, cfg.shoulderTolerance)) continue
 
     // ショルダー間のトラフを見つける（ネックライン）
     const necklineTroughs = troughs.filter(t => t > leftShoulder && t < rightShoulder)
@@ -496,10 +510,10 @@ function detectHeadAndShoulders(prices: PricePoint[]): ChartPatternResult | null
       pattern: "head_and_shoulders",
       patternName: "三尊（さんぞん）",
       signal: "sell",
-      rank: "S",
-      winRate: 89,
-      strength: breakdown ? 95 : 80,
-      confidence: breakdown ? 0.85 : 0.65,
+      rank: cfg.rank,
+      winRate: cfg.winRate,
+      strength: breakdown ? cfg.strength.breakout : cfg.strength.noBreakout,
+      confidence: breakdown ? cfg.confidence.breakout : cfg.confidence.noBreakout,
       description: breakdown
         ? "三尊が完成し、ネックラインを下抜けました。強い下落転換のサインです"
         : "三尊を形成中です。ネックラインを割り込むと本格的な下落の可能性があります",
@@ -523,42 +537,43 @@ function detectHeadAndShoulders(prices: PricePoint[]): ChartPatternResult | null
  * 調整後に再び下落する可能性が高い。
  */
 function detectBearFlag(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.bear_flag
+  if (prices.length < cfg.minDataPoints) return null
 
-  const poleEnd = Math.floor(prices.length * 0.5)
-  const poleStart = Math.max(0, poleEnd - 10)
+  const poleEnd = Math.floor(prices.length * cfg.poleEndRatio)
+  const poleStart = Math.max(0, poleEnd - cfg.poleLookback)
   const poleDrop =
     (prices[poleStart].close - prices[poleEnd].close) / prices[poleStart].close
 
-  // 最低5%の下落が必要
-  if (poleDrop < 0.05) return null
+  // 最低限の下落が必要
+  if (poleDrop < cfg.minPoleDrop) return null
 
   // フラッグ部分
   const flagPrices = prices.slice(poleEnd)
-  if (flagPrices.length < 5) return null
+  if (flagPrices.length < cfg.minFlagLength) return null
 
   const flagCloses = flagPrices.map(p => p.close)
   const flagSlope = calculateSlope(flagCloses)
   const avgPrice = flagCloses.reduce((a, b) => a + b, 0) / flagCloses.length
   const normalizedSlope = flagSlope / avgPrice
 
-  // フラッグは緩やかに上昇（0%〜3%の傾き）
-  if (normalizedSlope < -0.001 || normalizedSlope > 0.005) return null
+  // フラッグは緩やかに上昇
+  if (normalizedSlope < cfg.flagSlopeMin || normalizedSlope > cfg.flagSlopeMax) return null
 
   const flagHigh = Math.max(...flagPrices.map(p => p.high))
   const flagLow = Math.min(...flagPrices.map(p => p.low))
   const flagRange = (flagHigh - flagLow) / avgPrice
 
-  if (flagRange > 0.10) return null
+  if (flagRange > cfg.maxFlagRange) return null
 
   return {
     pattern: "bear_flag",
     patternName: "下降フラッグ（ベアフラッグ）",
     signal: "sell",
-    rank: "C",
-    winRate: 54,
-    strength: 58,
-    confidence: 0.50,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: cfg.strength.breakout,
+    confidence: cfg.confidence.breakout,
     description:
       "下降フラッグを形成中です。急下落後の小反発で、再下落の準備段階の可能性があります",
     explanation:
@@ -577,9 +592,10 @@ function detectBearFlag(prices: PricePoint[]): ChartPatternResult | null {
  * 下値支持線を下抜けると下落。
  */
 function detectDescendingTriangle(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.descending_triangle
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 2 || troughs.length < 2) return null
 
@@ -589,7 +605,7 @@ function detectDescendingTriangle(prices: PricePoint[]): ChartPatternResult | nu
   const avgTrough = troughPrices.reduce((a, b) => a + b, 0) / troughPrices.length
   const normalizedTroughSlope = Math.abs(troughSlope / avgTrough)
 
-  if (normalizedTroughSlope > 0.003) return null
+  if (normalizedTroughSlope > cfg.troughSlopeMax) return null
 
   // 高値が切り下がっているか確認
   const peakPrices = peaks.map(i => prices[i].high)
@@ -597,7 +613,7 @@ function detectDescendingTriangle(prices: PricePoint[]): ChartPatternResult | nu
   const avgPeak = peakPrices.reduce((a, b) => a + b, 0) / peakPrices.length
   const normalizedPeakSlope = peakSlope / avgPeak
 
-  if (normalizedPeakSlope >= -0.001) return null
+  if (normalizedPeakSlope >= cfg.peakSlopeMin) return null
 
   const supportLevel = avgTrough
   const latestClose = prices[prices.length - 1].close
@@ -607,10 +623,10 @@ function detectDescendingTriangle(prices: PricePoint[]): ChartPatternResult | nu
     pattern: "descending_triangle",
     patternName: "下降トライアングル（ディセンディング・トライアングル）",
     signal: "sell",
-    rank: "S",
-    winRate: 87,
-    strength: breakdown ? 90 : 75,
-    confidence: breakdown ? 0.82 : 0.60,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: breakdown ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: breakdown ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: breakdown
       ? "下降トライアングルの支持線を下抜けました。下落の勢いが強まっています"
       : "下降トライアングルを形成中。高値が切り下がっており、下放れの可能性があります",
@@ -630,9 +646,10 @@ function detectDescendingTriangle(prices: PricePoint[]): ChartPatternResult | nu
  * どちらに抜けるかで次のトレンドが決まる。
  */
 function detectBoxRange(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.box_range
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 2 || troughs.length < 2) return null
 
@@ -649,11 +666,11 @@ function detectBoxRange(prices: PricePoint[]): ChartPatternResult | null {
   const troughStdDev = Math.sqrt(troughVariance) / avgTrough
 
   // 高値・安値の標準偏差が小さい（水平に近い）
-  if (peakStdDev > 0.03 || troughStdDev > 0.03) return null
+  if (peakStdDev > cfg.maxStdDev || troughStdDev > cfg.maxStdDev) return null
 
-  // レンジの幅が適度（3%〜15%）
+  // レンジの幅が適度
   const rangeWidth = (avgPeak - avgTrough) / avgTrough
-  if (rangeWidth < 0.03 || rangeWidth > 0.15) return null
+  if (rangeWidth < cfg.minRangeWidth || rangeWidth > cfg.maxRangeWidth) return null
 
   const latestClose = prices[prices.length - 1].close
   const positionInRange = (latestClose - avgTrough) / (avgPeak - avgTrough)
@@ -662,10 +679,10 @@ function detectBoxRange(prices: PricePoint[]): ChartPatternResult | null {
     pattern: "box_range",
     patternName: "ボックスレンジ",
     signal: "neutral",
-    rank: "D",
-    winRate: 55,
-    strength: 55,
-    confidence: 0.55,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: cfg.strength.breakout,
+    confidence: cfg.confidence.breakout,
     description:
       `ボックスレンジで推移中です。${avgTrough.toLocaleString()}円〜${avgPeak.toLocaleString()}円の間で動いています`,
     explanation:
@@ -685,9 +702,10 @@ function detectBoxRange(prices: PricePoint[]): ChartPatternResult | null {
  * 三角形が収束し、どちらかにブレイクする。
  */
 function detectSymmetricalTriangle(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.symmetrical_triangle
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 2 || troughs.length < 2) return null
 
@@ -697,7 +715,7 @@ function detectSymmetricalTriangle(prices: PricePoint[]): ChartPatternResult | n
   const avgPeak = peakPrices.reduce((a, b) => a + b, 0) / peakPrices.length
   const normalizedPeakSlope = peakSlope / avgPeak
 
-  if (normalizedPeakSlope >= -0.0005) return null // 高値が切り下がっていない
+  if (normalizedPeakSlope >= cfg.peakSlopeMax) return null // 高値が切り下がっていない
 
   // 安値が切り上がっている
   const troughPrices = troughs.map(i => prices[i].low)
@@ -705,7 +723,7 @@ function detectSymmetricalTriangle(prices: PricePoint[]): ChartPatternResult | n
   const avgTrough = troughPrices.reduce((a, b) => a + b, 0) / troughPrices.length
   const normalizedTroughSlope = troughSlope / avgTrough
 
-  if (normalizedTroughSlope <= 0.0005) return null // 安値が切り上がっていない
+  if (normalizedTroughSlope <= cfg.troughSlopeMin) return null // 安値が切り上がっていない
 
   // 収束度合い
   const latestRange = peakPrices[peakPrices.length - 1] - troughPrices[troughPrices.length - 1]
@@ -716,10 +734,10 @@ function detectSymmetricalTriangle(prices: PricePoint[]): ChartPatternResult | n
     pattern: "symmetrical_triangle",
     patternName: "三角保ち合い（シンメトリカル・トライアングル）",
     signal: "neutral",
-    rank: "D",
-    winRate: 55,
-    strength: 55,
-    confidence: 0.52,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: cfg.strength.breakout,
+    confidence: cfg.confidence.breakout,
     description:
       "三角保ち合いを形成中です。値幅が狭まっており、近いうちに大きく動く可能性があります",
     explanation:
@@ -739,10 +757,11 @@ function detectSymmetricalTriangle(prices: PricePoint[]): ChartPatternResult | n
  * Bulkowski勝率: 68%
  */
 function detectCupWithHandle(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 20) return null
+  const cfg = PATTERN_CONFIG.cup_with_handle
+  if (prices.length < cfg.minDataPoints) return null
 
   // カップ部分を探す: 前半で下落→底→上昇
-  const cupEnd = Math.floor(prices.length * 0.75)
+  const cupEnd = Math.floor(prices.length * cfg.cupEndRatio)
   const cupStart = 0
 
   // カップの左リム（開始点の高値）
@@ -756,32 +775,31 @@ function detectCupWithHandle(prices: PricePoint[]): ChartPatternResult | null {
   }
 
   // 底がカップの中間付近にあるか（U字型の確認）
-  const cupMid = (cupStart + cupEnd) / 2
-  if (cupBottomIdx < cupStart + 3 || cupBottomIdx > cupEnd - 3) return null
+  if (cupBottomIdx < cupStart + cfg.cupBottomMargin || cupBottomIdx > cupEnd - cfg.cupBottomMargin) return null
 
   // カップの右リム（カップ終了点の高値）
   const rightRimPrice = prices[cupEnd].close
   const cupBottomPrice = prices[cupBottomIdx].low
 
-  // カップの深さが5%〜35%（浅すぎても深すぎてもNG）
+  // カップの深さ（浅すぎても深すぎてもNG）
   const avgRim = (leftRimPrice + rightRimPrice) / 2
   const cupDepth = (avgRim - cupBottomPrice) / avgRim
-  if (cupDepth < 0.05 || cupDepth > 0.35) return null
+  if (cupDepth < cfg.minCupDepth || cupDepth > cfg.maxCupDepth) return null
 
-  // 右リムが左リムの90%以上まで回復していること（U字型）
-  if (rightRimPrice < leftRimPrice * 0.90) return null
+  // 右リムが左リムの一定割合以上まで回復していること（U字型）
+  if (rightRimPrice < leftRimPrice * cfg.rimRecovery) return null
 
   // ハンドル部分: カップ後の小さな調整
   const handlePrices = prices.slice(cupEnd)
-  if (handlePrices.length < 3) return null
+  if (handlePrices.length < cfg.minHandleLength) return null
 
   const handleLow = Math.min(...handlePrices.map(p => p.low))
   const handleDrop = (rightRimPrice - handleLow) / rightRimPrice
 
-  // ハンドルの下落はカップ深さの50%以内
-  if (handleDrop > cupDepth * 0.5) return null
-  // ハンドルは最低1%の調整
-  if (handleDrop < 0.01) return null
+  // ハンドルの下落はカップ深さの一定割合以内
+  if (handleDrop > cupDepth * cfg.maxHandleDropRatio) return null
+  // ハンドルは最低限の調整
+  if (handleDrop < cfg.minHandleDrop) return null
 
   const latestClose = prices[prices.length - 1].close
   const breakout = latestClose > Math.max(leftRimPrice, rightRimPrice)
@@ -790,10 +808,10 @@ function detectCupWithHandle(prices: PricePoint[]): ChartPatternResult | null {
     pattern: "cup_with_handle",
     patternName: "カップウィズハンドル",
     signal: "buy",
-    rank: "B",
-    winRate: 68,
-    strength: breakout ? 75 : 62,
-    confidence: breakout ? 0.65 : 0.50,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: breakout ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: breakout ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: breakout
       ? "カップウィズハンドルが完成し、リム（縁）を上抜けました。上昇トレンドの開始が期待できます"
       : "カップウィズハンドルを形成中です。U字型の底から回復し、小さな調整（取っ手）を経ています",
@@ -815,7 +833,8 @@ function detectCupWithHandle(prices: PricePoint[]): ChartPatternResult | null {
  * Bulkowski勝率: 65%
  */
 function detectSaucerBottom(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 20) return null
+  const cfg = PATTERN_CONFIG.saucer_bottom
+  if (prices.length < cfg.minDataPoints) return null
 
   // 前半で緩やかに下落、後半で緩やかに上昇
   const midPoint = Math.floor(prices.length / 2)
@@ -832,23 +851,23 @@ function detectSaucerBottom(prices: PricePoint[]): ChartPatternResult | null {
   const normSecondSlope = secondSlope / avgSecond
 
   // 前半は下降（緩やか）、後半は上昇（緩やか）
-  if (normFirstSlope >= -0.0002) return null  // 前半が下がっていない
-  if (normSecondSlope <= 0.0002) return null   // 後半が上がっていない
+  if (normFirstSlope >= -cfg.minSlope) return null  // 前半が下がっていない
+  if (normSecondSlope <= cfg.minSlope) return null   // 後半が上がっていない
 
   // 両方とも急激でないこと（ソーサーは緩やか）
-  if (Math.abs(normFirstSlope) > 0.008) return null
-  if (Math.abs(normSecondSlope) > 0.008) return null
+  if (Math.abs(normFirstSlope) > cfg.maxSlope) return null
+  if (Math.abs(normSecondSlope) > cfg.maxSlope) return null
 
-  // 底が浅い（2%〜20%）
+  // 底が浅い
   const startPrice = prices[0].close
   const bottomPrice = Math.min(...prices.map(p => p.low))
   const endPrice = prices[prices.length - 1].close
   const depth = (Math.max(startPrice, endPrice) - bottomPrice) / Math.max(startPrice, endPrice)
 
-  if (depth < 0.02 || depth > 0.20) return null
+  if (depth < cfg.minDepth || depth > cfg.maxDepth) return null
 
-  // 最終価格が開始価格の85%以上まで回復
-  if (endPrice < startPrice * 0.85) return null
+  // 最終価格が開始価格の一定割合以上まで回復
+  if (endPrice < startPrice * cfg.minRecovery) return null
 
   const recovery = endPrice > startPrice
 
@@ -856,10 +875,10 @@ function detectSaucerBottom(prices: PricePoint[]): ChartPatternResult | null {
     pattern: "saucer_bottom",
     patternName: "ソーサーボトム（受け皿型の底）",
     signal: "buy",
-    rank: "B",
-    winRate: 65,
-    strength: recovery ? 70 : 58,
-    confidence: recovery ? 0.62 : 0.48,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: recovery ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: recovery ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: recovery
       ? "ソーサーボトムが完成に近づいています。緩やかに底を打ち、回復基調に入っています"
       : "ソーサーボトムを形成中です。緩やかなU字型の底から徐々に回復しています",
@@ -880,9 +899,10 @@ function detectSaucerBottom(prices: PricePoint[]): ChartPatternResult | null {
  * Bulkowski勝率: 68%
  */
 function detectInverseCupWithHandle(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 20) return null
+  const cfg = PATTERN_CONFIG.inverse_cup_with_handle
+  if (prices.length < cfg.minDataPoints) return null
 
-  const cupEnd = Math.floor(prices.length * 0.75)
+  const cupEnd = Math.floor(prices.length * cfg.cupEndRatio)
   const cupStart = 0
 
   // 逆カップの左リム（開始点の安値）
@@ -895,28 +915,28 @@ function detectInverseCupWithHandle(prices: PricePoint[]): ChartPatternResult | 
     }
   }
 
-  if (cupTopIdx < cupStart + 3 || cupTopIdx > cupEnd - 3) return null
+  if (cupTopIdx < cupStart + cfg.cupTopMargin || cupTopIdx > cupEnd - cfg.cupTopMargin) return null
 
   const rightRimPrice = prices[cupEnd].close
   const cupTopPrice = prices[cupTopIdx].high
 
-  // 逆カップの高さが5%〜35%
+  // 逆カップの高さ
   const avgRim = (leftRimPrice + rightRimPrice) / 2
   const cupHeight = (cupTopPrice - avgRim) / avgRim
-  if (cupHeight < 0.05 || cupHeight > 0.35) return null
+  if (cupHeight < cfg.minCupHeight || cupHeight > cfg.maxCupHeight) return null
 
-  // 右リムが左リムの110%以内（逆U字型）
-  if (rightRimPrice > leftRimPrice * 1.10) return null
+  // 右リムが左リムの一定範囲以内（逆U字型）
+  if (rightRimPrice > leftRimPrice * cfg.rimMax) return null
 
   // ハンドル部分: 逆カップ後の小さな上昇
   const handlePrices = prices.slice(cupEnd)
-  if (handlePrices.length < 3) return null
+  if (handlePrices.length < cfg.minHandleLength) return null
 
   const handleHigh = Math.max(...handlePrices.map(p => p.high))
   const handleRise = (handleHigh - rightRimPrice) / rightRimPrice
 
-  if (handleRise > cupHeight * 0.5) return null
-  if (handleRise < 0.01) return null
+  if (handleRise > cupHeight * cfg.maxHandleRiseRatio) return null
+  if (handleRise < cfg.minHandleRise) return null
 
   const latestClose = prices[prices.length - 1].close
   const breakdown = latestClose < Math.min(leftRimPrice, rightRimPrice)
@@ -925,10 +945,10 @@ function detectInverseCupWithHandle(prices: PricePoint[]): ChartPatternResult | 
     pattern: "inverse_cup_with_handle",
     patternName: "逆カップウィズハンドル",
     signal: "sell",
-    rank: "B",
-    winRate: 68,
-    strength: breakdown ? 75 : 62,
-    confidence: breakdown ? 0.65 : 0.50,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: breakdown ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: breakdown ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: breakdown
       ? "逆カップウィズハンドルが完成し、リムを下抜けました。下落トレンドの開始が懸念されます"
       : "逆カップウィズハンドルを形成中です。逆U字型の天井から戻りが弱い状態です",
@@ -949,7 +969,8 @@ function detectInverseCupWithHandle(prices: PricePoint[]): ChartPatternResult | 
  * Bulkowski勝率: 65%
  */
 function detectSaucerTop(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 20) return null
+  const cfg = PATTERN_CONFIG.saucer_top
+  if (prices.length < cfg.minDataPoints) return null
 
   const midPoint = Math.floor(prices.length / 2)
   const firstHalf = prices.slice(0, midPoint).map(p => p.close)
@@ -965,20 +986,20 @@ function detectSaucerTop(prices: PricePoint[]): ChartPatternResult | null {
   const normSecondSlope = secondSlope / avgSecond
 
   // 前半は上昇（緩やか）、後半は下降（緩やか）
-  if (normFirstSlope <= 0.0002) return null
-  if (normSecondSlope >= -0.0002) return null
+  if (normFirstSlope <= cfg.minSlope) return null
+  if (normSecondSlope >= -cfg.minSlope) return null
 
-  if (Math.abs(normFirstSlope) > 0.008) return null
-  if (Math.abs(normSecondSlope) > 0.008) return null
+  if (Math.abs(normFirstSlope) > cfg.maxSlope) return null
+  if (Math.abs(normSecondSlope) > cfg.maxSlope) return null
 
   const startPrice = prices[0].close
   const topPrice = Math.max(...prices.map(p => p.high))
   const endPrice = prices[prices.length - 1].close
   const height = (topPrice - Math.min(startPrice, endPrice)) / topPrice
 
-  if (height < 0.02 || height > 0.20) return null
+  if (height < cfg.minHeight || height > cfg.maxHeight) return null
 
-  if (endPrice > startPrice * 1.15) return null
+  if (endPrice > startPrice * cfg.maxEndPriceRatio) return null
 
   const decline = endPrice < startPrice
 
@@ -986,10 +1007,10 @@ function detectSaucerTop(prices: PricePoint[]): ChartPatternResult | null {
     pattern: "saucer_top",
     patternName: "ソーサートップ（受け皿型の天井）",
     signal: "sell",
-    rank: "B",
-    winRate: 65,
-    strength: decline ? 70 : 58,
-    confidence: decline ? 0.62 : 0.48,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: decline ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: decline ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: decline
       ? "ソーサートップが完成に近づいています。緩やかに天井を打ち、下落基調に入っています"
       : "ソーサートップを形成中です。緩やかな逆U字型の天井から徐々に下降しています",
@@ -1011,9 +1032,10 @@ function detectSaucerTop(prices: PricePoint[]): ChartPatternResult | null {
  * Bulkowski勝率: 58%
  */
 function detectFallingWedge(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.falling_wedge
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 2 || troughs.length < 2) return null
 
@@ -1030,8 +1052,8 @@ function detectFallingWedge(prices: PricePoint[]): ChartPatternResult | null {
   const normTroughSlope = troughSlope / avgTrough
 
   // 両方下がっている
-  if (normPeakSlope >= -0.0005) return null
-  if (normTroughSlope >= -0.0005) return null
+  if (normPeakSlope >= cfg.minSlope) return null
+  if (normTroughSlope >= cfg.minSlope) return null
 
   // 安値の方がより急に下がっている（収束）
   if (normTroughSlope >= normPeakSlope) return null
@@ -1049,10 +1071,10 @@ function detectFallingWedge(prices: PricePoint[]): ChartPatternResult | null {
     pattern: "falling_wedge",
     patternName: "下降ウェッジ（フォーリング・ウェッジ）",
     signal: "buy",
-    rank: "C",
-    winRate: 58,
-    strength: breakout ? 65 : 52,
-    confidence: breakout ? 0.55 : 0.42,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: breakout ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: breakout ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: breakout
       ? "下降ウェッジの上値ラインを上抜けました。下落トレンドからの反転が期待できます"
       : "下降ウェッジを形成中です。値幅が狭まっており、上放れの可能性があります",
@@ -1073,9 +1095,10 @@ function detectFallingWedge(prices: PricePoint[]): ChartPatternResult | null {
  * Bulkowski勝率: 58%
  */
 function detectRisingWedge(prices: PricePoint[]): ChartPatternResult | null {
-  if (prices.length < 15) return null
+  const cfg = PATTERN_CONFIG.rising_wedge
+  if (prices.length < cfg.minDataPoints) return null
 
-  const { peaks, troughs } = findLocalExtremes(prices, 2)
+  const { peaks, troughs } = findLocalExtremes(prices, cfg.extremeWindow)
 
   if (peaks.length < 2 || troughs.length < 2) return null
 
@@ -1092,8 +1115,8 @@ function detectRisingWedge(prices: PricePoint[]): ChartPatternResult | null {
   const normTroughSlope = troughSlope / avgTrough
 
   // 両方上がっている
-  if (normPeakSlope <= 0.0005) return null
-  if (normTroughSlope <= 0.0005) return null
+  if (normPeakSlope <= cfg.minSlope) return null
+  if (normTroughSlope <= cfg.minSlope) return null
 
   // 高値の上昇が安値の上昇より鈍い（収束）
   if (normPeakSlope >= normTroughSlope) return null
@@ -1111,10 +1134,10 @@ function detectRisingWedge(prices: PricePoint[]): ChartPatternResult | null {
     pattern: "rising_wedge",
     patternName: "上昇ウェッジ（ライジング・ウェッジ）",
     signal: "sell",
-    rank: "C",
-    winRate: 58,
-    strength: breakdown ? 65 : 52,
-    confidence: breakdown ? 0.55 : 0.42,
+    rank: cfg.rank,
+    winRate: cfg.winRate,
+    strength: breakdown ? cfg.strength.breakout : cfg.strength.noBreakout,
+    confidence: breakdown ? cfg.confidence.breakout : cfg.confidence.noBreakout,
     description: breakdown
       ? "上昇ウェッジの下値ラインを下抜けました。上昇トレンドからの反転が懸念されます"
       : "上昇ウェッジを形成中です。値幅が狭まっており、下放れの可能性があります",
@@ -1131,7 +1154,7 @@ function detectRisingWedge(prices: PricePoint[]): ChartPatternResult | null {
  * すべてのチャートパターンを検出する（メインのエントリーポイント）
  */
 export function detectChartPatterns(prices: PricePoint[]): ChartPatternResult[] {
-  if (prices.length < 10) return []
+  if (prices.length < CHART_PATTERNS_MIN_DATA) return []
 
   const detectors = [
     // S級

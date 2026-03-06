@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
 import { prisma } from "../../lib/prisma";
+import { QUERY_LIMITS, ROUTE_LOOKBACK_DAYS } from "../../lib/constants";
 import { layout } from "../views/layout";
 import {
   formatYen,
@@ -18,12 +19,12 @@ const app = new Hono();
 app.get("/", async (c) => {
 
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - ROUTE_LOOKBACK_DAYS.HISTORY * 24 * 60 * 60 * 1000);
 
   const summaries = await prisma.tradingDailySummary.findMany({
     where: { date: { gte: thirtyDaysAgo } },
     orderBy: { date: "desc" },
-    take: 30,
+    take: QUERY_LIMITS.HISTORY_SUMMARIES,
   });
 
   // Cumulative PnL chart data (oldest first)

@@ -5,6 +5,7 @@
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { COLORS } from "./styles";
+import { CHART_PADDING, CHART_LABEL_THRESHOLD } from "../../lib/constants";
 
 type HtmlContent = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -100,7 +101,7 @@ export function sparklineChart(
 ): HtmlContent {
   if (data.length < 2) return emptyState("データ不足");
 
-  const padding = { top: 10, right: 10, bottom: 20, left: 50 };
+  const padding = { top: CHART_PADDING.TOP, right: CHART_PADDING.RIGHT, bottom: CHART_PADDING.BOTTOM, left: CHART_PADDING.LEFT };
   const w = width - padding.left - padding.right;
   const h = height - padding.top - padding.bottom;
 
@@ -158,7 +159,7 @@ export function sparklineChart(
     >
       ¥${formatYen(minV)}
     </text>
-    ${data.length <= 15
+    ${data.length <= CHART_LABEL_THRESHOLD
       ? data.map(
           (d, i) =>
             html`<text

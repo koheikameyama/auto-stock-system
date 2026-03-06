@@ -1,6 +1,16 @@
 // 技術指標計算ライブラリ
 
-import { TRENDLINE } from "./constants";
+import {
+  TRENDLINE,
+  RSI_THRESHOLDS,
+  MACD_CONFIG,
+  SMA_PERIODS,
+  TECHNICAL_SIGNAL,
+  GAP_DETECTION,
+  SUPPORT_RESISTANCE,
+  MA_ALIGNMENT,
+  TRENDLINE_SCORE,
+} from "./constants";
 
 interface PriceData {
   close: number;
@@ -79,12 +89,12 @@ export function calculateMACD(prices: PriceData[]): {
   signal: number | null;
   histogram: number | null;
 } {
-  if (prices.length < 26) {
+  if (prices.length < MACD_CONFIG.SLOW_PERIOD) {
     return { macd: null, signal: null, histogram: null };
   }
 
-  const ema12 = calculateEMA(prices, 12);
-  const ema26 = calculateEMA(prices, 26);
+  const ema12 = calculateEMA(prices, MACD_CONFIG.FAST_PERIOD);
+  const ema26 = calculateEMA(prices, MACD_CONFIG.SLOW_PERIOD);
 
   if (!ema12 || !ema26) {
     return { macd: null, signal: null, histogram: null };
@@ -94,7 +104,7 @@ export function calculateMACD(prices: PriceData[]): {
 
   // シグナルライン（MACDの9日EMA）は簡易的にMACDのみで計算
   // 本来はMACD値の履歴からEMAを計算すべき
-  const signal = macd * 0.9; // 簡易計算
+  const signal = macd * MACD_CONFIG.SIGNAL_APPROXIMATION; // 簡易計算
 
   const histogram = macd - signal;
 
@@ -146,7 +156,7 @@ export function getTechnicalSignal(prices: PriceData[]): {
   reasons: string[];
 } {
   const rsi = calculateRSI(prices);
-  const sma25 = calculateSMA(prices, 25);
+  const sma25 = calculateSMA(prices, SMA_PERIODS.MEDIUM);
   const macd = calculateMACD(prices);
   const maAlignment = calculateMAAlignment(prices);
   const currentPrice = prices[0].close;
@@ -156,10 +166,10 @@ export function getTechnicalSignal(prices: PriceData[]): {
 
   // RSIチェック
   if (rsi !== null) {
-    if (rsi < 30) {
+    if (rsi < RSI_THRESHOLDS.OVERSOLD) {
       signal += 1;
       reasons.push(`RSI${rsi.toFixed(1)}で売られすぎ`);
-    } else if (rsi > 70) {
+    } else if (rsi > RSI_THRESHOLDS.OVERBOUGHT) {
       signal -= 1;
       reasons.push(`RSI${rsi.toFixed(1)}で買われすぎ`);
     }
@@ -168,10 +178,10 @@ export function getTechnicalSignal(prices: PriceData[]): {
   // 移動平均チェック
   if (sma25 !== null) {
     if (currentPrice > sma25) {
-      signal += 0.5;
+      signal += TECHNICAL_SIGNAL.MA_WEIGHT;
       reasons.push("25日移動平均を上回る");
     } else {
-      signal -= 0.5;
+      signal -= TECHNICAL_SIGNAL.MA_WEIGHT;
       reasons.push("25日移動平均を下回る");
     }
   }
@@ -179,39 +189,39 @@ export function getTechnicalSignal(prices: PriceData[]): {
   // MACDチェック
   if (macd.macd !== null && macd.signal !== null) {
     if (macd.histogram && macd.histogram > 0) {
-      signal += 0.5;
+      signal += TECHNICAL_SIGNAL.MA_WEIGHT;
       reasons.push("MACDが上向き");
     } else {
-      signal -= 0.5;
+      signal -= TECHNICAL_SIGNAL.MA_WEIGHT;
       reasons.push("MACDが下向き");
     }
   }
 
   // 移動平均線の並び・方向性チェック（パーフェクトオーダー）
   if (maAlignment.trend === "uptrend") {
-    signal += 1;
+    signal += TECHNICAL_SIGNAL.PERFECT_ORDER;
     reasons.push("移動平均線が上昇トレンド（短期→中期→長期の順に並び右肩上がり）");
   } else if (maAlignment.trend === "downtrend") {
-    signal -= 1;
+    signal -= TECHNICAL_SIGNAL.PERFECT_ORDER;
     reasons.push("移動平均線が下降トレンド（長期→中期→短期の順に並び右肩下がり）");
   } else if (maAlignment.orderAligned && !maAlignment.slopesAligned) {
     // 並びは正しいが方向性が揃っていない（トレンド転換の可能性）
     if (maAlignment.sma5 !== null && maAlignment.sma75 !== null) {
       if (maAlignment.sma5 > maAlignment.sma75) {
-        signal += 0.3;
+        signal += TECHNICAL_SIGNAL.PARTIAL_ORDER;
         reasons.push("移動平均線の並びは上昇順だが方向性は不揃い");
       } else {
-        signal -= 0.3;
+        signal -= TECHNICAL_SIGNAL.PARTIAL_ORDER;
         reasons.push("移動平均線の並びは下降順だが方向性は不揃い");
       }
     }
   }
 
   let strength = "中立";
-  if (signal >= 1.5) strength = "強い買い";
-  else if (signal >= 0.5) strength = "買い";
-  else if (signal <= -1.5) strength = "強い売り";
-  else if (signal <= -0.5) strength = "売り";
+  if (signal >= TECHNICAL_SIGNAL.STRONG_BUY) strength = "強い買い";
+  else if (signal >= TECHNICAL_SIGNAL.BUY) strength = "買い";
+  else if (signal <= TECHNICAL_SIGNAL.STRONG_SELL) strength = "強い売り";
+  else if (signal <= TECHNICAL_SIGNAL.SELL) strength = "売り";
 
   return {
     signal: Math.round(signal * 100) / 100,
@@ -230,7 +240,7 @@ export function getTechnicalSignal(prices: PriceData[]): {
  */
 export function calculateMAAlignment(
   prices: PriceData[],
-  slopeLookback: number = 5,
+  slopeLookback: number = MA_ALIGNMENT.SLOPE_LOOKBACK,
 ): {
   trend: "uptrend" | "downtrend" | "none";
   sma5: number | null;
@@ -239,9 +249,9 @@ export function calculateMAAlignment(
   orderAligned: boolean;
   slopesAligned: boolean;
 } {
-  const sma5 = calculateSMA(prices, 5);
-  const sma25 = calculateSMA(prices, 25);
-  const sma75 = calculateSMA(prices, 75);
+  const sma5 = calculateSMA(prices, SMA_PERIODS.SHORT);
+  const sma25 = calculateSMA(prices, SMA_PERIODS.MEDIUM);
+  const sma75 = calculateSMA(prices, SMA_PERIODS.LONG);
 
   const noTrend = {
     trend: "none" as const,
@@ -260,7 +270,7 @@ export function calculateMAAlignment(
   if (!isUptrendOrder && !isDowntrendOrder) return noTrend;
 
   // N日前のMAと比較して方向性を判定
-  if (prices.length < 75 + slopeLookback) {
+  if (prices.length < SMA_PERIODS.LONG + slopeLookback) {
     return { ...noTrend, orderAligned: true };
   }
 
@@ -342,7 +352,7 @@ export function detectGaps(prices: PriceData[]): {
     return { type: null, price: null, isFilled: false, date: null };
 
   // 直近最大5日間で窓を探す
-  for (let i = 0; i < Math.min(5, prices.length - 1); i++) {
+  for (let i = 0; i < Math.min(GAP_DETECTION.LOOKBACK_DAYS, prices.length - 1); i++) {
     const today = prices[i];
     const yesterday = prices[i + 1];
 
@@ -404,7 +414,7 @@ export function findSupportResistance(prices: PriceData[]): {
   supports: number[];
   resistances: number[];
 } {
-  if (prices.length < 20) return { supports: [], resistances: [] };
+  if (prices.length < SUPPORT_RESISTANCE.MIN_DATA_POINTS) return { supports: [], resistances: [] };
 
   const highs = prices
     .map((p) => p.high || p.close)
@@ -415,7 +425,7 @@ export function findSupportResistance(prices: PriceData[]): {
   const pricePoints = [...highs, ...lows];
   const min = Math.min(...pricePoints);
   const max = Math.max(...pricePoints);
-  const step = (max - min) / 20; // 20分割
+  const step = (max - min) / SUPPORT_RESISTANCE.BUCKET_COUNT;
 
   const buckets: { [key: number]: number } = {};
   pricePoints.forEach((p) => {
@@ -426,7 +436,7 @@ export function findSupportResistance(prices: PriceData[]): {
   // 頻出価格帯を特定
   const sortedBuckets = Object.entries(buckets)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 3); // 上位3位
+    .slice(0, SUPPORT_RESISTANCE.TOP_LEVELS);
 
   const levels = sortedBuckets.map(
     ([bucket]) => min + Number(bucket) * step + step / 2,
@@ -590,7 +600,7 @@ function detectSupportTrendline(
       if (touches < TRENDLINE.MIN_TOUCHES) continue;
 
       // スコア: 接触回数を重視、スパンの長さにボーナス
-      const score = touches * 10 + (idxB - idxA) * 0.1 - violations * 5;
+      const score = touches * TRENDLINE_SCORE.TOUCH_WEIGHT + (idxB - idxA) * TRENDLINE_SCORE.SPAN_WEIGHT - violations * TRENDLINE_SCORE.VIOLATION_PENALTY;
 
       if (score > bestScore) {
         bestScore = score;
@@ -680,7 +690,7 @@ function detectResistanceTrendline(
       if (violations / totalPoints > TRENDLINE.MAX_VIOLATION_RATIO) continue;
       if (touches < TRENDLINE.MIN_TOUCHES) continue;
 
-      const score = touches * 10 + (idxB - idxA) * 0.1 - violations * 5;
+      const score = touches * TRENDLINE_SCORE.TOUCH_WEIGHT + (idxB - idxA) * TRENDLINE_SCORE.SPAN_WEIGHT - violations * TRENDLINE_SCORE.VIOLATION_PENALTY;
 
       if (score > bestScore) {
         bestScore = score;

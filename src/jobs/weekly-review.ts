@@ -7,7 +7,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { OPENAI_CONFIG } from "../lib/constants";
+import { OPENAI_CONFIG, WEEKLY_REVIEW } from "../lib/constants";
 import { getOpenAIClient } from "../lib/openai";
 import { notifySlack } from "../lib/slack";
 import dayjs from "dayjs";
@@ -16,7 +16,7 @@ export async function main() {
   console.log("=== Weekly Review 開始 ===");
 
   // 直近7日間のサマリーを取得
-  const weekAgo = dayjs().subtract(7, "day").toDate();
+  const weekAgo = dayjs().subtract(WEEKLY_REVIEW.LOOKBACK_DAYS, "day").toDate();
 
   const dailySummaries = await prisma.tradingDailySummary.findMany({
     where: { date: { gte: weekAgo } },
@@ -121,7 +121,7 @@ ${positionSummary || "なし"}
   const pnlEmoji = totalPnl >= 0 ? "📈" : "📉";
 
   await notifySlack({
-    title: `📊 週次レビュー（${dayjs().subtract(7, "day").format("MM/DD")}〜${dayjs().format("MM/DD")}）`,
+    title: `📊 週次レビュー（${dayjs().subtract(WEEKLY_REVIEW.LOOKBACK_DAYS, "day").format("MM/DD")}〜${dayjs().format("MM/DD")}）`,
     message: aiReview,
     color: totalPnl >= 0 ? "good" : "danger",
     fields: [
