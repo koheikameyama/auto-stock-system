@@ -2,7 +2,7 @@
  * HTML レイアウトテンプレート（PWA meta タグ含む）
  */
 
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { CSS } from "./styles";
 
@@ -35,9 +35,7 @@ export function layout(
   title: string,
   currentPath: string,
   content: HtmlContent,
-  token: string,
 ): HtmlContent {
-  const qs = `?token=${token}`;
   return html`<!DOCTYPE html>
     <html lang="ja">
       <head>
@@ -75,10 +73,10 @@ export function layout(
           ${NAV_ITEMS.map(
             (item) => html`
               <a
-                href="${item.path}${qs}"
+                href="${item.path}"
                 class="nav-item ${currentPath === item.path ? "active" : ""}"
               >
-                ${{ __html: item.icon }}
+                ${raw(item.icon)}
                 <span>${item.label}</span>
               </a>
             `,

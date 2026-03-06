@@ -16,7 +16,7 @@ import {
 const app = new Hono();
 
 app.get("/", async (c) => {
-  const token = c.req.query("token") ?? "";
+
 
   const [openPositions, closedPositions] = await Promise.all([
     prisma.tradingPosition.findMany({
@@ -119,7 +119,7 @@ app.get("/", async (c) => {
       : html`<div class="card">${emptyState("直近7日のクローズポジションなし")}</div>`}
   `;
 
-  return c.html(layout("ポジション", "/positions", content, token));
+  return c.html(layout("ポジション", "/positions", content));
 });
 
 export default app;

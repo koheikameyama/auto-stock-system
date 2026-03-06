@@ -16,7 +16,7 @@ import {
 const app = new Hono();
 
 app.get("/", async (c) => {
-  const token = c.req.query("token") ?? "";
+
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -105,7 +105,7 @@ app.get("/", async (c) => {
       : html`<div class="card">${emptyState("日次サマリーなし")}</div>`}
   `;
 
-  return c.html(layout("履歴", "/history", content, token));
+  return c.html(layout("履歴", "/history", content));
 });
 
 export default app;

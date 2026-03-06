@@ -17,7 +17,7 @@ import {
 const app = new Hono();
 
 app.get("/", async (c) => {
-  const token = c.req.query("token") ?? "";
+
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -126,7 +126,7 @@ app.get("/", async (c) => {
       : html`<div class="card">${emptyState("本日の注文履歴なし")}</div>`}
   `;
 
-  return c.html(layout("注文", "/orders", content, token));
+  return c.html(layout("注文", "/orders", content));
 });
 
 export default app;

@@ -35,7 +35,7 @@ export function setJobState(state: typeof jobState) {
 const app = new Hono();
 
 app.get("/", async (c) => {
-  const token = c.req.query("token") ?? "";
+
 
   // Parallel data fetch
   const [
@@ -185,7 +185,7 @@ app.get("/", async (c) => {
       : ""}
   `;
 
-  return c.html(layout("ダッシュボード", "/", content, token));
+  return c.html(layout("ダッシュボード", "/", content));
 });
 
 export default app;
