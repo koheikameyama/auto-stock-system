@@ -181,6 +181,7 @@ AIが複雑な市場データをわかりやすく整理・翻訳し、ユーザ
 | 設定・認証 | [settings.md](settings.md) | 投資スタイル、予算、通知設定 |
 | バッチ処理 | [batch-processing.md](batch-processing.md) | GitHub Actions定期実行、データパイプライン |
 | 管理画面 | [admin.md](admin.md) | 銘柄マスタ管理、上場廃止管理 |
+| 収益化 | [monetization.md](monetization.md) | チャット課金プラン（Free / Premium） |
 
 ## 日付の取り扱い
 

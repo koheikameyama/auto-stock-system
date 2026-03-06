@@ -212,6 +212,7 @@ import {
 | [settings.md](docs/specs/settings.md) | 設定・認証 |
 | [batch-processing.md](docs/specs/batch-processing.md) | バッチ処理 |
 | [admin.md](docs/specs/admin.md) | 管理画面 |
+| [monetization.md](docs/specs/monetization.md) | 収益化（チャット課金プラン） |
 
 詳細は `.claude/rules/` 配下を参照してください。
 
