@@ -294,24 +294,26 @@ checkOrderFill(order, currentHigh, currentLow):
 
 ### 処理フロー
 
-1. **銘柄マスタ登録**: NIKKEI_TICKERS（90銘柄）を Stock テーブルに upsert
+1. **銘柄マスタ登録**: STOCK_UNIVERSE（約230銘柄）を Stock テーブルに upsert
 2. **株価データ更新**（並列、p-limit=5、バッチ=10）:
    - 各銘柄の現在価格を取得
    - ヒストリカルデータ（60日分）からテクニカル指標を算出
    - ATR(14)、週間変化率、ボラティリティを更新
    - 取得失敗カウント（5回連続失敗で上場廃止フラグ）
-3. **TradingConfig 初期化**: 存在しない場合に作成
+3. **TradingConfig 同期**: TRADING_DEFAULTS の値でDB設定を作成/更新
 
-### 銘柄ユニバース（90銘柄）
+### 銘柄ユニバース（約230銘柄）
 
-| セクター | 銘柄数 | 代表銘柄 |
-|----------|--------|----------|
-| 半導体・電子部品 | 8 | アドバンテスト、東京エレクトロン、レーザーテック |
-| 自動車・輸送用機器 | 6 | トヨタ、ホンダ、デンソー |
-| 金融 | 7 | 三菱UFJ、三井住友、東京海上 |
-| 商社 | 4 | 伊藤忠、三菱商事、三井物産 |
-| IT・通信 | 8 | NTT、KDDI、ソフトバンクG、リクルート |
-| 医薬品・ヘルスケア | 6 | 武田、中外製薬、第一三共 |
+日経225構成銘柄 + TSEプライム主要銘柄。低位株（¥1,000以下）を含む幅広い価格帯をカバー。
+
+| セクター | 代表銘柄 |
+|----------|----------|
+| 半導体・電子部品 | アドバンテスト、東京エレクトロン、レーザーテック、SUMCO |
+| 自動車・輸送用機器 | トヨタ、ホンダ、日産、三菱自動車、マツダ |
+| 金融 | 三菱UFJ、りそな、あおぞら銀行、野村HD、大和証券 |
+| 商社 | 伊藤忠、三菱商事、丸紅、双日 |
+| IT・通信 | NTT、KDDI、ソフトバンク、メルカリ、サイバーエージェント |
+| 医薬品・ヘルスケア | 武田、中外製薬、第一三共、アステラス |
 | 小売・サービス | 7 | ファーストリテイリング、任天堂、オリエンタルランド |
 | 食品・日用品 | 6 | 味の素、JT、花王 |
 | 電機・精密 | 13 | ソニー、日立、キーエンス、HOYA |
@@ -325,15 +327,15 @@ checkOrderFill(order, currentHigh, currentLow):
 
 | 項目 | 値 | 定数名 |
 |------|-----|--------|
-| 総予算 | 500,000円 | `TRADING_DEFAULTS.TOTAL_BUDGET` |
-| 最大ポジション数 | 5 | `TRADING_DEFAULTS.MAX_POSITIONS` |
-| 最大ポジション比率 | 30% | `TRADING_DEFAULTS.MAX_POSITION_PCT` |
+| 総予算 | 100,000円 | `TRADING_DEFAULTS.TOTAL_BUDGET` |
+| 最大ポジション数 | 3 | `TRADING_DEFAULTS.MAX_POSITIONS` |
+| 最大ポジション比率 | 100% | `TRADING_DEFAULTS.MAX_POSITION_PCT` |
 | 最大日次損失率 | 3% | `TRADING_DEFAULTS.MAX_DAILY_LOSS_PCT` |
 
 ### DB操作
 
 - **Read**: `Stock`
-- **Write**: `Stock`（upsert）, `TradingConfig`（create if missing）
+- **Write**: `Stock`（upsert）, `TradingConfig`（create/update）
 
 ### 外部API
 
