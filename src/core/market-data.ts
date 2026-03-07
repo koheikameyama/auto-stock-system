@@ -74,6 +74,49 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * 429エラー時に指数バックオフでリトライ
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+): Promise<T> {
+  for (let attempt = 0; attempt < YAHOO_FINANCE.RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      const is429 =
+        error instanceof Error &&
+        (error.message.includes("Too Many Requests") ||
+          error.message.includes("429"));
+      if (!is429 || attempt >= YAHOO_FINANCE.RETRY_MAX_ATTEMPTS - 1) {
+        throw error;
+      }
+      const delay = YAHOO_FINANCE.RETRY_BASE_DELAY_MS * 2 ** attempt;
+      console.warn(
+        `[market-data] 429 rate limit for ${label}, retry ${attempt + 1}/${YAHOO_FINANCE.RETRY_MAX_ATTEMPTS} after ${delay}ms`,
+      );
+      await sleep(delay);
+    }
+  }
+  throw new Error("unreachable");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseQuoteResult(result: any, symbol: string): StockQuote {
+  return {
+    tickerCode: symbol,
+    price: result.regularMarketPrice ?? 0,
+    previousClose: result.regularMarketPreviousClose ?? 0,
+    change: result.regularMarketChange ?? 0,
+    changePercent: result.regularMarketChangePercent ?? 0,
+    volume: result.regularMarketVolume ?? 0,
+    high: result.regularMarketDayHigh ?? 0,
+    low: result.regularMarketDayLow ?? 0,
+    open: result.regularMarketOpen ?? 0,
+  };
+}
+
 // ========================================
 // 個別銘柄データ取得
 // ========================================
@@ -88,19 +131,11 @@ export async function fetchStockQuote(
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await yahooFinance.quote(symbol);
-
-    return {
-      tickerCode: symbol,
-      price: result.regularMarketPrice ?? 0,
-      previousClose: result.regularMarketPreviousClose ?? 0,
-      change: result.regularMarketChange ?? 0,
-      changePercent: result.regularMarketChangePercent ?? 0,
-      volume: result.regularMarketVolume ?? 0,
-      high: result.regularMarketDayHigh ?? 0,
-      low: result.regularMarketDayLow ?? 0,
-      open: result.regularMarketOpen ?? 0,
-    };
+    const result: any = await withRetry(
+      () => yahooFinance.quote(symbol),
+      symbol,
+    );
+    return parseQuoteResult(result, symbol);
   } catch (error) {
     console.error(`[market-data] Failed to fetch quote for ${symbol}:`, error);
     return null;
@@ -108,28 +143,70 @@ export async function fetchStockQuote(
 }
 
 /**
- * 複数銘柄のクォートをバッチ取得
+ * 複数銘柄のクォートをバッチ取得（yahoo-finance2のネイティブバッチAPI使用）
+ * 1リクエストで複数銘柄を取得するため、個別取得よりはるかに高速
  */
-export async function fetchStockQuotes(
+export async function fetchStockQuotesBatch(
   tickerCodes: string[],
-): Promise<(StockQuote | null)[]> {
-  const limit = pLimit(5);
-  const results: (StockQuote | null)[] = [];
+): Promise<Map<string, StockQuote>> {
+  const results = new Map<string, StockQuote>();
+  const symbols = tickerCodes.map(normalizeTickerCode);
 
-  for (let i = 0; i < tickerCodes.length; i += YAHOO_FINANCE.BATCH_SIZE) {
-    const batch = tickerCodes.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
+  for (let i = 0; i < symbols.length; i += YAHOO_FINANCE.BATCH_SIZE) {
+    const batch = symbols.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
 
-    const batchResults = await Promise.all(
-      batch.map((ticker) => limit(() => fetchStockQuote(ticker))),
-    );
-    results.push(...batchResults);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const batchResults: any[] = await withRetry(
+        () => yahooFinance.quote(batch),
+        `batch[${i}..${i + batch.length}]`,
+      );
 
-    if (i + YAHOO_FINANCE.BATCH_SIZE < tickerCodes.length) {
+      for (const result of batchResults) {
+        const symbol = result.symbol as string;
+        if (symbol) {
+          results.set(symbol, parseQuoteResult(result, symbol));
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[market-data] Batch quote failed for [${i}..${i + batch.length}]:`,
+        error,
+      );
+      // バッチ失敗時は個別にフォールバック
+      for (const symbol of batch) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result: any = await withRetry(
+            () => yahooFinance.quote(symbol),
+            symbol,
+          );
+          results.set(symbol, parseQuoteResult(result, symbol));
+        } catch {
+          console.error(`[market-data] Individual fallback failed: ${symbol}`);
+        }
+      }
+    }
+
+    if (i + YAHOO_FINANCE.BATCH_SIZE < symbols.length) {
       await sleep(YAHOO_FINANCE.RATE_LIMIT_DELAY_MS);
     }
   }
 
   return results;
+}
+
+/**
+ * 複数銘柄のクォートをバッチ取得（配列で返す互換API）
+ */
+export async function fetchStockQuotes(
+  tickerCodes: string[],
+): Promise<(StockQuote | null)[]> {
+  const batchMap = await fetchStockQuotesBatch(tickerCodes);
+  return tickerCodes.map((ticker) => {
+    const symbol = normalizeTickerCode(ticker);
+    return batchMap.get(symbol) ?? null;
+  });
 }
 
 // ========================================
@@ -148,11 +225,11 @@ export async function fetchHistoricalData(
   try {
     const period1 = dayjs().subtract(YAHOO_FINANCE.HISTORICAL_DAYS, "day").toDate();
 
-    const result = await yahooFinance.chart(symbol, {
+    const result = await withRetry(() => yahooFinance.chart(symbol, {
       period1,
       period2: dayjs().toDate(),
       interval: "1d",
-    });
+    }), symbol);
 
     // 新しい順にソート（テクニカル分析モジュールが期待する形式）
     const sorted = result.quotes.sort(
@@ -183,7 +260,10 @@ export async function fetchHistoricalData(
 async function fetchIndexQuote(symbol: string): Promise<IndexQuote | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await yahooFinance.quote(symbol);
+    const result: any = await withRetry(
+      () => yahooFinance.quote(symbol),
+      symbol,
+    );
 
     return {
       price: result.regularMarketPrice ?? 0,

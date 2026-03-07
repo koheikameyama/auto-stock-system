@@ -99,8 +99,11 @@ export const TRADING_SCHEDULE = {
 export const YAHOO_FINANCE = {
   HISTORICAL_PERIOD: "3mo", // テクニカル分析用データ期間
   HISTORICAL_DAYS: 60, // データポイント数
-  BATCH_SIZE: 10, // バッチ取得サイズ
-  RATE_LIMIT_DELAY_MS: 1000, // レート制限用ディレイ
+  BATCH_SIZE: 50, // バッチクォート取得サイズ（1リクエストで複数銘柄）
+  HISTORICAL_BATCH_SIZE: 10, // ヒストリカルデータ取得の並列数
+  RATE_LIMIT_DELAY_MS: 2000, // レート制限用ディレイ
+  RETRY_MAX_ATTEMPTS: 3, // リトライ最大回数
+  RETRY_BASE_DELAY_MS: 5000, // リトライ初回待機（指数バックオフ）
 } as const;
 
 // ========================================

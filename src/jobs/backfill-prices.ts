@@ -7,8 +7,8 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { TRADING_DEFAULTS, YAHOO_FINANCE, SCREENING, STOCK_FETCH, TECHNICAL_MIN_DATA, JOB_CONCURRENCY } from "../lib/constants";
-import { fetchStockQuote, fetchHistoricalData } from "../core/market-data";
+import { TRADING_DEFAULTS, YAHOO_FINANCE, STOCK_FETCH, TECHNICAL_MIN_DATA, JOB_CONCURRENCY } from "../lib/constants";
+import { fetchStockQuotesBatch, fetchHistoricalData } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
 import { normalizeTickerCode } from "../lib/ticker-utils";
 import pLimit from "p-limit";
@@ -61,7 +61,7 @@ export async function main() {
   }
   console.log("  銘柄マスタ登録完了");
 
-  // 2. 株価データ更新
+  // 2. 株価データ更新（バッチクォート + ヒストリカル並列取得）
   console.log("[2/3] 株価データ更新中...");
   const allStocks = await prisma.stock.findMany({ where: { isDelisted: false } });
   const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
@@ -70,12 +70,17 @@ export async function main() {
 
   for (let i = 0; i < allStocks.length; i += YAHOO_FINANCE.BATCH_SIZE) {
     const batch = allStocks.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
+    const tickers = batch.map((s) => s.tickerCode);
 
+    // バッチで一括クォート取得（1リクエスト）
+    const quoteMap = await fetchStockQuotesBatch(tickers);
+
+    // ヒストリカルデータは並列取得
     await Promise.all(
       batch.map((stock) =>
         limit(async () => {
           try {
-            const quote = await fetchStockQuote(stock.tickerCode);
+            const quote = quoteMap.get(stock.tickerCode);
             // 取得失敗 or 異常値（廃止銘柄の可能性）→ failCountを加算
             if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
               failed++;
