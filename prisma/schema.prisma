@@ -85,6 +85,47 @@ model MarketAssessment {
   @@index([date(sort: Desc)])
 }
 
+// スコアリング記録（80点以上の候補 + 即死棄却）
+model ScoringRecord {
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  tickerCode   String
+
+  // 総合
+  totalScore   Int
+  rank         String   // S / A / B / C
+
+  // カテゴリ別スコア
+  technicalScore  Int   // 0-40
+  patternScore    Int   // 0-30
+  liquidityScore  Int   // 0-30
+
+  // カテゴリ内訳（JSON）
+  technicalBreakdown Json  // { rsi, ma, volume }
+  patternBreakdown   Json  // { chart, candlestick }
+  liquidityBreakdown Json  // { tradingValue, spreadProxy, stability }
+
+  // 即死ルール
+  isDisqualified    Boolean @default(false)
+  disqualifyReason  String? // price_too_high / spread_too_wide / volatility_extreme
+
+  // AIレビュー結果
+  aiDecision   String?  // go / no_go
+  aiReasoning  String?  @db.Text
+
+  // トレード結果（後から紐づけ）
+  tradingOrderId String?  @unique
+  tradeResult    String?  // win / loss / no_trade
+  profitPct      Decimal? @db.Decimal(8, 4)
+
+  createdAt    DateTime @default(now())
+
+  @@unique([date, tickerCode])
+  @@index([date(sort: Desc)])
+  @@index([rank])
+  @@index([tradeResult])
+}
+
 // 売買注文（シミュレーション）
 model TradingOrder {
   id         String @id @default(cuid())

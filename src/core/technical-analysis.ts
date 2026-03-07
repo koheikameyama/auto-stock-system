@@ -25,7 +25,7 @@ import {
   VOLUME_ANALYSIS,
   TECHNICAL_MIN_DATA,
 } from "../lib/constants";
-import type { TechnicalScore } from "./technical-scorer";
+import type { LogicScore } from "./technical-scorer";
 
 // ========================================
 // 型定義
@@ -305,34 +305,45 @@ export function formatTechnicalForAI(summary: TechnicalSummary): string {
 }
 
 /**
- * テクニカルスコアをAIプロンプト用テキスト（スコア形式）に変換
+ * ロジックスコアをAIプロンプト用テキスト（3カテゴリ形式）に変換
  *
  * AIには数値の再計算をさせず、ロジックが算出したスコア内訳を提示する。
  */
 export function formatScoreForAI(
-  score: TechnicalScore,
+  score: LogicScore,
   summary: TechnicalSummary,
 ): string {
   const lines: string[] = [];
   lines.push(`【総合スコア】${score.totalScore}/100（${score.rank}ランク）`);
-  lines.push(`【スコア内訳】`);
-  lines.push(`  トレンド: ${score.breakdown.trend}/100`);
+
+  lines.push(`【カテゴリ別】`);
+
+  // テクニカル指標（40点）
+  lines.push(`  テクニカル: ${score.technical.total}/40`);
   lines.push(
-    `  RSIモメンタム: ${score.breakdown.rsiMomentum}/100${summary.rsi != null ? `（RSI=${summary.rsi}）` : ""}`,
+    `    RSI: ${score.technical.rsi}/15${summary.rsi != null ? `（RSI=${summary.rsi}）` : ""}`,
   );
-  lines.push(`  MACDモメンタム: ${score.breakdown.macdMomentum}/100`);
-  lines.push(`  ボリンジャー位置: ${score.breakdown.bollingerPosition}/100`);
-  lines.push(`  チャートパターン: ${score.breakdown.chartPattern}/100`);
+  lines.push(`    移動平均: ${score.technical.ma}/15`);
+  lines.push(
+    `    出来高変化: ${score.technical.volume}/10${summary.volumeAnalysis.volumeRatio ? `（${summary.volumeAnalysis.volumeRatio}倍）` : ""}`,
+  );
+
+  // パターン（30点）
+  lines.push(`  パターン: ${score.pattern.total}/30`);
+  lines.push(`    チャートパターン: ${score.pattern.chart}/22`);
   if (score.topPattern) {
     lines.push(
-      `    → ${score.topPattern.name}（${score.topPattern.rank}ランク / 勝率${score.topPattern.winRate}%）`,
+      `      → ${score.topPattern.name}（${score.topPattern.rank}ランク / 勝率${score.topPattern.winRate}%）`,
     );
   }
-  lines.push(`  ローソク足: ${score.breakdown.candlestick}/100`);
-  lines.push(
-    `  出来高: ${score.breakdown.volume}/100${summary.volumeAnalysis.volumeRatio ? `（${summary.volumeAnalysis.volumeRatio}倍）` : ""}`,
-  );
-  lines.push(`  サポート距離: ${score.breakdown.support}/100`);
+  lines.push(`    ローソク足: ${score.pattern.candlestick}/8`);
+
+  // 流動性（30点）
+  lines.push(`  流動性: ${score.liquidity.total}/30`);
+  lines.push(`    売買代金: ${score.liquidity.tradingValue}/12`);
+  lines.push(`    値幅率: ${score.liquidity.spreadProxy}/10`);
+  lines.push(`    安定性: ${score.liquidity.stability}/8`);
+
   lines.push(`【ロジック判定】${score.technicalSignal}`);
   return lines.join("\n");
 }

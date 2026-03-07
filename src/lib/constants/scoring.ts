@@ -1,23 +1,56 @@
 /**
  * スコアリング・損切り検証の定数
+ *
+ * 3カテゴリ100点満点:
+ * - テクニカル指標: 40点
+ * - チャート・ローソク足パターン: 30点
+ * - 流動性: 30点
  */
 
 export const SCORING = {
-  WEIGHTS: {
-    TREND: 0.2,
-    RSI_MOMENTUM: 0.15,
-    MACD_MOMENTUM: 0.1,
-    BOLLINGER_POSITION: 0.1,
-    CHART_PATTERN: 0.2,
-    CANDLESTICK: 0.1,
-    VOLUME: 0.1,
-    SUPPORT: 0.05,
+  // カテゴリ配点
+  CATEGORY_MAX: {
+    TECHNICAL: 40,
+    PATTERN: 30,
+    LIQUIDITY: 30,
   },
+
+  // サブ項目配点
+  SUB_MAX: {
+    // テクニカル (40点)
+    RSI: 15,
+    MA: 15,
+    VOLUME_CHANGE: 10,
+    // パターン (30点)
+    CHART_PATTERN: 22,
+    CANDLESTICK: 8,
+    // 流動性 (30点)
+    TRADING_VALUE: 12,
+    SPREAD_PROXY: 10,
+    STABILITY: 8,
+  },
+
+  // 閾値
   THRESHOLDS: {
     S_RANK: 80,
     A_RANK: 65,
     B_RANK: 50,
   },
+
+  // 即死ルール
+  DISQUALIFY: {
+    MAX_PRICE: 1000,
+    MAX_DAILY_SPREAD_PCT: 0.05,
+    MAX_WEEKLY_VOLATILITY: 8,
+  },
+
+  // 流動性閾値
+  LIQUIDITY: {
+    TRADING_VALUE_TIERS: [500_000_000, 300_000_000, 100_000_000, 50_000_000],
+    SPREAD_PROXY_TIERS: [0.01, 0.02, 0.03, 0.05],
+    STABILITY_CV_TIERS: [0.3, 0.5, 0.7],
+  },
+
   MAX_CANDIDATES_FOR_AI: 20,
   MIN_CANDIDATES_FOR_AI: 5,
 } as const;

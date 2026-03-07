@@ -158,6 +158,10 @@ export async function main() {
       summary: techSummary,
       chartPatterns,
       candlestickPattern,
+      historicalData: historical,
+      latestPrice: quote.price,
+      latestVolume: Number(stock.latestVolume ?? 0),
+      weeklyVolatility: stock.volatility ? Number(stock.volatility) : null,
     });
 
     const strategy = selected.strategy as "day_trade" | "swing";

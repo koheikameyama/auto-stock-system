@@ -1,13 +1,17 @@
 /**
- * テクニカルスコアリングエンジン
+ * ロジックスコアリングエンジン（3カテゴリ100点満点）
  *
- * TechnicalSummary + チャートパターン + ローソク足パターンを
- * 統一スコア（0-100）に変換し、ロジックだけで銘柄の優先順位を決定する。
+ * カテゴリ1: テクニカル指標（40点） — RSI, MA, 出来高変化
+ * カテゴリ2: チャート・ローソク足パターン（30点）
+ * カテゴリ3: 流動性（30点） — 売買代金, 値幅率, 安定性
+ *
+ * 即死ルール: 1つでも該当 → 即0点
  *
  * 全て純粋関数（I/Oなし）。
  */
 
 import type { TechnicalSummary } from "./technical-analysis";
+import type { OHLCVData } from "./technical-analysis";
 import type { ChartPatternResult, ChartPatternRank } from "../lib/chart-patterns";
 import type { PatternResult } from "../lib/candlestick-patterns";
 import { SCORING } from "../lib/constants";
@@ -16,124 +20,160 @@ import { SCORING } from "../lib/constants";
 // 型定義
 // ========================================
 
-export interface ScorerInput {
+export interface LogicScoreInput {
   summary: TechnicalSummary;
   chartPatterns: ChartPatternResult[];
   candlestickPattern: PatternResult | null;
+  historicalData: OHLCVData[];
+  latestPrice: number;
+  latestVolume: number;
+  weeklyVolatility: number | null;
 }
 
-export interface TechnicalScore {
+export interface LogicScore {
   totalScore: number;
   rank: "S" | "A" | "B" | "C";
-  breakdown: {
-    trend: number;
-    rsiMomentum: number;
-    macdMomentum: number;
-    bollingerPosition: number;
-    chartPattern: number;
-    candlestick: number;
+
+  technical: {
+    total: number;
+    rsi: number;
+    ma: number;
     volume: number;
-    support: number;
   };
+  pattern: {
+    total: number;
+    chart: number;
+    candlestick: number;
+  };
+  liquidity: {
+    total: number;
+    tradingValue: number;
+    spreadProxy: number;
+    stability: number;
+  };
+
+  isDisqualified: boolean;
+  disqualifyReason: string | null;
+
   topPattern: {
     name: string;
     rank: string;
     winRate: number;
     signal: string;
   } | null;
+
   technicalSignal: "strong_buy" | "buy" | "neutral" | "sell" | "strong_sell";
 }
 
+/** 後方互換: 旧 ScorerInput */
+export type ScorerInput = LogicScoreInput;
+/** 後方互換: 旧 TechnicalScore */
+export type TechnicalScore = LogicScore;
+
 // ========================================
-// 個別スコアリング関数
+// 即死ルール
 // ========================================
 
-/**
- * 移動平均線の並びを評価
- * パーフェクトオーダー（5>25>75 + 方向一致）= 100、逆 = 0、それ以外 = 50
- */
-function scoreTrend(summary: TechnicalSummary): number {
-  const { trend, orderAligned, slopesAligned } = summary.maAlignment;
-
-  if (trend === "uptrend" && orderAligned && slopesAligned) return 100;
-  if (trend === "uptrend" && orderAligned) return 80;
-  if (trend === "uptrend") return 70;
-  if (trend === "downtrend" && orderAligned && slopesAligned) return 0;
-  if (trend === "downtrend" && orderAligned) return 20;
-  if (trend === "downtrend") return 30;
-  return 50;
+interface DisqualifyResult {
+  isDisqualified: boolean;
+  reason: string | null;
 }
 
-/**
- * RSI を評価
- * 30-40 = 100（反発ゾーン）、40-50 = 70、50-60 = 50、<30 = 30（売られすぎ）、>70 = 0
- */
+function checkDisqualify(input: LogicScoreInput): DisqualifyResult {
+  const { latestPrice, weeklyVolatility, historicalData } = input;
+
+  // 10万円で買えない（株価 > 1,000円）
+  if (latestPrice > SCORING.DISQUALIFY.MAX_PRICE) {
+    return { isDisqualified: true, reason: "price_too_high" };
+  }
+
+  // 値幅率が広すぎる（当日 high-low / close > 5%）
+  if (historicalData.length > 0) {
+    const latest = historicalData[0];
+    const spreadPct = (latest.high - latest.low) / latest.close;
+    if (spreadPct > SCORING.DISQUALIFY.MAX_DAILY_SPREAD_PCT) {
+      return { isDisqualified: true, reason: "spread_too_wide" };
+    }
+  }
+
+  // ボラティリティ異常（週次 > 8%）
+  if (
+    weeklyVolatility != null &&
+    weeklyVolatility > SCORING.DISQUALIFY.MAX_WEEKLY_VOLATILITY
+  ) {
+    return { isDisqualified: true, reason: "volatility_extreme" };
+  }
+
+  return { isDisqualified: false, reason: null };
+}
+
+// ========================================
+// カテゴリ1: テクニカル指標（40点）
+// ========================================
+
+/** RSI スコア（0-15点） */
 function scoreRSI(rsi: number | null): number {
-  if (rsi == null) return 50;
-  if (rsi >= 30 && rsi < 40) return 100;
-  if (rsi >= 40 && rsi < 50) return 70;
-  if (rsi >= 50 && rsi < 60) return 50;
-  if (rsi >= 60 && rsi < 70) return 30;
-  if (rsi < 30) return 30;
-  return 0; // rsi >= 70
+  if (rsi == null) return 7;
+  const max = SCORING.SUB_MAX.RSI;
+  if (rsi >= 30 && rsi < 40) return max;      // 反発ゾーン
+  if (rsi >= 40 && rsi < 50) return 10;
+  if (rsi >= 50 && rsi < 60) return 7;
+  if (rsi >= 60 && rsi < 70) return 4;
+  if (rsi < 30) return 5;                     // 売られすぎ
+  return 0;                                    // rsi >= 70
 }
 
-/**
- * MACD を評価
- * シグナル上抜け = 100、ヒストグラム正 = 70、負 = 30、シグナル下抜け = 0
- */
-function scoreMACD(summary: TechnicalSummary): number {
-  const { macd, signal, histogram } = summary.macd;
-  if (macd == null || signal == null || histogram == null) return 50;
+/** 移動平均線 / 乖離率 スコア（0-15点） */
+function scoreMA(summary: TechnicalSummary): number {
+  const { trend, orderAligned, slopesAligned } = summary.maAlignment;
+  const max = SCORING.SUB_MAX.MA;
 
-  if (histogram > 0 && macd > signal) return 100;
-  if (histogram > 0) return 70;
-  if (histogram < 0 && macd < signal) return 0;
-  if (histogram < 0) return 30;
-  return 50;
+  if (trend === "uptrend" && orderAligned && slopesAligned) return max;
+  if (trend === "uptrend" && orderAligned) return 12;
+  if (trend === "uptrend") return 10;
+  if (trend === "downtrend" && orderAligned && slopesAligned) return 0;
+  if (trend === "downtrend" && orderAligned) return 3;
+  if (trend === "downtrend") return 4;
+  return 7; // none
 }
 
-/**
- * ボリンジャーバンド位置を評価
- * 下限タッチ = 100、下限〜中央 = 70、中央〜上限 = 40、上限超え = 20
- */
-function scoreBollinger(summary: TechnicalSummary): number {
-  const { upper, middle, lower } = summary.bollingerBands;
-  const price = summary.currentPrice;
+/** 出来高変化スコア（0-10点） */
+function scoreVolumeChange(volumeRatio: number | null): number {
+  if (volumeRatio == null) return 5;
+  const max = SCORING.SUB_MAX.VOLUME_CHANGE;
 
-  if (upper == null || middle == null || lower == null) return 50;
-
-  if (price <= lower) return 100;
-  if (price < middle) return 70;
-  if (price <= upper) return 40;
-  return 20; // price > upper
+  if (volumeRatio >= 2.0) return max;
+  if (volumeRatio >= 1.5) return 8;
+  if (volumeRatio >= 1.0) return 5;
+  if (volumeRatio > 0.5) return 3;
+  return 2;
 }
 
-/**
- * チャートパターンを評価
- * 最高ランクの買いパターンを使用。売りパターンはスコアを下げる。
- */
+// ========================================
+// カテゴリ2: チャート・ローソク足パターン（30点）
+// ========================================
+
+/** チャートパターン スコア（0-22点） */
 function scoreChartPattern(
   patterns: ChartPatternResult[],
-): { score: number; topPattern: TechnicalScore["topPattern"] } {
+): { score: number; topPattern: LogicScore["topPattern"] } {
   if (patterns.length === 0) {
     return { score: 0, topPattern: null };
   }
 
+  const max = SCORING.SUB_MAX.CHART_PATTERN;
   const rankScoreMap: Record<ChartPatternRank, number> = {
-    S: 100,
-    A: 85,
-    B: 70,
-    C: 55,
-    D: 40,
+    S: max,        // 22
+    A: 17,
+    B: 13,
+    C: 9,
+    D: 6,
   };
 
-  // 買いパターンの中で最高ランクを選ぶ
   const buyPatterns = patterns.filter((p) => p.signal === "buy");
   const sellPatterns = patterns.filter((p) => p.signal === "sell");
 
   if (buyPatterns.length > 0) {
-    // ランク順にソート（S > A > B > C > D）
     const best = buyPatterns.sort(
       (a, b) => rankScoreMap[b.rank] - rankScoreMap[a.rank],
     )[0];
@@ -149,11 +189,11 @@ function scoreChartPattern(
   }
 
   if (sellPatterns.length > 0) {
-    // 売りパターンのみ → スコアを反転（高ランクの売り = 低スコア）
     const best = sellPatterns.sort(
       (a, b) => rankScoreMap[b.rank] - rankScoreMap[a.rank],
     )[0];
-    const invertedScore = 100 - rankScoreMap[best.rank];
+    // 売りパターンは反転（高ランク売り = 低スコア）
+    const invertedScore = max - rankScoreMap[best.rank];
     return {
       score: invertedScore,
       topPattern: {
@@ -168,7 +208,7 @@ function scoreChartPattern(
   // neutral パターンのみ
   const best = patterns[0];
   return {
-    score: 40,
+    score: 6,
     topPattern: {
       name: best.patternName,
       rank: best.rank,
@@ -178,62 +218,75 @@ function scoreChartPattern(
   };
 }
 
-/**
- * ローソク足パターンを評価
- * 買いシグナル → strength をそのまま使用、売り → 反転、neutral/null → 50
- */
+/** ローソク足パターン スコア（0-8点） */
 function scoreCandlestick(pattern: PatternResult | null): number {
-  if (pattern == null) return 50;
+  const max = SCORING.SUB_MAX.CANDLESTICK;
+  if (pattern == null) return 4; // 中立
 
-  if (pattern.signal === "buy") return pattern.strength;
-  if (pattern.signal === "sell") return 100 - pattern.strength;
-  return 50;
+  if (pattern.signal === "buy") return Math.round(pattern.strength * max / 100);
+  if (pattern.signal === "sell") return Math.round((100 - pattern.strength) * max / 100);
+  return 4;
 }
 
-/**
- * 出来高比率を評価
- * 平均比 2倍以上 = 100、1.5倍 = 80、1.0倍 = 50、0.5倍以下 = 20
- */
-function scoreVolume(volumeRatio: number | null): number {
-  if (volumeRatio == null) return 50;
+// ========================================
+// カテゴリ3: 流動性（30点）
+// ========================================
 
-  if (volumeRatio >= 2.0) return 100;
-  if (volumeRatio >= 1.5) return 80;
-  if (volumeRatio >= 1.0) return 50;
-  if (volumeRatio > 0.5) return 35;
-  return 20;
+/** 売買代金スコア（0-12点） */
+function scoreTradingValue(price: number, volume: number): number {
+  const tradingValue = price * volume;
+  const tiers = SCORING.LIQUIDITY.TRADING_VALUE_TIERS;
+  const scores = [12, 9, 6, 3];
+
+  for (let i = 0; i < tiers.length; i++) {
+    if (tradingValue >= tiers[i]) return scores[i];
+  }
+  return 0;
 }
 
-/**
- * サポートラインとの距離を評価
- * サポート付近（1%以内）= 100、2%以内 = 70、5%以内 = 50、遠い = 20
- */
-function scoreSupport(summary: TechnicalSummary): number {
-  const { currentPrice, supports } = summary;
+/** 値幅率スコア（スプレッド代替）（0-10点） */
+function scoreSpreadProxy(historicalData: OHLCVData[]): number {
+  if (historicalData.length === 0) return 5;
 
-  if (supports.length === 0) return 20;
+  const latest = historicalData[0];
+  const spreadPct = (latest.high - latest.low) / latest.close;
+  const tiers = SCORING.LIQUIDITY.SPREAD_PROXY_TIERS;
+  const scores = [10, 7, 4, 2];
 
-  // 現在価格より下のサポートのみ対象
-  const belowSupports = supports.filter((s) => s < currentPrice);
-  if (belowSupports.length === 0) return 20;
+  for (let i = 0; i < tiers.length; i++) {
+    if (spreadPct <= tiers[i]) return scores[i];
+  }
+  return 0;
+}
 
-  // 最も近いサポートとの距離（%）
-  const nearest = Math.max(...belowSupports);
-  const distancePct = ((currentPrice - nearest) / currentPrice) * 100;
+/** 売買代金安定性スコア（0-8点）：過去5日の売買代金の変動係数 */
+function scoreStability(historicalData: OHLCVData[]): number {
+  const days = Math.min(historicalData.length, 5);
+  if (days < 2) return 4; // データ不足は中立
 
-  if (distancePct <= 1) return 100;
-  if (distancePct <= 2) return 70;
-  if (distancePct <= 5) return 50;
-  return 20;
+  const tradingValues = historicalData.slice(0, days).map(
+    (d) => d.close * d.volume,
+  );
+  const mean = tradingValues.reduce((s, v) => s + v, 0) / tradingValues.length;
+  if (mean === 0) return 1;
+
+  const variance =
+    tradingValues.reduce((s, v) => s + (v - mean) ** 2, 0) / tradingValues.length;
+  const cv = Math.sqrt(variance) / mean; // 変動係数
+
+  const tiers = SCORING.LIQUIDITY.STABILITY_CV_TIERS;
+  const scores = [8, 6, 3];
+
+  for (let i = 0; i < tiers.length; i++) {
+    if (cv <= tiers[i]) return scores[i];
+  }
+  return 1;
 }
 
 // ========================================
 // メインスコアリング関数
 // ========================================
 
-/**
- * ランクを決定
- */
 function getRank(score: number): "S" | "A" | "B" | "C" {
   if (score >= SCORING.THRESHOLDS.S_RANK) return "S";
   if (score >= SCORING.THRESHOLDS.A_RANK) return "A";
@@ -241,9 +294,6 @@ function getRank(score: number): "S" | "A" | "B" | "C" {
   return "C";
 }
 
-/**
- * テクニカルシグナルを決定
- */
 function getTechnicalSignal(
   score: number,
 ): "strong_buy" | "buy" | "neutral" | "sell" | "strong_sell" {
@@ -255,50 +305,77 @@ function getTechnicalSignal(
 }
 
 /**
- * テクニカル分析データから統一スコア（0-100）を算出する
+ * 3カテゴリスコアリング（100点満点）
  *
- * @param input - TechnicalSummary + チャートパターン + ローソク足パターン
- * @returns TechnicalScore - 総合スコア、ランク、内訳
+ * 即死ルール → テクニカル(40) + パターン(30) + 流動性(30)
  */
-export function scoreTechnicals(input: ScorerInput): TechnicalScore {
-  const { summary, chartPatterns, candlestickPattern } = input;
+export function scoreTechnicals(input: LogicScoreInput): LogicScore {
+  const {
+    summary,
+    chartPatterns,
+    candlestickPattern,
+    historicalData,
+    latestPrice,
+    latestVolume,
+  } = input;
 
-  // 各指標のスコアを算出
-  const trendScore = scoreTrend(summary);
+  // 即死ルールチェック
+  const disqualify = checkDisqualify(input);
+  if (disqualify.isDisqualified) {
+    return {
+      totalScore: 0,
+      rank: "C",
+      technical: { total: 0, rsi: 0, ma: 0, volume: 0 },
+      pattern: { total: 0, chart: 0, candlestick: 0 },
+      liquidity: { total: 0, tradingValue: 0, spreadProxy: 0, stability: 0 },
+      isDisqualified: true,
+      disqualifyReason: disqualify.reason,
+      topPattern: null,
+      technicalSignal: "strong_sell",
+    };
+  }
+
+  // カテゴリ1: テクニカル指標（40点）
   const rsiScore = scoreRSI(summary.rsi);
-  const macdScore = scoreMACD(summary);
-  const bollingerScore = scoreBollinger(summary);
-  const { score: chartPatternScore, topPattern } =
-    scoreChartPattern(chartPatterns);
-  const candlestickScore = scoreCandlestick(candlestickPattern);
-  const volumeScore = scoreVolume(summary.volumeAnalysis.volumeRatio);
-  const supportScore = scoreSupport(summary);
+  const maScore = scoreMA(summary);
+  const volumeChangeScore = scoreVolumeChange(summary.volumeAnalysis.volumeRatio);
+  const technicalTotal = rsiScore + maScore + volumeChangeScore;
 
-  // 加重平均でトータルスコアを算出
-  const totalScore = Math.round(
-    trendScore * SCORING.WEIGHTS.TREND +
-      rsiScore * SCORING.WEIGHTS.RSI_MOMENTUM +
-      macdScore * SCORING.WEIGHTS.MACD_MOMENTUM +
-      bollingerScore * SCORING.WEIGHTS.BOLLINGER_POSITION +
-      chartPatternScore * SCORING.WEIGHTS.CHART_PATTERN +
-      candlestickScore * SCORING.WEIGHTS.CANDLESTICK +
-      volumeScore * SCORING.WEIGHTS.VOLUME +
-      supportScore * SCORING.WEIGHTS.SUPPORT,
-  );
+  // カテゴリ2: チャート・ローソク足パターン（30点）
+  const { score: chartScore, topPattern } = scoreChartPattern(chartPatterns);
+  const candlestickScore = scoreCandlestick(candlestickPattern);
+  const patternTotal = chartScore + candlestickScore;
+
+  // カテゴリ3: 流動性（30点）
+  const tradingValueScore = scoreTradingValue(latestPrice, latestVolume);
+  const spreadProxyScore = scoreSpreadProxy(historicalData);
+  const stabilityScore = scoreStability(historicalData);
+  const liquidityTotal = tradingValueScore + spreadProxyScore + stabilityScore;
+
+  const totalScore = technicalTotal + patternTotal + liquidityTotal;
 
   return {
     totalScore,
     rank: getRank(totalScore),
-    breakdown: {
-      trend: trendScore,
-      rsiMomentum: rsiScore,
-      macdMomentum: macdScore,
-      bollingerPosition: bollingerScore,
-      chartPattern: chartPatternScore,
-      candlestick: candlestickScore,
-      volume: volumeScore,
-      support: supportScore,
+    technical: {
+      total: technicalTotal,
+      rsi: rsiScore,
+      ma: maScore,
+      volume: volumeChangeScore,
     },
+    pattern: {
+      total: patternTotal,
+      chart: chartScore,
+      candlestick: candlestickScore,
+    },
+    liquidity: {
+      total: liquidityTotal,
+      tradingValue: tradingValueScore,
+      spreadProxy: spreadProxyScore,
+      stability: stabilityScore,
+    },
+    isDisqualified: false,
+    disqualifyReason: null,
     topPattern,
     technicalSignal: getTechnicalSignal(totalScore),
   };

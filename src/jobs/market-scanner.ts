@@ -34,7 +34,7 @@ import {
 } from "../core/technical-analysis";
 import type { TechnicalSummary } from "../core/technical-analysis";
 import { scoreTechnicals } from "../core/technical-scorer";
-import type { TechnicalScore } from "../core/technical-scorer";
+import type { LogicScore } from "../core/technical-scorer";
 import { detectChartPatterns } from "../lib/chart-patterns";
 import type { ChartPatternResult } from "../lib/chart-patterns";
 import { analyzeSingleCandle } from "../lib/candlestick-patterns";
@@ -57,7 +57,7 @@ interface ScoredCandidate {
   tickerCode: string;
   name: string;
   summary: TechnicalSummary;
-  score: TechnicalScore;
+  score: LogicScore;
   chartPatterns: ChartPatternResult[];
   candlestickPattern: PatternResult | null;
   newsContext?: string;
@@ -234,6 +234,10 @@ ${sectorText || "  特になし"}`;
               summary,
               chartPatterns,
               candlestickPattern,
+              historicalData: historical,
+              latestPrice: Number(stock.latestPrice),
+              latestVolume: Number(stock.latestVolume),
+              weeklyVolatility: stock.volatility ? Number(stock.volatility) : null,
             });
 
             return {
@@ -269,12 +273,16 @@ ${sectorText || "  特になし"}`;
   // スコア降順ソート
   scoredCandidates.sort((a, b) => b.score.totalScore - a.score.totalScore);
 
+  // 即死ルールで棄却された銘柄を分離
+  const disqualified = scoredCandidates.filter((c) => c.score.isDisqualified);
+  const qualified = scoredCandidates.filter((c) => !c.score.isDisqualified);
+
   // フィルタリング: S+Aランク（不足時はBランクも追加）
-  let filtered = scoredCandidates.filter(
+  let filtered = qualified.filter(
     (c) => c.score.rank === "S" || c.score.rank === "A",
   );
   if (filtered.length < SCORING.MIN_CANDIDATES_FOR_AI) {
-    const bRankCandidates = scoredCandidates.filter(
+    const bRankCandidates = qualified.filter(
       (c) => c.score.rank === "B",
     );
     filtered = [...filtered, ...bRankCandidates];
@@ -282,12 +290,12 @@ ${sectorText || "  特になし"}`;
   filtered = filtered.slice(0, SCORING.MAX_CANDIDATES_FOR_AI);
 
   console.log(
-    `  スコアリング完了: ${scoredCandidates.length}銘柄 → ${filtered.length}銘柄に絞り込み`,
+    `  スコアリング完了: ${scoredCandidates.length}銘柄 → ${filtered.length}銘柄に絞り込み（即死棄却: ${disqualified.length}銘柄）`,
   );
 
   // スコア分布ログ
-  const rankCounts = { S: 0, A: 0, B: 0, C: 0 };
-  for (const c of scoredCandidates) {
+  const rankCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0 };
+  for (const c of qualified) {
     rankCounts[c.score.rank]++;
   }
   console.log(
@@ -327,7 +335,7 @@ ${sectorText || "  特になし"}`;
     `  → AIレビュー: ${reviews.length}銘柄中 ${goStocks.length}銘柄承認`,
   );
 
-  // 6. MarketAssessment に結果を保存
+  // 6. MarketAssessment + ScoringRecord に結果を保存
   console.log("[5/5] 結果保存中...");
   const selectedStocksData = goStocks.map((g) => {
     const scored = filtered.find((c) => c.tickerCode === g.tickerCode);
@@ -341,9 +349,11 @@ ${sectorText || "  特になし"}`;
     };
   });
 
+  const today = getTodayForDB();
+
   await prisma.marketAssessment.create({
     data: {
-      date: getTodayForDB(),
+      date: today,
       nikkeiPrice: marketData.nikkei.price,
       nikkeiChange: marketData.nikkei.changePercent,
       sp500Change: marketData.sp500?.changePercent,
@@ -356,6 +366,65 @@ ${sectorText || "  特になし"}`;
       selectedStocks: JSON.parse(JSON.stringify(selectedStocksData)),
     },
   });
+
+  // ScoringRecord 保存（80点以上の候補 + 即死棄却）
+  const scoringRecords = [
+    // 80点以上の候補（AIレビュー結果付き）
+    ...filtered.map((c) => {
+      const review = reviews.find((r) => r.tickerCode === c.tickerCode);
+      return {
+        date: today,
+        tickerCode: c.tickerCode,
+        totalScore: c.score.totalScore,
+        rank: c.score.rank,
+        technicalScore: c.score.technical.total,
+        patternScore: c.score.pattern.total,
+        liquidityScore: c.score.liquidity.total,
+        technicalBreakdown: {
+          rsi: c.score.technical.rsi,
+          ma: c.score.technical.ma,
+          volume: c.score.technical.volume,
+        },
+        patternBreakdown: {
+          chart: c.score.pattern.chart,
+          candlestick: c.score.pattern.candlestick,
+        },
+        liquidityBreakdown: {
+          tradingValue: c.score.liquidity.tradingValue,
+          spreadProxy: c.score.liquidity.spreadProxy,
+          stability: c.score.liquidity.stability,
+        },
+        isDisqualified: false,
+        aiDecision: review?.decision ?? null,
+        aiReasoning: review?.reasoning ?? null,
+      };
+    }),
+    // 即死棄却
+    ...disqualified.map((c) => ({
+      date: today,
+      tickerCode: c.tickerCode,
+      totalScore: 0,
+      rank: "C",
+      technicalScore: 0,
+      patternScore: 0,
+      liquidityScore: 0,
+      technicalBreakdown: {},
+      patternBreakdown: {},
+      liquidityBreakdown: {},
+      isDisqualified: true,
+      disqualifyReason: c.score.disqualifyReason,
+      aiDecision: null,
+      aiReasoning: null,
+    })),
+  ];
+
+  if (scoringRecords.length > 0) {
+    await prisma.scoringRecord.createMany({
+      data: scoringRecords,
+      skipDuplicates: true,
+    });
+    console.log(`  ScoringRecord 保存: ${scoringRecords.length}件`);
+  }
 
   // Slack通知
   if (goStocks.length > 0) {

@@ -6,7 +6,7 @@
  */
 
 import type { TechnicalSummary } from "./technical-analysis";
-import type { TechnicalScore } from "./technical-scorer";
+import type { LogicScore } from "./technical-scorer";
 import { validateStopLoss, calculatePositionSize } from "./risk-manager";
 import { STOP_LOSS, POSITION_DEFAULTS } from "../lib/constants";
 
@@ -32,7 +32,7 @@ export interface EntryCondition {
 export function calculateEntryCondition(
   currentPrice: number,
   summary: TechnicalSummary,
-  _score: TechnicalScore,
+  _score: LogicScore,
   strategy: "day_trade" | "swing",
   availableBudget: number,
   maxPositionPct: number,

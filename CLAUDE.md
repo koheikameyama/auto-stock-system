@@ -98,6 +98,7 @@
 | [settings.md](docs/specs/settings.md) | 設定・認証 |
 | [batch-processing.md](docs/specs/batch-processing.md) | バッチ処理 |
 | [trading-architecture.md](docs/specs/trading-architecture.md) | トレーディングアーキテクチャ改善（ロジック主導+AI最終審判） |
+| [scoring-system.md](docs/specs/scoring-system.md) | スコアリングシステム（3カテゴリ100点満点・即死ルール・DB保存） |
 | [admin.md](docs/specs/admin.md) | 管理画面 |
 
 詳細は `.claude/rules/` 配下を参照してください。
