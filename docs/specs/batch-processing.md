@@ -15,6 +15,7 @@ Railway上で常駐する node-cron ベースのジョブスケジューラ。
 | order-manager | `20 9 * * 1-5` | 平日 9:20 JST | 注文生成（寄付き9:00のデータ反映後） |
 | position-monitor | `20-59 9, * 10-14, 0-19 15 * * 1-5` | 平日 9:20-15:19 毎分 | ポジション監視 |
 | end-of-day | `50 15 * * 1-5` | 平日 15:50 JST | 日次締め（大引け15:30のデータ反映後） |
+| ghost-review | `10 16 * * 1-5` | 平日 16:10 JST | ゴースト・トレード分析（偽陰性分析） |
 | weekly-review | `0 10 * * 6` | 土曜 10:00 JST | 週次レビュー |
 
 ### 重複実行防止
@@ -233,7 +234,34 @@ checkOrderFill(order, currentHigh, currentLow):
 
 ---
 
-## 5. Weekly Review（src/jobs/weekly-review.ts）
+## 5. Ghost Review（src/jobs/ghost-review.ts）
+
+**実行**: 平日 16:10 JST
+**役割**: 見送った銘柄の事後分析（偽陰性検出）
+
+### 処理フロー
+
+1. 今日の `ScoringRecord` から `rejectionReason IS NOT NULL` の銘柄を取得
+2. `fetchStockQuotes()` で終値をバッチ取得
+3. 仮想損益を算出: `(closingPrice - entryPrice) / entryPrice * 100`
+4. 全レコードの `closingPrice`, `ghostProfitPct` をDB更新
+5. 利益率1%以上の上位5銘柄にAI後悔分析を実行
+6. `ghostAnalysis` をDB保存
+7. Slack通知（機会損失サマリー）
+
+### DB操作
+
+- **Read**: `ScoringRecord`（当日のrejected銘柄）
+- **Write**: `ScoringRecord`（closingPrice, ghostProfitPct, ghostAnalysis を更新）
+
+### 外部API
+
+- Yahoo Finance（終値取得）
+- OpenAI GPT-4o（後悔分析、最大5銘柄/日）
+
+---
+
+## 6. Weekly Review（src/jobs/weekly-review.ts）
 
 **実行**: 土曜 10:00 JST
 **役割**: 週間パフォーマンス分析と戦略レビュー
@@ -259,7 +287,7 @@ checkOrderFill(order, currentHigh, currentLow):
 
 ---
 
-## 6. Backfill Prices（src/jobs/backfill-prices.ts）
+## 7. Backfill Prices（src/jobs/backfill-prices.ts）
 
 **実行**: 手動（`npm run backfill`）
 **役割**: 銘柄マスタ登録と株価データの初期取得
@@ -338,5 +366,6 @@ news / scan / order / monitor / eod / weekly / backfill
 | 利確/損切 | 決済価格・損益 | green/red |
 | 日次レポート | 勝敗・PnL・ポートフォリオ | green/red |
 | 週次レポート | 週間集計・戦略レビュー | blue |
+| ゴースト分析 | 機会損失サマリー・AI後悔分析 | warning/green |
 | リスクアラート | 日次損失制限超過等 | red |
 | ジョブ失敗 | エラー内容 | red |

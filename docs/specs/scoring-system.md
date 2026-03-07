@@ -356,6 +356,67 @@ MarketAssessment に保存（既存フロー）
 
 ---
 
+## Ghost Trading Analysis（偽陰性分析）
+
+### 概要
+
+見送った銘柄のうち、実際には利益が出ていたケース（偽陰性）を追跡し、スコアリング閾値やAI判断基準の改善に活用する。
+
+### 追跡対象
+
+| 対象 | `rejectionReason` | 条件 |
+|------|-------------------|------|
+| AI否決銘柄 | `ai_no_go` | AIがGo/No-Go判定でNo-Goとした銘柄 |
+| 閾値未達銘柄 | `below_threshold` | スコア60+だがAI審査に送られなかった銘柄（B/Cランク） |
+| 即死棄却銘柄 | `disqualified` | 即死ルールで棄却された銘柄 |
+
+### ScoringRecord追加フィールド
+
+```prisma
+rejectionReason   String?                     // below_threshold / ai_no_go / disqualified
+entryPrice        Decimal? @db.Decimal(10, 2) // スコアリング時の株価
+closingPrice      Decimal? @db.Decimal(10, 2) // 大引け後の終値
+ghostProfitPct    Decimal? @db.Decimal(8, 4)  // 仮想損益 %
+ghostAnalysis     String?  @db.Text           // AI後悔分析（JSON）
+```
+
+### 処理フロー（ghost-review ジョブ / 16:10 JST）
+
+1. 今日の `ScoringRecord` から `rejectionReason IS NOT NULL` を取得
+2. `fetchStockQuotes()` で終値をバッチ取得
+3. 仮想損益を算出: `(closingPrice - entryPrice) / entryPrice * 100`
+4. DB更新（closingPrice + ghostProfitPct）
+5. 利益率1%以上の上位5銘柄にAI後悔分析を実行
+6. Slack通知
+
+### AI後悔分析の出力
+
+| フィールド | 内容 |
+|-----------|------|
+| `misjudgmentType` | `threshold_too_strict` / `ai_overcautious` / `pattern_not_recognized` / `market_context_changed` / `acceptable_miss` |
+| `analysis` | 判断が外れた原因（100文字以内） |
+| `recommendation` | `lower_threshold` / `adjust_ai_criteria` / `add_pattern_rule` / `no_change_needed` |
+| `reasoning` | 改善提案の理由（150文字以内） |
+
+### 定数
+
+```typescript
+export const GHOST_TRADING = {
+  MIN_SCORE_FOR_TRACKING: 60,       // 追跡対象の最低スコア
+  MAX_AI_REGRET_ANALYSIS: 5,        // AI分析の最大件数/日
+  MIN_PROFIT_PCT_FOR_ANALYSIS: 1.0, // AI分析トリガーの最低利益率(%)
+  AI_CONCURRENCY: 3,                // AI並列数
+};
+```
+
+### 容量見積もり
+
+- 追加レコード: 約10-30件/日（スコア60+のB/Cランク銘柄）
+- 1レコード ≈ 600B
+- 月間追加: ≈ 396KB → 容量影響は軽微
+
+---
+
 ## 将来の拡張
 
 ### 板情報スコアリング（立花API導入後）

@@ -23,6 +23,7 @@ import {
   JOB_CONCURRENCY,
   TECHNICAL_MIN_DATA,
   SCORING,
+  GHOST_TRADING,
 } from "../lib/constants";
 import {
   fetchMarketData,
@@ -289,6 +290,14 @@ ${sectorText || "  特になし"}`;
   }
   filtered = filtered.slice(0, SCORING.MAX_CANDIDATES_FOR_AI);
 
+  // Ghost追跡: filteredに入らなかったスコア60+の銘柄
+  const filteredTickerSet = new Set(filtered.map((c) => c.tickerCode));
+  const ghostCandidates = qualified.filter(
+    (c) =>
+      c.score.totalScore >= GHOST_TRADING.MIN_SCORE_FOR_TRACKING &&
+      !filteredTickerSet.has(c.tickerCode),
+  );
+
   console.log(
     `  スコアリング完了: ${scoredCandidates.length}銘柄 → ${filtered.length}銘柄に絞り込み（即死棄却: ${disqualified.length}銘柄）`,
   );
@@ -367,9 +376,14 @@ ${sectorText || "  特になし"}`;
     },
   });
 
-  // ScoringRecord 保存（80点以上の候補 + 即死棄却）
+  // ScoringRecord 保存（候補 + 即死棄却 + Ghost追跡）
+  const findEntryPrice = (tickerCode: string) => {
+    const stock = candidates.find((s) => s.tickerCode === tickerCode);
+    return stock?.latestPrice ? Number(stock.latestPrice) : null;
+  };
+
   const scoringRecords = [
-    // 80点以上の候補（AIレビュー結果付き）
+    // AIレビュー対象（S/A/Bランク）
     ...filtered.map((c) => {
       const review = reviews.find((r) => r.tickerCode === c.tickerCode);
       return {
@@ -397,8 +411,39 @@ ${sectorText || "  特になし"}`;
         isDisqualified: false,
         aiDecision: review?.decision ?? null,
         aiReasoning: review?.reasoning ?? null,
+        entryPrice: findEntryPrice(c.tickerCode),
+        rejectionReason: review?.decision === "no_go" ? "ai_no_go" : null,
       };
     }),
+    // Ghost追跡候補（スコア60+だがAI審査に送られなかった）
+    ...ghostCandidates.map((c) => ({
+      date: today,
+      tickerCode: c.tickerCode,
+      totalScore: c.score.totalScore,
+      rank: c.score.rank,
+      technicalScore: c.score.technical.total,
+      patternScore: c.score.pattern.total,
+      liquidityScore: c.score.liquidity.total,
+      technicalBreakdown: {
+        rsi: c.score.technical.rsi,
+        ma: c.score.technical.ma,
+        volume: c.score.technical.volume,
+      },
+      patternBreakdown: {
+        chart: c.score.pattern.chart,
+        candlestick: c.score.pattern.candlestick,
+      },
+      liquidityBreakdown: {
+        tradingValue: c.score.liquidity.tradingValue,
+        spreadProxy: c.score.liquidity.spreadProxy,
+        stability: c.score.liquidity.stability,
+      },
+      isDisqualified: false,
+      aiDecision: null,
+      aiReasoning: null,
+      entryPrice: findEntryPrice(c.tickerCode),
+      rejectionReason: "below_threshold",
+    })),
     // 即死棄却
     ...disqualified.map((c) => ({
       date: today,
@@ -415,6 +460,8 @@ ${sectorText || "  特になし"}`;
       disqualifyReason: c.score.disqualifyReason,
       aiDecision: null,
       aiReasoning: null,
+      entryPrice: findEntryPrice(c.tickerCode),
+      rejectionReason: "disqualified",
     })),
   ];
 

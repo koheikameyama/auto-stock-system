@@ -14,6 +14,7 @@
     "order": "tsx src/jobs/order-manager.ts",
     "monitor": "tsx src/jobs/position-monitor.ts",
     "eod": "tsx src/jobs/end-of-day.ts",
+    "ghost": "tsx src/jobs/ghost-review.ts",
     "weekly": "tsx src/jobs/weekly-review.ts",
     "backfill": "tsx src/jobs/backfill-prices.ts",
     "db:generate": "prisma generate",

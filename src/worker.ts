@@ -21,6 +21,7 @@ import { main as runOrder } from "./jobs/order-manager";
 import { main as runMonitor } from "./jobs/position-monitor";
 import { main as runEod } from "./jobs/end-of-day";
 import { main as runWeekly } from "./jobs/weekly-review";
+import { main as runGhostReview } from "./jobs/ghost-review";
 import { app } from "./web/app";
 import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
@@ -95,6 +96,8 @@ const schedules = [
   { cron: "0-19 15 * * 1-5", job: runMonitor, name: "position-monitor" },
   // 15:50 日次締め（平日）— 大引け15:30のデータ反映後
   { cron: "50 15 * * 1-5", job: runEod, name: "end-of-day" },
+  // 16:10 ゴースト・トレーディング分析（平日）— 終値取得のため大引け後に実行
+  { cron: "10 16 * * 1-5", job: runGhostReview, name: "ghost-review" },
   // 土曜 10:00 週次レビュー
   { cron: "0 10 * * 6", job: runWeekly, name: "weekly-review" },
 ];
@@ -184,6 +187,29 @@ async function catchUpMissedJobs() {
     if (!summary) {
       console.log("[catch-up] end-of-day が未実行 → 実行します");
       await runJob("end-of-day", runEod);
+    }
+  }
+
+  // ghost-review: 16:10以降で、今日のrejected銘柄にclosingPriceがなければ実行
+  if (now.hour() >= 17 || (now.hour() === 16 && now.minute() >= 10)) {
+    const hasGhostReview = await prisma.scoringRecord.findFirst({
+      where: {
+        date: todayStart,
+        rejectionReason: { not: null },
+        closingPrice: { not: null },
+      },
+    });
+    if (!hasGhostReview) {
+      const hasRejected = await prisma.scoringRecord.findFirst({
+        where: {
+          date: todayStart,
+          rejectionReason: { not: null },
+        },
+      });
+      if (hasRejected) {
+        console.log("[catch-up] ghost-review が未実行 → 実行します");
+        await runJob("ghost-review", runGhostReview);
+      }
     }
   }
 

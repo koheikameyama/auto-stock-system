@@ -252,3 +252,59 @@ export async function notifyRiskAlert(data: {
     color: "danger",
   });
 }
+
+/** ゴースト・トレーディング分析通知 */
+export async function notifyGhostReview(data: {
+  totalRejected: number;
+  totalProfitable: number;
+  totalLoss: number;
+  avgProfitPct: number;
+  topMissed: Array<{
+    tickerCode: string;
+    score: number;
+    rank: string;
+    rejectionReason: string;
+    ghostProfitPct: number;
+    misjudgmentType?: string;
+  }>;
+}): Promise<void> {
+  const reasonLabel: Record<string, string> = {
+    below_threshold: "閾値未達",
+    ai_no_go: "AI見送り",
+    disqualified: "即死ルール",
+  };
+
+  const missedList =
+    data.topMissed
+      .map(
+        (m, i) =>
+          `${i + 1}. ${m.tickerCode} [${m.rank}:${m.score}点] +${m.ghostProfitPct.toFixed(2)}% (${reasonLabel[m.rejectionReason] || m.rejectionReason})${m.misjudgmentType ? ` → ${m.misjudgmentType}` : ""}`,
+      )
+      .join("\n") || "利益が出ていた見送り銘柄はありませんでした";
+
+  await notifySlack({
+    title: `👻 ゴースト・トレード分析: ${data.totalProfitable}件の機会損失`,
+    message: missedList,
+    color: data.totalProfitable > 0 ? "warning" : "good",
+    fields: [
+      {
+        title: "見送り銘柄数",
+        value: `${data.totalRejected}件`,
+        short: true,
+      },
+      {
+        title: "利益/損失",
+        value: `📈${data.totalProfitable}件 / 📉${data.totalLoss}件`,
+        short: true,
+      },
+      {
+        title: "平均利益率(利益銘柄)",
+        value:
+          data.totalProfitable > 0
+            ? `+${data.avgProfitPct.toFixed(2)}%`
+            : "N/A",
+        short: true,
+      },
+    ],
+  });
+}

@@ -85,7 +85,7 @@ model MarketAssessment {
   @@index([date(sort: Desc)])
 }
 
-// スコアリング記録（80点以上の候補 + 即死棄却）
+// スコアリング記録（候補銘柄 + 即死棄却 + ゴースト追跡）
 model ScoringRecord {
   id           String   @id @default(cuid())
   date         DateTime @db.Date
@@ -118,12 +118,20 @@ model ScoringRecord {
   tradeResult    String?  // win / loss / no_trade
   profitPct      Decimal? @db.Decimal(8, 4)
 
+  // Ghost Trading Analysis（偽陰性分析）
+  rejectionReason String?                     // below_threshold / ai_no_go / disqualified
+  entryPrice      Decimal? @db.Decimal(10, 2) // スコアリング時の株価
+  closingPrice    Decimal? @db.Decimal(10, 2) // 大引け後の終値
+  ghostProfitPct  Decimal? @db.Decimal(8, 4)  // 仮想損益 %
+  ghostAnalysis   String?  @db.Text           // AI後悔分析
+
   createdAt    DateTime @default(now())
 
   @@unique([date, tickerCode])
   @@index([date(sort: Desc)])
   @@index([rank])
   @@index([tradeResult])
+  @@index([rejectionReason])
 }
 
 // 売買注文（シミュレーション）
