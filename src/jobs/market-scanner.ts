@@ -1,28 +1,46 @@
 /**
  * 市場スキャナー（8:30 JST / 平日）
  *
+ * 「ロジックが主役、AIが最終審判」フロー:
  * 1. 市場指標データ取得
  * 2. AI市場評価 → shouldTrade判定
  * 3. shouldTrade = false → Slack通知して終了
  * 4. shouldTrade = true → 銘柄選定
  *    a. 対象銘柄のヒストリカルデータ取得
  *    b. テクニカル分析
- *    c. AI銘柄選定
- *    d. MarketAssessment に結果を保存
- *    e. Slackに候補銘柄通知
+ *    c. チャートパターン・ローソク足パターン検出
+ *    d. テクニカルスコアリング（0-100）→ 上位10-20銘柄に絞り込み
+ *    e. AIレビュー（Go/No-Go）
+ *    f. MarketAssessment に結果を保存
+ *    g. Slackに候補銘柄通知
  */
 
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
-import { SCREENING, YAHOO_FINANCE, JOB_CONCURRENCY, TECHNICAL_MIN_DATA } from "../lib/constants";
+import {
+  SCREENING,
+  YAHOO_FINANCE,
+  JOB_CONCURRENCY,
+  TECHNICAL_MIN_DATA,
+  SCORING,
+} from "../lib/constants";
 import {
   fetchMarketData,
   fetchHistoricalData,
-  fetchStockQuote,
 } from "../core/market-data";
-import { analyzeTechnicals, formatTechnicalForAI } from "../core/technical-analysis";
-import { assessMarket, selectStocks } from "../core/ai-decision";
-import type { MarketDataInput, StockCandidateInput } from "../core/ai-decision";
+import {
+  analyzeTechnicals,
+  formatScoreForAI,
+} from "../core/technical-analysis";
+import type { TechnicalSummary } from "../core/technical-analysis";
+import { scoreTechnicals } from "../core/technical-scorer";
+import type { TechnicalScore } from "../core/technical-scorer";
+import { detectChartPatterns } from "../lib/chart-patterns";
+import type { ChartPatternResult } from "../lib/chart-patterns";
+import { analyzeSingleCandle } from "../lib/candlestick-patterns";
+import type { PatternResult } from "../lib/candlestick-patterns";
+import { assessMarket, reviewStocks } from "../core/ai-decision";
+import type { MarketDataInput, StockReviewCandidateInput } from "../core/ai-decision";
 import {
   notifyMarketAssessment,
   notifyStockCandidates,
@@ -34,11 +52,22 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** スコアリング済み候補 */
+interface ScoredCandidate {
+  tickerCode: string;
+  name: string;
+  summary: TechnicalSummary;
+  score: TechnicalScore;
+  chartPatterns: ChartPatternResult[];
+  candlestickPattern: PatternResult | null;
+  newsContext?: string;
+}
+
 export async function main() {
   console.log("=== Market Scanner 開始 ===");
 
   // 1. 市場指標データ取得
-  console.log("[1/4] 市場指標データ取得中...");
+  console.log("[1/5] 市場指標データ取得中...");
   const marketData = await fetchMarketData();
 
   if (!marketData.nikkei || !marketData.vix) {
@@ -51,7 +80,7 @@ export async function main() {
   }
 
   // 1.5. ニュース分析データ取得
-  console.log("[1.5/4] ニュース分析データ取得中...");
+  console.log("[1.5/5] ニュース分析データ取得中...");
   const newsAnalysis = await prisma.newsAnalysis.findUnique({
     where: { date: getTodayForDB() },
   });
@@ -85,7 +114,7 @@ ${sectorText || "  特になし"}`;
   }
 
   // 2. AI市場評価
-  console.log("[2/4] AI市場評価中...");
+  console.log("[2/5] AI市場評価中...");
   const marketInput: MarketDataInput = {
     nikkeiPrice: marketData.nikkei.price,
     nikkeiChange: marketData.nikkei.changePercent,
@@ -133,8 +162,8 @@ ${sectorText || "  特になし"}`;
     return;
   }
 
-  // 4. 銘柄選定
-  console.log("[3/4] 候補銘柄のテクニカル分析中...");
+  // 4. テクニカル分析 + スコアリング
+  console.log("[3/5] テクニカル分析 + スコアリング中...");
 
   // スクリーニング条件に合う銘柄を取得
   const stocks = await prisma.stock.findMany({
@@ -145,7 +174,6 @@ ${sectorText || "  特になし"}`;
     },
   });
 
-  // スクリーニングフィルタ
   const candidates = stocks.filter((s) => {
     const price = Number(s.latestPrice);
     const volume = Number(s.latestVolume);
@@ -160,9 +188,9 @@ ${sectorText || "  特になし"}`;
 
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 
-  // テクニカル分析（並列、バッチ制御）
+  // テクニカル分析 + パターン検出 + スコアリング（並列、バッチ制御）
   const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
-  const analysisResults: StockCandidateInput[] = [];
+  const scoredCandidates: ScoredCandidate[] = [];
 
   for (let i = 0; i < candidates.length; i += YAHOO_FINANCE.BATCH_SIZE) {
     const batch = candidates.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
@@ -172,16 +200,50 @@ ${sectorText || "  特になし"}`;
         limit(async () => {
           try {
             const historical = await fetchHistoricalData(stock.tickerCode);
-            if (!historical || historical.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) return null;
+            if (
+              !historical ||
+              historical.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS
+            )
+              return null;
 
+            // テクニカル分析
             const summary = analyzeTechnicals(historical);
-            const formatted = formatTechnicalForAI(summary);
+
+            // チャートパターン検出（oldest-first を期待）
+            const historicalOldestFirst = [...historical].reverse().map((d) => ({
+              date: d.date,
+              open: d.open,
+              high: d.high,
+              low: d.low,
+              close: d.close,
+            }));
+            const chartPatterns = detectChartPatterns(historicalOldestFirst);
+
+            // ローソク足パターン検出（最新のローソク足）
+            const latestCandle = {
+              date: historical[0].date,
+              open: historical[0].open,
+              high: historical[0].high,
+              low: historical[0].low,
+              close: historical[0].close,
+            };
+            const candlestickPattern = analyzeSingleCandle(latestCandle);
+
+            // スコアリング
+            const score = scoreTechnicals({
+              summary,
+              chartPatterns,
+              candlestickPattern,
+            });
 
             return {
               tickerCode: stock.tickerCode,
               name: stock.name,
-              technicalSummary: formatted,
-            } as StockCandidateInput;
+              summary,
+              score,
+              chartPatterns,
+              candlestickPattern,
+            } as ScoredCandidate;
           } catch (error) {
             console.error(
               `  テクニカル分析エラー: ${stock.tickerCode}`,
@@ -193,8 +255,8 @@ ${sectorText || "  特になし"}`;
       ),
     );
 
-    analysisResults.push(
-      ...batchResults.filter((r): r is StockCandidateInput => r !== null),
+    scoredCandidates.push(
+      ...batchResults.filter((r): r is ScoredCandidate => r !== null),
     );
 
     if (i + YAHOO_FINANCE.BATCH_SIZE < candidates.length) {
@@ -202,7 +264,35 @@ ${sectorText || "  特になし"}`;
     }
   }
 
-  console.log(`  テクニカル分析完了: ${analysisResults.length}銘柄`);
+  console.log(`  テクニカル分析完了: ${scoredCandidates.length}銘柄`);
+
+  // スコア降順ソート
+  scoredCandidates.sort((a, b) => b.score.totalScore - a.score.totalScore);
+
+  // フィルタリング: S+Aランク（不足時はBランクも追加）
+  let filtered = scoredCandidates.filter(
+    (c) => c.score.rank === "S" || c.score.rank === "A",
+  );
+  if (filtered.length < SCORING.MIN_CANDIDATES_FOR_AI) {
+    const bRankCandidates = scoredCandidates.filter(
+      (c) => c.score.rank === "B",
+    );
+    filtered = [...filtered, ...bRankCandidates];
+  }
+  filtered = filtered.slice(0, SCORING.MAX_CANDIDATES_FOR_AI);
+
+  console.log(
+    `  スコアリング完了: ${scoredCandidates.length}銘柄 → ${filtered.length}銘柄に絞り込み`,
+  );
+
+  // スコア分布ログ
+  const rankCounts = { S: 0, A: 0, B: 0, C: 0 };
+  for (const c of scoredCandidates) {
+    rankCounts[c.score.rank]++;
+  }
+  console.log(
+    `  ランク分布: S=${rankCounts.S} A=${rankCounts.A} B=${rankCounts.B} C=${rankCounts.C}`,
+  );
 
   // 銘柄別ニュースコンテキストを添付
   const stockCatalysts = newsAnalysis?.stockCatalysts as
@@ -210,24 +300,47 @@ ${sectorText || "  特になし"}`;
     | undefined;
 
   if (stockCatalysts && stockCatalysts.length > 0) {
-    for (const result of analysisResults) {
+    for (const candidate of filtered) {
       const catalysts = stockCatalysts.filter(
-        (c) => c.tickerCode === result.tickerCode,
+        (c) => c.tickerCode === candidate.tickerCode,
       );
       if (catalysts.length > 0) {
-        result.newsContext = catalysts
+        candidate.newsContext = catalysts
           .map((c) => `[${c.type}] ${c.summary}`)
           .join("\n");
       }
     }
   }
 
-  // AI銘柄選定
-  console.log("[4/4] AI銘柄選定中...");
-  const selections = await selectStocks(assessment, analysisResults);
-  console.log(`  → ${selections.length}銘柄選定`);
+  // 5. AIレビュー（Go/No-Go）
+  console.log("[4/5] AIレビュー中...");
+  const reviewCandidates: StockReviewCandidateInput[] = filtered.map((c) => ({
+    tickerCode: c.tickerCode,
+    name: c.name,
+    scoreFormatted: formatScoreForAI(c.score, c.summary),
+    newsContext: c.newsContext,
+  }));
 
-  // MarketAssessment に結果を保存
+  const reviews = await reviewStocks(assessment, reviewCandidates);
+  const goStocks = reviews.filter((r) => r.decision === "go");
+  console.log(
+    `  → AIレビュー: ${reviews.length}銘柄中 ${goStocks.length}銘柄承認`,
+  );
+
+  // 6. MarketAssessment に結果を保存
+  console.log("[5/5] 結果保存中...");
+  const selectedStocksData = goStocks.map((g) => {
+    const scored = filtered.find((c) => c.tickerCode === g.tickerCode);
+    return {
+      tickerCode: g.tickerCode,
+      strategy: g.strategy,
+      reasoning: g.reasoning,
+      riskFlags: g.riskFlags,
+      technicalScore: scored?.score.totalScore ?? 0,
+      technicalRank: scored?.score.rank ?? "C",
+    };
+  });
+
   await prisma.marketAssessment.create({
     data: {
       date: getTodayForDB(),
@@ -240,20 +353,23 @@ ${sectorText || "  特になし"}`;
       sentiment: assessment.sentiment,
       shouldTrade: true,
       reasoning: assessment.reasoning,
-      selectedStocks: JSON.parse(JSON.stringify(selections)),
+      selectedStocks: JSON.parse(JSON.stringify(selectedStocksData)),
     },
   });
 
   // Slack通知
-  if (selections.length > 0) {
+  if (goStocks.length > 0) {
     await notifyStockCandidates(
-      selections.map((s) => ({
-        tickerCode: s.tickerCode,
-        name: candidates.find((c) => c.tickerCode === s.tickerCode)?.name,
-        strategy: s.strategy,
-        score: s.score,
-        reasoning: s.reasoning,
-      })),
+      goStocks.map((g) => {
+        const scored = filtered.find((c) => c.tickerCode === g.tickerCode);
+        return {
+          tickerCode: g.tickerCode,
+          name: candidates.find((c) => c.tickerCode === g.tickerCode)?.name,
+          strategy: g.strategy,
+          score: scored?.score.totalScore ?? 0,
+          reasoning: g.reasoning,
+        };
+      }),
     );
   }
 

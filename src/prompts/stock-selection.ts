@@ -1,40 +1,35 @@
 /**
- * 銘柄選定プロンプト
+ * 銘柄選定プロンプト（レビュー型）
+ *
+ * AIの役割を「分析官」から「ベテラン投資家（上司）」に変更。
+ * ロジック（テクニカルスコアリングエンジン）が推薦した銘柄に対し、
+ * 定性的リスクを判断してGo/No-Goを出す。
  */
 
-export const STOCK_SELECTION_SYSTEM_PROMPT = `あなたは日本株の自動売買システムのAIトレーダーです。
-テクニカル分析データに基づいて、今日取引すべき銘柄を選定します。
+export const STOCK_REVIEW_SYSTEM_PROMPT = `あなたはベテラン投資家です。
+ロジック（テクニカル分析エンジン）が以下の銘柄を推薦しました。
+各銘柄にはスコアとその内訳が付いています。
 
-【選定基準】
-- テクニカル指標（RSI、MACD、ボリンジャーバンド、移動平均線）が有利な銘柄
-- 出来高が十分にあり、流動性が確保されている
-- 明確なトレンドやパターンが形成されている
-- リスク/リワード比が魅力的
+あなたの役割は、ロジックが見落としがちな「定性的リスク」を判断し、
+各銘柄を承認（Go）または見送り（No-Go）してください。
 
-【デイトレード向き銘柄】
-- ボラティリティが高い（ATRが大きい）
-- 出来高が多い
-- 明確な日中トレンドが期待できる
-- ギャップアップ/ダウンなどの短期モメンタム
+【判断基準】
+- 地政学リスクとの関連
+- 市場の空気感（センチメント）
+- チャートパターンの「綺麗さ」（ダマシの可能性）
+- セクター全体の流れとの整合性
+- ニュースカタリストの信頼性
 
-【スイングトレード向き銘柄】
-- 中期トレンドが明確（移動平均線のパーフェクトオーダーなど）
-- RSIが30-40付近で反転の兆し
-- ボリンジャーバンド下限付近でサポートライン上
-- 出来高を伴うトレンド転換シグナル
+【重要ルール】
+- ロジックのスコアが高い銘柄を却下する場合は、明確な定性的理由を述べてください
+- 数値的な判断（RSIが高い等）はロジックが既に行っています。あなたは数値を再計算しないでください
+- 承認する銘柄には取引戦略（day_trade/swing）を指定してください
+- riskFlagsには検出したリスク要因を列挙してください（空配列も可）`;
 
-【ニュース情報の活用】
-銘柄にニュース情報が添付されている場合は、テクニカル分析と合わせて考慮してください：
-- ポジティブカタリスト（好決算、新製品等）がある銘柄はスコアを上方修正
-- ネガティブカタリスト（不祥事、規制強化等）がある銘柄はスコアを下方修正
-- セクター全体に影響するニュースがある場合は関連銘柄に反映
-
-各銘柄のスコア（0-100）と戦略（day_trade/swing）を決定し、reasoningに根拠を記述してください。`;
-
-export const STOCK_SELECTION_SCHEMA = {
+export const STOCK_REVIEW_SCHEMA = {
   type: "json_schema" as const,
   json_schema: {
-    name: "stock_selection",
+    name: "stock_review",
     strict: true,
     schema: {
       type: "object",
@@ -44,19 +39,37 @@ export const STOCK_SELECTION_SCHEMA = {
           items: {
             type: "object",
             properties: {
-              tickerCode: { type: "string", description: "銘柄コード (例: 7203.T)" },
+              tickerCode: {
+                type: "string",
+                description: "銘柄コード (例: 7203.T)",
+              },
+              decision: {
+                type: "string",
+                enum: ["go", "no_go"],
+                description: "承認判断",
+              },
               strategy: {
                 type: "string",
                 enum: ["day_trade", "swing"],
                 description: "取引戦略",
               },
-              score: {
-                type: "number",
-                description: "選定スコア (0-100)",
+              reasoning: {
+                type: "string",
+                description: "定性的な判断理由",
               },
-              reasoning: { type: "string", description: "選定理由" },
+              riskFlags: {
+                type: "array",
+                items: { type: "string" },
+                description: "リスクフラグ（例: 地政学リスク、セクター逆風）",
+              },
             },
-            required: ["tickerCode", "strategy", "score", "reasoning"],
+            required: [
+              "tickerCode",
+              "decision",
+              "strategy",
+              "reasoning",
+              "riskFlags",
+            ],
             additionalProperties: false,
           },
         },

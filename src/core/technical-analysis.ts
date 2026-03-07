@@ -25,6 +25,7 @@ import {
   VOLUME_ANALYSIS,
   TECHNICAL_MIN_DATA,
 } from "../lib/constants";
+import type { TechnicalScore } from "./technical-scorer";
 
 // ========================================
 // 型定義
@@ -300,5 +301,38 @@ export function formatTechnicalForAI(summary: TechnicalSummary): string {
       `出来高比率(20日平均比): ${summary.volumeAnalysis.volumeRatio}倍`,
     );
 
+  return lines.join("\n");
+}
+
+/**
+ * テクニカルスコアをAIプロンプト用テキスト（スコア形式）に変換
+ *
+ * AIには数値の再計算をさせず、ロジックが算出したスコア内訳を提示する。
+ */
+export function formatScoreForAI(
+  score: TechnicalScore,
+  summary: TechnicalSummary,
+): string {
+  const lines: string[] = [];
+  lines.push(`【総合スコア】${score.totalScore}/100（${score.rank}ランク）`);
+  lines.push(`【スコア内訳】`);
+  lines.push(`  トレンド: ${score.breakdown.trend}/100`);
+  lines.push(
+    `  RSIモメンタム: ${score.breakdown.rsiMomentum}/100${summary.rsi != null ? `（RSI=${summary.rsi}）` : ""}`,
+  );
+  lines.push(`  MACDモメンタム: ${score.breakdown.macdMomentum}/100`);
+  lines.push(`  ボリンジャー位置: ${score.breakdown.bollingerPosition}/100`);
+  lines.push(`  チャートパターン: ${score.breakdown.chartPattern}/100`);
+  if (score.topPattern) {
+    lines.push(
+      `    → ${score.topPattern.name}（${score.topPattern.rank}ランク / 勝率${score.topPattern.winRate}%）`,
+    );
+  }
+  lines.push(`  ローソク足: ${score.breakdown.candlestick}/100`);
+  lines.push(
+    `  出来高: ${score.breakdown.volume}/100${summary.volumeAnalysis.volumeRatio ? `（${summary.volumeAnalysis.volumeRatio}倍）` : ""}`,
+  );
+  lines.push(`  サポート距離: ${score.breakdown.support}/100`);
+  lines.push(`【ロジック判定】${score.technicalSignal}`);
   return lines.join("\n");
 }
