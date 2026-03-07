@@ -10,6 +10,7 @@ Railway上で常駐する node-cron ベースのジョブスケジューラ。
 
 | ジョブ | cron式 | 実行タイミング | 備考 |
 |--------|--------|--------------|------|
+| news-collector | `0 8 * * 1-5` | 平日 8:00 JST | ニュース収集・AI分析（market-scanner前に実行） |
 | market-scanner | `30 8 * * 1-5` | 平日 8:30 JST | 市場スキャン（海外指標は遅延影響なし） |
 | order-manager | `20 9 * * 1-5` | 平日 9:20 JST | 注文生成（寄付き9:00のデータ反映後） |
 | position-monitor | `20-59 9, * 10-14, 0-19 15 * * 1-5` | 平日 9:20-15:19 毎分 | ポジション監視 |
@@ -23,6 +24,55 @@ Railway上で常駐する node-cron ベースのジョブスケジューラ。
 ### エラーハンドリング
 
 ジョブエラーは catch してログ出力。Worker プロセス自体は落とさない。
+
+---
+
+## 0. News Collector（src/jobs/news-collector.ts）
+
+**実行**: 平日 8:00 JST
+**役割**: ニュースを収集し、AIで市場影響を分析する
+
+### 処理フロー
+
+1. **ニュースフェッチ**（3ソース並列）:
+   - NewsAPI.org: 地政学 + マーケット関連（API key不在時スキップ）
+   - Google News RSS: 地政学 + マーケット + セクター別
+   - Yahoo Finance: 主要20銘柄の個別ニュース（p-limit=5）
+2. **重複排除**: SHA-256ハッシュ（title + url）で排除
+3. **DB保存**: 新規記事のみ `createMany`（skipDuplicates）
+4. **AI分析**: 直近24時間の記事タイトルをGPT-4oで構造化分析
+5. **NewsAnalysis upsert**: 当日1レコード（地政学リスク、市場インパクト、セクター影響、銘柄カタリスト）
+6. **クリーンアップ**: 90日超の古い記事・分析結果を削除
+7. **Slack通知**: 地政学リスクレベル、市場インパクト、セクター影響
+
+### AI分析出力
+
+| 項目 | 内容 |
+|------|------|
+| geopoliticalRiskLevel | 1-5（1=平穏, 5=危機的） |
+| geopoliticalSummary | 地政学・マクロ環境の要約 |
+| marketImpact | positive / neutral / negative |
+| sectorImpacts | セクター別影響（JSON配列） |
+| stockCatalysts | 銘柄別カタリスト（JSON配列） |
+| keyEvents | 主要イベントの要約 |
+
+### DB操作
+
+- **Read**: `Stock`（Yahoo Finance用ティッカー取得）, `NewsArticle`（重複チェック）
+- **Write**: `NewsArticle`（記事保存）, `NewsAnalysis`（分析結果保存）
+- **Delete**: 90日超の `NewsArticle`, `NewsAnalysis`
+
+### 外部API
+
+- NewsAPI.org（オプション、API key必要）
+- Google News RSS（無料、キー不要）
+- Yahoo Finance（yahoo-finance2 search API）
+- OpenAI GPT-4o（ニュース分析）
+
+### ニュース分析の利用箇所
+
+- **market-scanner**: `assessMarket()` に地政学・マクロ要約、`selectStocks()` に銘柄別カタリスト
+- **order-manager**: `decideTrade()` に銘柄別ニュースコンテキスト
 
 ---
 
@@ -269,7 +319,7 @@ checkOrderFill(order, currentHigh, currentLow):
 
 ### 利用可能なジョブ
 
-scan / order / monitor / eod / weekly / backfill
+news / scan / order / monitor / eod / weekly / backfill
 
 ### 失敗通知
 
@@ -281,6 +331,7 @@ scan / order / monitor / eod / weekly / backfill
 
 | タイミング | 通知内容 | 色 |
 |-----------|---------|-----|
+| ニュース分析完了 | 地政学リスク・市場インパクト・セクター影響 | good/warning/gray |
 | 市場スキャン完了 | 市場評価・候補銘柄一覧 | blue |
 | 注文生成 | 銘柄名・指値・数量 | blue |
 | 約定 | 約定価格・数量 | green |

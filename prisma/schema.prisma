@@ -139,6 +139,43 @@ model TradingPosition {
   @@index([createdAt(sort: Desc)])
 }
 
+// ニュース記事（生データ）
+model NewsArticle {
+  id          String   @id @default(cuid())
+  source      String   // "newsapi" | "google_rss" | "yahoo_finance"
+  title       String
+  url         String
+  publishedAt DateTime
+  category    String   // "geopolitical" | "sector" | "stock"
+  tickerCode  String?
+  sector      String?
+  contentHash String   @unique // SHA-256(title|url)
+
+  createdAt DateTime @default(now())
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([category])
+  @@index([tickerCode])
+}
+
+// ニュース分析（AI処理済みサマリー、日次1レコード）
+model NewsAnalysis {
+  id                    String   @id @default(cuid())
+  date                  DateTime @db.Date @unique
+  geopoliticalRiskLevel Int      // 1-5
+  geopoliticalSummary   String   @db.Text
+  marketImpact          String   // "positive" | "neutral" | "negative"
+  marketImpactSummary   String   @db.Text
+  sectorImpacts         Json     // [{ sector, impact, summary }]
+  stockCatalysts        Json     // [{ tickerCode, type, summary }]
+  keyEvents             String   @db.Text
+  articleCount          Int
+
+  createdAt DateTime @default(now())
+
+  @@index([date(sort: Desc)])
+}
+
 // 日次取引サマリー
 model TradingDailySummary {
   id             String   @id @default(cuid())

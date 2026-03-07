@@ -15,6 +15,7 @@ import { serve } from "@hono/node-server";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+import { main as runNews } from "./jobs/news-collector";
 import { main as runScan } from "./jobs/market-scanner";
 import { main as runOrder } from "./jobs/order-manager";
 import { main as runMonitor } from "./jobs/position-monitor";
@@ -82,6 +83,8 @@ function nowJST(): string {
 // スケジュール定義（全て JST）
 // ※ Yahoo Finance日本株データの約20分遅延を考慮し、各ジョブを+20分にオフセット
 const schedules = [
+  // 8:00 ニュース収集・分析（平日）— market-scanner前に実行
+  { cron: "0 8 * * 1-5", job: runNews, name: "news-collector" },
   // 8:30 市場スキャン（平日）— 海外指標は遅延影響なしのため据置
   { cron: "30 8 * * 1-5", job: runScan, name: "market-scanner" },
   // 9:20 注文発行（平日）— 寄付き9:00のデータ反映後
@@ -133,6 +136,17 @@ async function catchUpMissedJobs() {
   const todayStart = now.startOf("day").toDate();
 
   console.log("[catch-up] 逃したジョブを確認中...");
+
+  // news-collector: 8:00以降で、今日のNewsAnalysisがなければ実行
+  if (now.hour() >= 8) {
+    const newsAnalysis = await prisma.newsAnalysis.findFirst({
+      where: { date: todayStart },
+    });
+    if (!newsAnalysis) {
+      console.log("[catch-up] news-collector が未実行 → 実行します");
+      await runJob("news-collector", runNews);
+    }
+  }
 
   // market-scanner: 8:30以降で、今日のMarketAssessmentがなければ実行
   if (now.hour() >= 9 || (now.hour() === 8 && now.minute() >= 30)) {

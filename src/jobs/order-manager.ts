@@ -68,6 +68,14 @@ export async function main() {
     reasoning: todayAssessment.reasoning,
   };
 
+  // ニュース分析データ取得
+  const newsAnalysis = await prisma.newsAnalysis.findUnique({
+    where: { date: getTodayForDB() },
+  });
+  const stockCatalysts = newsAnalysis?.stockCatalysts as
+    | Array<{ tickerCode: string; type: string; summary: string }>
+    | undefined;
+
   console.log(`  選定銘柄数: ${selectedStocks.length}, 現金残高: ¥${cashBalance.toLocaleString()}`);
 
   // 3. 各銘柄に対してAI売買判断
@@ -101,6 +109,15 @@ export async function main() {
     const techSummary = analyzeTechnicals(historical);
     const techFormatted = formatTechnicalForAI(techSummary);
 
+    // 銘柄別ニュースコンテキスト
+    const catalysts = stockCatalysts?.filter(
+      (c) => c.tickerCode === stock.tickerCode,
+    );
+    const newsContext =
+      catalysts && catalysts.length > 0
+        ? catalysts.map((c) => `[${c.type}] ${c.summary}`).join("\n")
+        : undefined;
+
     // AI売買判断
     const decision = await decideTrade(
       {
@@ -114,6 +131,7 @@ export async function main() {
         changePercent: quote.changePercent,
         sector: getSectorGroup(stock.sector) ?? stock.sector ?? "不明",
         technicalSummary: techFormatted,
+        newsContext,
       },
       assessment,
       cashBalance,

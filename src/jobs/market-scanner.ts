@@ -50,6 +50,40 @@ export async function main() {
     throw new Error("市場データの取得に失敗しました（nikkei/vix が null）");
   }
 
+  // 1.5. ニュース分析データ取得
+  console.log("[1.5/4] ニュース分析データ取得中...");
+  const newsAnalysis = await prisma.newsAnalysis.findUnique({
+    where: { date: getTodayForDB() },
+  });
+
+  let newsSummary: string | undefined;
+  if (newsAnalysis) {
+    const sectorText = (
+      newsAnalysis.sectorImpacts as Array<{
+        sector: string;
+        impact: string;
+        summary: string;
+      }>
+    )
+      .map((s) => `  - ${s.sector}: ${s.impact} — ${s.summary}`)
+      .join("\n");
+
+    newsSummary = `【ニュース分析】
+- 地政学リスクレベル: ${newsAnalysis.geopoliticalRiskLevel}/5
+- ${newsAnalysis.geopoliticalSummary}
+- 市場インパクト: ${newsAnalysis.marketImpact}
+- ${newsAnalysis.marketImpactSummary}
+- 主要イベント: ${newsAnalysis.keyEvents}
+【セクター別影響】
+${sectorText || "  特になし"}`;
+
+    console.log(
+      `  ニュース分析あり（地政学リスク: ${newsAnalysis.geopoliticalRiskLevel}/5, 市場: ${newsAnalysis.marketImpact}）`,
+    );
+  } else {
+    console.log("  ニュース分析なし（news-collector未実行）");
+  }
+
   // 2. AI市場評価
   console.log("[2/4] AI市場評価中...");
   const marketInput: MarketDataInput = {
@@ -60,6 +94,7 @@ export async function main() {
     usdJpy: marketData.usdjpy?.price ?? 0,
     cmeFuturesPrice: marketData.cmeFutures?.price ?? 0,
     cmeFuturesChange: marketData.cmeFutures?.changePercent ?? 0,
+    newsSummary,
   };
 
   const assessment = await assessMarket(marketInput);
@@ -168,6 +203,24 @@ export async function main() {
   }
 
   console.log(`  テクニカル分析完了: ${analysisResults.length}銘柄`);
+
+  // 銘柄別ニュースコンテキストを添付
+  const stockCatalysts = newsAnalysis?.stockCatalysts as
+    | Array<{ tickerCode: string; type: string; summary: string }>
+    | undefined;
+
+  if (stockCatalysts && stockCatalysts.length > 0) {
+    for (const result of analysisResults) {
+      const catalysts = stockCatalysts.filter(
+        (c) => c.tickerCode === result.tickerCode,
+      );
+      if (catalysts.length > 0) {
+        result.newsContext = catalysts
+          .map((c) => `[${c.type}] ${c.summary}`)
+          .join("\n");
+      }
+    }
+  }
 
   // AI銘柄選定
   console.log("[4/4] AI銘柄選定中...");

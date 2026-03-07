@@ -31,12 +31,14 @@ export interface MarketDataInput {
   usdJpy: number;
   cmeFuturesPrice: number;
   cmeFuturesChange: number;
+  newsSummary?: string;
 }
 
 export interface StockCandidateInput {
   tickerCode: string;
   name: string;
   technicalSummary: string; // formatTechnicalForAI の出力
+  newsContext?: string;
 }
 
 export interface TradeInput {
@@ -50,6 +52,7 @@ export interface TradeInput {
   changePercent: number;
   sector: string;
   technicalSummary: string;
+  newsContext?: string;
 }
 
 export interface PositionInput {
@@ -95,7 +98,7 @@ export async function assessMarket(
 ): Promise<MarketAssessmentResult> {
   const openai = getOpenAIClient();
 
-  const userPrompt = `以下の市場データに基づいて、今日の日本株取引を行うべきか評価してください。
+  let userPrompt = `以下の市場データに基づいて、今日の日本株取引を行うべきか評価してください。
 
 【市場指標】
 - 日経225: ${data.nikkeiPrice.toLocaleString()}円（前日比: ${data.nikkeiChange >= 0 ? "+" : ""}${data.nikkeiChange.toFixed(2)}%）
@@ -103,6 +106,10 @@ export async function assessMarket(
 - VIX: ${data.vix.toFixed(2)}
 - USD/JPY: ${data.usdJpy.toFixed(2)}
 - CME日経先物: ${data.cmeFuturesPrice.toLocaleString()}円（前日比: ${data.cmeFuturesChange >= 0 ? "+" : ""}${data.cmeFuturesChange.toFixed(2)}%）`;
+
+  if (data.newsSummary) {
+    userPrompt += `\n\n${data.newsSummary}`;
+  }
 
   const response = await openai.chat.completions.create({
     model: OPENAI_CONFIG.MODEL,
@@ -136,7 +143,7 @@ export async function selectStocks(
     .map(
       (c) => `
 【${c.tickerCode} ${c.name}】
-${c.technicalSummary}`,
+${c.technicalSummary}${c.newsContext ? `\n【ニュース】\n${c.newsContext}` : ""}`,
     )
     .join("\n---\n");
 
@@ -194,7 +201,7 @@ export async function decideTrade(
           .join("\n")
       : "  なし";
 
-  const userPrompt = `【銘柄情報】
+  let userPrompt = `【銘柄情報】
 - ティッカー: ${stock.tickerCode}（${stock.name}）
 - セクター: ${stock.sector}
 - 現在価格: ¥${stock.price.toLocaleString()}
@@ -216,6 +223,10 @@ ${stock.technicalSummary}
 ${positionsText}
 
 買い/見送りの判断と、買いの場合は指値・利確・損切り価格、株数（${UNIT_SHARES}株単位）を決定してください。`;
+
+  if (stock.newsContext) {
+    userPrompt += `\n\n【関連ニュース】\n${stock.newsContext}`;
+  }
 
   const response = await openai.chat.completions.create({
     model: OPENAI_CONFIG.MODEL,
