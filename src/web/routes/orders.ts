@@ -4,7 +4,9 @@
 
 import { Hono } from "hono";
 import { html } from "hono/html";
+import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
+import { getStartOfDayJST } from "../../lib/date-utils";
 import { QUERY_LIMITS } from "../../lib/constants";
 import { layout } from "../views/layout";
 import {
@@ -20,8 +22,7 @@ const app = new Hono();
 app.get("/", async (c) => {
 
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = getStartOfDayJST();
 
   const [pendingOrders, todayOrders] = await Promise.all([
     prisma.tradingOrder.findMany({
@@ -73,12 +74,7 @@ app.get("/", async (c) => {
                       <td>${o.quantity}</td>
                       <td>
                         ${o.expiresAt
-                          ? new Date(o.expiresAt).toLocaleString("ja-JP", {
-                              month: "numeric",
-                              day: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })
+                          ? dayjs(o.expiresAt).format("M/D H:mm")
                           : "-"}
                       </td>
                     </tr>

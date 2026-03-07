@@ -5,6 +5,7 @@
  */
 
 import { prisma } from "../lib/prisma";
+import { getStartOfDayJST, getEndOfDayJST } from "../lib/date-utils";
 import { UNIT_SHARES, STOP_LOSS } from "../lib/constants";
 
 /**
@@ -112,7 +113,7 @@ export async function checkDailyLossLimit(): Promise<boolean> {
   const maxDailyLossPct = Number(config.maxDailyLossPct);
   const maxDailyLoss = totalBudget * (maxDailyLossPct / 100);
 
-  const todayPnl = await getDailyPnl(new Date());
+  const todayPnl = await getDailyPnl();
 
   return todayPnl < 0 && Math.abs(todayPnl) >= maxDailyLoss;
 }
@@ -120,12 +121,9 @@ export async function checkDailyLossLimit(): Promise<boolean> {
 /**
  * 指定日の確定損益を計算する
  */
-export async function getDailyPnl(date: Date): Promise<number> {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+export async function getDailyPnl(date?: Date): Promise<number> {
+  const startOfDay = getStartOfDayJST(date);
+  const endOfDay = getEndOfDayJST(date);
 
   const closedPositions = await prisma.tradingPosition.findMany({
     where: {

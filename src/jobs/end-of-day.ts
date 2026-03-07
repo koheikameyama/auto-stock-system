@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB, getStartOfDayJST, getEndOfDayJST } from "../lib/date-utils";
 import { OPENAI_CONFIG } from "../lib/constants";
 import { getOpenAIClient } from "../lib/openai";
 import { fetchStockQuote } from "../core/market-data";
@@ -66,11 +66,8 @@ export async function main() {
 
   // 3. 日次サマリー計算
   console.log("[3/5] 日次サマリー計算...");
-  const today = new Date();
-  const startOfDay = new Date(today);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(today);
-  endOfDay.setHours(23, 59, 59, 999);
+  const startOfDay = getStartOfDayJST();
+  const endOfDay = getEndOfDayJST();
 
   // 今日クローズされたポジション
   const closedToday = await prisma.tradingPosition.findMany({
@@ -87,7 +84,7 @@ export async function main() {
   const losses = closedToday.filter(
     (p) => p.realizedPnl && Number(p.realizedPnl) < 0,
   ).length;
-  const totalPnl = await getDailyPnl(today);
+  const totalPnl = await getDailyPnl(new Date());
 
   // ポートフォリオ評価
   const openPositions = await prisma.tradingPosition.findMany({

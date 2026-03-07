@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import { html } from "hono/html";
+import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
 import { getOpenPositions, getCashBalance } from "../../core/position-manager";
 import { getPendingOrders } from "../../core/order-executor";
@@ -168,7 +169,7 @@ app.get("/", async (c) => {
       ? html`
           <p class="section-title">最新日次サマリー</p>
           <div class="card">
-            ${detailRow("日付", new Date(latestSummary.date).toLocaleDateString("ja-JP"))}
+            ${detailRow("日付", dayjs(latestSummary.date).format("YYYY/M/D"))}
             ${detailRow("取引数", `${latestSummary.totalTrades}`)}
             ${detailRow("勝敗", `${latestSummary.wins}勝 ${latestSummary.losses}敗`)}
             ${detailRow("損益", pnlText(Number(latestSummary.totalPnl)))}

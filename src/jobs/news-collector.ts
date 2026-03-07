@@ -8,6 +8,7 @@
  * 5. Slack通知
  */
 
+import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB, getDaysAgoForDB } from "../lib/date-utils";
 import { OPENAI_CONFIG, NEWS_RETENTION, NEWS_AI_MAX_ARTICLES } from "../lib/constants";
@@ -116,7 +117,7 @@ export async function main() {
   // 4. AI分析
   console.log("[4/5] AI分析中...");
 
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const oneDayAgo = dayjs().subtract(1, "day").toDate();
   const recentArticles = await prisma.newsArticle.findMany({
     where: { publishedAt: { gte: oneDayAgo } },
     orderBy: { publishedAt: "desc" },

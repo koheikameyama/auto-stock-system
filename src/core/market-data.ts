@@ -6,6 +6,7 @@
 
 import YahooFinance from "yahoo-finance2";
 import pLimit from "p-limit";
+import dayjs from "dayjs";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
@@ -145,22 +146,21 @@ export async function fetchHistoricalData(
   const symbol = normalizeTickerCode(tickerCode);
 
   try {
-    const period1 = new Date();
-    period1.setDate(period1.getDate() - YAHOO_FINANCE.HISTORICAL_DAYS);
+    const period1 = dayjs().subtract(YAHOO_FINANCE.HISTORICAL_DAYS, "day").toDate();
 
     const result = await yahooFinance.chart(symbol, {
       period1,
-      period2: new Date(),
+      period2: dayjs().toDate(),
       interval: "1d",
     });
 
     // 新しい順にソート（テクニカル分析モジュールが期待する形式）
     const sorted = result.quotes.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      (a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf(),
     );
 
     return sorted.map((bar) => ({
-      date: new Date(bar.date).toISOString().split("T")[0],
+      date: dayjs(bar.date).format("YYYY-MM-DD"),
       open: bar.open ?? 0,
       high: bar.high ?? 0,
       low: bar.low ?? 0,

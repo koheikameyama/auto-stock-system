@@ -49,3 +49,20 @@ export function getDaysAgoForDB(days: number): Date {
 export function toJSTDateForDB(date: Date | string): Date {
   return jstDateAsUTC(dayjs(date).tz(JST).startOf("day"))
 }
+
+/**
+ * JST基準の今日の開始時刻（タイムスタンプ列クエリ用）
+ * getTodayForDB() とは異なり、UTCに正しく変換された時刻を返す
+ * 例: JST 2024-06-10 00:00:00 → UTC 2024-06-09 15:00:00
+ */
+export function getStartOfDayJST(date?: Date): Date {
+  return dayjs(date).tz(JST).startOf("day").toDate()
+}
+
+/**
+ * JST基準の今日の終了時刻（タイムスタンプ列クエリ用）
+ * 例: JST 2024-06-10 23:59:59.999 → UTC 2024-06-10 14:59:59.999
+ */
+export function getEndOfDayJST(date?: Date): Date {
+  return dayjs(date).tz(JST).endOf("day").toDate()
+}

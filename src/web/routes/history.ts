@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import { html } from "hono/html";
+import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
 import { QUERY_LIMITS, ROUTE_LOOKBACK_DAYS } from "../../lib/constants";
 import { layout } from "../views/layout";
@@ -19,7 +20,7 @@ const app = new Hono();
 app.get("/", async (c) => {
 
 
-  const thirtyDaysAgo = new Date(Date.now() - ROUTE_LOOKBACK_DAYS.HISTORY * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = dayjs().subtract(ROUTE_LOOKBACK_DAYS.HISTORY, "day").toDate();
 
   const summaries = await prisma.tradingDailySummary.findMany({
     where: { date: { gte: thirtyDaysAgo } },
@@ -33,10 +34,7 @@ app.get("/", async (c) => {
   >((acc, s) => {
     const prev = acc.length > 0 ? acc[acc.length - 1].value : 0;
     acc.push({
-      label: new Date(s.date).toLocaleDateString("ja-JP", {
-        month: "numeric",
-        day: "numeric",
-      }),
+      label: dayjs(s.date).format("M/D"),
       value: prev + Number(s.totalPnl),
     });
     return acc;
