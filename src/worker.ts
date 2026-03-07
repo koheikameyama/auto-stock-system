@@ -22,6 +22,7 @@ import { main as runMonitor } from "./jobs/position-monitor";
 import { main as runEod } from "./jobs/end-of-day";
 import { main as runWeekly } from "./jobs/weekly-review";
 import { main as runGhostReview } from "./jobs/ghost-review";
+import { main as runDelistingSync } from "./jobs/jpx-delisting-sync";
 import { app } from "./web/app";
 import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
@@ -98,6 +99,8 @@ const schedules = [
   { cron: "50 15 * * 1-5", job: runEod, name: "end-of-day" },
   // 16:10 ゴースト・トレーディング分析（平日）— 終値取得のため大引け後に実行
   { cron: "10 16 * * 1-5", job: runGhostReview, name: "ghost-review" },
+  // 土曜 9:00 JPX廃止予定同期
+  { cron: "0 9 * * 6", job: runDelistingSync, name: "jpx-delisting-sync" },
   // 土曜 10:00 週次レビュー
   { cron: "0 10 * * 6", job: runWeekly, name: "weekly-review" },
 ];

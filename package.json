@@ -17,6 +17,8 @@
     "ghost": "tsx src/jobs/ghost-review.ts",
     "weekly": "tsx src/jobs/weekly-review.ts",
     "backfill": "tsx src/jobs/backfill-prices.ts",
+    "jpx-sync": "tsx src/jobs/jpx-csv-sync.ts",
+    "delisting-sync": "tsx src/jobs/jpx-delisting-sync.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
@@ -26,6 +28,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.11",
     "@prisma/client": "^6.19.2",
+    "cheerio": "^1.2.0",
     "dayjs": "^1.11.19",
     "hono": "^4.12.5",
     "node-cron": "^4.2.1",

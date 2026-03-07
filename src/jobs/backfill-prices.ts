@@ -1,19 +1,17 @@
 /**
- * 株価データ初期取得 / バックフィル
+ * 株価データバックフィル
  *
- * 1. 銘柄ユニバース（data/stock-universe.json）をStockテーブルに登録
- * 2. 各銘柄の最新株価・出来高を更新
- * 3. TradingConfig の設定同期
+ * 1. 各銘柄の最新株価・出来高を更新
+ * 2. TradingConfig の設定同期
+ *
+ * 注: 銘柄マスタ登録は jpx-csv-sync.ts が担当
  */
 
 import { prisma } from "../lib/prisma";
 import { TRADING_DEFAULTS, YAHOO_FINANCE, STOCK_FETCH, TECHNICAL_MIN_DATA, JOB_CONCURRENCY } from "../lib/constants";
 import { fetchStockQuotesBatch, fetchHistoricalData } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
-import { normalizeTickerCode } from "../lib/ticker-utils";
 import pLimit from "p-limit";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -25,51 +23,19 @@ function clampDecimal8(value: number | null | undefined): number | null {
   return Math.max(-999_999.99, Math.min(999_999.99, value));
 }
 
-// 銘柄ユニバース（data/stock-universe.json から読み込み）
-type StockEntry = { ticker: string; name: string; market: string; sector: string };
-
-function loadStockUniverse(): StockEntry[] {
-  const filePath = resolve(process.cwd(), "data/stock-universe.json");
-  const raw = readFileSync(filePath, "utf-8");
-  return JSON.parse(raw) as StockEntry[];
-}
-
 export async function main() {
   console.log("=== Backfill Prices 開始 ===");
 
-  // 1. 銘柄マスタ登録
-  const stockUniverse = loadStockUniverse();
-  console.log(`[1/3] 銘柄マスタ登録... (${stockUniverse.length}銘柄)`);
+  // 1. 株価データ更新（バッチクォート + ヒストリカル並列取得）
+  console.log("[1/2] 株価データ更新中...");
+  const allStocks = await prisma.stock.findMany({
+    where: { isDelisted: false, isActive: true },
+  });
 
-  const UPSERT_BATCH_SIZE = 100;
-  for (let i = 0; i < stockUniverse.length; i += UPSERT_BATCH_SIZE) {
-    const batch = stockUniverse.slice(i, i + UPSERT_BATCH_SIZE);
-    await prisma.$transaction(
-      batch.map((stock) => {
-        const tickerCode = normalizeTickerCode(stock.ticker);
-        return prisma.stock.upsert({
-          where: { tickerCode },
-          create: {
-            tickerCode,
-            name: stock.name,
-            market: stock.market,
-            sector: stock.sector,
-          },
-          update: {
-            name: stock.name,
-            market: stock.market,
-            sector: stock.sector,
-          },
-        });
-      }),
-    );
-    console.log(`  ${Math.min(i + UPSERT_BATCH_SIZE, stockUniverse.length)}/${stockUniverse.length} 登録`);
+  if (allStocks.length === 0) {
+    console.warn("  ⚠ アクティブな銘柄が0件です。先に jpx-csv-sync を実行してください。");
+    return;
   }
-  console.log("  銘柄マスタ登録完了");
-
-  // 2. 株価データ更新（バッチクォート + ヒストリカル並列取得）
-  console.log("[2/3] 株価データ更新中...");
-  const allStocks = await prisma.stock.findMany({ where: { isDelisted: false } });
   const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
   let updated = 0;
   let failed = 0;
@@ -159,8 +125,8 @@ export async function main() {
 
   console.log(`  更新: ${updated}件, 失敗: ${failed}件`);
 
-  // 3. TradingConfig 初期設定
-  console.log("[3/3] TradingConfig 確認...");
+  // 2. TradingConfig 初期設定
+  console.log("[2/2] TradingConfig 確認...");
   const config = await prisma.tradingConfig.findFirst();
 
   if (!config) {

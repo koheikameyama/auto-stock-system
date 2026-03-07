@@ -39,6 +39,24 @@ model Stock {
   fetchFailCount Int      @default(0)
   isDelisted     Boolean  @default(false)
 
+  // JPX CSV同期
+  isActive        Boolean   @default(true)  // JPX上場銘柄CSVに存在するか
+  jpxSectorCode   String?                   // JPX 33業種コード
+  jpxSectorName   String?                   // JPX 33業種区分名
+  jpxLastSyncDate DateTime? @db.Date        // 最後にJPX CSVに出現した日付
+
+  // 廃止予定管理
+  delistingDate DateTime? @db.Date         // 上場廃止予定日
+  isRestricted  Boolean   @default(false)  // 取引制限フラグ
+
+  // 動的防御（立花API用、将来実装）
+  supervisionFlag String?                  // "監理" | "整理" | null
+  tradingHaltFlag Boolean  @default(false) // 売買停止
+  statusUpdatedAt DateTime?                // ステータス最終更新
+
+  // ニュース検知
+  delistingNewsDetected Boolean @default(false)
+
   // リレーション
   orders    TradingOrder[]
   positions TradingPosition[]
@@ -47,6 +65,8 @@ model Stock {
 
   @@index([tickerCode])
   @@index([sector])
+  @@index([isActive])
+  @@index([isRestricted])
 }
 
 // 取引設定
@@ -248,4 +268,20 @@ model TradingDailySummary {
   createdAt DateTime @default(now())
 
   @@index([date(sort: Desc)])
+}
+
+// 銘柄ステータス変更ログ（監査証跡）
+model StockStatusLog {
+  id         String   @id @default(cuid())
+  tickerCode String
+  changeType String   // "jpx_added" | "jpx_removed" | "delisting_set" | "restricted_set" | "news_flag"
+  oldValue   String?
+  newValue   String?
+  source     String   // "jpx_csv" | "jpx_delisting" | "news_collector"
+  detail     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tickerCode])
+  @@index([createdAt(sort: Desc)])
 }

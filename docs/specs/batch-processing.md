@@ -16,6 +16,7 @@ Railway上で常駐する node-cron ベースのジョブスケジューラ。
 | position-monitor | `20-59 9, * 10-14, 0-19 15 * * 1-5` | 平日 9:20-15:19 毎分 | ポジション監視 |
 | end-of-day | `50 15 * * 1-5` | 平日 15:50 JST | 日次締め（大引け15:30のデータ反映後） |
 | ghost-review | `10 16 * * 1-5` | 平日 16:10 JST | ゴースト・トレード分析（偽陰性分析） |
+| jpx-delisting-sync | `0 9 * * 6` | 土曜 9:00 JST | JPX廃止予定同期 |
 | weekly-review | `0 10 * * 6` | 土曜 10:00 JST | 週次レビュー |
 
 ### 重複実行防止
@@ -287,41 +288,66 @@ checkOrderFill(order, currentHigh, currentLow):
 
 ---
 
-## 7. Backfill Prices（src/jobs/backfill-prices.ts）
+## 7. JPX CSV同期（src/jobs/jpx-csv-sync.ts）
 
-**実行**: 手動（`npm run backfill`）
-**役割**: 銘柄マスタ登録と株価データの初期取得
+**実行**: 手動（`npm run jpx-sync`）
+**役割**: JPX公式CSVから銘柄マスタを同期
 
 ### 処理フロー
 
-1. **銘柄マスタ登録**: STOCK_UNIVERSE（約230銘柄）を Stock テーブルに upsert
-2. **株価データ更新**（並列、p-limit=5、バッチ=10）:
-   - 各銘柄の現在価格を取得
+1. **CSVパース**: `data/data_j.csv`（JPX上場銘柄一覧）を読み込み
+2. **市場フィルタ**: プライム・スタンダード・グロース（内国株式）のみ
+3. **バッチupsert**（100件ずつ）:
+   - 既存銘柄: name, market, sector, jpxSectorCode, jpxSectorName更新、`isActive=true`
+   - 新規銘柄: 作成 + StockStatusLog記録
+4. **非アクティブ化**: CSVに存在しない銘柄を `isActive=false` に更新
+5. **ステータスログ**: StockStatusLog に変更履歴を記録
+
+### DB操作
+
+- **Read**: `Stock`（既存銘柄チェック）
+- **Write**: `Stock`（upsert）, `StockStatusLog`
+
+---
+
+## 8. JPX廃止予定同期（src/jobs/jpx-delisting-sync.ts）
+
+**実行**: 土曜 9:00 JST（`npm run delisting-sync` で手動実行も可）
+**役割**: JPX公式サイトから上場廃止予定を取得し、取引制限を適用
+
+### 処理フロー
+
+1. **JPXページ取得**: `https://www.jpx.co.jp/listing/stocks/delisted/index.html`
+2. **HTMLパース**: cheerioで廃止予定テーブルを解析
+3. **DB更新**:
+   - `delistingDate` を設定
+   - 廃止30日前: `isRestricted=true`（取引候補から除外）
+   - 廃止日超過: `isDelisted=true`, `isActive=false`
+4. **StockStatusLog記録**
+5. **Slack通知**: 新規廃止予定検出時のみ
+
+### DB操作
+
+- **Read**: `Stock`（廃止対象チェック）
+- **Write**: `Stock`（delistingDate, isRestricted, isDelisted更新）, `StockStatusLog`
+
+---
+
+## 9. Backfill Prices（src/jobs/backfill-prices.ts）
+
+**実行**: 手動（`npm run backfill`）
+**役割**: 株価データの一括取得・更新
+
+### 処理フロー
+
+1. **株価データ更新**（並列、p-limit=5、バッチ=10）:
+   - アクティブ銘柄（`isDelisted=false, isActive=true`）の現在価格を取得
    - ヒストリカルデータ（60日分）からテクニカル指標を算出
    - ATR(14)、週間変化率、ボラティリティを更新
    - 取得失敗カウント（5回連続失敗で上場廃止フラグ）
-3. **TradingConfig 同期**: TRADING_DEFAULTS の値でDB設定を作成/更新
+2. **TradingConfig 同期**: TRADING_DEFAULTS の値でDB設定を作成/更新
 
-### 銘柄ユニバース（約230銘柄）
-
-日経225構成銘柄 + TSEプライム主要銘柄。低位株（¥1,000以下）を含む幅広い価格帯をカバー。
-
-| セクター | 代表銘柄 |
-|----------|----------|
-| 半導体・電子部品 | アドバンテスト、東京エレクトロン、レーザーテック、SUMCO |
-| 自動車・輸送用機器 | トヨタ、ホンダ、日産、三菱自動車、マツダ |
-| 金融 | 三菱UFJ、りそな、あおぞら銀行、野村HD、大和証券 |
-| 商社 | 伊藤忠、三菱商事、丸紅、双日 |
-| IT・通信 | NTT、KDDI、ソフトバンク、メルカリ、サイバーエージェント |
-| 医薬品・ヘルスケア | 武田、中外製薬、第一三共、アステラス |
-| 小売・サービス | 7 | ファーストリテイリング、任天堂、オリエンタルランド |
-| 食品・日用品 | 6 | 味の素、JT、花王 |
-| 電機・精密 | 13 | ソニー、日立、キーエンス、HOYA |
-| 機械 | 3 | ダイキン、SMC、コマツ |
-| 不動産・建設 | 5 | 三井不動産、三菱地所、大成建設 |
-| 素材・化学 | 8 | 信越化学、富士フイルム、ブリヂストン |
-| 運輸・物流 | 6 | JR東日本、JAL、日本郵船 |
-| エネルギー・電力 | 3 | ENEOS、東京電力、東京ガス |
+注: 銘柄マスタ登録は `jpx-csv-sync.ts` が担当。銘柄が0件の場合は警告を表示。
 
 ### TradingConfig デフォルト値
 

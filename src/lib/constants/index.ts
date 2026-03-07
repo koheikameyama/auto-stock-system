@@ -6,3 +6,4 @@ export * from "./web";
 export * from "./jobs";
 export * from "./news";
 export * from "./scoring";
+export * from "./stock-master";

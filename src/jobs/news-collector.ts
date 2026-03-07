@@ -11,7 +11,7 @@
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB, getDaysAgoForDB } from "../lib/date-utils";
-import { OPENAI_CONFIG, NEWS_RETENTION, NEWS_AI_MAX_ARTICLES } from "../lib/constants";
+import { OPENAI_CONFIG, NEWS_RETENTION, NEWS_AI_MAX_ARTICLES, DELISTING_NEWS_KEYWORDS } from "../lib/constants";
 import { getOpenAIClient } from "../lib/openai";
 import {
   fetchFromNewsAPI,
@@ -200,8 +200,50 @@ ${stockNews.map((a) => `- ${a.title}${a.tickerCode ? ` [${a.tickerCode}]` : ""}`
     `  AI分析完了（地政学リスク: ${analysis.geopoliticalRiskLevel}/5, 市場: ${analysis.marketImpact}）`,
   );
 
-  // 5. クリーンアップ
-  console.log("[5/5] クリーンアップ中...");
+  // 5. 上場廃止関連ニュース検知
+  console.log("[5/6] 上場廃止ニュース検知中...");
+  let delistingFlagCount = 0;
+
+  for (const article of recentArticles) {
+    const matchedKeyword = DELISTING_NEWS_KEYWORDS.find((kw) =>
+      article.title.includes(kw),
+    );
+
+    if (matchedKeyword && article.tickerCode) {
+      const stock = await prisma.stock.findUnique({
+        where: { tickerCode: article.tickerCode },
+        select: { id: true, delistingNewsDetected: true },
+      });
+
+      if (stock && !stock.delistingNewsDetected) {
+        await prisma.stock.update({
+          where: { id: stock.id },
+          data: { delistingNewsDetected: true },
+        });
+        await prisma.stockStatusLog.create({
+          data: {
+            tickerCode: article.tickerCode,
+            changeType: "news_flag",
+            oldValue: "false",
+            newValue: "true",
+            source: "news_collector",
+            detail: `キーワード「${matchedKeyword}」検出: ${article.title}`,
+          },
+        });
+        delistingFlagCount++;
+        console.log(`  ⚠ ${article.tickerCode}: 「${matchedKeyword}」検出`);
+      }
+    }
+  }
+
+  if (delistingFlagCount > 0) {
+    console.log(`  ${delistingFlagCount}銘柄にフラグ設定`);
+  } else {
+    console.log("  廃止関連ニュースなし");
+  }
+
+  // 6. クリーンアップ
+  console.log("[6/6] クリーンアップ中...");
 
   const articleRetentionDate = getDaysAgoForDB(NEWS_RETENTION.ARTICLE_DAYS);
   const deletedArticles = await prisma.newsArticle.deleteMany({

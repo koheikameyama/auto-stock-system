@@ -196,10 +196,13 @@ ${sectorText || "  特になし"}`;
     `  資金状況: 総予算=${totalBudget}円, 投資中=${investedAmount}円, 残高=${cashBalance}円 → 上限株価=${maxAffordablePrice}円`,
   );
 
-  // スクリーニング条件に合う銘柄を取得（資金で買えない銘柄はDB段階で除外）
+  // スクリーニング条件に合う銘柄を取得（資金で買えない銘柄・非アクティブ・制限銘柄はDB段階で除外）
   const candidates = await prisma.stock.findMany({
     where: {
       isDelisted: false,
+      isActive: true,
+      isRestricted: false,
+      tradingHaltFlag: false,
       latestPrice: {
         not: null,
         gte: SCREENING.MIN_PRICE,
