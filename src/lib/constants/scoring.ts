@@ -1,0 +1,32 @@
+/**
+ * スコアリング・損切り検証の定数
+ */
+
+export const SCORING = {
+  WEIGHTS: {
+    TREND: 0.2,
+    RSI_MOMENTUM: 0.15,
+    MACD_MOMENTUM: 0.1,
+    BOLLINGER_POSITION: 0.1,
+    CHART_PATTERN: 0.2,
+    CANDLESTICK: 0.1,
+    VOLUME: 0.1,
+    SUPPORT: 0.05,
+  },
+  THRESHOLDS: {
+    S_RANK: 80,
+    A_RANK: 65,
+    B_RANK: 50,
+  },
+  MAX_CANDIDATES_FOR_AI: 20,
+  MIN_CANDIDATES_FOR_AI: 5,
+} as const;
+
+export const STOP_LOSS = {
+  MAX_LOSS_PCT: 0.03,
+  ATR_MIN_MULTIPLIER: 0.5,
+  ATR_MAX_MULTIPLIER: 2.0,
+  ATR_DEFAULT_MULTIPLIER: 1.0,
+  ATR_ADJUSTED_MULTIPLIER: 1.5,
+  SUPPORT_BUFFER_ATR: 0.3,
+} as const;

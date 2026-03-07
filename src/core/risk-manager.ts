@@ -5,7 +5,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { UNIT_SHARES } from "../lib/constants";
+import { UNIT_SHARES, STOP_LOSS } from "../lib/constants";
 
 /**
  * 新規ポジションを建てられるかチェックする
@@ -160,4 +160,102 @@ export function calculatePositionSize(
   const maxAmount = budget * (maxPositionPct / 100);
   const maxShares = Math.floor(maxAmount / price);
   return Math.floor(maxShares / UNIT_SHARES) * UNIT_SHARES;
+}
+
+// ========================================
+// 損切り検証
+// ========================================
+
+export interface StopLossValidation {
+  originalPrice: number;
+  validatedPrice: number;
+  wasOverridden: boolean;
+  reason: string;
+}
+
+/**
+ * 損切り価格を検証し、必要に応じてロジックで上書きする
+ *
+ * AIが決定した stopLossPrice をロジック側で検証し、
+ * ルール違反がある場合は強制的に修正する。
+ *
+ * 検証ルール:
+ * 1. 最大損失率 3% 超過 → 3% に強制設定
+ * 2. ATR × 0.5 未満（近すぎる）→ ATR × 1.0 に引き上げ
+ * 3. ATR × 2.0 超過（遠すぎる）→ ATR × 1.5 に引き下げ
+ * 4. サポートライン考慮 → サポート - ATR × 0.3 に設定
+ * 5. 最終チェック: 3% 超過していないか再確認
+ */
+export function validateStopLoss(
+  entryPrice: number,
+  proposedStopLoss: number,
+  atr14: number | null,
+  supports: number[],
+): StopLossValidation {
+  let validatedPrice = proposedStopLoss;
+  let wasOverridden = false;
+  let reason = "OK";
+
+  const stopLossGap = entryPrice - proposedStopLoss;
+  const stopLossGapPct = stopLossGap / entryPrice;
+
+  // ルール1: 最大損失率チェック
+  if (stopLossGapPct > STOP_LOSS.MAX_LOSS_PCT) {
+    validatedPrice = entryPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
+    wasOverridden = true;
+    reason = `最大損失率(${STOP_LOSS.MAX_LOSS_PCT * 100}%)を超過。強制設定`;
+  }
+
+  if (atr14) {
+    const gap = entryPrice - validatedPrice;
+
+    // ルール2: ATR最小チェック（損切りが近すぎる）
+    if (gap < atr14 * STOP_LOSS.ATR_MIN_MULTIPLIER) {
+      validatedPrice = entryPrice - atr14 * STOP_LOSS.ATR_DEFAULT_MULTIPLIER;
+      wasOverridden = true;
+      reason = `損切りが近すぎる(ATR*${STOP_LOSS.ATR_MIN_MULTIPLIER}未満)。ATR*${STOP_LOSS.ATR_DEFAULT_MULTIPLIER}に引き上げ`;
+    }
+
+    // ルール3: ATR最大チェック（損切りが遠すぎる）
+    if (gap > atr14 * STOP_LOSS.ATR_MAX_MULTIPLIER) {
+      validatedPrice = entryPrice - atr14 * STOP_LOSS.ATR_ADJUSTED_MULTIPLIER;
+      wasOverridden = true;
+      reason = `損切りが遠すぎる(ATR*${STOP_LOSS.ATR_MAX_MULTIPLIER}超過)。ATR*${STOP_LOSS.ATR_ADJUSTED_MULTIPLIER}に引き下げ`;
+    }
+
+    // ルール4: サポートライン考慮
+    if (supports.length > 0) {
+      const nearestSupport = supports
+        .filter((s) => s < entryPrice)
+        .sort((a, b) => b - a)[0];
+
+      if (nearestSupport) {
+        const supportBasedStop =
+          nearestSupport - atr14 * STOP_LOSS.SUPPORT_BUFFER_ATR;
+        // サポートベースの損切りがより高い（タイトな）場合のみ採用
+        if (supportBasedStop > validatedPrice) {
+          validatedPrice = supportBasedStop;
+          wasOverridden = true;
+          reason = `サポートライン(${nearestSupport})考慮。サポート - ATR*${STOP_LOSS.SUPPORT_BUFFER_ATR}に設定`;
+        }
+      }
+    }
+  }
+
+  // ルール5: 最終チェック（最大損失率を再確認）
+  const finalGapPct = (entryPrice - validatedPrice) / entryPrice;
+  if (finalGapPct > STOP_LOSS.MAX_LOSS_PCT) {
+    validatedPrice = entryPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
+    wasOverridden = true;
+    reason = `最終チェック: 最大損失率(${STOP_LOSS.MAX_LOSS_PCT * 100}%)を超過。強制設定`;
+  }
+
+  validatedPrice = Math.round(validatedPrice * 100) / 100;
+
+  return {
+    originalPrice: proposedStopLoss,
+    validatedPrice,
+    wasOverridden,
+    reason,
+  };
 }

@@ -1,22 +1,27 @@
 /**
  * AI意思決定モジュール
  *
- * OpenAI GPT-4o を使用して市場評価・銘柄選定・売買判断を行う
+ * OpenAI GPT-4o を使用して市場評価・銘柄レビュー・売買レビューを行う
+ *
+ * 「ロジックが主役、AIが最終審判」:
+ * - assessMarket: 市場全体の評価（AI主導 - 変更なし）
+ * - reviewStocks: ロジックが推薦した銘柄のGo/No-Go判断（レビュー型）
+ * - reviewTrade: ロジックが算出したエントリー条件の承認/修正/却下（レビュー型）
  */
 
 import { getOpenAIClient } from "../lib/openai";
-import { OPENAI_CONFIG, UNIT_SHARES } from "../lib/constants";
+import { OPENAI_CONFIG } from "../lib/constants";
 import {
   MARKET_ASSESSMENT_SYSTEM_PROMPT,
   MARKET_ASSESSMENT_SCHEMA,
 } from "../prompts/market-assessment";
 import {
-  STOCK_SELECTION_SYSTEM_PROMPT,
-  STOCK_SELECTION_SCHEMA,
+  STOCK_REVIEW_SYSTEM_PROMPT,
+  STOCK_REVIEW_SCHEMA,
 } from "../prompts/stock-selection";
 import {
-  TRADE_DECISION_SYSTEM_PROMPT,
-  TRADE_DECISION_SCHEMA,
+  TRADE_REVIEW_SYSTEM_PROMPT,
+  TRADE_REVIEW_SCHEMA,
 } from "../prompts/trade-decision";
 
 // ========================================
@@ -34,24 +39,19 @@ export interface MarketDataInput {
   newsSummary?: string;
 }
 
-export interface StockCandidateInput {
+export interface StockReviewCandidateInput {
   tickerCode: string;
   name: string;
-  technicalSummary: string; // formatTechnicalForAI の出力
+  scoreFormatted: string; // formatScoreForAI の出力
   newsContext?: string;
 }
 
-export interface TradeInput {
+export interface TradeReviewInput {
   tickerCode: string;
   name: string;
   price: number;
-  open: number;
-  high: number;
-  low: number;
-  previousClose: number;
-  changePercent: number;
   sector: string;
-  technicalSummary: string;
+  scoreFormatted: string;
   newsContext?: string;
 }
 
@@ -72,25 +72,28 @@ export interface MarketAssessmentResult {
   reasoning: string;
 }
 
-export interface StockSelectionResult {
+export interface StockReviewResult {
   tickerCode: string;
+  decision: "go" | "no_go";
   strategy: "day_trade" | "swing";
-  score: number;
   reasoning: string;
+  riskFlags: string[];
 }
 
-export interface TradeDecisionResult {
-  action: "buy" | "skip";
-  limitPrice: number | null;
-  takeProfitPrice: number | null;
-  stopLossPrice: number | null;
-  quantity: number;
-  strategy: "day_trade" | "swing";
+export interface TradeReviewResult {
+  decision: "approve" | "approve_with_modification" | "reject";
   reasoning: string;
+  modification: {
+    adjustLimitPrice: number | null;
+    adjustTakeProfitPrice: number | null;
+    adjustStopLossPrice: number | null;
+    adjustQuantity: number | null;
+  } | null;
+  riskFlags: string[];
 }
 
 // ========================================
-// 1. 市場評価
+// 1. 市場評価（変更なし - AIの仕事）
 // ========================================
 
 export async function assessMarket(
@@ -130,99 +133,108 @@ export async function assessMarket(
 }
 
 // ========================================
-// 2. 銘柄選定
+// 2. 銘柄レビュー（レビュー型）
 // ========================================
 
-export async function selectStocks(
+/**
+ * ロジックが推薦した銘柄を AI がレビューし、Go/No-Go を判断する
+ */
+export async function reviewStocks(
   assessment: MarketAssessmentResult,
-  candidates: StockCandidateInput[],
-): Promise<StockSelectionResult[]> {
+  candidates: StockReviewCandidateInput[],
+): Promise<StockReviewResult[]> {
   const openai = getOpenAIClient();
 
   const candidatesText = candidates
     .map(
       (c) => `
 【${c.tickerCode} ${c.name}】
-${c.technicalSummary}${c.newsContext ? `\n【ニュース】\n${c.newsContext}` : ""}`,
+${c.scoreFormatted}${c.newsContext ? `\n【ニュース】\n${c.newsContext}` : ""}`,
     )
     .join("\n---\n");
 
   const userPrompt = `【市場評価】
-- 取引判断: ${assessment.shouldTrade ? "取引推奨" : "取引見送り"}
 - センチメント: ${assessment.sentiment}
 - 理由: ${assessment.reasoning}
 
-【候補銘柄一覧】
+【ロジックが推薦した銘柄一覧】
 ${candidatesText}
 
-上記の銘柄から、今日取引すべき銘柄を選定してください。スコア50以上の銘柄のみ返してください。`;
+各銘柄について、Go（承認）またはNo-Go（見送り）の判断をしてください。`;
 
   const response = await openai.chat.completions.create({
     model: OPENAI_CONFIG.MODEL,
     temperature: OPENAI_CONFIG.TEMPERATURE,
     messages: [
-      { role: "system", content: STOCK_SELECTION_SYSTEM_PROMPT },
+      { role: "system", content: STOCK_REVIEW_SYSTEM_PROMPT },
       { role: "user", content: userPrompt },
     ],
-    response_format: STOCK_SELECTION_SCHEMA,
+    response_format: STOCK_REVIEW_SCHEMA,
   });
 
   const content = response.choices[0].message.content;
   if (!content) {
-    throw new Error("[ai-decision] selectStocks: Empty response from OpenAI");
+    throw new Error("[ai-decision] reviewStocks: Empty response from OpenAI");
   }
 
-  const parsed = JSON.parse(content) as { stocks: StockSelectionResult[] };
+  const parsed = JSON.parse(content) as { stocks: StockReviewResult[] };
   return parsed.stocks;
 }
 
 // ========================================
-// 3. 売買判断
+// 3. 売買レビュー（レビュー型）
 // ========================================
 
-export async function decideTrade(
-  stock: TradeInput,
+/**
+ * ロジックが算出したエントリー条件を AI がレビューし、承認/修正/却下する
+ */
+export async function reviewTrade(
+  stock: TradeReviewInput,
+  entryCondition: {
+    limitPrice: number;
+    takeProfitPrice: number;
+    stopLossPrice: number;
+    quantity: number;
+    riskRewardRatio: number;
+    strategy: "day_trade" | "swing";
+  },
   assessment: MarketAssessmentResult,
-  availableBudget: number,
-  currentPositions: PositionInput[],
-): Promise<TradeDecisionResult> {
+): Promise<TradeReviewResult> {
   const openai = getOpenAIClient();
 
-  const maxSharesByBudget =
-    Math.floor(availableBudget / (stock.price * UNIT_SHARES)) * UNIT_SHARES;
+  const takeProfitPct = (
+    ((entryCondition.takeProfitPrice - entryCondition.limitPrice) /
+      entryCondition.limitPrice) *
+    100
+  ).toFixed(1);
+  const stopLossPct = (
+    ((entryCondition.limitPrice - entryCondition.stopLossPrice) /
+      entryCondition.limitPrice) *
+    100
+  ).toFixed(1);
 
-  const positionsText =
-    currentPositions.length > 0
-      ? currentPositions
-          .map(
-            (p) =>
-              `  ${p.tickerCode}: ${p.quantity}株 @ ¥${p.averagePrice.toLocaleString()} (${p.strategy})`,
-          )
-          .join("\n")
-      : "  なし";
+  let userPrompt = `ロジックが以下のエントリー条件を算出しました:
 
-  let userPrompt = `【銘柄情報】
-- ティッカー: ${stock.tickerCode}（${stock.name}）
-- セクター: ${stock.sector}
-- 現在価格: ¥${stock.price.toLocaleString()}
-- 始値: ¥${stock.open.toLocaleString()}、高値: ¥${stock.high.toLocaleString()}、安値: ¥${stock.low.toLocaleString()}
-- 前日終値: ¥${stock.previousClose.toLocaleString()}
-- 変化率: ${stock.changePercent >= 0 ? "+" : ""}${stock.changePercent.toFixed(2)}%
+【銘柄】${stock.tickerCode}（${stock.name}）
+【セクター】${stock.sector}
+【現在価格】¥${stock.price.toLocaleString()}
 
-【テクニカル分析】
-${stock.technicalSummary}
+【テクニカル評価】
+${stock.scoreFormatted}
+
+【エントリー条件（ロジック算出）】
+- 指値: ¥${entryCondition.limitPrice.toLocaleString()}
+- 利確: ¥${entryCondition.takeProfitPrice.toLocaleString()}（+${takeProfitPct}%）
+- 損切: ¥${entryCondition.stopLossPrice.toLocaleString()}（-${stopLossPct}%）
+- リスクリワード比: 1:${entryCondition.riskRewardRatio}
+- 数量: ${entryCondition.quantity}株
+- 戦略: ${entryCondition.strategy}
 
 【市場評価】
 - センチメント: ${assessment.sentiment}
 - 理由: ${assessment.reasoning}
 
-【ポートフォリオ状況】
-- 利用可能予算: ¥${availableBudget.toLocaleString()}
-- 予算内最大株数: ${maxSharesByBudget}株
-- 現在のポジション:
-${positionsText}
-
-買い/見送りの判断と、買いの場合は指値・利確・損切り価格、株数（${UNIT_SHARES}株単位）を決定してください。`;
+このトレードを承認しますか？`;
 
   if (stock.newsContext) {
     userPrompt += `\n\n【関連ニュース】\n${stock.newsContext}`;
@@ -232,16 +244,16 @@ ${positionsText}
     model: OPENAI_CONFIG.MODEL,
     temperature: OPENAI_CONFIG.TEMPERATURE,
     messages: [
-      { role: "system", content: TRADE_DECISION_SYSTEM_PROMPT },
+      { role: "system", content: TRADE_REVIEW_SYSTEM_PROMPT },
       { role: "user", content: userPrompt },
     ],
-    response_format: TRADE_DECISION_SCHEMA,
+    response_format: TRADE_REVIEW_SCHEMA,
   });
 
   const content = response.choices[0].message.content;
   if (!content) {
-    throw new Error("[ai-decision] decideTrade: Empty response from OpenAI");
+    throw new Error("[ai-decision] reviewTrade: Empty response from OpenAI");
   }
 
-  return JSON.parse(content) as TradeDecisionResult;
+  return JSON.parse(content) as TradeReviewResult;
 }
