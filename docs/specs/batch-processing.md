@@ -100,14 +100,14 @@ Railway上で常駐する node-cron ベースのジョブスケジューラ。
 | 条件 | 値 | 定数名 |
 |------|-----|--------|
 | 最低株価 | 100円 | `SCREENING.MIN_PRICE` |
-| 最高株価 | 50,000円 | `SCREENING.MAX_PRICE` |
+| 最高株価 | 利用可能資金から動的算出 | `min(残高, 総予算×最大比率%) / 100株` |
 | 最低出来高 | 100,000株/日 | `SCREENING.MIN_DAILY_VOLUME` |
 | 最低時価総額 | 1億円 | `SCREENING.MIN_MARKET_CAP` |
 
 ### DB操作
 
-- **Read**: `Stock`（活動銘柄）
-- **Write**: `MarketAssessment`
+- **Read**: `Stock`（活動銘柄）, `TradingConfig`, `TradingPosition`（オープン）
+- **Write**: `MarketAssessment`, `ScoringRecord`
 
 ### 外部API
 

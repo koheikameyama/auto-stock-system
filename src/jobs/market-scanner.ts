@@ -24,6 +24,8 @@ import {
   TECHNICAL_MIN_DATA,
   SCORING,
   GHOST_TRADING,
+  UNIT_SHARES,
+  TRADING_DEFAULTS,
 } from "../lib/constants";
 import {
   fetchMarketData,
@@ -166,25 +168,46 @@ ${sectorText || "  特になし"}`;
   // 4. テクニカル分析 + スコアリング
   console.log("[3/5] テクニカル分析 + スコアリング中...");
 
-  // スクリーニング条件に合う銘柄を取得
-  const stocks = await prisma.stock.findMany({
+  // 利用可能資金から購入可能な上限株価を計算
+  const config = await prisma.tradingConfig.findFirst({
+    orderBy: { createdAt: "desc" },
+  });
+  const totalBudget = config
+    ? Number(config.totalBudget)
+    : TRADING_DEFAULTS.TOTAL_BUDGET;
+  const maxPositionPct = config
+    ? Number(config.maxPositionPct)
+    : TRADING_DEFAULTS.MAX_POSITION_PCT;
+
+  const openPositions = await prisma.tradingPosition.findMany({
+    where: { status: "open" },
+  });
+  const investedAmount = openPositions.reduce(
+    (sum, pos) => sum + Number(pos.entryPrice) * pos.quantity,
+    0,
+  );
+  const cashBalance = totalBudget - investedAmount;
+  const maxPositionAmount = totalBudget * (maxPositionPct / 100);
+  const maxAffordablePrice = Math.floor(
+    Math.min(cashBalance, maxPositionAmount) / UNIT_SHARES,
+  );
+
+  console.log(
+    `  資金状況: 総予算=${totalBudget}円, 投資中=${investedAmount}円, 残高=${cashBalance}円 → 上限株価=${maxAffordablePrice}円`,
+  );
+
+  // スクリーニング条件に合う銘柄を取得（資金で買えない銘柄はDB段階で除外）
+  const candidates = await prisma.stock.findMany({
     where: {
       isDelisted: false,
-      latestPrice: { not: null },
-      latestVolume: { not: null },
+      latestPrice: {
+        not: null,
+        gte: SCREENING.MIN_PRICE,
+        lte: maxAffordablePrice,
+      },
+      latestVolume: { not: null, gte: SCREENING.MIN_DAILY_VOLUME },
+      marketCap: { gte: SCREENING.MIN_MARKET_CAP },
     },
-  });
-
-  const candidates = stocks.filter((s) => {
-    const price = Number(s.latestPrice);
-    const volume = Number(s.latestVolume);
-    const marketCap = s.marketCap ? Number(s.marketCap) : 0;
-    return (
-      price >= SCREENING.MIN_PRICE &&
-      price <= SCREENING.MAX_PRICE &&
-      volume >= SCREENING.MIN_DAILY_VOLUME &&
-      marketCap >= SCREENING.MIN_MARKET_CAP
-    );
   });
 
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);

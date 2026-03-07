@@ -157,5 +157,4 @@ export const SCREENING = {
   MIN_MARKET_CAP: 100, // 最低時価総額（億円）
   MIN_DAILY_VOLUME: 100_000, // 最低出来高（株）
   MIN_PRICE: 100, // 最低株価（円）
-  MAX_PRICE: 50_000, // 最高株価（円）- 資金効率
 } as const;
