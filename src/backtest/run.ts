@@ -1,0 +1,139 @@
+/**
+ * バックテスト CLI エントリポイント
+ *
+ * Usage:
+ *   npm run backtest -- --tickers 7203,9432 --start-date 2025-09-01
+ *   npm run backtest -- --tickers 7203 --sensitivity
+ *   npm run backtest -- --tickers 7203 --output results.json
+ */
+
+import { parseArgs } from "node:util";
+import dayjs from "dayjs";
+import { fetchMultipleBacktestData } from "./data-fetcher";
+import { runBacktest } from "./simulation-engine";
+import { runSensitivityAnalysis } from "./sensitivity";
+import {
+  printBacktestReport,
+  printSensitivityReport,
+  writeJsonReport,
+} from "./reporter";
+import type { BacktestConfig } from "./types";
+
+const { values } = parseArgs({
+  options: {
+    tickers: { type: "string", default: "" },
+    "start-date": { type: "string" },
+    "end-date": { type: "string" },
+    budget: { type: "string", default: "100000" },
+    "max-positions": { type: "string", default: "3" },
+    "score-threshold": { type: "string", default: "65" },
+    "tp-ratio": { type: "string", default: "1.03" },
+    "sl-ratio": { type: "string", default: "0.98" },
+    "atr-multiplier": { type: "string", default: "1.0" },
+    strategy: { type: "string", default: "swing" },
+    sensitivity: { type: "boolean", default: false },
+    output: { type: "string" },
+    verbose: { type: "boolean", default: false },
+    help: { type: "boolean", default: false },
+  },
+});
+
+function printHelp(): void {
+  console.log(`
+バックテスト CLI
+
+使い方:
+  npm run backtest -- [オプション]
+
+オプション:
+  --tickers <codes>       銘柄コード（カンマ区切り）  例: 7203,9432
+  --start-date <date>     開始日（YYYY-MM-DD）       デフォルト: 6ヶ月前
+  --end-date <date>       終了日（YYYY-MM-DD）       デフォルト: 今日
+  --budget <yen>          初期資金                   デフォルト: 100000
+  --max-positions <n>     最大同時保有数             デフォルト: 3
+  --score-threshold <n>   スコア閾値                 デフォルト: 65
+  --tp-ratio <n>          利確比率                   デフォルト: 1.03
+  --sl-ratio <n>          損切比率                   デフォルト: 0.98
+  --atr-multiplier <n>    ATR倍率                    デフォルト: 1.0
+  --strategy <type>       day_trade | swing          デフォルト: swing
+  --sensitivity           パラメータ感度分析を実行
+  --output <path>         JSON結果を出力
+  --verbose               詳細ログ
+  --help                  ヘルプ表示
+  `);
+}
+
+async function main(): Promise<void> {
+  if (values.help) {
+    printHelp();
+    return;
+  }
+
+  if (!values.tickers) {
+    console.error("エラー: --tickers を指定してください（例: --tickers 7203,9432）");
+    process.exit(1);
+  }
+
+  const tickers = values.tickers.split(",").map((t) => t.trim()).filter(Boolean);
+  const endDate = values["end-date"] ?? dayjs().format("YYYY-MM-DD");
+  const startDate =
+    values["start-date"] ?? dayjs(endDate).subtract(6, "month").format("YYYY-MM-DD");
+
+  const config: BacktestConfig = {
+    tickers,
+    startDate,
+    endDate,
+    initialBudget: Number(values.budget),
+    maxPositions: Number(values["max-positions"]),
+    scoreThreshold: Number(values["score-threshold"]),
+    takeProfitRatio: Number(values["tp-ratio"]),
+    stopLossRatio: Number(values["sl-ratio"]),
+    atrMultiplier: Number(values["atr-multiplier"]),
+    strategy: values.strategy === "day_trade" ? "day_trade" : "swing",
+    outputFile: values.output,
+    verbose: values.verbose ?? false,
+  };
+
+  console.log("[backtest] 開始");
+  const startTime = Date.now();
+
+  // 1. データ取得
+  const allData = await fetchMultipleBacktestData(
+    tickers,
+    config.startDate,
+    config.endDate,
+  );
+
+  if (allData.size === 0) {
+    console.error("エラー: データを取得できませんでした");
+    process.exit(1);
+  }
+
+  // 2. バックテスト実行
+  console.log("[backtest] シミュレーション実行中...");
+  const result = runBacktest(config, allData);
+
+  // 3. 結果表示
+  printBacktestReport(result);
+
+  // 4. 感度分析（オプション）
+  let sensitivityResults = null;
+  if (values.sensitivity) {
+    console.log("[backtest] パラメータ感度分析...");
+    sensitivityResults = runSensitivityAnalysis(config, allData);
+    printSensitivityReport(sensitivityResults);
+  }
+
+  // 5. JSON出力（オプション）
+  if (values.output) {
+    writeJsonReport(result, sensitivityResults, values.output);
+  }
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[backtest] 完了 (${elapsed}秒)`);
+}
+
+main().catch((err) => {
+  console.error("バックテスト実行エラー:", err);
+  process.exit(1);
+});
