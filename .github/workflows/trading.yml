@@ -8,10 +8,12 @@ on:
         type: choice
         required: true
         options:
+          - news
           - scan
           - order
           - monitor
           - eod
+          - ghost
           - weekly
           - backfill
 
@@ -21,6 +23,20 @@ env:
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 jobs:
+  news:
+    if: github.event.inputs.job == 'news'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run news
+
   scan:
     if: github.event.inputs.job == 'scan'
     runs-on: ubuntu-latest
@@ -29,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
@@ -43,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
@@ -57,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
@@ -71,11 +87,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
       - run: npm run eod
+
+  ghost:
+    if: github.event.inputs.job == 'ghost'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run ghost
 
   weekly:
     if: github.event.inputs.job == 'weekly'
@@ -85,7 +115,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
@@ -99,14 +129,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
       - run: npm run backfill
 
   notify-failure:
-    needs: [scan, order, monitor, eod, weekly, backfill]
+    needs: [news, scan, order, monitor, eod, ghost, weekly, backfill]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
@@ -119,4 +149,4 @@ jobs:
             ジョブ「${{ github.event.inputs.job }}」が失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
-          SLACK_FOOTER: "Auto Stock Trader"
+          SLACK_FOOTER: "Stock Buddy"
