@@ -6,7 +6,7 @@
 export const MACD_CONFIG = {
   FAST_PERIOD: 12,
   SLOW_PERIOD: 26,
-  SIGNAL_APPROXIMATION: 0.9, // 簡易シグナルライン係数
+  SIGNAL_PERIOD: 9,
 } as const;
 
 // ボリンジャーバンドのデフォルト値

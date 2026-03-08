@@ -83,34 +83,79 @@ export function calculateEMA(
 /**
  * MACD (Moving Average Convergence Divergence)
  * MACDライン、シグナルライン、ヒストグラムを計算
+ *
+ * シグナル線はMACDヒストリーの9期間EMAで正しく算出する。
+ * 必要データ数: SLOW_PERIOD(26) + SIGNAL_PERIOD(9) - 1 = 34日分
  */
 export function calculateMACD(prices: PriceData[]): {
   macd: number | null;
   signal: number | null;
   histogram: number | null;
 } {
+  const minRequired = MACD_CONFIG.SLOW_PERIOD + MACD_CONFIG.SIGNAL_PERIOD - 1;
   if (prices.length < MACD_CONFIG.SLOW_PERIOD) {
     return { macd: null, signal: null, histogram: null };
   }
 
-  const ema12 = calculateEMA(prices, MACD_CONFIG.FAST_PERIOD);
-  const ema26 = calculateEMA(prices, MACD_CONFIG.SLOW_PERIOD);
+  // 各日のMACD値を算出するため、各日のEMA12/EMA26を逐次計算
+  // prices は新しい順なので reversed で古い順にする
+  const closes = prices.map((p) => p.close).reverse();
 
-  if (!ema12 || !ema26) {
-    return { macd: null, signal: null, histogram: null };
+  const fastK = 2 / (MACD_CONFIG.FAST_PERIOD + 1);
+  const slowK = 2 / (MACD_CONFIG.SLOW_PERIOD + 1);
+  const signalK = 2 / (MACD_CONFIG.SIGNAL_PERIOD + 1);
+
+  // EMA12の初期値: 最初の12日のSMA
+  let emaFast =
+    closes.slice(0, MACD_CONFIG.FAST_PERIOD).reduce((s, v) => s + v, 0) /
+    MACD_CONFIG.FAST_PERIOD;
+
+  // EMA26の初期値: 最初の26日のSMA
+  let emaSlow =
+    closes.slice(0, MACD_CONFIG.SLOW_PERIOD).reduce((s, v) => s + v, 0) /
+    MACD_CONFIG.SLOW_PERIOD;
+
+  // SLOW_PERIOD目からMACD値を蓄積
+  const macdHistory: number[] = [];
+
+  // EMA12を先にSLOW_PERIOD-1まで進める
+  for (let i = MACD_CONFIG.FAST_PERIOD; i < MACD_CONFIG.SLOW_PERIOD; i++) {
+    emaFast = closes[i] * fastK + emaFast * (1 - fastK);
   }
 
-  const macd = ema12 - ema26;
+  // SLOW_PERIOD目以降: EMA12とEMA26を同時に更新しMACD値を記録
+  macdHistory.push(emaFast - emaSlow);
+  for (let i = MACD_CONFIG.SLOW_PERIOD; i < closes.length; i++) {
+    emaFast = closes[i] * fastK + emaFast * (1 - fastK);
+    emaSlow = closes[i] * slowK + emaSlow * (1 - slowK);
+    macdHistory.push(emaFast - emaSlow);
+  }
 
-  // シグナルライン（MACDの9日EMA）は簡易的にMACDのみで計算
-  // 本来はMACD値の履歴からEMAを計算すべき
-  const signal = macd * MACD_CONFIG.SIGNAL_APPROXIMATION; // 簡易計算
+  const currentMacd = macdHistory[macdHistory.length - 1];
 
-  const histogram = macd - signal;
+  // シグナル線: MACDヒストリーの9期間EMA
+  if (macdHistory.length < MACD_CONFIG.SIGNAL_PERIOD) {
+    // シグナル線を計算するにはデータ不足だが、MACDは返せる
+    return {
+      macd: Math.round(currentMacd * 100) / 100,
+      signal: null,
+      histogram: null,
+    };
+  }
+
+  let signalEma =
+    macdHistory.slice(0, MACD_CONFIG.SIGNAL_PERIOD).reduce((s, v) => s + v, 0) /
+    MACD_CONFIG.SIGNAL_PERIOD;
+
+  for (let i = MACD_CONFIG.SIGNAL_PERIOD; i < macdHistory.length; i++) {
+    signalEma = macdHistory[i] * signalK + signalEma * (1 - signalK);
+  }
+
+  const histogram = currentMacd - signalEma;
 
   return {
-    macd: Math.round(macd * 100) / 100,
-    signal: Math.round(signal * 100) / 100,
+    macd: Math.round(currentMacd * 100) / 100,
+    signal: Math.round(signalEma * 100) / 100,
     histogram: Math.round(histogram * 100) / 100,
   };
 }
