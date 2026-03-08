@@ -212,6 +212,21 @@ export const CSS = `
     line-height: 1.6;
   }
 
+  /* Toggle button */
+  .btn-toggle {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-toggle:hover { opacity: 0.8; }
+  .btn-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-danger { background: ${COLORS.loss}; color: white; }
+  .btn-success { background: ${COLORS.profit}; color: white; }
+
   /* Refresh indicator */
   .refresh-info {
     font-size: 10px;

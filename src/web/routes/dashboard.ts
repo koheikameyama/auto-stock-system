@@ -17,6 +17,7 @@ import {
   emptyState,
   detailRow,
 } from "../views/components";
+import { isMarketDay } from "../../lib/market-calendar";
 
 // jobState is injected from worker.ts
 export let jobState: {
@@ -74,17 +75,34 @@ app.get("/", async (c) => {
     | { tickerCode: string }[]
     | null;
 
+  const marketOpen = isMarketDay();
+
   const content = html`
     <!-- System status -->
     <div class="card">
       <div class="card-title">システム状態</div>
       ${detailRow("稼働時間", `${uptimeH}h ${uptimeM}m`)}
       ${detailRow(
-        "取引",
-        config?.isActive
-          ? html`<span style="color:#22c55e">ON</span>`
-          : html`<span style="color:#ef4444">OFF</span>`,
+        "市場",
+        marketOpen
+          ? html`<span style="color:#22c55e">開場</span>`
+          : html`<span style="color:#f59e0b">休場</span>`,
       )}
+      <div class="detail-row">
+        <span class="detail-label">システム</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          ${config?.isActive
+            ? html`<span style="color:#22c55e">稼働中</span>`
+            : html`<span style="color:#ef4444">停止中</span>`}
+          <button
+            id="toggleTrading"
+            class="btn-toggle ${config?.isActive ? "btn-danger" : "btn-success"}"
+            onclick="toggleSystem(${!config?.isActive})"
+          >
+            ${config?.isActive ? "緊急停止" : "再開"}
+          </button>
+        </span>
+      </div>
       ${detailRow("実行中ジョブ", `${jobState.running.size > 0 ? [...jobState.running].join(", ") : "なし"}`)}
       ${detailRow("オープンポジション", `${openPositions.length}`)}
       ${detailRow("待機注文", `${pendingOrders.length}`)}
@@ -184,6 +202,33 @@ app.get("/", async (c) => {
           </div>
         `
       : ""}
+
+    <script>
+      function toggleSystem(active) {
+        var btn = document.getElementById('toggleTrading');
+        if (!btn) return;
+        var action = active ? 'システムを再開' : 'システムを緊急停止';
+        if (!confirm(action + 'しますか？')) return;
+        btn.disabled = true;
+        btn.textContent = '処理中...';
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get('token') || '';
+        fetch('/api/trading/toggle?token=' + encodeURIComponent(token), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ active: active }),
+        })
+        .then(function(res) {
+          if (!res.ok) throw new Error('Failed');
+          location.reload();
+        })
+        .catch(function() {
+          alert('エラーが発生しました');
+          btn.disabled = false;
+          btn.textContent = active ? '再開' : '緊急停止';
+        });
+      }
+    </script>
   `;
 
   return c.html(layout("ダッシュボード", "/", content));

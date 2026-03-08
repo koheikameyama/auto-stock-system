@@ -27,6 +27,7 @@ import { app } from "./web/app";
 import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
 import { notifySlack } from "./lib/slack";
+import { isMarketDay } from "./lib/market-calendar";
 
 // ジョブ状態（ダッシュボードから参照可能）
 const jobState = {
@@ -41,7 +42,37 @@ const jobState = {
 // ダッシュボードに状態を共有
 setJobState(jobState);
 
-async function runJob(name: string, job: () => Promise<void>) {
+// 休場日スキップのログ重複防止（position-monitor等の毎分実行対策）
+const holidaySkipLogged = new Set<string>();
+
+async function runJob(
+  name: string,
+  job: () => Promise<void>,
+  requiresMarketDay = false,
+) {
+  // 休場日チェック
+  if (requiresMarketDay && !isMarketDay()) {
+    if (!holidaySkipLogged.has(name)) {
+      console.log(`[${nowJST()}] ${name} スキップ（休場日）`);
+      holidaySkipLogged.add(name);
+    }
+    return;
+  }
+
+  // システム停止チェック
+  if (requiresMarketDay) {
+    const config = await prisma.tradingConfig.findFirst({
+      orderBy: { createdAt: "desc" },
+    });
+    if (config && !config.isActive) {
+      if (!holidaySkipLogged.has(`${name}:inactive`)) {
+        console.log(`[${nowJST()}] ${name} スキップ（システム停止中）`);
+        holidaySkipLogged.add(`${name}:inactive`);
+      }
+      return;
+    }
+  }
+
   if (jobState.running.has(name)) {
     console.log(
       `[${nowJST()}] ${name} スキップ（前回の実行がまだ完了していません）`,
@@ -86,32 +117,39 @@ function nowJST(): string {
 // ※ Yahoo Finance日本株データの約20分遅延を考慮し、各ジョブを+20分にオフセット
 const schedules = [
   // 8:00 ニュース収集・分析（平日）— market-scanner前に実行
-  { cron: "0 8 * * 1-5", job: runNews, name: "news-collector" },
+  { cron: "0 8 * * 1-5", job: runNews, name: "news-collector", requiresMarketDay: true },
   // 8:30 市場スキャン（平日）— 海外指標は遅延影響なしのため据置
-  { cron: "30 8 * * 1-5", job: runScan, name: "market-scanner" },
+  { cron: "30 8 * * 1-5", job: runScan, name: "market-scanner", requiresMarketDay: true },
   // 9:20 注文発行（平日）— 寄付き9:00のデータ反映後
-  { cron: "20 9 * * 1-5", job: runOrder, name: "order-manager" },
+  { cron: "20 9 * * 1-5", job: runOrder, name: "order-manager", requiresMarketDay: true },
   // 9:20-15:19 毎分 ポジション監視（平日）— 遅延考慮
-  { cron: "20-59 9 * * 1-5", job: runMonitor, name: "position-monitor" },
-  { cron: "* 10-14 * * 1-5", job: runMonitor, name: "position-monitor" },
-  { cron: "0-19 15 * * 1-5", job: runMonitor, name: "position-monitor" },
+  { cron: "20-59 9 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
+  { cron: "* 10-14 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
+  { cron: "0-19 15 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
   // 15:50 日次締め（平日）— 大引け15:30のデータ反映後
-  { cron: "50 15 * * 1-5", job: runEod, name: "end-of-day" },
+  { cron: "50 15 * * 1-5", job: runEod, name: "end-of-day", requiresMarketDay: true },
   // 16:10 ゴースト・トレーディング分析（平日）— 終値取得のため大引け後に実行
-  { cron: "10 16 * * 1-5", job: runGhostReview, name: "ghost-review" },
-  // 土曜 9:00 JPX廃止予定同期
-  { cron: "0 9 * * 6", job: runDelistingSync, name: "jpx-delisting-sync" },
-  // 土曜 10:00 週次レビュー
-  { cron: "0 10 * * 6", job: runWeekly, name: "weekly-review" },
+  { cron: "10 16 * * 1-5", job: runGhostReview, name: "ghost-review", requiresMarketDay: true },
+  // 土曜 9:00 JPX廃止予定同期（市場営業日に依存しない）
+  { cron: "0 9 * * 6", job: runDelistingSync, name: "jpx-delisting-sync", requiresMarketDay: false },
+  // 土曜 10:00 週次レビュー（市場営業日に依存しない）
+  { cron: "0 10 * * 6", job: runWeekly, name: "weekly-review", requiresMarketDay: false },
 ];
 
 // cron 登録
 for (const s of schedules) {
-  cron.schedule(s.cron, () => runJob(s.name, s.job), {
-    timezone: "Asia/Tokyo",
-  });
+  cron.schedule(
+    s.cron,
+    () => runJob(s.name, s.job, s.requiresMarketDay),
+    { timezone: "Asia/Tokyo" },
+  );
   console.log(`  スケジュール登録: ${s.name} → ${s.cron} (JST)`);
 }
+
+// 日次リセット: 休場日スキップログとシステム停止ログをクリア
+cron.schedule("0 0 * * *", () => {
+  holidaySkipLogged.clear();
+}, { timezone: "Asia/Tokyo" });
 
 // HTTP サーバー起動（ダッシュボード）
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -131,11 +169,9 @@ console.log(`============================\n`);
 
 async function catchUpMissedJobs() {
   const now = dayjs().tz("Asia/Tokyo");
-  const day = now.day(); // 0=日, 6=土
-  const isWeekday = day >= 1 && day <= 5;
 
-  if (!isWeekday) {
-    console.log("[catch-up] 平日ではないのでスキップ");
+  if (!isMarketDay()) {
+    console.log("[catch-up] 休場日のためスキップ");
     return;
   }
 
