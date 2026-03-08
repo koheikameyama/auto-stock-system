@@ -56,7 +56,6 @@ export async function canOpenPosition(
   const openPositions = await prisma.tradingPosition.findMany({
     where: { status: "open" },
   });
-
   const investedAmount = openPositions.reduce((sum, pos) => {
     return sum + Number(pos.entryPrice) * pos.quantity;
   }, 0);

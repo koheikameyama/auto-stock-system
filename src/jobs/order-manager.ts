@@ -71,8 +71,8 @@ export async function main() {
     return;
   }
 
-  // 2. 残高を取得
-  const cashBalance = await getCashBalance();
+  // 2. 残高を取得（ループ内で注文作成ごとに減算する）
+  let cashBalance = await getCashBalance();
 
   const assessment: MarketAssessmentResult = {
     shouldTrade: todayAssessment.shouldTrade,
@@ -113,6 +113,15 @@ export async function main() {
       console.log(
         `    → 銘柄マスタに存在しません: ${selected.tickerCode}`,
       );
+      continue;
+    }
+
+    // 同一銘柄の既存ポジションがあればスキップ
+    const existingPosition = await prisma.tradingPosition.findFirst({
+      where: { stockId: stock.id, status: "open" },
+    });
+    if (existingPosition) {
+      console.log(`    → 既存ポジションあり、スキップ: ${stock.tickerCode}`);
       continue;
     }
 
@@ -358,6 +367,7 @@ export async function main() {
     });
 
     ordersCreated++;
+    cashBalance -= finalCondition.limitPrice * finalCondition.quantity;
 
     // Slack通知
     await notifyOrderPlaced({
