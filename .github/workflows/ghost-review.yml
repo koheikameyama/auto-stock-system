@@ -37,19 +37,7 @@ jobs:
       - name: Check market day and system active
         id: check
         run: |
-          RESULT=$(npx tsx -e "
-          import { isMarketDay } from './src/lib/market-calendar.js';
-          import { PrismaClient } from '@prisma/client';
-          const prisma = new PrismaClient();
-          try {
-            const marketDay = isMarketDay();
-            const config = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: 'desc' } });
-            const isActive = !config || config.isActive;
-            console.log(marketDay && isActive ? 'true' : 'false');
-          } finally {
-            await prisma.\$disconnect();
-          }
-          ")
+          RESULT=$(npx tsx scripts/check-market-day.ts)
           echo "should_run=$RESULT" >> "$GITHUB_OUTPUT"
 
       - name: Determine final result
