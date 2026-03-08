@@ -3,6 +3,7 @@
  */
 
 import { Hono } from "hono";
+import { basicAuth } from "hono/basic-auth";
 
 import dashboardRoute from "./routes/dashboard";
 import positionsRoute from "./routes/positions";
@@ -15,6 +16,18 @@ export const app = new Hono();
 // Health check (no auth)
 app.get("/api/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Basic認証（ヘルスチェックは除外）
+app.use("*", async (c, next) => {
+  if (c.req.path === "/api/health") {
+    return next();
+  }
+  const auth = basicAuth({
+    username: process.env.BASIC_AUTH_USER || "admin",
+    password: process.env.BASIC_AUTH_PASS || "",
+  });
+  return auth(c, next);
 });
 
 // PWA assets (no auth)
