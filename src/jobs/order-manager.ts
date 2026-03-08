@@ -358,6 +358,8 @@ export async function main() {
         orderType: "limit",
         strategy: finalCondition.strategy,
         limitPrice: finalCondition.limitPrice,
+        takeProfitPrice: finalCondition.takeProfitPrice,
+        stopLossPrice: finalCondition.stopLossPrice,
         quantity: finalCondition.quantity,
         status: "pending",
         reasoning: review.reasoning,

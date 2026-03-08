@@ -162,8 +162,10 @@ model TradingOrder {
   side       String // buy / sell
   orderType  String // limit / stop_limit / market
   strategy   String // day_trade / swing
-  limitPrice Decimal? @db.Decimal(10, 2) // 指値
-  stopPrice  Decimal? @db.Decimal(10, 2) // 逆指値トリガー
+  limitPrice      Decimal? @db.Decimal(10, 2) // 指値
+  stopPrice       Decimal? @db.Decimal(10, 2) // 逆指値トリガー
+  takeProfitPrice Decimal? @db.Decimal(10, 2) // 利確価格
+  stopLossPrice   Decimal? @db.Decimal(10, 2) // 損切り価格
   quantity   Int // 株数
   status     String @default("pending") // pending / filled / cancelled / expired
   filledPrice Decimal? @db.Decimal(10, 2)

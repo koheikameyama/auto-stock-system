@@ -60,36 +60,18 @@ export async function main() {
 
       if (order.side === "buy") {
         // 買い約定 → ポジションをオープン
-        // 元の選定データから利確/損切り価格を取得
-        const todayAssessment = await prisma.marketAssessment.findFirst({
-          where: { shouldTrade: true },
-          orderBy: { date: "desc" },
-        });
-
-        let takeProfitPrice = 0;
-        let stopLossPrice = 0;
-
-        if (todayAssessment?.selectedStocks) {
-          const selections = todayAssessment.selectedStocks as Array<{
-            tickerCode: string;
-            takeProfitPrice?: number;
-            stopLossPrice?: number;
-          }>;
-          const sel = selections.find(
-            (s) => s.tickerCode === order.stock.tickerCode,
-          );
-          takeProfitPrice = sel?.takeProfitPrice ?? filledPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
-          stopLossPrice = sel?.stopLossPrice ?? filledPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
-        } else {
-          takeProfitPrice = filledPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
-          stopLossPrice = filledPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
-        }
-
-        // 約定した注文からエントリースナップショットを取得
+        // 注文レコードから利確/損切り価格を取得
         const filledOrder = await prisma.tradingOrder.findUnique({
           where: { id: order.id },
-          select: { entrySnapshot: true },
+          select: { entrySnapshot: true, takeProfitPrice: true, stopLossPrice: true },
         });
+
+        const takeProfitPrice = filledOrder?.takeProfitPrice
+          ? Number(filledOrder.takeProfitPrice)
+          : filledPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
+        const stopLossPrice = filledOrder?.stopLossPrice
+          ? Number(filledOrder.stopLossPrice)
+          : filledPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
 
         const position = await openPosition(
           order.stockId,
