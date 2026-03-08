@@ -1,31 +1,42 @@
 # バッチ処理仕様
 
-## Worker（src/worker.ts）
+## ジョブ実行基盤
 
-Railway上で常駐する node-cron ベースのジョブスケジューラ。
+ジョブは2つの基盤で実行される。
 
-### スケジュール一覧
+### Railway Worker（src/worker.ts）
 
-※ Yahoo Finance 日本株データの約20分遅延を考慮し、市場イベントの+20分にオフセット
+Railway上で常駐する node-cron ベースのジョブスケジューラ。時間精度が重要なジョブ、または毎分実行が必要なジョブを担当。
 
 | ジョブ | cron式 | 実行タイミング | 備考 |
 |--------|--------|--------------|------|
-| news-collector | `0 8 * * 1-5` | 平日 8:00 JST | ニュース収集・AI分析（market-scanner前に実行） |
-| market-scanner | `30 8 * * 1-5` | 平日 8:30 JST | 市場スキャン（海外指標は遅延影響なし） |
 | order-manager | `20 9 * * 1-5` | 平日 9:20 JST | 注文生成（寄付き9:00のデータ反映後） |
 | position-monitor | `20-59 9, * 10-14, 0-19 15 * * 1-5` | 平日 9:20-15:19 毎分 | ポジション監視 |
 | end-of-day | `50 15 * * 1-5` | 平日 15:50 JST | 日次締め（大引け15:30のデータ反映後） |
-| ghost-review | `10 16 * * 1-5` | 平日 16:10 JST | ゴースト・トレード分析（偽陰性分析） |
+| daily-backtest | `30 16 * * 1-5` | 平日 16:30 JST | 日次バックテスト |
 | jpx-delisting-sync | `0 9 * * 6` | 土曜 9:00 JST | JPX廃止予定同期 |
-| weekly-review | `0 10 * * 6` | 土曜 10:00 JST | 週次レビュー |
+
+### GitHub Actions cron
+
+外部API（Yahoo Finance等）への接続が必要なジョブを担当。RailwayのIPレンジがYahoo Financeにブロックされる問題を回避するため、GitHub Actionsランナーから実行する（KOH-296）。
+
+| ジョブ | ワークフロー | cron式 (UTC) | 実行タイミング | 備考 |
+|--------|------------|-------------|--------------|------|
+| news-collector | morning-analysis.yml | `0 23 * * 0-4` | 平日 8:00 JST | ニュース収集・AI分析 |
+| market-scanner | morning-analysis.yml | news完了後 | 平日 ~8:15-8:30 JST | `needs:` で順序制御 |
+| ghost-review | ghost-review.yml | `10 7 * * 1-5` | 平日 16:10 JST | ゴースト・トレード分析 |
+| weekly-review | weekly-review.yml | `0 1 * * 6` | 土曜 10:00 JST | 週次レビュー |
+
+各ワークフローには `workflow_dispatch` トリガーがあり、手動実行も可能。平日ジョブは `check-market-day` ステップで休場日・システム停止チェックを行う。
 
 ### 重複実行防止
 
-`running` Set で同一ジョブの同時実行を防止。ジョブ完了時に Set から削除。
+Worker: `running` Set で同一ジョブの同時実行を防止。ジョブ完了時に Set から削除。
+GitHub Actions: `concurrency` グループで同一ワークフローの重複実行を防止。
 
 ### エラーハンドリング
 
-ジョブエラーは catch してログ出力。Worker プロセス自体は落とさない。
+ジョブエラーは catch してログ出力 + Slack通知。Worker プロセス自体は落とさない。
 
 ---
 
@@ -377,17 +388,27 @@ checkOrderFill(order, currentHigh, currentLow):
 
 ---
 
-## GitHub Actions（.github/workflows/trading.yml）
+## GitHub Actions ワークフロー一覧
 
-手動実行（workflow_dispatch）用。Workerがスケジュール実行を担当するため、定期実行は不要。
+### trading.yml（手動実行用）
 
-### 利用可能なジョブ
+`workflow_dispatch` で任意のジョブを手動実行。
 
-news / scan / order / monitor / eod / weekly / backfill
+利用可能: news / scan / order / monitor / eod / ghost / weekly / backfill
 
-### 失敗通知
+失敗時は Slack に通知。
 
-いずれかのジョブが失敗した場合、Slack に通知。
+### morning-analysis.yml（cron実行）
+
+news-collector → market-scanner の順で実行。`check-market-day` で休場日・システム停止チェック。
+
+### ghost-review.yml（cron実行）
+
+ghost-review を実行。`check-market-day` で休場日・システム停止チェック。
+
+### weekly-review.yml（cron実行）
+
+weekly-review を実行。休場日チェックなし（土曜固定）。
 
 ---
 

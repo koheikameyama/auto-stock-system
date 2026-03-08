@@ -15,13 +15,9 @@ import { serve } from "@hono/node-server";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-import { main as runNews } from "./jobs/news-collector";
-import { main as runScan } from "./jobs/market-scanner";
 import { main as runOrder } from "./jobs/order-manager";
 import { main as runMonitor } from "./jobs/position-monitor";
 import { main as runEod } from "./jobs/end-of-day";
-import { main as runWeekly } from "./jobs/weekly-review";
-import { main as runGhostReview } from "./jobs/ghost-review";
 import { main as runDailyBacktest } from "./jobs/daily-backtest";
 import { main as runDelistingSync } from "./jobs/jpx-delisting-sync";
 import { app } from "./web/app";
@@ -116,11 +112,9 @@ function nowJST(): string {
 
 // スケジュール定義（全て JST）
 // ※ Yahoo Finance日本株データの約20分遅延を考慮し、各ジョブを+20分にオフセット
+// ※ news-collector, market-scanner, ghost-review, weekly-review は
+//   GitHub Actions cron に移行済み（KOH-296）
 const schedules = [
-  // 8:00 ニュース収集・分析（平日）— market-scanner前に実行
-  { cron: "0 8 * * 1-5", job: runNews, name: "news-collector", requiresMarketDay: true },
-  // 8:30 市場スキャン（平日）— 海外指標は遅延影響なしのため据置
-  { cron: "30 8 * * 1-5", job: runScan, name: "market-scanner", requiresMarketDay: true },
   // 9:20 注文発行（平日）— 寄付き9:00のデータ反映後
   { cron: "20 9 * * 1-5", job: runOrder, name: "order-manager", requiresMarketDay: true },
   // 9:20-15:19 毎分 ポジション監視（平日）— 遅延考慮
@@ -129,14 +123,10 @@ const schedules = [
   { cron: "0-19 15 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
   // 15:50 日次締め（平日）— 大引け15:30のデータ反映後
   { cron: "50 15 * * 1-5", job: runEod, name: "end-of-day", requiresMarketDay: true },
-  // 16:10 ゴースト・トレーディング分析（平日）— 終値取得のため大引け後に実行
-  { cron: "10 16 * * 1-5", job: runGhostReview, name: "ghost-review", requiresMarketDay: true },
   // 16:30 日次バックテスト（平日）— 終値確定後、資金帯別パフォーマンス追跡
   { cron: "30 16 * * 1-5", job: runDailyBacktest, name: "daily-backtest", requiresMarketDay: true },
   // 土曜 9:00 JPX廃止予定同期（市場営業日に依存しない）
   { cron: "0 9 * * 6", job: runDelistingSync, name: "jpx-delisting-sync", requiresMarketDay: false },
-  // 土曜 10:00 週次レビュー（市場営業日に依存しない）
-  { cron: "0 10 * * 6", job: runWeekly, name: "weekly-review", requiresMarketDay: false },
 ];
 
 // cron 登録
@@ -182,27 +172,7 @@ async function catchUpMissedJobs() {
 
   console.log("[catch-up] 逃したジョブを確認中...");
 
-  // news-collector: 8:00以降で、今日のNewsAnalysisがなければ実行
-  if (now.hour() >= 8) {
-    const newsAnalysis = await prisma.newsAnalysis.findFirst({
-      where: { date: todayStart },
-    });
-    if (!newsAnalysis) {
-      console.log("[catch-up] news-collector が未実行 → 実行します");
-      await runJob("news-collector", runNews);
-    }
-  }
-
-  // market-scanner: 8:30以降で、今日のMarketAssessmentがなければ実行
-  if (now.hour() >= 9 || (now.hour() === 8 && now.minute() >= 30)) {
-    const assessment = await prisma.marketAssessment.findFirst({
-      where: { date: todayStart },
-    });
-    if (!assessment) {
-      console.log("[catch-up] market-scanner が未実行 → 実行します");
-      await runJob("market-scanner", runScan);
-    }
-  }
+  // ※ news-collector, market-scanner は GitHub Actions に移行済み（KOH-296）
 
   // order-manager: 9:20以降で、今日のpending注文がなければ実行
   // (market-scannerのshouldTrade=falseの場合は注文なしが正常なのでassessmentも確認)
@@ -232,28 +202,7 @@ async function catchUpMissedJobs() {
     }
   }
 
-  // ghost-review: 16:10以降で、今日のrejected銘柄にclosingPriceがなければ実行
-  if (now.hour() >= 17 || (now.hour() === 16 && now.minute() >= 10)) {
-    const hasGhostReview = await prisma.scoringRecord.findFirst({
-      where: {
-        date: todayStart,
-        rejectionReason: { not: null },
-        closingPrice: { not: null },
-      },
-    });
-    if (!hasGhostReview) {
-      const hasRejected = await prisma.scoringRecord.findFirst({
-        where: {
-          date: todayStart,
-          rejectionReason: { not: null },
-        },
-      });
-      if (hasRejected) {
-        console.log("[catch-up] ghost-review が未実行 → 実行します");
-        await runJob("ghost-review", runGhostReview);
-      }
-    }
-  }
+  // ※ ghost-review は GitHub Actions に移行済み（KOH-296）
 
   // daily-backtest: 16:30以降で、今日のBacktestDailyResultがなければ実行
   if (now.hour() >= 17 || (now.hour() === 16 && now.minute() >= 30)) {
