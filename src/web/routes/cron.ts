@@ -20,6 +20,8 @@ import { main as runMiddayReassessment } from "../../jobs/midday-reassessment";
 import { main as runEod } from "../../jobs/end-of-day";
 import { main as runDailyBacktest } from "../../jobs/daily-backtest";
 import { main as runDelistingSync } from "../../jobs/jpx-delisting-sync";
+import { main as runMarketScanner } from "../../jobs/market-scanner";
+import { main as runGhostReview } from "../../jobs/ghost-review";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -39,6 +41,8 @@ const JOBS: Record<string, JobDef> = {
   "midday-reassessment": { fn: runMiddayReassessment, requiresMarketDay: true },
   "end-of-day": { fn: runEod, requiresMarketDay: true },
   "daily-backtest": { fn: runDailyBacktest, requiresMarketDay: true },
+  "market-scanner": { fn: runMarketScanner, requiresMarketDay: true },
+  "ghost-review": { fn: runGhostReview, requiresMarketDay: true },
   "jpx-delisting-sync": { fn: runDelistingSync, requiresMarketDay: false },
 };
 
