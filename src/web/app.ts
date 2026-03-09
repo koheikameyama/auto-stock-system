@@ -12,6 +12,7 @@ import historyRoute from "./routes/history";
 import riskRoute from "./routes/risk";
 import backtestRoute from "./routes/backtest";
 import apiRoute from "./routes/api";
+import cronRoute from "./routes/cron";
 
 export const app = new Hono();
 
@@ -20,9 +21,9 @@ app.get("/api/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Basic認証（ヘルスチェックは除外）
+// Basic認証（ヘルスチェック・cronエンドポイントは除外）
 app.use("*", async (c, next) => {
-  if (c.req.path === "/api/health") {
+  if (c.req.path === "/api/health" || c.req.path.startsWith("/api/cron")) {
     return next();
   }
   const auth = basicAuth({
@@ -119,3 +120,6 @@ app.route("/backtest", backtestRoute);
 
 // API routes (authenticated)
 app.route("/api", apiRoute);
+
+// Cron routes (Bearer CRON_SECRET auth)
+app.route("/api/cron", cronRoute);
