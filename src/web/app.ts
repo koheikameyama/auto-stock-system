@@ -11,6 +11,7 @@ import ordersRoute from "./routes/orders";
 import historyRoute from "./routes/history";
 import riskRoute from "./routes/risk";
 import backtestRoute from "./routes/backtest";
+import contrarianRoute from "./routes/contrarian";
 import apiRoute from "./routes/api";
 import cronRoute from "./routes/cron";
 
@@ -117,6 +118,7 @@ app.route("/orders", ordersRoute);
 app.route("/history", historyRoute);
 app.route("/risk", riskRoute);
 app.route("/backtest", backtestRoute);
+app.route("/contrarian", contrarianRoute);
 
 // API routes (authenticated)
 app.route("/api", apiRoute);
