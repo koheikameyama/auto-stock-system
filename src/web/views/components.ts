@@ -97,6 +97,20 @@ export function orderStatusBadge(status: string): HtmlContent {
   >`;
 }
 
+/** Rank バッジ（S/A/B/C） */
+export function rankBadge(rank: string): HtmlContent {
+  const colorMap: Record<string, string> = {
+    S: "#f59e0b",
+    A: "#3b82f6",
+    B: "#22c55e",
+    C: "#94a3b8",
+  };
+  const color = colorMap[rank] ?? "#94a3b8";
+  return html`<span class="badge" style="background:${color}20;color:${color}"
+    >${rank}</span
+  >`;
+}
+
 /** 空の状態 */
 export function emptyState(message: string): HtmlContent {
   return html`<div class="empty">${message}</div>`;
