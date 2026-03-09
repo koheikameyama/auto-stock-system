@@ -8,3 +8,4 @@ export * from "./news";
 export * from "./scoring";
 export * from "./stock-master";
 export * from "./backtest";
+export * from "./data-quality";

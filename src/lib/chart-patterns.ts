@@ -92,6 +92,7 @@ function findLocalExtremes(
  */
 function isSimilarPrice(price1: number, price2: number, tolerance: number = DEFAULT_PRICE_TOLERANCE): boolean {
   const avg = (price1 + price2) / 2
+  if (avg <= 0) return false
   return Math.abs(price1 - price2) / avg <= tolerance
 }
 

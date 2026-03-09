@@ -192,7 +192,9 @@ export function runBacktest(
 
       if (exitPrice != null && exitReason != null) {
         const pnl = (exitPrice - pos.entryPrice) * pos.quantity;
-        const pnlPct = ((exitPrice - pos.entryPrice) / pos.entryPrice) * 100;
+        const pnlPct = pos.entryPrice > 0
+          ? ((exitPrice - pos.entryPrice) / pos.entryPrice) * 100
+          : 0;
         const entryDayIdx = tradingDays.indexOf(pos.entryDate);
         const holdingDays = entryDayIdx >= 0 ? dayIdx - entryDayIdx : 1;
 

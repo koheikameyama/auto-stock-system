@@ -90,6 +90,9 @@ function checkDisqualify(input: LogicScoreInput): DisqualifyResult {
   // 値幅率が広すぎる（当日 high-low / close > 5%）
   if (historicalData.length > 0) {
     const latest = historicalData[0];
+    if (latest.close <= 0) {
+      return { isDisqualified: true, reason: "invalid_price_data" };
+    }
     const spreadPct = (latest.high - latest.low) / latest.close;
     if (spreadPct > SCORING.DISQUALIFY.MAX_DAILY_SPREAD_PCT) {
       return { isDisqualified: true, reason: "spread_too_wide" };
@@ -249,6 +252,7 @@ function scoreSpreadProxy(historicalData: OHLCVData[]): number {
   if (historicalData.length === 0) return 5;
 
   const latest = historicalData[0];
+  if (latest.close <= 0) return 0;
   const spreadPct = (latest.high - latest.low) / latest.close;
   const tiers = SCORING.LIQUIDITY.SPREAD_PROXY_TIERS;
   const scores = [10, 7, 4, 2];

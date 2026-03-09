@@ -11,7 +11,7 @@ import dayjs from "dayjs";
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
 });
-import { YAHOO_FINANCE } from "../lib/constants";
+import { YAHOO_FINANCE, DATA_QUALITY } from "../lib/constants";
 import { normalizeTickerCode } from "../lib/ticker-utils";
 import { sleep, withRetry as _withRetry } from "../lib/retry-utils";
 
@@ -203,19 +203,54 @@ export async function fetchHistoricalData(
       interval: "1d",
     }), symbol);
 
+    const totalBars = result.quotes.length;
+
+    // null/無効なOHLCバーを除外（close=0はテクニカル指標の除算エラーを引き起こす）
+    const validBars = result.quotes
+      .filter(
+        (bar) =>
+          bar.open != null &&
+          bar.high != null &&
+          bar.low != null &&
+          bar.close != null &&
+          bar.close > 0,
+      )
+      .map((bar) => ({
+        date: dayjs(bar.date).format("YYYY-MM-DD"),
+        open: bar.open!,
+        high: bar.high!,
+        low: bar.low!,
+        close: bar.close!,
+        volume: bar.volume ?? 0,
+      }));
+
+    // 欠損率チェック
+    if (totalBars > 0) {
+      const missingRate = 1 - validBars.length / totalBars;
+      if (missingRate > DATA_QUALITY.MAX_MISSING_RATE) {
+        console.warn(
+          `[market-data] ${symbol}: 欠損率 ${(missingRate * 100).toFixed(1)}% > ${DATA_QUALITY.MAX_MISSING_RATE * 100}% — データ品質不足`,
+        );
+      }
+    }
+
+    // 最低データ数チェック
+    if (validBars.length < DATA_QUALITY.MIN_VALID_BARS) {
+      console.warn(
+        `[market-data] ${symbol}: 有効バー数 ${validBars.length} < ${DATA_QUALITY.MIN_VALID_BARS} — データ不足`,
+      );
+      return null;
+    }
+
+    // 異常値除外（前日比 ±50% 以上）
+    const cleaned = removeAnomalies(validBars);
+
     // 新しい順にソート（テクニカル分析モジュールが期待する形式）
-    const sorted = result.quotes.sort(
+    cleaned.sort(
       (a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf(),
     );
 
-    return sorted.map((bar) => ({
-      date: dayjs(bar.date).format("YYYY-MM-DD"),
-      open: bar.open ?? 0,
-      high: bar.high ?? 0,
-      low: bar.low ?? 0,
-      close: bar.close ?? 0,
-      volume: bar.volume ?? 0,
-    }));
+    return cleaned;
   } catch (error) {
     console.error(
       `[market-data] Failed to fetch historical data for ${symbol}:`,
@@ -223,6 +258,36 @@ export async function fetchHistoricalData(
     );
     return null;
   }
+}
+
+/**
+ * 前日比が異常に大きいバーを除外する
+ * 株式分割や配当落ちによる価格ジャンプを検出し、テクニカル指標の歪みを防ぐ
+ */
+function removeAnomalies(bars: OHLCVBar[]): OHLCVBar[] {
+  if (bars.length < 2) return bars;
+
+  // 日付昇順でソート（古い順）
+  const sorted = [...bars].sort(
+    (a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf(),
+  );
+
+  const result: OHLCVBar[] = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const prevClose = sorted[i - 1].close;
+    const currClose = sorted[i].close;
+    const changePct = Math.abs(currClose - prevClose) / prevClose;
+
+    if (changePct <= DATA_QUALITY.MAX_DAILY_CHANGE_PCT) {
+      result.push(sorted[i]);
+    } else {
+      console.warn(
+        `[market-data] 異常値除外: ${sorted[i].date} close=${currClose} (前日比 ${(changePct * 100).toFixed(1)}%)`,
+      );
+    }
+  }
+
+  return result;
 }
 
 // ========================================
