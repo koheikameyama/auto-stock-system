@@ -222,12 +222,17 @@ export function runBacktest(
     }
 
     // 3. 新規エントリー評価
-    if (openPositions.length < config.maxPositions && cash > 0) {
-      // VIXからレジームを判定（データなければ"normal"）
-      const todayVix = vixData?.get(today);
-      const todayRegime: RegimeLevel =
-        todayVix != null ? determineMarketRegime(todayVix).level : "normal";
+    // VIXからレジームを判定（データなければ"normal"）
+    const todayVix = vixData?.get(today);
+    const todayRegime: RegimeLevel =
+      todayVix != null ? determineMarketRegime(todayVix).level : "normal";
 
+    // crisis時は新規エントリーをスキップ（本番のshouldTrade=falseと同等）
+    if (todayRegime === "crisis") {
+      if (config.verbose) {
+        console.log(`  [${today}] VIX=${todayVix?.toFixed(1)} → crisis: 新規エントリースキップ`);
+      }
+    } else if (openPositions.length < config.maxPositions && cash > 0) {
       const candidates = evaluateTickers(
         config,
         allData,
