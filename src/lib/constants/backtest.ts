@@ -7,7 +7,7 @@ export const DAILY_BACKTEST = {
   BUDGET_TIERS: [
     { label: "10万", budget: 100_000, maxPrice: 1_000, maxPositions: 3 },
     { label: "30万", budget: 300_000, maxPrice: 3_000, maxPositions: 3 },
-    { label: "50万", budget: 500_000, maxPrice: 5_000, maxPositions: 5 },
+    { label: "50万", budget: 500_000, maxPrice: 5_000, maxPositions: 3 },
     { label: "100万", budget: 1_000_000, maxPrice: 10_000, maxPositions: 5 },
   ],
 
