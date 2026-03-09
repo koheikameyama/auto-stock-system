@@ -191,6 +191,7 @@ export async function main() {
   console.log(
     `=== Midday Reassessment 終了（${sentimentWorsened ? "悪化→更新" : "維持"}、キャンセル: ${cancelledCount}件） ===`,
   );
+
 }
 
 const isDirectRun = process.argv[1]?.includes("midday-reassessment");

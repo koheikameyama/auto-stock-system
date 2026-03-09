@@ -13,7 +13,7 @@ import { cronAuthMiddleware } from "../middleware/cron-auth";
 import { jobState } from "./dashboard";
 import { isMarketDay } from "../../lib/market-calendar";
 import { prisma } from "../../lib/prisma";
-import { notifySlack } from "../../lib/slack";
+
 
 import { main as runOrder } from "../../jobs/order-manager";
 import { main as runMiddayReassessment } from "../../jobs/midday-reassessment";
@@ -98,17 +98,6 @@ for (const [key, def] of Object.entries(JOBS)) {
       const entry = jobState.lastRun.get(key);
       if (entry) entry.error = String(err);
       console.error(`[${nowJST()}] ${key} エラー (API):`, err);
-
-      const errorDetail =
-        err instanceof Error
-          ? `${err.message}\n\n\`\`\`\n${err.stack?.split("\n").slice(1, 6).join("\n") ?? ""}\n\`\`\``
-          : String(err);
-
-      await notifySlack({
-        title: `❌ ${key} でエラーが発生しました`,
-        message: errorDetail,
-        color: "danger",
-      }).catch(() => {});
 
       return c.json(
         {
