@@ -13,6 +13,10 @@ const yahooFinance = new YahooFinance({
 });
 import { YAHOO_FINANCE } from "../lib/constants";
 import { normalizeTickerCode } from "../lib/ticker-utils";
+import { sleep, withRetry as _withRetry } from "../lib/retry-utils";
+
+const retry = <T>(fn: () => Promise<T>, label: string) =>
+  _withRetry(fn, label, "market-data");
 
 // ========================================
 // インターフェース
@@ -70,50 +74,6 @@ const MARKET_SYMBOLS = {
 // ユーティリティ
 // ========================================
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * リトライ可能なエラーか判定（429 + ネットワークエラー）
- */
-function isRetryableError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const msg = error.message;
-  if (msg.includes("Too Many Requests") || msg.includes("429")) return true;
-  if (msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") ||
-      msg.includes("ECONNREFUSED") || msg.includes("fetch failed") ||
-      msg.includes("ENETUNREACH") || msg.includes("EAI_AGAIN")) return true;
-  const cause = (error as { cause?: { code?: string } }).cause;
-  if (cause?.code === "ETIMEDOUT" || cause?.code === "ECONNRESET") return true;
-  return false;
-}
-
-/**
- * リトライ可能エラー時に指数バックオフでリトライ
- */
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  label: string,
-): Promise<T> {
-  for (let attempt = 0; attempt < YAHOO_FINANCE.RETRY_MAX_ATTEMPTS; attempt++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      if (!isRetryableError(error) || attempt >= YAHOO_FINANCE.RETRY_MAX_ATTEMPTS - 1) {
-        throw error;
-      }
-      const delay = YAHOO_FINANCE.RETRY_BASE_DELAY_MS * 2 ** attempt;
-      const errCode = error instanceof Error ? error.message.slice(0, 40) : "unknown";
-      console.warn(
-        `[market-data] ${label}: リトライ ${attempt + 1}/${YAHOO_FINANCE.RETRY_MAX_ATTEMPTS} after ${delay}ms [${errCode}]`,
-      );
-      await sleep(delay);
-    }
-  }
-  throw new Error("unreachable");
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseQuoteResult(result: any, symbol: string): StockQuote {
   return {
@@ -143,7 +103,7 @@ export async function fetchStockQuote(
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await withRetry(
+    const result: any = await retry(
       () => yahooFinance.quote(symbol),
       symbol,
     );
@@ -169,7 +129,7 @@ export async function fetchStockQuotesBatch(
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const batchResults: any[] = await withRetry(
+      const batchResults: any[] = await retry(
         () => yahooFinance.quote(batch),
         `batch[${i}..${i + batch.length}]`,
       );
@@ -189,7 +149,7 @@ export async function fetchStockQuotesBatch(
       for (const symbol of batch) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result: any = await withRetry(
+          const result: any = await retry(
             () => yahooFinance.quote(symbol),
             symbol,
           );
@@ -237,7 +197,7 @@ export async function fetchHistoricalData(
   try {
     const period1 = dayjs().subtract(YAHOO_FINANCE.HISTORICAL_DAYS, "day").toDate();
 
-    const result = await withRetry(() => yahooFinance.chart(symbol, {
+    const result = await retry(() => yahooFinance.chart(symbol, {
       period1,
       period2: dayjs().toDate(),
       interval: "1d",
@@ -272,7 +232,7 @@ export async function fetchHistoricalData(
 async function fetchIndexQuote(symbol: string): Promise<IndexQuote | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await withRetry(
+    const result: any = await retry(
       () => yahooFinance.quote(symbol),
       symbol,
     );

@@ -10,7 +10,7 @@ import pLimit from "p-limit";
 import dayjs from "dayjs";
 import type { OHLCVData } from "../core/technical-analysis";
 import { normalizeTickerCode } from "../lib/ticker-utils";
-import { YAHOO_FINANCE } from "../lib/constants";
+import { withRetry as _withRetry } from "../lib/retry-utils";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
@@ -19,40 +19,8 @@ const yahooFinance = new YahooFinance({
 const LOOKBACK_CALENDAR_DAYS = 120;
 const FETCH_CONCURRENCY = 3;
 
-function isRetryableError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const msg = error.message;
-  // 429 Rate Limit
-  if (msg.includes("Too Many Requests") || msg.includes("429")) return true;
-  // ネットワークエラー
-  if (msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") ||
-      msg.includes("ECONNREFUSED") || msg.includes("fetch failed") ||
-      msg.includes("ENETUNREACH") || msg.includes("EAI_AGAIN")) return true;
-  // cause チェーン
-  const cause = (error as { cause?: { code?: string } }).cause;
-  if (cause?.code === "ETIMEDOUT" || cause?.code === "ECONNRESET") return true;
-  return false;
-}
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  label: string,
-): Promise<T> {
-  for (let attempt = 0; attempt < YAHOO_FINANCE.RETRY_MAX_ATTEMPTS; attempt++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      if (!isRetryableError(error) || attempt >= YAHOO_FINANCE.RETRY_MAX_ATTEMPTS - 1) {
-        throw error;
-      }
-      const delay = YAHOO_FINANCE.RETRY_BASE_DELAY_MS * 2 ** attempt;
-      const errCode = error instanceof Error ? error.message.slice(0, 40) : "unknown";
-      console.log(`  [backtest] ${label}: リトライ ${attempt + 1}/${YAHOO_FINANCE.RETRY_MAX_ATTEMPTS} (${delay}ms) [${errCode}]`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-  }
-  throw new Error("unreachable");
-}
+const retry = <T>(fn: () => Promise<T>, label: string) =>
+  _withRetry(fn, label, "backtest");
 
 /**
  * 単一銘柄のヒストリカルデータを取得
@@ -69,7 +37,7 @@ export async function fetchBacktestData(
     .toDate();
   const period2 = dayjs(endDate).add(1, "day").toDate();
 
-  const result = await withRetry(
+  const result = await retry(
     () =>
       yahooFinance.chart(symbol, {
         period1,
@@ -108,7 +76,7 @@ export async function fetchVixData(
   startDate: string,
   endDate: string,
 ): Promise<Map<string, number>> {
-  const result = await withRetry(
+  const result = await retry(
     () =>
       yahooFinance.chart("^VIX", {
         period1: dayjs(startDate).subtract(LOOKBACK_CALENDAR_DAYS, "day").toDate(),
