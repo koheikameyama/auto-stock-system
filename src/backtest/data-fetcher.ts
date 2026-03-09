@@ -101,6 +101,35 @@ export async function fetchBacktestData(
 }
 
 /**
+ * VIX（CBOE Volatility Index）の過去データを取得
+ * @returns date -> VIX終値 のMap
+ */
+export async function fetchVixData(
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, number>> {
+  const result = await withRetry(
+    () =>
+      yahooFinance.chart("^VIX", {
+        period1: dayjs(startDate).subtract(LOOKBACK_CALENDAR_DAYS, "day").toDate(),
+        period2: dayjs(endDate).add(1, "day").toDate(),
+        interval: "1d",
+      }),
+    "^VIX",
+  );
+
+  const vixMap = new Map<string, number>();
+  for (const bar of result.quotes) {
+    if (bar.close != null) {
+      vixMap.set(dayjs(bar.date).format("YYYY-MM-DD"), bar.close);
+    }
+  }
+
+  console.log(`[backtest] VIXデータ取得完了: ${vixMap.size}件`);
+  return vixMap;
+}
+
+/**
  * 複数銘柄のヒストリカルデータを一括取得
  */
 export async function fetchMultipleBacktestData(

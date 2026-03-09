@@ -11,7 +11,7 @@ import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { getDaysAgoForDB } from "../lib/date-utils";
 import { DAILY_BACKTEST, type BudgetTier } from "../lib/constants";
-import { fetchMultipleBacktestData } from "./data-fetcher";
+import { fetchMultipleBacktestData, fetchVixData } from "./data-fetcher";
 import { runBacktest } from "./simulation-engine";
 import type { BacktestConfig, PerformanceMetrics } from "./types";
 
@@ -108,7 +108,13 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
 
   // 3. データ一括取得（全ティア共通）
   const fetchStart = Date.now();
-  const allData = await fetchMultipleBacktestData(tickers, startDate, endDate);
+  const [allData, vixData] = await Promise.all([
+    fetchMultipleBacktestData(tickers, startDate, endDate),
+    fetchVixData(startDate, endDate).catch((err) => {
+      console.warn("[daily-backtest] VIXデータ取得失敗（レジーム集計なし）:", err);
+      return new Map<string, number>();
+    }),
+  ]);
   const dataFetchTimeMs = Date.now() - fetchStart;
 
   if (allData.size === 0) {
@@ -116,7 +122,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
   }
 
   console.log(
-    `[daily-backtest] データ取得完了: ${allData.size}銘柄 (${(dataFetchTimeMs / 1000).toFixed(1)}秒)`,
+    `[daily-backtest] データ取得完了: ${allData.size}銘柄 VIX${vixData.size}件 (${(dataFetchTimeMs / 1000).toFixed(1)}秒)`,
   );
 
   // 4. 各ティアでシミュレーション実行
@@ -143,7 +149,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
     };
 
     console.log(`[daily-backtest] ${tier.label}ティア シミュレーション中...`);
-    const result = runBacktest(config, allData);
+    const result = runBacktest(config, allData, vixData);
 
     tierResults.push({
       tier,

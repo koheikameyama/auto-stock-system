@@ -16,6 +16,66 @@
 | D. ポジション管理 | 中 | ローカル計算 → ブローカー残高連携 |
 | E. ティッカーコード | 小 | `.T`サフィックス → 4桁コード |
 | F. 新規実装 | 大 | ブローカー固有の機能追加 |
+| G. バックテスト精度改善 | 中 | 手数料・スリッページをシミュレーションに反映 |
+
+---
+
+## G. バックテスト精度改善（API移行時に対応）
+
+### 現状の問題
+
+バックテストエンジン（`src/backtest/simulation-engine.ts`）は手数料・スリッページを考慮していないため、シミュレーション結果が実際より **1〜3% 楽観的** になっている。
+
+```typescript
+// 現在（手数料なし）
+const cost = order.limitPrice * order.quantity;
+cash -= cost;
+
+cash += exitPrice * pos.quantity;
+```
+
+### 移行後に追加すること
+
+**1. 手数料の反映**
+
+立花証券の手数料レートが確定したら `src/lib/constants/backtest.ts` に追加：
+
+```typescript
+// TODO: 立花証券API導入時に実際の手数料レートで更新
+export const BROKER_FEE = {
+  COMMISSION_RATE: 0.00099, // 0.099%（仮）
+  MIN_COMMISSION: 0,        // 最低手数料（確認後に設定）
+} as const;
+```
+
+`simulation-engine.ts` の約定処理に手数料を組み込む：
+
+```typescript
+// 買い
+const commission = Math.round(order.limitPrice * order.quantity * BROKER_FEE.COMMISSION_RATE);
+cash -= cost + commission;
+
+// 売り
+const sellCommission = Math.round(exitPrice * pos.quantity * BROKER_FEE.COMMISSION_RATE);
+cash += exitPrice * pos.quantity - sellCommission;
+```
+
+**2. スリッページの反映**
+
+指値注文のスリッページは基本ゼロだが、成行注文（ディフェンシブモードの強制決済など）には平均スプレッドを加算：
+
+```typescript
+// TODO: 立花証券の板情報から平均スプレッドを取得して設定
+const SLIPPAGE_PCT = 0.001; // 0.1%（仮）
+```
+
+### 対象ファイル
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `src/lib/constants/backtest.ts` | `BROKER_FEE` 定数を追加 |
+| `src/backtest/simulation-engine.ts` | 約定コスト計算に手数料を加算 |
+| `src/backtest/types.ts` | `BacktestConfig` に `commissionRate` オプションを追加 |
 
 ---
 

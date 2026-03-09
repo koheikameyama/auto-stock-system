@@ -14,12 +14,14 @@ import { detectChartPatterns } from "../lib/chart-patterns";
 import { analyzeSingleCandle } from "../lib/candlestick-patterns";
 import { TECHNICAL_MIN_DATA, SCORING } from "../lib/constants";
 import { calculateTrailingStop } from "../core/trailing-stop";
+import { determineMarketRegime } from "../core/market-regime";
 import { calculateMetrics } from "./metrics";
 import type {
   BacktestConfig,
   BacktestResult,
   SimulatedPosition,
   DailyEquity,
+  RegimeLevel,
 } from "./types";
 
 const MIN_WINDOW_BARS = 80;
@@ -30,6 +32,7 @@ const MIN_WINDOW_BARS = 80;
 export function runBacktest(
   config: BacktestConfig,
   allData: Map<string, OHLCVData[]>,
+  vixData?: Map<string, number>,
 ): BacktestResult {
   const openPositions: SimulatedPosition[] = [];
   const closedTrades: SimulatedPosition[] = [];
@@ -95,6 +98,7 @@ export function runBacktest(
         quantity: order.quantity,
         rank: order.rank,
         score: order.score,
+        regime: order.regime,
         maxHighDuringHold: order.limitPrice,
         trailingStopPrice: null,
         entryAtr: order.entryAtr,
@@ -219,6 +223,11 @@ export function runBacktest(
 
     // 3. 新規エントリー評価
     if (openPositions.length < config.maxPositions && cash > 0) {
+      // VIXからレジームを判定（データなければ"normal"）
+      const todayVix = vixData?.get(today);
+      const todayRegime: RegimeLevel =
+        todayVix != null ? determineMarketRegime(todayVix).level : "normal";
+
       const candidates = evaluateTickers(
         config,
         allData,
@@ -246,6 +255,7 @@ export function runBacktest(
           rank: candidate.score.rank,
           score: candidate.score.totalScore,
           entryAtr: candidate.entryAtr,
+          regime: todayRegime,
         });
       }
     }
@@ -298,6 +308,7 @@ interface PendingOrder {
   rank: "S" | "A" | "B" | "C";
   score: number;
   entryAtr: number | null;
+  regime: RegimeLevel;
 }
 
 interface EntryCandidate {

@@ -58,6 +58,7 @@ export function calculateMetrics(
     calculateMaxDrawdown(equityCurve);
   const sharpeRatio = calculateSharpeRatio(equityCurve);
   const byRank = calculateByRank(closedTrades);
+  const byRegime = calculateByRegime(closedTrades);
 
   return {
     totalTrades: closedTrades.length,
@@ -75,6 +76,7 @@ export function calculateMetrics(
     totalPnl: Math.round(totalPnl),
     totalReturnPct: round2(totalReturnPct),
     byRank,
+    byRegime,
   };
 }
 
@@ -175,6 +177,46 @@ function calculateByRank(
   }
 
   return ranks;
+}
+
+function calculateByRegime(
+  trades: SimulatedPosition[],
+): Record<string, RankMetrics> {
+  const regimes: Record<string, RankMetrics> = {};
+
+  for (const trade of trades) {
+    const regime = trade.regime ?? "normal";
+    if (!regimes[regime]) {
+      regimes[regime] = {
+        totalTrades: 0,
+        wins: 0,
+        losses: 0,
+        winRate: 0,
+        avgPnlPct: 0,
+      };
+    }
+    regimes[regime].totalTrades++;
+    if (trade.pnl != null && trade.pnl > 0) {
+      regimes[regime].wins++;
+    } else {
+      regimes[regime].losses++;
+    }
+  }
+
+  for (const regime of Object.keys(regimes)) {
+    const r = regimes[regime];
+    r.winRate = r.totalTrades > 0 ? round2((r.wins / r.totalTrades) * 100) : 0;
+    const regimeTrades = trades.filter((t) => (t.regime ?? "normal") === regime);
+    r.avgPnlPct =
+      regimeTrades.length > 0
+        ? round2(
+            regimeTrades.reduce((s, t) => s + (t.pnlPct ?? 0), 0) /
+              regimeTrades.length,
+          )
+        : 0;
+  }
+
+  return regimes;
 }
 
 function round2(n: number): number {

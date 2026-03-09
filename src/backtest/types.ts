@@ -19,6 +19,8 @@ export interface BacktestConfig {
   verbose: boolean;
 }
 
+export type RegimeLevel = "normal" | "elevated" | "high" | "crisis";
+
 export interface SimulatedPosition {
   ticker: string;
   entryDate: string;
@@ -28,6 +30,7 @@ export interface SimulatedPosition {
   quantity: number;
   rank: "S" | "A" | "B" | "C";
   score: number;
+  regime: RegimeLevel | null;
   maxHighDuringHold: number;
   trailingStopPrice: number | null;
   entryAtr: number | null;
@@ -76,6 +79,7 @@ export interface PerformanceMetrics {
   totalPnl: number;
   totalReturnPct: number;
   byRank: Record<string, RankMetrics>;
+  byRegime: Record<string, RankMetrics>;
 }
 
 export interface RankMetrics {
