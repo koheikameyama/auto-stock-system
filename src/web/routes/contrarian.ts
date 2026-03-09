@@ -21,6 +21,7 @@ import {
   pnlPercent,
   emptyState,
   rankBadge,
+  tt,
 } from "../views/components";
 
 const app = new Hono();
@@ -461,11 +462,11 @@ app.get("/", async (c) => {
               <thead>
                 <tr>
                   <th>銘柄</th>
-                  <th>スコア</th>
+                  <th>${tt("スコア", "テクニカル・パターン・流動性を合算した100点満点のスコア")}</th>
                   <th>ランク</th>
-                  <th>エントリー</th>
+                  <th>${tt("エントリー", "仮想エントリー価格（市場停止日の始値）")}</th>
                   <th>終値</th>
-                  <th>騰落率</th>
+                  <th>${tt("騰落率", "エントリー価格に対する終値の変化率")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -543,12 +544,12 @@ app.get("/", async (c) => {
               <thead>
                 <tr>
                   <th>銘柄</th>
-                  <th>出現</th>
+                  <th>${tt("出現", "市場停止日にスコアリングされた回数")}</th>
                   <th>平均スコア</th>
-                  <th>逆行勝ち</th>
-                  <th>勝率</th>
+                  <th>${tt("逆行勝ち", "市場停止日に実際に上昇した回数")}</th>
+                  <th>${tt("勝率", "市場停止日の上昇確率")}</th>
                   <th>平均利益率</th>
-                  <th>ボーナス</th>
+                  <th>${tt("ボーナス", "逆行実績に基づきスコアに加算されるポイント")}</th>
                 </tr>
               </thead>
               <tbody>

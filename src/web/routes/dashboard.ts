@@ -16,6 +16,7 @@ import {
   strategyBadge,
   emptyState,
   detailRow,
+  tt,
 } from "../views/components";
 import { isMarketDay } from "../../lib/market-calendar";
 
@@ -104,8 +105,8 @@ app.get("/", async (c) => {
         </span>
       </div>
       ${detailRow("実行中ジョブ", `${jobState.running.size > 0 ? [...jobState.running].join(", ") : "なし"}`)}
-      ${detailRow("オープンポジション", `${openPositions.length}`)}
-      ${detailRow("待機注文", `${pendingOrders.length}`)}
+      ${detailRow(tt("オープンポジション", "現在保有中の建玉"), `${openPositions.length}`)}
+      ${detailRow(tt("待機注文", "未約定・約定待ちの注文"), `${pendingOrders.length}`)}
     </div>
 
     <!-- Portfolio -->
@@ -161,7 +162,7 @@ app.get("/", async (c) => {
                 <tr>
                   <th>銘柄</th>
                   <th>戦略</th>
-                  <th>建値</th>
+                  <th>${tt("建値", "エントリー時の購入価格")}</th>
                   <th>数量</th>
                 </tr>
               </thead>

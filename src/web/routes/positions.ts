@@ -13,6 +13,7 @@ import {
   pnlText,
   strategyBadge,
   emptyState,
+  tt,
 } from "../views/components";
 
 const app = new Hono();
@@ -47,10 +48,10 @@ app.get("/", async (c) => {
                 <tr>
                   <th>銘柄</th>
                   <th>戦略</th>
-                  <th>建値</th>
+                  <th>${tt("建値", "エントリー時の購入価格")}</th>
                   <th>数量</th>
-                  <th>利確</th>
-                  <th>損切</th>
+                  <th>${tt("利確", "利益確定の目標価格（TP）")}</th>
+                  <th>${tt("損切", "損失を限定する売却価格（SL）")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -89,9 +90,9 @@ app.get("/", async (c) => {
                 <tr>
                   <th>銘柄</th>
                   <th>戦略</th>
-                  <th>建値</th>
-                  <th>決済</th>
-                  <th>損益</th>
+                  <th>${tt("建値", "エントリー時の購入価格")}</th>
+                  <th>${tt("決済", "ポジションを閉じた時の価格")}</th>
+                  <th>${tt("損益", "実現損益（税引前）")}</th>
                 </tr>
               </thead>
               <tbody>

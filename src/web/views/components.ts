@@ -9,6 +9,11 @@ import { CHART_PADDING, CHART_LABEL_THRESHOLD } from "../../lib/constants";
 
 type HtmlContent = HtmlEscapedString | Promise<HtmlEscapedString>;
 
+/** 専門用語にツールチップを付与 */
+export function tt(text: string, tooltip: string): HtmlContent {
+  return html`<span class="tt" data-tooltip="${tooltip}">${text}</span>`;
+}
+
 /** 金額フォーマット（円） */
 export function formatYen(value: number): string {
   return value.toLocaleString("ja-JP", {
@@ -118,7 +123,7 @@ export function emptyState(message: string): HtmlContent {
 
 /** Detail row (ラベル: 値) */
 export function detailRow(
-  label: string,
+  label: string | HtmlContent,
   value: HtmlContent | string,
 ): HtmlContent {
   return html`<div class="detail-row">

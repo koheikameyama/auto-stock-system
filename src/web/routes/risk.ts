@@ -21,6 +21,7 @@ import {
   detailRow,
   emptyState,
   regimeBadge,
+  tt,
 } from "../views/components";
 
 const app = new Hono();
@@ -57,7 +58,7 @@ app.get("/", async (c) => {
             >
               ${regimeBadge(regime.level)}
               <span style="font-size:13px;color:#94a3b8">
-                VIX: ${regime.vix.toFixed(1)}
+                ${tt("VIX", "恐怖指数。高いほど市場の不安が大きい（30超で危機）")}: ${regime.vix.toFixed(1)}
               </span>
             </div>
             ${detailRow("最大ポジション数", `${regime.maxPositions}`)}
@@ -94,9 +95,9 @@ app.get("/", async (c) => {
           : ""}
       <div class="grid-2" style="margin:0;gap:8px">
         <div>
-          ${detailRow("週次P&L", pnlText(drawdown.weeklyPnl))}
+          ${detailRow(tt("週次P&L", "今週の実現損益合計"), pnlText(drawdown.weeklyPnl))}
           ${detailRow(
-            "週次DD",
+            tt("週次DD", "今週の資産ピークからの最大下落率"),
             html`<span
               class="${drawdown.weeklyDrawdownPct >= DRAWDOWN.WEEKLY_HALT_PCT ? "pnl-negative" : ""}"
               >${drawdown.weeklyDrawdownPct.toFixed(1)}%
@@ -105,9 +106,9 @@ app.get("/", async (c) => {
           )}
         </div>
         <div>
-          ${detailRow("月次P&L", pnlText(drawdown.monthlyPnl))}
+          ${detailRow(tt("月次P&L", "今月の実現損益合計"), pnlText(drawdown.monthlyPnl))}
           ${detailRow(
-            "月次DD",
+            tt("月次DD", "今月の資産ピークからの最大下落率"),
             html`<span
               class="${drawdown.monthlyDrawdownPct >= DRAWDOWN.MONTHLY_HALT_PCT ? "pnl-negative" : ""}"
               >${drawdown.monthlyDrawdownPct.toFixed(1)}%
@@ -117,7 +118,7 @@ app.get("/", async (c) => {
         </div>
       </div>
       ${detailRow(
-        "連敗数",
+        tt("連敗数", "連続して発生した損失トレードの回数"),
         html`<span
           class="${drawdown.consecutiveLosses >= DRAWDOWN.COOLDOWN_TRIGGER ? "pnl-negative" : ""}"
           >${drawdown.consecutiveLosses}
@@ -128,7 +129,7 @@ app.get("/", async (c) => {
               : ""}</span
         >`,
       )}
-      ${detailRow("ピークエクイティ", `¥${formatYen(drawdown.peakEquity)}`)}
+      ${detailRow(tt("ピークエクイティ", "運用開始以来の資産最高値"), `¥${formatYen(drawdown.peakEquity)}`)}
     </div>
 
     <!-- Sector Concentration -->
@@ -173,8 +174,8 @@ app.get("/", async (c) => {
               <thead>
                 <tr>
                   <th>セクター</th>
-                  <th>週間変化</th>
-                  <th>相対強度</th>
+                  <th>${tt("週間変化", "セクター内銘柄の週次平均騰落率")}</th>
+                  <th>${tt("相対強度", "市場平均に対するセクターのパフォーマンス差")}</th>
                   <th>判定</th>
                 </tr>
               </thead>

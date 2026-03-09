@@ -232,4 +232,39 @@ export const CSS = `
     font-size: 10px;
     color: ${COLORS.textDim};
   }
+
+  /* Tooltip */
+  .tt {
+    position: relative;
+    display: inline-block;
+    border-bottom: 1px dashed ${COLORS.textDim};
+    cursor: help;
+  }
+  .tt::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0b1120;
+    border: 1px solid ${COLORS.border};
+    color: ${COLORS.text};
+    font-size: 11px;
+    font-weight: normal;
+    letter-spacing: 0;
+    text-transform: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    width: max-content;
+    max-width: 160px;
+    white-space: normal;
+    z-index: 999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .tt:hover::after,
+  .tt.show::after {
+    opacity: 1;
+  }
 `;

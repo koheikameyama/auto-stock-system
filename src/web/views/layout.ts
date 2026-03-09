@@ -121,6 +121,21 @@ export function layout(
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("/sw.js").catch(() => {});
           }
+
+          // Tooltip tap to show (mobile)
+          document.addEventListener('click', function(e) {
+            var el = e.target && e.target.closest ? e.target.closest('.tt') : null;
+            if (el) {
+              document.querySelectorAll('.tt.show').forEach(function(t) {
+                if (t !== el) t.classList.remove('show');
+              });
+              el.classList.toggle('show');
+            } else {
+              document.querySelectorAll('.tt.show').forEach(function(t) {
+                t.classList.remove('show');
+              });
+            }
+          });
         </script>
       </body>
     </html>`;

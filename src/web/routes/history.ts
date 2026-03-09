@@ -13,6 +13,7 @@ import {
   pnlText,
   emptyState,
   sparklineChart,
+  tt,
 } from "../views/components";
 
 const app = new Hono();
@@ -59,9 +60,9 @@ app.get("/", async (c) => {
                 <tr>
                   <th>日付</th>
                   <th>取引</th>
-                  <th>勝敗</th>
-                  <th>損益</th>
-                  <th>PF値</th>
+                  <th>${tt("勝敗", "W=勝ち（利確）/ L=負け（損切）")}</th>
+                  <th>${tt("損益", "当日の実現損益合計")}</th>
+                  <th>${tt("PF値", "プロフィットファクター。総利益÷総損失")}</th>
                 </tr>
               </thead>
               <tbody>

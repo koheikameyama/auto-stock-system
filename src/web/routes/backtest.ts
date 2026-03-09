@@ -15,6 +15,7 @@ import {
   emptyState,
   detailRow,
   sparklineChart,
+  tt,
 } from "../views/components";
 
 const app = new Hono();
@@ -77,11 +78,11 @@ app.get("/", async (c) => {
             <table>
               <thead>
                 <tr>
-                  <th>ティア</th>
-                  <th>勝率</th>
-                  <th>PF</th>
-                  <th>リターン</th>
-                  <th>DD</th>
+                  <th>${tt("ティア", "運用資金の規模区分")}</th>
+                  <th>${tt("勝率", "取引のうち利益が出た割合")}</th>
+                  <th>${tt("PF", "プロフィットファクター。総利益÷総損失（1超が黒字）")}</th>
+                  <th>${tt("リターン", "期間中の総収益率")}</th>
+                  <th>${tt("DD", "最大ドローダウン。期間中の最大下落率")}</th>
                   <th>取引</th>
                 </tr>
               </thead>
@@ -123,12 +124,12 @@ app.get("/", async (c) => {
                     pnlPercent(Number(r.totalReturnPct)),
                   )}
                   ${detailRow(
-                    "PF",
+                    tt("PF", "プロフィットファクター。総利益÷総損失（1超が黒字）"),
                     `${Number(r.profitFactor) >= 999 ? "∞" : Number(r.profitFactor)}`,
                   )}
-                  ${detailRow("最大DD", `-${Number(r.maxDrawdown)}%`)}
+                  ${detailRow(tt("最大DD", "期間中の資産ピークからの最大下落率"), `-${Number(r.maxDrawdown)}%`)}
                   ${detailRow(
-                    "シャープレシオ",
+                    tt("シャープレシオ", "リスク調整後リターン。高いほど効率的な運用"),
                     r.sharpeRatio != null ? `${Number(r.sharpeRatio)}` : "N/A",
                   )}
                   ${detailRow(
