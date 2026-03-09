@@ -12,6 +12,7 @@ import historyRoute from "./routes/history";
 import riskRoute from "./routes/risk";
 import backtestRoute from "./routes/backtest";
 import contrarianRoute from "./routes/contrarian";
+import newsRoute from "./routes/news";
 import apiRoute from "./routes/api";
 import cronRoute from "./routes/cron";
 
@@ -119,6 +120,7 @@ app.route("/history", historyRoute);
 app.route("/risk", riskRoute);
 app.route("/backtest", backtestRoute);
 app.route("/contrarian", contrarianRoute);
+app.route("/news", newsRoute);
 
 // API routes (authenticated)
 app.route("/api", apiRoute);
