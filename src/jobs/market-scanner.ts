@@ -26,6 +26,7 @@ import {
   GHOST_TRADING,
   UNIT_SHARES,
   TRADING_DEFAULTS,
+  MARKET_INDEX,
   getSectorGroup,
 } from "../lib/constants";
 import {
@@ -168,6 +169,48 @@ ${sectorText || "  特になし"}`;
         sentiment: "crisis",
         shouldTrade: false,
         reasoning: `[VIXレジーム自動停止] ${regime.reason}`,
+        selectedStocks: [],
+      },
+    });
+    isShadowMode = true;
+  }
+
+  // 1.8.5. 日経平均キルスイッチ（機械的 — VIXとは独立）
+  if (
+    !isShadowMode &&
+    marketData.nikkei.changePercent <= MARKET_INDEX.NIKKEI_CRISIS_THRESHOLD
+  ) {
+    const reason = `日経平均 ${marketData.nikkei.changePercent.toFixed(2)}% ≤ ${MARKET_INDEX.NIKKEI_CRISIS_THRESHOLD}%: 急落キルスイッチ発動。全取引停止`;
+    console.log(`[1.8.5/5] ${reason}`);
+    await notifyRiskAlert({
+      type: "日経平均キルスイッチ",
+      message: reason,
+    });
+    await prisma.marketAssessment.upsert({
+      where: { date: getTodayForDB() },
+      update: {
+        nikkeiPrice: marketData.nikkei.price,
+        nikkeiChange: marketData.nikkei.changePercent,
+        sp500Change: marketData.sp500?.changePercent,
+        vix: marketData.vix.price,
+        usdjpy: marketData.usdjpy?.price,
+        cmeFuturesPrice: marketData.cmeFutures?.price,
+        sentiment: "crisis",
+        shouldTrade: false,
+        reasoning: `[日経平均キルスイッチ] ${reason}`,
+        selectedStocks: [],
+      },
+      create: {
+        date: getTodayForDB(),
+        nikkeiPrice: marketData.nikkei.price,
+        nikkeiChange: marketData.nikkei.changePercent,
+        sp500Change: marketData.sp500?.changePercent,
+        vix: marketData.vix.price,
+        usdjpy: marketData.usdjpy?.price,
+        cmeFuturesPrice: marketData.cmeFutures?.price,
+        sentiment: "crisis",
+        shouldTrade: false,
+        reasoning: `[日経平均キルスイッチ] ${reason}`,
         selectedStocks: [],
       },
     });

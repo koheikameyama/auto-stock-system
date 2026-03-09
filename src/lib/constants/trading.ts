@@ -53,6 +53,7 @@ export const TRENDLINE = {
 export const MARKET_INDEX = {
   CRASH_THRESHOLD: -5, // 急落判定（週間変化率%）
   PANIC_THRESHOLD: -7, // パニック閾値
+  NIKKEI_CRISIS_THRESHOLD: -3, // 日経平均キルスイッチ（前日比%で全取引停止）
 } as const;
 
 // CME日経先物の取引時間（JST基準）
