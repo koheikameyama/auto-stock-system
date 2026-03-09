@@ -86,6 +86,11 @@ export interface ExitSnapshot {
     maxFavorableExcursion: number;
     maxAdverseExcursion: number;
   };
+  trailingStop?: {
+    wasActivated: boolean;
+    finalTrailingStopPrice: number | null;
+    entryAtr: number | null;
+  };
   marketContext: {
     sentiment: string;
     reasoning: string;

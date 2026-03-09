@@ -20,6 +20,7 @@ export async function openPosition(
   takeProfitPrice: number,
   stopLossPrice: number,
   entrySnapshot?: object,
+  entryAtr?: number | null,
 ): Promise<TradingPosition> {
   return prisma.$transaction(async (tx) => {
     const position = await tx.tradingPosition.create({
@@ -34,6 +35,8 @@ export async function openPosition(
         entrySnapshot: entrySnapshot ?? undefined,
         maxHighDuringHold: entryPrice,
         minLowDuringHold: entryPrice,
+        trailingStopPrice: null,
+        entryAtr: entryAtr ?? null,
       },
     });
 

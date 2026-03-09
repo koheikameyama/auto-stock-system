@@ -24,6 +24,23 @@ export const JOB_CONCURRENCY = {
   MARKET_SCANNER: 5,
 } as const;
 
+// トレーリングストップ
+export const TRAILING_STOP = {
+  // アクティベーション閾値（エントリー価格からATR×N上昇で発動）
+  ACTIVATION_ATR_MULTIPLIER: {
+    day_trade: 0.5,
+    swing: 0.75,
+  },
+  // トレール幅（最高値 - ATR×N がストップライン）
+  TRAIL_ATR_MULTIPLIER: {
+    day_trade: 1.0,
+    swing: 1.5,
+  },
+  // ATR不明時のフォールバック（%ベース）
+  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.015 },
+  TRAIL_PCT: { day_trade: 0.015, swing: 0.025 },
+} as const;
+
 // 週次レビュー
 export const WEEKLY_REVIEW = {
   LOOKBACK_DAYS: 7,

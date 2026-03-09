@@ -138,6 +138,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
       stopLossRatio: DEFAULT_PARAMS.stopLossRatio,
       atrMultiplier: DEFAULT_PARAMS.atrMultiplier,
       strategy: DEFAULT_PARAMS.strategy,
+      trailingStopEnabled: DEFAULT_PARAMS.trailingStopEnabled,
       verbose: false,
     };
 

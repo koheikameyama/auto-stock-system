@@ -207,6 +207,8 @@ model TradingPosition {
   exitSnapshot      Json?                       // 売却時の理由・値動き・市場状況
   maxHighDuringHold Decimal? @db.Decimal(10, 2) // 保有中の最高値
   minLowDuringHold  Decimal? @db.Decimal(10, 2) // 保有中の最安値
+  trailingStopPrice Decimal? @db.Decimal(10, 2) // 現在のトレーリングストップ価格
+  entryAtr          Decimal? @db.Decimal(10, 2) // エントリー時のATR(14)
   reviewComments    String?  @db.Text           // AIによる振り返り分析
 
   orders TradingOrder[]

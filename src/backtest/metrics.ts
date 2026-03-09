@@ -15,7 +15,10 @@ export function calculateMetrics(
   initialBudget: number,
 ): PerformanceMetrics {
   const closedTrades = trades.filter(
-    (t) => t.exitReason === "take_profit" || t.exitReason === "stop_loss",
+    (t) =>
+      t.exitReason === "take_profit" ||
+      t.exitReason === "stop_loss" ||
+      t.exitReason === "trailing_profit",
   );
   const stillOpen = trades.filter((t) => t.exitReason === "still_open").length;
 

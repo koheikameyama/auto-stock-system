@@ -29,6 +29,7 @@ export const DAILY_BACKTEST = {
     stopLossRatio: 0.98,
     atrMultiplier: 1.0,
     strategy: "swing" as const,
+    trailingStopEnabled: true,
   },
 
   /** トレンド表示の日数 */

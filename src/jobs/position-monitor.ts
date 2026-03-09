@@ -23,6 +23,7 @@ import {
   getOpenPositions,
   getUnrealizedPnl,
 } from "../core/position-manager";
+import { calculateTrailingStop } from "../core/trailing-stop";
 import { notifyOrderFilled, notifyRiskAlert } from "../lib/slack";
 import type { ExitSnapshot } from "../types/snapshots";
 import dayjs from "dayjs";
@@ -73,6 +74,10 @@ export async function main() {
           ? Number(filledOrder.stopLossPrice)
           : filledPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
 
+        const entryAtr = extractAtrFromSnapshot(
+          filledOrder?.entrySnapshot,
+        );
+
         const position = await openPosition(
           order.stockId,
           order.strategy,
@@ -81,6 +86,7 @@ export async function main() {
           takeProfitPrice,
           stopLossPrice,
           filledOrder?.entrySnapshot as object | undefined,
+          entryAtr,
         );
 
         // ポジションIDを注文に紐付け
@@ -123,41 +129,61 @@ export async function main() {
     const quote = await fetchStockQuote(position.stock.tickerCode);
     if (!quote) continue;
 
-    const takeProfitPrice = position.takeProfitPrice
+    const entryPriceNum = Number(position.entryPrice);
+
+    // maxHigh/minLow を exit チェック前に更新（トレーリングストップで最新値を使うため）
+    const newMaxHigh = position.maxHighDuringHold
+      ? Math.max(Number(position.maxHighDuringHold), quote.high)
+      : quote.high;
+    const newMinLow = position.minLowDuringHold
+      ? Math.min(Number(position.minLowDuringHold), quote.low)
+      : quote.low;
+
+    // トレーリングストップ算出
+    const originalTP = position.takeProfitPrice
       ? Number(position.takeProfitPrice)
-      : null;
-    const stopLossPrice = position.stopLossPrice
+      : entryPriceNum * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
+    const originalSL = position.stopLossPrice
       ? Number(position.stopLossPrice)
-      : null;
+      : entryPriceNum * POSITION_DEFAULTS.STOP_LOSS_RATIO;
+    const entryAtr = position.entryAtr
+      ? Number(position.entryAtr)
+      : extractAtrFromSnapshot(position.entrySnapshot);
+
+    const trailingResult = calculateTrailingStop({
+      entryPrice: entryPriceNum,
+      maxHighDuringHold: newMaxHigh,
+      currentTrailingStop: position.trailingStopPrice
+        ? Number(position.trailingStopPrice)
+        : null,
+      originalStopLoss: originalSL,
+      originalTakeProfit: originalTP,
+      entryAtr,
+      strategy: position.strategy as "day_trade" | "swing",
+    });
+
+    const effectiveTP = trailingResult.effectiveTakeProfit;
+    const effectiveSL = trailingResult.effectiveStopLoss;
 
     let exitPrice: number | null = null;
     let exitReason = "";
 
-    // 利確チェック
-    if (takeProfitPrice && quote.high >= takeProfitPrice) {
-      exitPrice = takeProfitPrice;
+    // 利確チェック（トレーリング発動中は effectiveTP = null なのでスキップ）
+    if (effectiveTP !== null && quote.high >= effectiveTP) {
+      exitPrice = effectiveTP;
       exitReason = "利確";
     }
 
-    // 損切りチェック（利確より優先）
-    if (stopLossPrice && quote.low <= stopLossPrice) {
-      exitPrice = stopLossPrice;
-      exitReason = "損切り";
+    // 損切り / トレーリングストップチェック（利確より優先）
+    if (quote.low <= effectiveSL) {
+      exitPrice = effectiveSL;
+      exitReason = trailingResult.isActivated ? "トレーリング利確" : "損切り";
     }
 
     if (exitPrice !== null) {
       console.log(
-        `  → ${position.stock.tickerCode}: ${exitReason}! ¥${exitPrice.toLocaleString()}`,
+        `  → ${position.stock.tickerCode}: ${exitReason}! ¥${exitPrice.toLocaleString()} (${trailingResult.reason})`,
       );
-
-      // exitSnapshot構築
-      const entryPriceNum = Number(position.entryPrice);
-      const maxHigh = position.maxHighDuringHold
-        ? Math.max(Number(position.maxHighDuringHold), quote.high)
-        : quote.high;
-      const minLow = position.minLowDuringHold
-        ? Math.min(Number(position.minLowDuringHold), quote.low)
-        : quote.low;
 
       const latestAssessment = await prisma.marketAssessment.findFirst({
         orderBy: { date: "desc" },
@@ -168,12 +194,17 @@ export async function main() {
         exitReason,
         exitPrice,
         priceJourney: {
-          maxHigh,
-          minLow,
+          maxHigh: newMaxHigh,
+          minLow: newMinLow,
           maxFavorableExcursion:
-            ((maxHigh - entryPriceNum) / entryPriceNum) * 100,
+            ((newMaxHigh - entryPriceNum) / entryPriceNum) * 100,
           maxAdverseExcursion:
-            ((entryPriceNum - minLow) / entryPriceNum) * 100,
+            ((entryPriceNum - newMinLow) / entryPriceNum) * 100,
+        },
+        trailingStop: {
+          wasActivated: trailingResult.isActivated,
+          finalTrailingStopPrice: trailingResult.trailingStopPrice,
+          entryAtr,
         },
         marketContext: latestAssessment
           ? {
@@ -200,31 +231,33 @@ export async function main() {
           : 0,
       });
     } else {
-      // maxHigh/minLow を更新
-      const newMaxHigh = position.maxHighDuringHold
-        ? Math.max(Number(position.maxHighDuringHold), quote.high)
-        : quote.high;
-      const newMinLow = position.minLowDuringHold
-        ? Math.min(Number(position.minLowDuringHold), quote.low)
-        : quote.low;
+      // maxHigh/minLow/trailingStopPrice を更新
+      const updateData: Record<string, number | null> = {};
 
-      if (
-        newMaxHigh !== Number(position.maxHighDuringHold) ||
-        newMinLow !== Number(position.minLowDuringHold)
-      ) {
+      if (newMaxHigh !== Number(position.maxHighDuringHold)) {
+        updateData.maxHighDuringHold = newMaxHigh;
+      }
+      if (newMinLow !== Number(position.minLowDuringHold)) {
+        updateData.minLowDuringHold = newMinLow;
+      }
+      const currentTrailing = position.trailingStopPrice
+        ? Number(position.trailingStopPrice)
+        : null;
+      if (trailingResult.trailingStopPrice !== currentTrailing) {
+        updateData.trailingStopPrice = trailingResult.trailingStopPrice;
+      }
+
+      if (Object.keys(updateData).length > 0) {
         await prisma.tradingPosition.update({
           where: { id: position.id },
-          data: {
-            maxHighDuringHold: newMaxHigh,
-            minLowDuringHold: newMinLow,
-          },
+          data: updateData,
         });
       }
 
       // 含み損益表示
       const unrealized = getUnrealizedPnl(position, quote.price);
       console.log(
-        `  → ${position.stock.tickerCode}: 含み損益 ¥${unrealized.toLocaleString()}`,
+        `  → ${position.stock.tickerCode}: 含み損益 ¥${unrealized.toLocaleString()} ${trailingResult.reason}`,
       );
     }
   }
@@ -310,6 +343,16 @@ async function calculatePnlForOrder(
   });
   if (!position) return 0;
   return (filledPrice - Number(position.entryPrice)) * position.quantity;
+}
+
+/**
+ * entrySnapshot JSON から atr14 を抽出する
+ */
+function extractAtrFromSnapshot(snapshot: unknown): number | null {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const s = snapshot as Record<string, unknown>;
+  const technicals = s.technicals as Record<string, unknown> | undefined;
+  return technicals?.atr14 != null ? Number(technicals.atr14) : null;
 }
 
 const isDirectRun = process.argv[1]?.includes("position-monitor");

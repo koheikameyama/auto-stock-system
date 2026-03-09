@@ -93,6 +93,7 @@ async function main(): Promise<void> {
     atrMultiplier: Number(values["atr-multiplier"]),
     maxPrice: Number(values["max-price"]),
     strategy: values.strategy === "day_trade" ? "day_trade" : "swing",
+    trailingStopEnabled: true,
     outputFile: values.output,
     verbose: values.verbose ?? false,
   };

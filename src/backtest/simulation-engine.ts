@@ -13,6 +13,7 @@ import { calculateEntryCondition } from "../core/entry-calculator";
 import { detectChartPatterns } from "../lib/chart-patterns";
 import { analyzeSingleCandle } from "../lib/candlestick-patterns";
 import { TECHNICAL_MIN_DATA, SCORING } from "../lib/constants";
+import { calculateTrailingStop } from "../core/trailing-stop";
 import { calculateMetrics } from "./metrics";
 import type {
   BacktestConfig,
@@ -94,6 +95,9 @@ export function runBacktest(
         quantity: order.quantity,
         rank: order.rank,
         score: order.score,
+        maxHighDuringHold: order.limitPrice,
+        trailingStopPrice: null,
+        entryAtr: order.entryAtr,
         exitDate: null,
         exitPrice: null,
         exitReason: null,
@@ -119,28 +123,67 @@ export function runBacktest(
       const todayBar = bars?.find((b) => b.date === today);
       if (!todayBar) continue;
 
+      // maxHighDuringHold を更新（トレーリングストップ算出前に）
+      pos.maxHighDuringHold = Math.max(
+        pos.maxHighDuringHold,
+        todayBar.high,
+      );
+
       let exitPrice: number | null = null;
       let exitReason: SimulatedPosition["exitReason"] = null;
 
-      const slHit = todayBar.low <= pos.stopLossPrice;
-      const tpHit = todayBar.high >= pos.takeProfitPrice;
+      if (config.trailingStopEnabled && pos.entryAtr) {
+        // トレーリングストップ有効
+        const trailingResult = calculateTrailingStop({
+          entryPrice: pos.entryPrice,
+          maxHighDuringHold: pos.maxHighDuringHold,
+          currentTrailingStop: pos.trailingStopPrice,
+          originalStopLoss: pos.stopLossPrice,
+          originalTakeProfit: pos.takeProfitPrice,
+          entryAtr: pos.entryAtr,
+          strategy: config.strategy,
+        });
 
-      if (slHit && tpHit) {
-        // 両方ヒット → 保守的にSL優先
-        exitPrice = pos.stopLossPrice;
-        exitReason = "stop_loss";
-      } else if (slHit) {
-        exitPrice = pos.stopLossPrice;
-        exitReason = "stop_loss";
-      } else if (tpHit) {
-        exitPrice = pos.takeProfitPrice;
-        exitReason = "take_profit";
+        pos.trailingStopPrice = trailingResult.trailingStopPrice;
+
+        const effectiveTP = trailingResult.effectiveTakeProfit;
+        const effectiveSL = trailingResult.effectiveStopLoss;
+
+        // TPチェック（トレーリング発動中はeffectiveTP=nullなのでスキップ）
+        if (effectiveTP !== null && todayBar.high >= effectiveTP) {
+          exitPrice = effectiveTP;
+          exitReason = "take_profit";
+        }
+
+        // SL/トレーリングストップチェック（TP優先を上書き）
+        if (todayBar.low <= effectiveSL) {
+          exitPrice = effectiveSL;
+          exitReason = trailingResult.isActivated
+            ? "trailing_profit"
+            : "stop_loss";
+        }
+      } else {
+        // トレーリングストップ無効 or ATR不明 → 従来の固定TP/SL
+        const slHit = todayBar.low <= pos.stopLossPrice;
+        const tpHit = todayBar.high >= pos.takeProfitPrice;
+
+        if (slHit && tpHit) {
+          exitPrice = pos.stopLossPrice;
+          exitReason = "stop_loss";
+        } else if (slHit) {
+          exitPrice = pos.stopLossPrice;
+          exitReason = "stop_loss";
+        } else if (tpHit) {
+          exitPrice = pos.takeProfitPrice;
+          exitReason = "take_profit";
+        }
       }
 
       // デイトレ: 当日中にTP/SLヒットしなければ引けで決済
       if (!exitPrice && config.strategy === "day_trade") {
         exitPrice = todayBar.close;
-        exitReason = todayBar.close >= pos.entryPrice ? "take_profit" : "stop_loss";
+        exitReason =
+          todayBar.close >= pos.entryPrice ? "take_profit" : "stop_loss";
       }
 
       if (exitPrice != null && exitReason != null) {
@@ -202,6 +245,7 @@ export function runBacktest(
           quantity: candidate.entry.quantity,
           rank: candidate.score.rank,
           score: candidate.score.totalScore,
+          entryAtr: candidate.entryAtr,
         });
       }
     }
@@ -253,6 +297,7 @@ interface PendingOrder {
   quantity: number;
   rank: "S" | "A" | "B" | "C";
   score: number;
+  entryAtr: number | null;
 }
 
 interface EntryCandidate {
@@ -264,6 +309,7 @@ interface EntryCandidate {
     stopLossPrice: number;
     quantity: number;
   };
+  entryAtr: number | null;
 }
 
 /**
@@ -394,6 +440,7 @@ function evaluateTickers(
         stopLossPrice,
         quantity: entry.quantity,
       },
+      entryAtr: summary.atr14,
     });
   }
 

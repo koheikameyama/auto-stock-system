@@ -14,6 +14,7 @@ export interface BacktestConfig {
   atrMultiplier: number;
   maxPrice: number;
   strategy: "day_trade" | "swing";
+  trailingStopEnabled: boolean;
   outputFile?: string;
   verbose: boolean;
 }
@@ -27,9 +28,18 @@ export interface SimulatedPosition {
   quantity: number;
   rank: "S" | "A" | "B" | "C";
   score: number;
+  maxHighDuringHold: number;
+  trailingStopPrice: number | null;
+  entryAtr: number | null;
   exitDate: string | null;
   exitPrice: number | null;
-  exitReason: "take_profit" | "stop_loss" | "expired" | "still_open" | null;
+  exitReason:
+    | "take_profit"
+    | "stop_loss"
+    | "trailing_profit"
+    | "expired"
+    | "still_open"
+    | null;
   pnl: number | null;
   pnlPct: number | null;
   holdingDays: number | null;
