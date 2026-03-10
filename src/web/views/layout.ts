@@ -241,8 +241,7 @@ export function layout(
                   + '</div></div></div>';
                 modal.innerHTML = h;
               })
-              .catch(function(e) {
-                console.error('Stock modal error:', e);
+              .catch(function() {
                 var modal = document.getElementById('stock-modal');
                 modal.innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeStockModal()"><div class="modal-content"><div class="modal-loading">データ取得に失敗しました</div></div></div>';
               });
