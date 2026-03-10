@@ -86,7 +86,7 @@ app.get("/", async (c) => {
 
           ${sectorImpacts.length > 0
             ? html`
-                <div class="card table-wrap">
+                <div class="card table-wrap responsive-table">
                   <table>
                     <thead>
                       <tr>
@@ -99,8 +99,8 @@ app.get("/", async (c) => {
                       ${sectorImpacts.map(
                         (s) => html`
                           <tr>
-                            <td style="white-space:nowrap;font-weight:500">${s.sector}</td>
-                            <td>
+                            <td data-label="セクター" style="font-weight:500">${s.sector}</td>
+                            <td data-label="評価">
                               <span
                                 class="badge"
                                 style="background:${impactColor(s.impact)}20;color:${impactColor(s.impact)};white-space:nowrap"
@@ -108,7 +108,7 @@ app.get("/", async (c) => {
                                 ${impactLabel(s.impact)}
                               </span>
                             </td>
-                            <td style="font-size:12px;color:#94a3b8">${s.summary}</td>
+                            <td data-label="概要" style="font-size:12px;color:#94a3b8">${s.summary}</td>
                           </tr>
                         `,
                       )}

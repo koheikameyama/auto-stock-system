@@ -54,7 +54,7 @@ app.get("/", async (c) => {
     <p class="section-title">日次サマリー</p>
     ${summaries.length > 0
       ? html`
-          <div class="card table-wrap">
+          <div class="card table-wrap responsive-table">
             <table>
               <thead>
                 <tr>
@@ -69,24 +69,24 @@ app.get("/", async (c) => {
                 ${summaries.map(
                   (s) => html`
                     <tr>
-                      <td>
+                      <td data-label="日付">
                         ${new Date(s.date).toLocaleDateString("ja-JP", {
                           month: "numeric",
                           day: "numeric",
                         })}
                       </td>
-                      <td>${s.totalTrades}</td>
-                      <td>
+                      <td data-label="取引">${s.totalTrades}</td>
+                      <td data-label="勝敗">
                         ${s.totalTrades > 0
                           ? `${s.wins}W ${s.losses}L`
                           : "-"}
                       </td>
-                      <td>${pnlText(Number(s.totalPnl))}</td>
-                      <td>¥${formatYen(Number(s.portfolioValue))}</td>
+                      <td data-label="損益">${pnlText(Number(s.totalPnl))}</td>
+                      <td data-label="PF値">¥${formatYen(Number(s.portfolioValue))}</td>
                     </tr>
                     ${s.aiReview
                       ? html`
-                          <tr>
+                          <tr class="review-row">
                             <td
                               colspan="5"
                               style="font-size:11px;color:#64748b;padding:4px 8px 12px"

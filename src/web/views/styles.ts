@@ -140,6 +140,53 @@ export const CSS = `
     .grid-2 { margin: 6px 10px; gap: 6px; }
     .section-title { padding: 12px 10px 4px; }
     .chart-container { margin: 6px 10px; }
+
+    /* Responsive table → card layout */
+    .responsive-table { overflow-x: visible; }
+    .responsive-table table,
+    .responsive-table thead,
+    .responsive-table tbody,
+    .responsive-table tr,
+    .responsive-table td { display: block; }
+    .responsive-table thead { display: none; }
+    .responsive-table tr {
+      border-bottom: 1px solid ${COLORS.border};
+      padding: 8px 0;
+    }
+    .responsive-table tr:last-child { border-bottom: none; }
+    .responsive-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      border-bottom: none;
+      white-space: normal;
+    }
+    .responsive-table td::before {
+      content: attr(data-label);
+      font-size: 11px;
+      font-weight: 500;
+      color: ${COLORS.textMuted};
+      flex-shrink: 0;
+      margin-right: 8px;
+    }
+    .responsive-table td[data-label="日付"],
+    .responsive-table td[data-label="セクター"] {
+      font-weight: 600;
+      font-size: 13px;
+      padding-bottom: 4px;
+    }
+    .responsive-table td[data-label="日付"]::before,
+    .responsive-table td[data-label="セクター"]::before { display: none; }
+    .responsive-table td[data-label="概要"] {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .responsive-table .review-row td {
+      padding: 4px 0 0;
+    }
+    .responsive-table .review-row td::before { display: none; }
   }
 
   /* PnL colors */
