@@ -538,6 +538,7 @@ function evaluateTickers(
       config.strategy,
       cash,
       maxPositionPct,
+      config.gapRiskEnabled ? newestFirst : undefined,
     );
 
     if (entry.quantity <= 0) continue;

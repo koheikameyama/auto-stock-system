@@ -186,6 +186,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
       trailingStopEnabled: DEFAULT_PARAMS.trailingStopEnabled,
       costModelEnabled: true,
       priceLimitEnabled: true,
+      gapRiskEnabled: true,
       verbose: false,
     };
 

@@ -175,3 +175,13 @@ export const POSITION_SIZING = {
   /** 1トレードあたりリスク: 総資金の2% */
   RISK_PER_TRADE_PCT: 2,
 } as const;
+
+/** ギャップリスク推定パラメータ */
+export const GAP_RISK = {
+  /** MAG（最大想定ギャップ）算出に使う過去データ日数 */
+  LOOKBACK_DAYS: 60,
+  /** ATRベースの最低ギャップ想定倍率 */
+  ATR_FLOOR_MULTIPLIER: 1.5,
+  /** ATRベースの上限倍率（異常値カット） */
+  ATR_CAP_MULTIPLIER: 3.0,
+} as const;

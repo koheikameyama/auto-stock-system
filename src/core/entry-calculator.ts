@@ -7,7 +7,11 @@
 
 import type { TechnicalSummary } from "./technical-analysis";
 import type { LogicScore } from "./technical-scorer";
-import { validateStopLoss, calculatePositionSize } from "./risk-manager";
+import {
+  validateStopLoss,
+  calculatePositionSize,
+  estimateGapRisk,
+} from "./risk-manager";
 import { STOP_LOSS, POSITION_DEFAULTS } from "../lib/constants";
 
 export interface EntryCondition {
@@ -28,6 +32,7 @@ export interface EntryCondition {
  * @param strategy - 取引戦略
  * @param availableBudget - 利用可能予算
  * @param maxPositionPct - 1銘柄あたり最大投資比率（%）
+ * @param historicalData - OHLCVデータ（新しい順）。スイング時のギャップリスク推定に使用
  */
 export function calculateEntryCondition(
   currentPrice: number,
@@ -36,6 +41,7 @@ export function calculateEntryCondition(
   strategy: "day_trade" | "swing",
   availableBudget: number,
   maxPositionPct: number,
+  historicalData?: Array<{ open: number; close: number }>,
 ): EntryCondition {
   // 1. 指値: サポートライン or BB下限の近い方（現在価格に近い方を採用）
   const bbLower = summary.bollingerBands.lower;
@@ -89,15 +95,22 @@ export function calculateEntryCondition(
   );
   const stopLossPrice = Math.round(stopLossValidation.validatedPrice);
 
-  // 4. 数量: リスクベース（損切り幅考慮）と予算の厳しい方
+  // 4. ギャップリスク推定（スイングのみ — デイトレはオーバーナイトリスクなし）
+  let gapRiskPct: number | undefined;
+  if (strategy === "swing" && historicalData && historicalData.length > 1) {
+    gapRiskPct = estimateGapRisk(historicalData, summary.atr14, limitPrice);
+  }
+
+  // 5. 数量: リスクベース（ギャップリスク考慮）と予算の厳しい方
   const quantity = calculatePositionSize(
     limitPrice,
     availableBudget,
     maxPositionPct,
     stopLossPrice,
+    gapRiskPct,
   );
 
-  // 5. リスクリワード比
+  // 6. リスクリワード比
   const risk = limitPrice - stopLossPrice;
   const reward = takeProfitPrice - limitPrice;
   const riskRewardRatio =

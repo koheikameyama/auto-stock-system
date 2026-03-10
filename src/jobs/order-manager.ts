@@ -208,6 +208,7 @@ export async function main() {
           strategy,
           cashBalance,
           maxPositionPct,
+          historical,
         );
 
         if (entryCondition.quantity === 0) {

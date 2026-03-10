@@ -34,6 +34,7 @@ const { values } = parseArgs({
     strategy: { type: "string", default: "swing" },
     "no-costs": { type: "boolean", default: false },
     "price-limits": { type: "boolean", default: false },
+    "no-gap-risk": { type: "boolean", default: false },
     sensitivity: { type: "boolean", default: false },
     output: { type: "string" },
     verbose: { type: "boolean", default: false },
@@ -62,6 +63,7 @@ function printHelp(): void {
   --strategy <type>       day_trade | swing          デフォルト: swing
   --no-costs              取引コストモデルを無効化
   --price-limits          値幅制限シミュレーションを有効化
+  --no-gap-risk           ギャップリスク考慮を無効化
   --sensitivity           パラメータ感度分析を実行
   --output <path>         JSON結果を出力
   --verbose               詳細ログ
@@ -100,6 +102,7 @@ async function main(): Promise<void> {
     trailingStopEnabled: true,
     costModelEnabled: !values["no-costs"],
     priceLimitEnabled: values["price-limits"] ?? false,
+    gapRiskEnabled: !(values["no-gap-risk"] ?? false),
     outputFile: values.output,
     verbose: values.verbose ?? false,
   };

@@ -6,7 +6,12 @@
 
 import { prisma } from "../lib/prisma";
 import { getStartOfDayJST, getEndOfDayJST } from "../lib/date-utils";
-import { UNIT_SHARES, STOP_LOSS, POSITION_SIZING } from "../lib/constants";
+import {
+  UNIT_SHARES,
+  STOP_LOSS,
+  POSITION_SIZING,
+  GAP_RISK,
+} from "../lib/constants";
 import { canAddToSector } from "./sector-analyzer";
 import { calculateDrawdownStatus } from "./drawdown-manager";
 import { fetchStockQuotesBatch } from "./market-data";
@@ -223,18 +228,71 @@ async function getUnrealizedPnlTotal(): Promise<number> {
 }
 
 /**
+ * ギャップリスク（最大想定ギャップダウン率）を推定する
+ *
+ * 過去データから最大の翌日始値ギャップダウンを計算し、
+ * ATRベースの最低値でフロアする。
+ *
+ * @param historicalData - OHLCVデータ（新しい順）
+ * @param atr14 - ATR(14)
+ * @param currentPrice - 現在価格（ATRの%変換用）
+ * @returns ギャップリスク率（0.04 = 4%）
+ */
+export function estimateGapRisk(
+  historicalData: Array<{ open: number; close: number }>,
+  atr14: number | null,
+  currentPrice: number,
+): number {
+  // 1. 過去データから最大ギャップダウンを算出
+  const lookback = Math.min(
+    historicalData.length - 1,
+    GAP_RISK.LOOKBACK_DAYS,
+  );
+  let maxGapDownPct = 0;
+
+  for (let i = 0; i < lookback; i++) {
+    const todayOpen = historicalData[i].open;
+    const prevClose = historicalData[i + 1].close;
+    if (prevClose <= 0) continue;
+
+    const gapPct = (prevClose - todayOpen) / prevClose; // 正 = ギャップダウン
+    if (gapPct > maxGapDownPct) {
+      maxGapDownPct = gapPct;
+    }
+  }
+
+  // 2. ATRベースのフロア
+  const atrFloorPct =
+    atr14 && currentPrice > 0
+      ? (atr14 * GAP_RISK.ATR_FLOOR_MULTIPLIER) / currentPrice
+      : 0.03; // ATR不明時は3%をフォールバック
+
+  // 3. ATRベースのキャップ
+  const atrCapPct =
+    atr14 && currentPrice > 0
+      ? (atr14 * GAP_RISK.ATR_CAP_MULTIPLIER) / currentPrice
+      : 0.08; // ATR不明時は8%をフォールバック
+
+  // max(実績MAG, ATRフロア) を ATRキャップで上限
+  return Math.min(Math.max(maxGapDownPct, atrFloorPct), atrCapPct);
+}
+
+/**
  * ポジションサイズを計算する
  *
  * リスクベースと予算ベースの両方で算出し、厳しい方を採用する。
  * - リスクベース: 1トレードの最大損失額 / 1株あたりリスク（= エントリー価格 - 損切り価格）
  * - 予算ベース: 利用可能予算 × 最大比率 / エントリー価格
  * 日本株は単元株制度（100株単位）のため、UNIT_SHARES の倍数に切り捨てる。
+ *
+ * @param gapRiskPct - ギャップリスク率（例: 0.05 = 5%）。指定時はSL距離との大きい方を使用
  */
 export function calculatePositionSize(
   price: number,
   budget: number,
   maxPositionPct: number,
   stopLossPrice?: number,
+  gapRiskPct?: number,
 ): number {
   if (price <= 0 || budget <= 0 || maxPositionPct <= 0) {
     return 0;
@@ -247,9 +305,11 @@ export function calculatePositionSize(
   // リスクベース: 損切り幅に基づく計算
   let riskBasedShares = budgetBasedShares; // デフォルトは予算ベースと同じ
   if (stopLossPrice != null && stopLossPrice > 0 && stopLossPrice < price) {
-    const riskPerShare = price - stopLossPrice;
+    const stopLossRisk = price - stopLossPrice;
+    const gapRisk = gapRiskPct != null ? price * gapRiskPct : 0;
+    const effectiveRiskPerShare = Math.max(stopLossRisk, gapRisk);
     const riskAmount = budget * (POSITION_SIZING.RISK_PER_TRADE_PCT / 100);
-    riskBasedShares = Math.floor(riskAmount / riskPerShare);
+    riskBasedShares = Math.floor(riskAmount / effectiveRiskPerShare);
   }
 
   // 両方のminを取り、100株単位に切捨て

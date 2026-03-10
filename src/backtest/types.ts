@@ -17,6 +17,7 @@ export interface BacktestConfig {
   trailingStopEnabled: boolean;
   costModelEnabled: boolean;
   priceLimitEnabled: boolean;
+  gapRiskEnabled: boolean;
   outputFile?: string;
   verbose: boolean;
 }
