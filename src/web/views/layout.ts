@@ -217,9 +217,9 @@ export function layout(
                 + '<div class="modal-content">'
                 + '<div class="modal-header"><div><h2>' + s.tickerCode + '</h2><div class="modal-sub">' + s.name + '</div></div><button class="modal-close" onclick="closeStockModal()">✕</button></div>'
                 + '<div class="modal-tabs">'
-                + '<button class="modal-tab active" onclick="switchModalTab(this,\'chart\')">チャート</button>'
-                + '<button class="modal-tab" onclick="switchModalTab(this,\'info\')">情報</button>'
-                + '<button class="modal-tab" onclick="switchModalTab(this,\'finance\')">財務</button>'
+                + '<button class="modal-tab active" onclick="switchModalTab(this,\\'chart\\')">チャート</button>'
+                + '<button class="modal-tab" onclick="switchModalTab(this,\\'info\\')">情報</button>'
+                + '<button class="modal-tab" onclick="switchModalTab(this,\\'finance\\')">財務</button>'
                 + '</div>'
                 + '<div class="modal-body">'
                 + buildChartTab(s, a)
