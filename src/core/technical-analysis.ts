@@ -318,12 +318,12 @@ export function formatScoreForAI(
 
   lines.push(`【カテゴリ別】`);
 
-  // テクニカル指標（40点）
-  lines.push(`  テクニカル: ${score.technical.total}/40`);
+  // テクニカル指標（35点）
+  lines.push(`  テクニカル: ${score.technical.total}/35`);
   lines.push(
-    `    RSI: ${score.technical.rsi}/15${summary.rsi != null ? `（RSI=${summary.rsi}）` : ""}`,
+    `    RSI: ${score.technical.rsi}/13${summary.rsi != null ? `（RSI=${summary.rsi}）` : ""}`,
   );
-  lines.push(`    移動平均: ${score.technical.ma}/15`);
+  lines.push(`    移動平均: ${score.technical.ma}/13`);
   if (score.weeklyTrendPenalty < 0) {
     lines.push(
       `      ※週足トレンドペナルティ: ${score.weeklyTrendPenalty}（日足↑と週足↓が矛盾）`,
@@ -336,24 +336,31 @@ export function formatScoreForAI(
         ? "投げ売り"
         : "中立";
   lines.push(
-    `    出来高変化: ${score.technical.volume}/10${summary.volumeAnalysis.volumeRatio ? `（${summary.volumeAnalysis.volumeRatio}倍 / ${volDirLabel}）` : ""}`,
+    `    出来高変化: ${score.technical.volume}/9${summary.volumeAnalysis.volumeRatio ? `（${summary.volumeAnalysis.volumeRatio}倍 / ${volDirLabel}）` : ""}`,
   );
 
-  // パターン（30点）
-  lines.push(`  パターン: ${score.pattern.total}/30`);
-  lines.push(`    チャートパターン: ${score.pattern.chart}/22`);
+  // パターン（25点）
+  lines.push(`  パターン: ${score.pattern.total}/25`);
+  lines.push(`    チャートパターン: ${score.pattern.chart}/18`);
   if (score.topPattern) {
     lines.push(
       `      → ${score.topPattern.name}（${score.topPattern.rank}ランク / 勝率${score.topPattern.winRate}%）`,
     );
   }
-  lines.push(`    ローソク足: ${score.pattern.candlestick}/8`);
+  lines.push(`    ローソク足: ${score.pattern.candlestick}/7`);
 
-  // 流動性（30点）
-  lines.push(`  流動性: ${score.liquidity.total}/30`);
-  lines.push(`    売買代金: ${score.liquidity.tradingValue}/12`);
-  lines.push(`    値幅率: ${score.liquidity.spreadProxy}/10`);
-  lines.push(`    安定性: ${score.liquidity.stability}/8`);
+  // 流動性（25点）
+  lines.push(`  流動性: ${score.liquidity.total}/25`);
+  lines.push(`    売買代金: ${score.liquidity.tradingValue}/10`);
+  lines.push(`    値幅率: ${score.liquidity.spreadProxy}/8`);
+  lines.push(`    安定性: ${score.liquidity.stability}/7`);
+
+  // ファンダメンタルズ（15点）
+  lines.push(`  ファンダメンタルズ: ${score.fundamental.total}/15`);
+  lines.push(`    PER: ${score.fundamental.per}/5`);
+  lines.push(`    PBR: ${score.fundamental.pbr}/4`);
+  lines.push(`    収益性: ${score.fundamental.profitability}/4`);
+  lines.push(`    時価総額: ${score.fundamental.marketCap}/2`);
 
   lines.push(`【ロジック判定】${score.technicalSignal}`);
   return lines.join("\n");
