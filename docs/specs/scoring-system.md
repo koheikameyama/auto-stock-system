@@ -624,6 +624,37 @@ export const GHOST_TRADING = {
 
 ---
 
+## スコアリング精度レポート（scoring-accuracy-report ジョブ / 土曜 11:00 JST）
+
+ゴースト実績データをもとに、スコアリングシステムの弱点を定量的に集計・Slack通知するレポート。AI呼び出し不要の純粋な統計集計。
+
+### レポート内容
+
+| セクション | 内容 |
+|-----------|------|
+| カテゴリ別弱点 | 見逃し銘柄（却下 + ghostProfitPct >= 1%）のカテゴリ別欠損を平均集計 |
+| ランク別実績 | S/A/B/Cランクごとの平均利益率・上昇率・件数 |
+| rejectionReason別機会損失 | 各却下理由ごとの件数・上昇件数・平均利益率 |
+| 週次/月次トレンド | 今週（7日）vs 30日ローリングの上昇率・平均利益率 |
+
+### 定数
+
+```typescript
+export const SCORING_ACCURACY_REPORT = {
+  WEEKLY_LOOKBACK_DAYS: 7,
+  MONTHLY_LOOKBACK_DAYS: 30,
+  MISSED_PROFIT_THRESHOLD: 1.0,  // 見逃し判定の最低利益率(%)
+  MAX_MISSED_DISPLAY: 5,
+};
+```
+
+### 実装ファイル
+
+- `src/jobs/scoring-accuracy-report.ts`
+- `.github/workflows/scoring-accuracy-report.yml`
+
+---
+
 ## セクターモメンタムフィルタ
 
 スコアリングシステムとは別軸で、market-scanner内で弱セクター銘柄を除外するフィルタ。

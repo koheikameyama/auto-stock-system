@@ -17,6 +17,7 @@
     "ghost": "tsx src/jobs/ghost-review.ts",
     "defensive-followup": "tsx src/jobs/defensive-exit-followup.ts",
     "weekly": "tsx src/jobs/weekly-review.ts",
+    "scoring-report": "tsx src/jobs/scoring-accuracy-report.ts",
     "backfill": "tsx src/jobs/backfill-prices.ts",
     "jpx-sync": "tsx src/jobs/jpx-csv-sync.ts",
     "delisting-sync": "tsx src/jobs/jpx-delisting-sync.ts",

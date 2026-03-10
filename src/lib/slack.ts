@@ -396,3 +396,125 @@ export async function notifyGhostReview(data: {
     ],
   });
 }
+
+/** スコアリング精度レポート通知 */
+export async function notifyScoringAccuracyReport(data: {
+  periodLabel: string;
+  totalRecords: number;
+  missedCount: number;
+  categoryWeakness: Array<{
+    category: string;
+    avgDeficit: number;
+    maxScore: number;
+  }>;
+  rankAccuracy: Array<{
+    rank: string;
+    avgProfitPct: number;
+    positiveRate: number;
+    count: number;
+  }>;
+  rejectionCost: Array<{
+    reason: string;
+    count: number;
+    profitableCount: number;
+    avgMissedProfit: number;
+  }>;
+  weeklyStats: { positiveRate: number; avgProfit: number };
+  monthlyStats: { positiveRate: number; avgProfit: number };
+}): Promise<void> {
+  const reasonLabel: Record<string, string> = {
+    below_threshold: "閾値未達",
+    ai_no_go: "AI見送り",
+    disqualified: "即死ルール",
+    market_halted: "市場停止",
+  };
+
+  // カテゴリ別弱点
+  const categoryLines = data.categoryWeakness
+    .sort((a, b) => b.avgDeficit - a.avgDeficit)
+    .map(
+      (c, i) =>
+        `${i + 1}. ${c.category}: 平均 -${c.avgDeficit.toFixed(1)}pt / ${c.maxScore}pt`,
+    )
+    .join("\n");
+
+  // ランク別実績
+  const rankLines = data.rankAccuracy
+    .map((r) => {
+      const sign = r.avgProfitPct >= 0 ? "+" : "";
+      return `${r.rank}: 平均${sign}${r.avgProfitPct.toFixed(2)}% / 上昇率${r.positiveRate.toFixed(0)}% (${r.count}件)`;
+    })
+    .join("\n");
+
+  // 却下理由別
+  const rejectionLines = data.rejectionCost
+    .filter((r) => r.count > 0)
+    .map((r) => {
+      const label = reasonLabel[r.reason] || r.reason;
+      const avgStr =
+        r.profitableCount > 0
+          ? `平均+${r.avgMissedProfit.toFixed(2)}%`
+          : "N/A";
+      return `${label}: ${r.count}件中${r.profitableCount}件上昇 → ${avgStr}`;
+    })
+    .join("\n");
+
+  // トレンド
+  const trendArrow =
+    data.weeklyStats.positiveRate > data.monthlyStats.positiveRate
+      ? "↗ 改善"
+      : data.weeklyStats.positiveRate < data.monthlyStats.positiveRate
+        ? "↘ 低下"
+        : "→ 横ばい";
+
+  const trendLines = [
+    `今週: 上昇率${data.weeklyStats.positiveRate.toFixed(0)}% / 平均${data.weeklyStats.avgProfit >= 0 ? "+" : ""}${data.weeklyStats.avgProfit.toFixed(2)}%`,
+    `月次: 上昇率${data.monthlyStats.positiveRate.toFixed(0)}% / 平均${data.monthlyStats.avgProfit >= 0 ? "+" : ""}${data.monthlyStats.avgProfit.toFixed(2)}%`,
+  ].join("\n");
+
+  const message = [
+    "━━ カテゴリ別弱点 ━━",
+    categoryLines || "データなし",
+    "",
+    "━━ ランク別実績 ━━",
+    rankLines || "データなし",
+    "",
+    "━━ 却下理由別の機会損失 ━━",
+    rejectionLines || "データなし",
+    "",
+    "━━ トレンド ━━",
+    trendLines,
+  ].join("\n");
+
+  // Sランクの上昇率を取得
+  const sRank = data.rankAccuracy.find((r) => r.rank === "S");
+  const sRankPositiveRate = sRank ? `${sRank.positiveRate.toFixed(0)}%` : "N/A";
+
+  await notifySlack({
+    title: `🎯 スコアリング精度レポート（${data.periodLabel}）`,
+    message,
+    color: data.missedCount > 0 ? "warning" : "good",
+    fields: [
+      {
+        title: "対象レコード数",
+        value: `${data.totalRecords}件`,
+        short: true,
+      },
+      {
+        title: "見逃し銘柄数",
+        value: `${data.missedCount}件`,
+        short: true,
+      },
+      {
+        title: "Sランク上昇率",
+        value: sRankPositiveRate,
+        short: true,
+      },
+      {
+        title: "トレンド",
+        value: trendArrow,
+        short: true,
+      },
+    ],
+  });
+}

@@ -150,6 +150,17 @@ export const CONTRARIAN = {
   ],
 } as const;
 
+export const SCORING_ACCURACY_REPORT = {
+  /** 週次レポートの振り返り期間（日） */
+  WEEKLY_LOOKBACK_DAYS: 7,
+  /** 月次ローリング統計の期間（日） */
+  MONTHLY_LOOKBACK_DAYS: 30,
+  /** ゴースト利益の「見逃し」閾値（%） */
+  MISSED_PROFIT_THRESHOLD: 1.0,
+  /** Slack通知の見逃し銘柄表示件数上限 */
+  MAX_MISSED_DISPLAY: 5,
+} as const;
+
 export const STOP_LOSS = {
   MAX_LOSS_PCT: 0.03,
   ATR_MIN_MULTIPLIER: 0.5,
