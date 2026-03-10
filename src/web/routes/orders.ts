@@ -14,6 +14,7 @@ import {
   pnlText,
   strategyBadge,
   orderStatusBadge,
+  tickerLink,
   emptyState,
 } from "../views/components";
 
@@ -61,7 +62,7 @@ app.get("/", async (c) => {
                 ${pendingOrders.map(
                   (o) => html`
                     <tr>
-                      <td>${o.stock?.name ?? o.stockId}</td>
+                      <td>${tickerLink(o.stock?.tickerCode ?? o.stockId, o.stock?.name ?? o.stockId)}</td>
                       <td>${o.side === "buy" ? "買" : "売"}</td>
                       <td>${strategyBadge(o.strategy)}</td>
                       <td>
@@ -104,7 +105,7 @@ app.get("/", async (c) => {
                 ${todayOrders.map(
                   (o) => html`
                     <tr>
-                      <td>${o.stock?.name ?? o.stockId}</td>
+                      <td>${tickerLink(o.stock?.tickerCode ?? o.stockId, o.stock?.name ?? o.stockId)}</td>
                       <td>${o.side === "buy" ? "買" : "売"}</td>
                       <td>${orderStatusBadge(o.status)}</td>
                       <td>

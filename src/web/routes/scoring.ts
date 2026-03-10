@@ -16,6 +16,7 @@ import {
   rankBadge,
   formatYen,
   pnlPercent,
+  tickerLink,
   emptyState,
   tt,
 } from "../views/components";
@@ -175,9 +176,10 @@ app.get("/", async (c) => {
             <div class="card scoring-card" style="${cardOpacity}cursor:pointer" onclick="toggleScoringDetail(this)">
               <!-- ヘッダー行: 銘柄コード + スコア + ランク -->
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem">
-                <div>
-                  <a href="/scoring/${r.tickerCode}" style="color:#3b82f6;text-decoration:none;font-weight:700;font-size:0.95rem" onclick="event.stopPropagation()">${r.tickerCode}</a>
+                <div onclick="event.stopPropagation()">
+                  ${tickerLink(r.tickerCode)}
                   <span style="color:#94a3b8;font-size:0.75rem;margin-left:0.35rem">${name}</span>
+                  <a href="/scoring/${r.tickerCode}" style="color:#64748b;font-size:0.7rem;margin-left:0.35rem;text-decoration:none" onclick="event.stopPropagation()">履歴</a>
                 </div>
                 <div style="display:flex;align-items:center;gap:0.5rem">
                   <span style="font-size:1.1rem;font-weight:700">${r.totalScore}</span>

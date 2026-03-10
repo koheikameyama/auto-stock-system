@@ -12,6 +12,7 @@ import {
   formatYen,
   pnlText,
   strategyBadge,
+  tickerLink,
   emptyState,
   tt,
 } from "../views/components";
@@ -58,7 +59,7 @@ app.get("/", async (c) => {
                 ${openPositions.map(
                   (p) => html`
                     <tr>
-                      <td>${p.stock?.name ?? p.stockId}</td>
+                      <td>${tickerLink(p.stock?.tickerCode ?? p.stockId, p.stock?.name ?? p.stockId)}</td>
                       <td>${strategyBadge(p.strategy)}</td>
                       <td>¥${formatYen(Number(p.entryPrice))}</td>
                       <td>${p.quantity}</td>
@@ -99,7 +100,7 @@ app.get("/", async (c) => {
                 ${closedPositions.map(
                   (p) => html`
                     <tr>
-                      <td>${p.stock?.name ?? p.stockId}</td>
+                      <td>${tickerLink(p.stock?.tickerCode ?? p.stockId, p.stock?.name ?? p.stockId)}</td>
                       <td>${strategyBadge(p.strategy)}</td>
                       <td>¥${formatYen(Number(p.entryPrice))}</td>
                       <td>

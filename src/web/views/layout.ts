@@ -95,6 +95,9 @@ export function layout(
 
         <main>${content}</main>
 
+        <!-- Stock detail modal -->
+        <div id="stock-modal"></div>
+
         <nav class="bottom-nav">
           ${NAV_ITEMS.map(
             (item) => html`
@@ -175,6 +178,76 @@ export function layout(
               }
             }, true);
           })();
+
+          // Stock detail modal
+          function openStockModal(tickerCode) {
+            var modal = document.getElementById('stock-modal');
+            modal.innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeStockModal()"><div class="modal-content"><div class="modal-loading">読み込み中...</div></div></div>';
+            fetch('/api/stock/' + encodeURIComponent(tickerCode))
+              .then(function(r) { return r.json(); })
+              .then(function(s) {
+                if (s.error) { closeStockModal(); return; }
+                var fmt = function(v, suffix) { return v != null ? v + (suffix || '') : '-'; };
+                var fmtYen = function(v) { return v != null ? '¥' + Number(v).toLocaleString('ja-JP', {maximumFractionDigits:0}) : '-'; };
+                var fmtVol = function(v) { return v != null ? Number(v).toLocaleString('ja-JP') : '-'; };
+                var fmtPct = function(v) {
+                  if (v == null) return '-';
+                  var n = Number(v);
+                  var sign = n >= 0 ? '+' : '';
+                  var color = n >= 0 ? '#22c55e' : '#ef4444';
+                  return '<span style="color:' + color + '">' + sign + n.toFixed(2) + '%</span>';
+                };
+                var fmtDate = function(v) {
+                  if (!v) return '-';
+                  var d = new Date(v);
+                  return (d.getMonth()+1) + '/' + d.getDate();
+                };
+                var statusText = s.isDelisted ? '<span style="color:#ef4444">上場廃止</span>' : s.isActive ? '<span style="color:#22c55e">アクティブ</span>' : '<span style="color:#f59e0b">非アクティブ</span>';
+                var profitText = s.isProfitable == null ? '-' : s.isProfitable ? '<span style="color:#22c55e">黒字</span>' : '<span style="color:#ef4444">赤字</span>';
+
+                var h = '<div class="modal-overlay" onclick="if(event.target===this)closeStockModal()">'
+                  + '<div class="modal-content">'
+                  + '<div class="modal-header"><div><h2>' + s.tickerCode + '</h2><div class="modal-sub">' + s.name + '</div></div><button class="modal-close" onclick="closeStockModal()">✕</button></div>'
+                  + '<div class="modal-body">'
+                  + '<div class="modal-section">基本情報</div>'
+                  + '<div class="modal-row"><span class="modal-row-label">市場</span><span>' + (s.market || '-') + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">セクター</span><span>' + (s.jpxSectorName || s.sector || '-') + '</span></div>'
+                  + '<div class="modal-section">株価データ</div>'
+                  + '<div class="modal-row"><span class="modal-row-label">現在価格</span><span>' + fmtYen(s.latestPrice) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">日次変動</span><span>' + fmtPct(s.dailyChangeRate) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">週次変動</span><span>' + fmtPct(s.weekChangeRate) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">出来高</span><span>' + fmtVol(s.latestVolume) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">ATR(14)</span><span>' + fmt(s.atr14) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">ボラティリティ</span><span>' + fmt(s.volatility, '%') + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">更新日</span><span>' + fmtDate(s.latestPriceDate) + '</span></div>'
+                  + '<div class="modal-section">財務指標</div>'
+                  + '<div class="modal-row"><span class="modal-row-label">PER</span><span>' + fmt(s.per) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">PBR</span><span>' + fmt(s.pbr) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">ROE</span><span>' + fmt(s.roe, '%') + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">EPS</span><span>' + fmt(s.eps) + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">配当利回り</span><span>' + fmt(s.dividendYield, '%') + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">時価総額</span><span>' + (s.marketCap != null ? Number(s.marketCap).toLocaleString('ja-JP') + '億円' : '-') + '</span></div>'
+                  + '<div class="modal-row"><span class="modal-row-label">収益性</span><span>' + profitText + '</span></div>'
+                  + '<div class="modal-section">ステータス</div>'
+                  + '<div class="modal-row"><span class="modal-row-label">上場状態</span><span>' + statusText + '</span></div>'
+                  + (s.isRestricted ? '<div class="modal-row"><span class="modal-row-label">取引制限</span><span style="color:#ef4444">あり</span></div>' : '')
+                  + (s.supervisionFlag ? '<div class="modal-row"><span class="modal-row-label">監理区分</span><span style="color:#f59e0b">' + s.supervisionFlag + '</span></div>' : '')
+                  + (s.tradingHaltFlag ? '<div class="modal-row"><span class="modal-row-label">売買停止</span><span style="color:#ef4444">停止中</span></div>' : '')
+                  + (s.delistingDate ? '<div class="modal-row"><span class="modal-row-label">廃止予定日</span><span style="color:#ef4444">' + fmtDate(s.delistingDate) + '</span></div>' : '')
+                  + '<div class="modal-row"><span class="modal-row-label">次回決算</span><span>' + fmtDate(s.nextEarningsDate) + '</span></div>'
+                  + '</div></div></div>';
+                modal.innerHTML = h;
+              })
+              .catch(function() { closeStockModal(); });
+          }
+
+          function closeStockModal() {
+            document.getElementById('stock-modal').innerHTML = '';
+          }
+
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeStockModal();
+          });
         </script>
       </body>
     </html>`;

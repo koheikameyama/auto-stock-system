@@ -116,6 +116,18 @@ export function rankBadge(rank: string): HtmlContent {
   >`;
 }
 
+/** 銘柄リンク（クリックでモーダル表示） */
+export function tickerLink(
+  tickerCode: string,
+  displayText?: string,
+): HtmlContent {
+  return html`<span
+    class="ticker-link"
+    onclick="openStockModal('${tickerCode}')"
+    >${displayText ?? tickerCode}</span
+  >`;
+}
+
 /** 空の状態 */
 export function emptyState(message: string): HtmlContent {
   return html`<div class="empty">${message}</div>`;

@@ -19,6 +19,7 @@ import { layout } from "../views/layout";
 import {
   formatYen,
   pnlPercent,
+  tickerLink,
   emptyState,
   rankBadge,
   tt,
@@ -473,7 +474,7 @@ app.get("/", async (c) => {
                 ${todayCandidates.map(
                   (r) => html`
                     <tr>
-                      <td style="font-weight:600">${r.tickerCode}</td>
+                      <td>${tickerLink(r.tickerCode)}</td>
                       <td>${r.totalScore}</td>
                       <td>${rankBadge(r.rank)}</td>
                       <td>¥${formatYen(Number(r.entryPrice))}</td>
@@ -513,7 +514,7 @@ app.get("/", async (c) => {
                   (r) => html`
                     <tr>
                       <td>${dayjs(r.date).format("M/D")}</td>
-                      <td style="font-weight:600">${r.tickerCode}</td>
+                      <td>${tickerLink(r.tickerCode)}</td>
                       <td>
                         ${r.rejectionReason === "ai_no_go"
                           ? html`<span class="badge" style="background:#ef444420;color:#ef4444">AI却下</span>`
@@ -556,7 +557,7 @@ app.get("/", async (c) => {
                 ${ranking.map(
                   (r) => html`
                     <tr>
-                      <td style="font-weight:600">${r.tickerCode}</td>
+                      <td>${tickerLink(r.tickerCode)}</td>
                       <td>${r.totalDays}回</td>
                       <td>${r.avgScore}</td>
                       <td>${r.wins > 0 ? `${r.wins}回` : "-"}</td>
@@ -610,7 +611,7 @@ app.get("/", async (c) => {
                   (r) => html`
                     <tr>
                       <td>${dayjs(r.date).format("M/D")}</td>
-                      <td style="font-weight:600">${r.tickerCode}</td>
+                      <td>${tickerLink(r.tickerCode)}</td>
                       <td>${r.totalScore - r.contrarianBonus}</td>
                       <td>
                         <span class="pnl-positive"

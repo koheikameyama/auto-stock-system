@@ -84,6 +84,17 @@ app.post("/trading/toggle", authMiddleware, async (c) => {
 });
 
 /**
+ * GET /api/stock/:tickerCode - 銘柄詳細データ
+ */
+app.get("/stock/:tickerCode", async (c) => {
+  const stock = await prisma.stock.findUnique({
+    where: { tickerCode: c.req.param("tickerCode") },
+  });
+  if (!stock) return c.json({ error: "not found" }, 404);
+  return c.json(stock);
+});
+
+/**
  * GET /api/health - ヘルスチェック（認証不要）
  */
 app.get("/health", (c) => {

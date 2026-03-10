@@ -16,6 +16,7 @@ import {
   strategyBadge,
   emptyState,
   detailRow,
+  tickerLink,
   tt,
 } from "../views/components";
 import { isMarketDay } from "../../lib/market-calendar";
@@ -170,7 +171,7 @@ app.get("/", async (c) => {
                 ${openPositions.map(
                   (p) => html`
                     <tr>
-                      <td>${(p as any).stock?.name ?? p.stockId}</td>
+                      <td>${tickerLink((p as any).stock?.tickerCode ?? p.stockId, (p as any).stock?.name ?? p.stockId)}</td>
                       <td>${strategyBadge(p.strategy)}</td>
                       <td>¥${formatYen(Number(p.entryPrice))}</td>
                       <td>${p.quantity}</td>
