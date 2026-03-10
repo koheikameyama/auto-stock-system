@@ -32,10 +32,12 @@ export const QUERY_LIMITS = {
   ORDERS_TODAY: 30,
   POSITIONS_CLOSED: 20,
   HISTORY_SUMMARIES: 30,
+  SCORING_RECORDS: 50,
 } as const;
 
 // ルートのルックバック日数
 export const ROUTE_LOOKBACK_DAYS = {
   POSITIONS_CLOSED: 7,
   HISTORY: 30,
+  SCORING_HISTORY: 30,
 } as const;

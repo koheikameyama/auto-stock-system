@@ -50,6 +50,11 @@ const NAV_ITEMS = [
     label: "ニュース",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h10M4 18h8"/></svg>`,
   },
+  {
+    path: "/scoring",
+    label: "スコア",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>`,
+  },
 ];
 
 export function layout(
