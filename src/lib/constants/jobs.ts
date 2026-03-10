@@ -30,16 +30,16 @@ export const TRAILING_STOP = {
   // アクティベーション閾値（エントリー価格からATR×N上昇で発動）
   ACTIVATION_ATR_MULTIPLIER: {
     day_trade: 0.5,
-    swing: 0.75,
+    swing: 0.5,   // 0.75 → 0.5（より早く発動）
   },
   // トレール幅（最高値 - ATR×N がストップライン）
   TRAIL_ATR_MULTIPLIER: {
     day_trade: 1.0,
-    swing: 1.5,
+    swing: 1.2,   // 1.5 → 1.2（やや引き締め）
   },
   // ATR不明時のフォールバック（%ベース）
-  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.015 },
-  TRAIL_PCT: { day_trade: 0.015, swing: 0.025 },
+  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.01 },   // 0.015 → 0.01
+  TRAIL_PCT: { day_trade: 0.015, swing: 0.02 },        // 0.025 → 0.02
 } as const;
 
 // ディフェンシブモード（市場環境悪化時のポジション防衛）
