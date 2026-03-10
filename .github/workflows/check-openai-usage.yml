@@ -1,9 +1,9 @@
 name: Check OpenAI API Usage
 
 on:
-  # schedule:
+  schedule:
     # 毎日 10:00 JST (01:00 UTC)
-    # - cron: '0 1 * * *'
+    - cron: '0 1 * * *'
   workflow_dispatch: # 手動実行も可能
 
 concurrency:
