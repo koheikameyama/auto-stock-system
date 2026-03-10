@@ -49,6 +49,8 @@ export const SCORING = {
     MAX_PRICE: 1000,
     MAX_DAILY_SPREAD_PCT: 0.05,
     MAX_WEEKLY_VOLATILITY: 8,
+    EARNINGS_DAYS_BEFORE: 5,   // 決算前N日は即死
+    EARNINGS_DAYS_AFTER: 2,    // 決算後N日は即死
   },
 
   // 流動性閾値

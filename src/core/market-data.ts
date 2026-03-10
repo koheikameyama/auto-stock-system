@@ -341,3 +341,34 @@ export async function fetchMarketData(): Promise<MarketData> {
 
   return { nikkei, sp500, vix, usdjpy, cmeFutures };
 }
+
+// ========================================
+// 決算日データ取得
+// ========================================
+
+/**
+ * 銘柄の次回決算発表日を取得（quoteSummary API使用）
+ * 取得失敗時はnullを返す（即死ルール適用せず）
+ */
+export async function fetchNextEarningsDate(
+  tickerCode: string,
+): Promise<Date | null> {
+  const symbol = normalizeTickerCode(tickerCode);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any = await retry(
+      () =>
+        yahooFinance.quoteSummary(symbol, { modules: ["calendarEvents"] }),
+      `earnings-${symbol}`,
+    );
+    const dates = result.calendarEvents?.earnings?.earningsDate;
+    if (!dates || dates.length === 0) return null;
+
+    // 最も近い未来の日付を返す（複数候補がある場合）
+    const now = new Date();
+    const futureDates = dates.filter((d: Date) => d >= now);
+    return futureDates.length > 0 ? futureDates[0] : dates[dates.length - 1];
+  } catch {
+    return null;
+  }
+}

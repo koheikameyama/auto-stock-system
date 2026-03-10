@@ -35,6 +35,9 @@ model Stock {
   latestPriceDate DateTime? @db.Date
   priceUpdatedAt  DateTime?
 
+  // 決算日管理（即死ルール用）
+  nextEarningsDate DateTime? @db.Date  // 次回決算発表予定日
+
   // 上場廃止管理
   fetchFailCount Int      @default(0)
   isDelisted     Boolean  @default(false)

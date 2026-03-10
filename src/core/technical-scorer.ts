@@ -40,6 +40,7 @@ export interface LogicScoreInput {
   weeklyVolatility: number | null;
   weeklyTrend?: WeeklyTrendResult | null;
   fundamentals?: FundamentalInput;
+  nextEarningsDate?: Date | null;
 }
 
 export type VolumeDirection = "accumulation" | "distribution" | "neutral";
@@ -129,6 +130,20 @@ function checkDisqualify(input: LogicScoreInput): DisqualifyResult {
     weeklyVolatility > SCORING.DISQUALIFY.MAX_WEEKLY_VOLATILITY
   ) {
     return { isDisqualified: true, reason: "volatility_extreme" };
+  }
+
+  // 決算発表前後はエントリー禁止（前5日〜後2日）
+  if (input.nextEarningsDate) {
+    const now = new Date();
+    const diffDays = Math.round(
+      (input.nextEarningsDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (
+      diffDays >= -SCORING.DISQUALIFY.EARNINGS_DAYS_AFTER &&
+      diffDays <= SCORING.DISQUALIFY.EARNINGS_DAYS_BEFORE
+    ) {
+      return { isDisqualified: true, reason: "earnings_upcoming" };
+    }
   }
 
   return { isDisqualified: false, reason: null };

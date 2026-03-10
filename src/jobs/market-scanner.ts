@@ -444,6 +444,7 @@ ${sectorText || "  特になし"}`;
                 marketCap: stock.marketCap ? Number(stock.marketCap) : null,
                 latestPrice: Number(stock.latestPrice),
               },
+              nextEarningsDate: stock.nextEarningsDate,
             });
 
             return {

@@ -70,6 +70,7 @@
 | 1 | スプレッド（値幅）が広すぎる | 当日の `(high - low) / close > 5%` | OHLCVデータ |
 | 2 | ボラティリティ異常 | `Stock.volatility > 8%`（週次ボラティリティ） | Stockモデル |
 | 3 | 10万円で買えない | `latestPrice > 1000`（100株 = 10万円超） | Stockモデル |
+| 4 | 決算発表前後 | 決算日の前5日〜後2日 | `Stock.nextEarningsDate`（yahoo-finance2 quoteSummary API） |
 
 > 即死ルール該当銘柄は、棄却理由をDBに記録する（振り返り用）。
 
@@ -252,7 +253,7 @@ model ScoringRecord {
 
   // 即死ルール
   isDisqualified    Boolean @default(false)
-  disqualifyReason  String? // "price_too_high" | "volatility_extreme" | "spread_too_wide"
+  disqualifyReason  String? // "price_too_high" | "volatility_extreme" | "spread_too_wide" | "earnings_upcoming"
 
   // AIレビュー結果（AIに渡された場合のみ）
   aiDecision   String?  // "go" | "no_go"
@@ -422,6 +423,8 @@ export const SCORING = {
     MAX_PRICE: 1000,              // 株価上限（10万円で100株買えない）
     MAX_DAILY_SPREAD_PCT: 0.05,   // 当日値幅率上限 5%
     MAX_WEEKLY_VOLATILITY: 8,     // 週次ボラティリティ上限 8%
+    EARNINGS_DAYS_BEFORE: 5,      // 決算前N日は即死
+    EARNINGS_DAYS_AFTER: 2,       // 決算後N日は即死
   },
 
   // 流動性閾値
