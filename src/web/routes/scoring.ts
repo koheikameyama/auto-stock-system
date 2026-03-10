@@ -87,6 +87,11 @@ function breakdownDetail(
   return items.join("　|　");
 }
 
+/** カテゴリスコアをコンパクトに表示 */
+function scoreBreakdownCompact(tech: number, pat: number, liq: number, fund: number) {
+  return html`<span style="font-size:0.8rem">技<b>${tech}</b> パ<b>${pat}</b> 流<b>${liq}</b> フ<b>${fund}</b></span>`;
+}
+
 // ---- 日付別一覧 ----
 app.get("/", async (c) => {
   const dateParam = c.req.query("date");
@@ -128,16 +133,16 @@ app.get("/", async (c) => {
 
   const content = html`
     <!-- 日付ナビ -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-      <a href="/scoring?date=${prevDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem">&larr;</a>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:0 16px 1rem">
+      <a href="/scoring?date=${prevDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem;padding:8px">&larr;</a>
       <span style="font-size:1rem;font-weight:600">${dateStr}</span>
-      <a href="/scoring?date=${nextDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem">&rarr;</a>
+      <a href="/scoring?date=${nextDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem;padding:8px">&rarr;</a>
     </div>
 
     <!-- サマリー -->
-    <div class="card" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;text-align:center;margin-bottom:1rem">
+    <div class="card" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;text-align:center;margin-bottom:0.5rem">
       <div>
-        <div style="color:#94a3b8;font-size:0.75rem">スコアリング件数</div>
+        <div style="color:#94a3b8;font-size:0.75rem">件数</div>
         <div style="font-size:1.2rem;font-weight:700">${records.length}</div>
       </div>
       <div>
@@ -155,72 +160,62 @@ app.get("/", async (c) => {
       </div>
     </div>
 
-    <!-- テーブル -->
+    <!-- 銘柄一覧（カード形式 — スマホ対応） -->
     ${records.length > 0
-      ? html`
-          <div class="card table-wrap responsive-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>銘柄</th>
-                  <th>${tt("合計", "100点満点")}</th>
-                  <th>ランク</th>
-                  <th>${tt("技", "テクニカル(35)")}</th>
-                  <th>${tt("パ", "パターン(25)")}</th>
-                  <th>${tt("流", "流動性(25)")}</th>
-                  <th>${tt("フ", "ファンダ(15)")}</th>
-                  <th>AI</th>
-                  <th>理由</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${records.map((r) => {
-                  const name = nameMap.get(r.tickerCode) ?? "";
-                  const detail = breakdownDetail(
-                    r.technicalBreakdown as Record<string, number> | null,
-                    r.patternBreakdown as Record<string, number> | null,
-                    r.liquidityBreakdown as Record<string, number> | null,
-                    r.fundamentalBreakdown as Record<string, number> | null,
-                  );
-                  const rowStyle = r.isDisqualified ? "opacity:0.5" : "";
-                  return html`
-                    <tr class="expandable-row" style="${rowStyle};cursor:pointer" onclick="toggleDetail(this)">
-                      <td>
-                        <a href="/scoring/${r.tickerCode}" style="color:#3b82f6;text-decoration:none;font-weight:600">${r.tickerCode}</a>
-                        <div style="font-size:0.7rem;color:#94a3b8">${name}</div>
-                      </td>
-                      <td style="font-weight:700">${r.totalScore}</td>
-                      <td>${rankBadge(r.rank)}</td>
-                      <td>${r.technicalScore}</td>
-                      <td>${r.patternScore}</td>
-                      <td>${r.liquidityScore}</td>
-                      <td>${r.fundamentalScore}</td>
-                      <td>${aiDecisionBadge(r.aiDecision)}</td>
-                      <td>${reasonBadge(r.rejectionReason)}</td>
-                    </tr>
-                    <tr class="detail-row" style="display:none">
-                      <td colspan="9" style="font-size:0.78rem;color:#94a3b8;padding:0.5rem 0.75rem;background:#0f172a">
-                        ${detail || "内訳データなし"}
-                        ${r.aiReasoning
-                          ? html`<div style="margin-top:0.25rem;color:#cbd5e1">AI: ${r.aiReasoning}</div>`
-                          : ""}
-                        ${r.entryPrice
-                          ? html`<div style="margin-top:0.25rem">エントリー: ¥${formatYen(Number(r.entryPrice))}${r.ghostProfitPct != null ? html` → ${pnlPercent(Number(r.ghostProfitPct))}` : ""}</div>`
-                          : ""}
-                      </td>
-                    </tr>
-                  `;
-                })}
-              </tbody>
-            </table>
-          </div>
-        `
+      ? records.map((r) => {
+          const name = nameMap.get(r.tickerCode) ?? "";
+          const detail = breakdownDetail(
+            r.technicalBreakdown as Record<string, number> | null,
+            r.patternBreakdown as Record<string, number> | null,
+            r.liquidityBreakdown as Record<string, number> | null,
+            r.fundamentalBreakdown as Record<string, number> | null,
+          );
+          const cardOpacity = r.isDisqualified ? "opacity:0.5;" : "";
+          return html`
+            <div class="card scoring-card" style="${cardOpacity}cursor:pointer" onclick="toggleScoringDetail(this)">
+              <!-- ヘッダー行: 銘柄コード + スコア + ランク -->
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem">
+                <div>
+                  <a href="/scoring/${r.tickerCode}" style="color:#3b82f6;text-decoration:none;font-weight:700;font-size:0.95rem" onclick="event.stopPropagation()">${r.tickerCode}</a>
+                  <span style="color:#94a3b8;font-size:0.75rem;margin-left:0.35rem">${name}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                  <span style="font-size:1.1rem;font-weight:700">${r.totalScore}</span>
+                  ${rankBadge(r.rank)}
+                </div>
+              </div>
+              <!-- カテゴリスコア + AI判定 -->
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.8rem;color:#94a3b8">
+                <div>
+                  技<span style="color:#e2e8f0;font-weight:600">${r.technicalScore}</span>
+                  パ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.patternScore}</span>
+                  流<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.liquidityScore}</span>
+                  フ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.fundamentalScore}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.35rem">
+                  ${aiDecisionBadge(r.aiDecision)}
+                  ${r.rejectionReason ? reasonBadge(r.rejectionReason) : ""}
+                </div>
+              </div>
+              <!-- 展開エリア（内訳詳細） -->
+              <div class="scoring-detail" style="display:none;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid #334155;font-size:0.78rem;color:#94a3b8">
+                ${detail || "内訳データなし"}
+                ${r.aiReasoning
+                  ? html`<div style="margin-top:0.25rem;color:#cbd5e1">AI: ${r.aiReasoning}</div>`
+                  : ""}
+                ${r.entryPrice
+                  ? html`<div style="margin-top:0.25rem">エントリー: ¥${formatYen(Number(r.entryPrice))}${r.ghostProfitPct != null ? html` → ${pnlPercent(Number(r.ghostProfitPct))}` : ""}</div>`
+                  : ""}
+              </div>
+            </div>
+          `;
+        })
       : html`<div class="card">${emptyState("この日のスコアリングデータはありません")}</div>`}
 
     <script>
-      function toggleDetail(row) {
-        var detail = row.nextElementSibling;
-        if (detail && detail.classList.contains('detail-row')) {
+      function toggleScoringDetail(card) {
+        var detail = card.querySelector('.scoring-detail');
+        if (detail) {
           detail.style.display = detail.style.display === 'none' ? '' : 'none';
         }
       }
@@ -253,50 +248,39 @@ app.get("/:tickerCode", async (c) => {
   const stockName = stock?.name ?? tickerCode;
 
   const content = html`
-    <div style="margin-bottom:1rem">
+    <div style="margin:0 16px 1rem">
       <a href="/scoring" style="color:#3b82f6;text-decoration:none;font-size:0.85rem">&larr; 一覧に戻る</a>
     </div>
 
     <p class="section-title">${tickerCode} ${stockName}（直近${ROUTE_LOOKBACK_DAYS.SCORING_HISTORY}日）</p>
 
     ${records.length > 0
-      ? html`
-          <div class="card table-wrap responsive-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>日付</th>
-                  <th>合計</th>
-                  <th>ランク</th>
-                  <th>技</th>
-                  <th>パ</th>
-                  <th>流</th>
-                  <th>フ</th>
-                  <th>AI</th>
-                  <th>騰落率</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${records.map((r) => {
-                  const rowStyle = r.isDisqualified ? "opacity:0.5" : "";
-                  return html`
-                    <tr style="${rowStyle}">
-                      <td><a href="/scoring?date=${dayjs(r.date).format("YYYY-MM-DD")}" style="color:#3b82f6;text-decoration:none">${dayjs(r.date).format("M/D")}</a></td>
-                      <td style="font-weight:700">${r.totalScore}</td>
-                      <td>${rankBadge(r.rank)}</td>
-                      <td>${r.technicalScore}</td>
-                      <td>${r.patternScore}</td>
-                      <td>${r.liquidityScore}</td>
-                      <td>${r.fundamentalScore}</td>
-                      <td>${aiDecisionBadge(r.aiDecision)}</td>
-                      <td>${r.ghostProfitPct != null ? pnlPercent(Number(r.ghostProfitPct)) : html`<span style="color:#64748b">-</span>`}</td>
-                    </tr>
-                  `;
-                })}
-              </tbody>
-            </table>
-          </div>
-        `
+      ? records.map((r) => {
+          const rowOpacity = r.isDisqualified ? "opacity:0.5;" : "";
+          return html`
+            <div class="card" style="${rowOpacity}">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem">
+                <a href="/scoring?date=${dayjs(r.date).format("YYYY-MM-DD")}" style="color:#3b82f6;text-decoration:none;font-weight:600">${dayjs(r.date).format("M/D")}</a>
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                  <span style="font-size:1.1rem;font-weight:700">${r.totalScore}</span>
+                  ${rankBadge(r.rank)}
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.8rem;color:#94a3b8">
+                <div>
+                  技<span style="color:#e2e8f0;font-weight:600">${r.technicalScore}</span>
+                  パ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.patternScore}</span>
+                  流<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.liquidityScore}</span>
+                  フ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.fundamentalScore}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.35rem">
+                  ${aiDecisionBadge(r.aiDecision)}
+                  ${r.ghostProfitPct != null ? pnlPercent(Number(r.ghostProfitPct)) : ""}
+                </div>
+              </div>
+            </div>
+          `;
+        })
       : html`<div class="card">${emptyState("この銘柄のスコアリングデータはありません")}</div>`}
   `;
 
