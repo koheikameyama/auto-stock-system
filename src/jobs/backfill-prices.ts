@@ -103,6 +103,12 @@ export async function main() {
                 latestPriceDate: new Date(),
                 priceUpdatedAt: new Date(),
                 fetchFailCount: 0,
+                // ファンダメンタルズ
+                per: clampDecimal8(quote.per),
+                pbr: clampDecimal8(quote.pbr),
+                eps: quote.eps != null && Number.isFinite(quote.eps) ? quote.eps : null,
+                marketCap: quote.marketCap != null && Number.isFinite(quote.marketCap) ? quote.marketCap : null,
+                isProfitable: quote.eps != null ? quote.eps > 0 : null,
               },
             });
 

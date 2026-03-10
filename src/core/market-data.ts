@@ -32,6 +32,11 @@ export interface StockQuote {
   high: number;
   low: number;
   open: number;
+  // ファンダメンタルズ
+  per: number | null;       // trailingPE
+  pbr: number | null;       // priceToBook
+  eps: number | null;       // epsTrailingTwelveMonths
+  marketCap: number | null; // 時価総額（円）
 }
 
 export interface OHLCVBar {
@@ -86,6 +91,11 @@ function parseQuoteResult(result: any, symbol: string): StockQuote {
     high: result.regularMarketDayHigh ?? 0,
     low: result.regularMarketDayLow ?? 0,
     open: result.regularMarketOpen ?? 0,
+    // ファンダメンタルズ
+    per: result.trailingPE ?? null,
+    pbr: result.priceToBook ?? null,
+    eps: result.epsTrailingTwelveMonths ?? null,
+    marketCap: result.marketCap ?? null,
   };
 }
 

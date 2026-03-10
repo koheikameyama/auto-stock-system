@@ -437,6 +437,13 @@ ${sectorText || "  特になし"}`;
               latestVolume: Number(stock.latestVolume),
               weeklyVolatility: stock.volatility ? Number(stock.volatility) : null,
               weeklyTrend,
+              fundamentals: {
+                per: stock.per ? Number(stock.per) : null,
+                pbr: stock.pbr ? Number(stock.pbr) : null,
+                eps: stock.eps ? Number(stock.eps) : null,
+                marketCap: stock.marketCap ? Number(stock.marketCap) : null,
+                latestPrice: Number(stock.latestPrice),
+              },
             });
 
             return {
@@ -612,6 +619,7 @@ ${sectorText || "  特になし"}`;
     technicalScore: c.score.technical.total,
     patternScore: c.score.pattern.total,
     liquidityScore: c.score.liquidity.total,
+    fundamentalScore: c.score.fundamental.total,
     technicalBreakdown: {
       rsi: c.score.technical.rsi,
       ma: c.score.technical.ma,
@@ -627,6 +635,12 @@ ${sectorText || "  特になし"}`;
       tradingValue: c.score.liquidity.tradingValue,
       spreadProxy: c.score.liquidity.spreadProxy,
       stability: c.score.liquidity.stability,
+    },
+    fundamentalBreakdown: {
+      per: c.score.fundamental.per,
+      pbr: c.score.fundamental.pbr,
+      profitability: c.score.fundamental.profitability,
+      marketCap: c.score.fundamental.marketCap,
     },
     isDisqualified: false,
     contrarianBonus: contrarianBonusMap.get(c.tickerCode)?.bonus ?? 0,

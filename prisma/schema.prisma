@@ -125,14 +125,16 @@ model ScoringRecord {
   rank         String   // S / A / B / C
 
   // カテゴリ別スコア
-  technicalScore  Int   // 0-40
-  patternScore    Int   // 0-30
-  liquidityScore  Int   // 0-30
+  technicalScore    Int   // 0-35
+  patternScore      Int   // 0-25
+  liquidityScore    Int   // 0-25
+  fundamentalScore  Int   @default(0) // 0-15
 
   // カテゴリ内訳（JSON）
-  technicalBreakdown Json  // { rsi, ma, volume }
-  patternBreakdown   Json  // { chart, candlestick }
-  liquidityBreakdown Json  // { tradingValue, spreadProxy, stability }
+  technicalBreakdown   Json   // { rsi, ma, volume }
+  patternBreakdown     Json   // { chart, candlestick }
+  liquidityBreakdown   Json   // { tradingValue, spreadProxy, stability }
+  fundamentalBreakdown Json?  // { per, pbr, profitability, marketCap }
 
   // 即死ルール
   isDisqualified    Boolean @default(false)
