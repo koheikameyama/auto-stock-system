@@ -27,7 +27,7 @@ import {
 import { notifySlack } from "../lib/slack";
 
 // AI分析結果の型
-interface NewsAnalysisResult {
+export interface NewsAnalysisResult {
   geopoliticalRiskLevel: number;
   geopoliticalSummary: string;
   marketImpact: "positive" | "neutral" | "negative";
@@ -45,11 +45,20 @@ interface NewsAnalysisResult {
   keyEvents: string;
 }
 
-export async function main() {
-  console.log("=== News Collector 開始 ===");
-
+/**
+ * ニュース収集 + AI分析を実行する
+ *
+ * 1. 3ソースからニュースをフェッチ（NewsAPI, Google RSS, Yahoo Finance）
+ * 2. 重複排除
+ * 3. DB保存（既存ハッシュとの重複スキップ）
+ * 4. AI分析（カテゴリ別テキスト構築 → OpenAI → NewsAnalysis upsert）
+ */
+export async function collectAndAnalyzeNews(): Promise<{
+  newArticleCount: number;
+  analysis: NewsAnalysisResult | null;
+}> {
   // 1. ニュースフェッチ（3ソース並列）
-  console.log("[1/5] ニュースフェッチ中...");
+  console.log("  ニュースフェッチ中...");
 
   // Yahoo Finance用: 主要銘柄を取得
   const stocks = await prisma.stock.findMany({
@@ -70,7 +79,7 @@ export async function main() {
   );
 
   // 2. 重複排除
-  console.log("[2/5] 重複排除中...");
+  console.log("  重複排除中...");
   const allItems = deduplicateNews([
     ...newsapiItems,
     ...googleItems,
@@ -79,7 +88,7 @@ export async function main() {
   console.log(`  重複排除後: ${allItems.length}件`);
 
   // 3. DB保存（既存ハッシュとの重複スキップ）
-  console.log("[3/5] DB保存中...");
+  console.log("  DB保存中...");
 
   const existingHashes = new Set(
     (
@@ -115,7 +124,7 @@ export async function main() {
   console.log(`  新規保存: ${savedCount}件`);
 
   // 4. AI分析
-  console.log("[4/5] AI分析中...");
+  console.log("  AI分析中...");
 
   const oneDayAgo = dayjs().subtract(1, "day").toDate();
   const recentArticles = await prisma.newsArticle.findMany({
@@ -126,13 +135,7 @@ export async function main() {
 
   if (recentArticles.length === 0) {
     console.log("  分析対象のニュースがありません");
-    await notifySlack({
-      title: "📰 ニュース収集完了",
-      message: "直近24時間のニュースはありませんでした",
-      color: "#808080",
-    });
-    console.log("=== News Collector 終了 ===");
-    return;
+    return { newArticleCount: 0, analysis: null };
   }
 
   // ニュースをカテゴリ別に整理してAI入力テキスト構築
@@ -200,9 +203,36 @@ ${stockNews.map((a) => `- ${a.title}${a.tickerCode ? ` [${a.tickerCode}]` : ""}`
     `  AI分析完了（地政学リスク: ${analysis.geopoliticalRiskLevel}/5, 市場: ${analysis.marketImpact}）`,
   );
 
-  // 5. 上場廃止関連ニュース検知
-  console.log("[5/6] 上場廃止ニュース検知中...");
+  return { newArticleCount: savedCount, analysis };
+}
+
+export async function main() {
+  console.log("=== News Collector 開始 ===");
+
+  // 1. ニュース収集 + AI分析
+  console.log("[1/3] ニュース収集・AI分析中...");
+  const { analysis } = await collectAndAnalyzeNews();
+
+  if (!analysis) {
+    await notifySlack({
+      title: "📰 ニュース収集完了",
+      message: "直近24時間のニュースはありませんでした",
+      color: "#808080",
+    });
+    console.log("=== News Collector 終了 ===");
+    return;
+  }
+
+  // 2. 上場廃止関連ニュース検知
+  console.log("[2/3] 上場廃止ニュース検知中...");
   let delistingFlagCount = 0;
+
+  const oneDayAgo = dayjs().subtract(1, "day").toDate();
+  const recentArticles = await prisma.newsArticle.findMany({
+    where: { publishedAt: { gte: oneDayAgo } },
+    orderBy: { publishedAt: "desc" },
+    take: NEWS_AI_MAX_ARTICLES,
+  });
 
   for (const article of recentArticles) {
     const matchedKeyword = DELISTING_NEWS_KEYWORDS.find((kw) =>
@@ -242,8 +272,8 @@ ${stockNews.map((a) => `- ${a.title}${a.tickerCode ? ` [${a.tickerCode}]` : ""}`
     console.log("  廃止関連ニュースなし");
   }
 
-  // 6. クリーンアップ
-  console.log("[6/6] クリーンアップ中...");
+  // 3. クリーンアップ
+  console.log("[3/3] クリーンアップ中...");
 
   const articleRetentionDate = getDaysAgoForDB(NEWS_RETENTION.ARTICLE_DAYS);
   const deletedArticles = await prisma.newsArticle.deleteMany({
