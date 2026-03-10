@@ -1,7 +1,7 @@
 /**
  * 日次自動バックテスト実行エンジン
  *
- * 1. ScoringRecordからS/Aランク銘柄を選定
+ * 1. ScoringRecordから日付別S/Aランク銘柄マップを構築（生存者バイアス除去）
  * 2. Yahoo Financeからデータを一括取得（1回のみ）
  * 3. 4つの予算ティアでシミュレーション実行
  * 4. 結果を返す（DB保存・通知は呼び出し側で行う）
@@ -9,7 +9,6 @@
 
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
-import { getDaysAgoForDB } from "../lib/date-utils";
 import { DAILY_BACKTEST, type BudgetTier } from "../lib/constants";
 import { fetchMultipleBacktestData, fetchVixData } from "./data-fetcher";
 import { runBacktest } from "./simulation-engine";
@@ -31,44 +30,33 @@ export interface DailyBacktestRunResult {
   dataFetchTimeMs: number;
 }
 
+interface CandidateMapResult {
+  /** 日付別の候補銘柄マップ（生存者バイアス除去） */
+  candidateMap: Map<string, string[]> | null;
+  /** データ取得用の全ユニーク銘柄 */
+  allTickers: string[];
+  /** バックテスト開始日（ScoringRecord蓄積量に基づく動的期間） */
+  startDate: string;
+}
+
 /**
- * ScoringRecordから直近S/Aランク銘柄を選定
+ * ScoringRecordから日付別の候補銘柄マップを構築
+ *
+ * 各日付に「その日のScoringRecordでS/Aだった銘柄」を使うことで
+ * 生存者バイアスを除去する。
  */
-async function selectTickers(): Promise<string[]> {
-  const { LOOKBACK_DAYS, MIN_TICKERS, TARGET_RANKS, FALLBACK_RANKS } =
-    DAILY_BACKTEST.TICKER_SELECTION;
+async function buildCandidateMap(): Promise<CandidateMapResult> {
+  const { TARGET_RANKS, FALLBACK_RANKS } = DAILY_BACKTEST.TICKER_SELECTION;
 
-  const sinceDate = getDaysAgoForDB(LOOKBACK_DAYS);
-
-  // S/Aランクのdistinct銘柄を取得
-  const records = await prisma.scoringRecord.findMany({
-    where: {
-      date: { gte: sinceDate },
-      rank: { in: [...TARGET_RANKS] },
-      isDisqualified: false,
-    },
-    select: { tickerCode: true },
-    distinct: ["tickerCode"],
+  // ScoringRecordの最古日を取得 → 動的なバックテスト期間
+  const oldest = await prisma.scoringRecord.findFirst({
+    where: { isDisqualified: false },
+    orderBy: { date: "asc" },
+    select: { date: true },
   });
 
-  let tickers = records.map((r) => r.tickerCode);
-
-  // MIN_TICKERS未満ならBランクも含める
-  if (tickers.length < MIN_TICKERS) {
-    const fallbackRecords = await prisma.scoringRecord.findMany({
-      where: {
-        date: { gte: sinceDate },
-        rank: { in: [...FALLBACK_RANKS] },
-        isDisqualified: false,
-      },
-      select: { tickerCode: true },
-      distinct: ["tickerCode"],
-    });
-    tickers = fallbackRecords.map((r) => r.tickerCode);
-  }
-
-  // ScoringRecordが空の場合、Stockテーブルから出来高上位のアクティブ銘柄を取得
-  if (tickers.length === 0) {
+  if (!oldest) {
+    // ScoringRecordが空 → Stockテーブルから出来高上位銘柄でフォールバック
     console.log(
       "[daily-backtest] ScoringRecord が空のため、Stockテーブルから出来高上位銘柄を使用",
     );
@@ -82,34 +70,85 @@ async function selectTickers(): Promise<string[]> {
       take: 50,
       select: { tickerCode: true },
     });
-    tickers = stocks.map((s) => s.tickerCode);
+    const tickers = stocks.map((s) => s.tickerCode);
+    const startDate = dayjs()
+      .subtract(DAILY_BACKTEST.LOOKBACK_MONTHS, "month")
+      .format("YYYY-MM-DD");
+    return { candidateMap: null, allTickers: tickers, startDate };
   }
 
-  return tickers;
+  const startDate = dayjs(oldest.date).format("YYYY-MM-DD");
+
+  // 全期間のS/Aランク ScoringRecord を一括取得
+  const records = await prisma.scoringRecord.findMany({
+    where: {
+      date: { gte: oldest.date },
+      rank: { in: [...TARGET_RANKS, ...FALLBACK_RANKS] },
+      isDisqualified: false,
+    },
+    select: { date: true, tickerCode: true, rank: true },
+    orderBy: { date: "asc" },
+  });
+
+  // Map<dateString, tickerCode[]> を構築（TARGET_RANKS優先、不足時FALLBACK_RANKS追加）
+  const dateTargetMap = new Map<string, Set<string>>();
+  const dateFallbackMap = new Map<string, Set<string>>();
+
+  for (const r of records) {
+    const dateStr = dayjs(r.date).format("YYYY-MM-DD");
+    if ((TARGET_RANKS as readonly string[]).includes(r.rank)) {
+      if (!dateTargetMap.has(dateStr)) dateTargetMap.set(dateStr, new Set());
+      dateTargetMap.get(dateStr)!.add(r.tickerCode);
+    }
+    if (!dateFallbackMap.has(dateStr)) dateFallbackMap.set(dateStr, new Set());
+    dateFallbackMap.get(dateStr)!.add(r.tickerCode);
+  }
+
+  // TARGET_RANKSの候補が少ない日はFALLBACK_RANKSで補完
+  const candidateMap = new Map<string, string[]>();
+  const allTickerSet = new Set<string>();
+  const { MIN_TICKERS } = DAILY_BACKTEST.TICKER_SELECTION;
+
+  for (const dateStr of dateFallbackMap.keys()) {
+    const targetTickers = dateTargetMap.get(dateStr);
+    const tickers =
+      targetTickers && targetTickers.size >= MIN_TICKERS
+        ? [...targetTickers]
+        : [...(dateFallbackMap.get(dateStr) ?? [])];
+    candidateMap.set(dateStr, tickers);
+    for (const t of tickers) allTickerSet.add(t);
+  }
+
+  console.log(
+    `[daily-backtest] ScoringRecord期間: ${startDate}〜 (${candidateMap.size}営業日, ${allTickerSet.size}銘柄)`,
+  );
+
+  return {
+    candidateMap,
+    allTickers: [...allTickerSet],
+    startDate,
+  };
 }
 
 /**
  * 日次バックテストを実行
  */
 export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
-  // 1. 銘柄選定
-  const tickers = await selectTickers();
-  if (tickers.length === 0) {
+  // 1. 日付別候補銘柄マップを構築（生存者バイアス除去）
+  const { candidateMap, allTickers, startDate } = await buildCandidateMap();
+  if (allTickers.length === 0) {
     throw new Error("バックテスト対象銘柄が0件です");
   }
 
-  console.log(`[daily-backtest] 対象銘柄: ${tickers.length}件`);
+  console.log(`[daily-backtest] 対象銘柄: ${allTickers.length}件`);
 
-  // 2. 期間設定（6ヶ月ローリング）
+  // 2. 期間設定（ScoringRecord蓄積量に基づく動的期間）
   const endDate = dayjs().format("YYYY-MM-DD");
-  const startDate = dayjs()
-    .subtract(DAILY_BACKTEST.LOOKBACK_MONTHS, "month")
-    .format("YYYY-MM-DD");
 
   // 3. データ一括取得（全ティア共通）
   const fetchStart = Date.now();
   const [allData, vixData] = await Promise.all([
-    fetchMultipleBacktestData(tickers, startDate, endDate),
+    fetchMultipleBacktestData(allTickers, startDate, endDate),
     fetchVixData(startDate, endDate).catch((err) => {
       console.warn("[daily-backtest] VIXデータ取得失敗（レジーム集計なし）:", err);
       return new Map<string, number>();
@@ -133,7 +172,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
     const tierStart = Date.now();
 
     const config: BacktestConfig = {
-      tickers,
+      tickers: allTickers,
       startDate,
       endDate,
       initialBudget: tier.budget,
@@ -151,7 +190,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
     };
 
     console.log(`[daily-backtest] ${tier.label}ティア シミュレーション中...`);
-    const result = runBacktest(config, allData, vixData);
+    const result = runBacktest(config, allData, vixData, candidateMap);
 
     tierResults.push({
       tier,
@@ -168,7 +207,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
   }
 
   return {
-    tickers,
+    tickers: allTickers,
     periodStart: startDate,
     periodEnd: endDate,
     tierResults,

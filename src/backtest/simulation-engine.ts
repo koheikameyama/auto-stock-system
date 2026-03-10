@@ -39,6 +39,7 @@ export function runBacktest(
   config: BacktestConfig,
   allData: Map<string, OHLCVData[]>,
   vixData?: Map<string, number>,
+  candidateMap?: Map<string, string[]> | null,
 ): BacktestResult {
   const openPositions: SimulatedPosition[] = [];
   const closedTrades: SimulatedPosition[] = [];
@@ -328,12 +329,15 @@ export function runBacktest(
         console.log(`  [${today}] VIX=${todayVix?.toFixed(1)} → crisis: 新規エントリースキップ`);
       }
     } else if (openPositions.length < config.maxPositions && cash > 0) {
+      // candidateMapがある場合、当日の候補銘柄のみ評価（生存者バイアス除去）
+      const todayCandidates = candidateMap?.get(today);
       const candidates = evaluateTickers(
         config,
         allData,
         today,
         cash,
         openPositions,
+        todayCandidates,
       );
 
       // スコア上位から注文を作成
@@ -432,10 +436,18 @@ function evaluateTickers(
   today: string,
   cash: number,
   openPositions: SimulatedPosition[],
+  candidateTickers?: string[],
 ): EntryCandidate[] {
   const candidates: EntryCandidate[] = [];
 
-  for (const [ticker, bars] of allData) {
+  // candidateTickersが指定されている場合はその銘柄のみ評価
+  const tickersToEvaluate: Iterable<[string, OHLCVData[]]> = candidateTickers
+    ? candidateTickers
+        .filter((t) => allData.has(t))
+        .map((t) => [t, allData.get(t)!] as [string, OHLCVData[]])
+    : allData;
+
+  for (const [ticker, bars] of tickersToEvaluate) {
     // 同一銘柄のオープンポジションがある場合はスキップ
     if (openPositions.some((p) => p.ticker === ticker)) continue;
 
