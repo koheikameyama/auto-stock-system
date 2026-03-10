@@ -59,3 +59,8 @@ export const MIDDAY_REASSESSMENT = {
 export const WEEKLY_REVIEW = {
   LOOKBACK_DAYS: 7,
 } as const;
+
+// タイムストップ
+export const TIME_STOP = {
+  MAX_HOLDING_DAYS: 10, // 最大保有営業日数
+} as const;
