@@ -34,6 +34,8 @@ export function printBacktestReport(result: BacktestResult): void {
   console.log(`  平均利益: +${metrics.avgWinPct}%`);
   console.log(`  平均損失: ${metrics.avgLossPct}%`);
   console.log(`  PF: ${metrics.profitFactor === Infinity ? "∞" : metrics.profitFactor}`);
+  console.log(`  期待値: ${metrics.expectancy}%`);
+  console.log(`  RR比: ${metrics.riskRewardRatio === Infinity ? "∞" : metrics.riskRewardRatio}`);
   console.log(`  最大DD: -${metrics.maxDrawdown}%`);
   if (metrics.maxDrawdownPeriod) {
     console.log(`    (${metrics.maxDrawdownPeriod.start} ~ ${metrics.maxDrawdownPeriod.end})`);
@@ -86,7 +88,7 @@ export function printBacktestReport(result: BacktestResult): void {
 
   // トレード一覧（最大20件）
   const closedTrades = result.trades.filter(
-    (t) => t.exitReason === "take_profit" || t.exitReason === "stop_loss",
+    (t) => t.exitReason === "take_profit" || t.exitReason === "stop_loss" || t.exitReason === "trailing_profit" || t.exitReason === "time_stop",
   );
   if (closedTrades.length > 0) {
     console.log("-".repeat(50));
@@ -95,7 +97,8 @@ export function printBacktestReport(result: BacktestResult): void {
     const display = closedTrades.slice(-20);
     for (const t of display) {
       const pnlSign = (t.pnl ?? 0) >= 0 ? "+" : "";
-      const reason = t.exitReason === "take_profit" ? "TP" : "SL";
+      const reasonMap: Record<string, string> = { take_profit: "TP", stop_loss: "SL", trailing_profit: "TR", time_stop: "TS" };
+      const reason = reasonMap[t.exitReason ?? ""] ?? t.exitReason;
       console.log(
         `  ${t.entryDate} ${t.ticker.padEnd(8)} ${reason} ¥${t.entryPrice}→¥${t.exitPrice} ${pnlSign}¥${t.pnl} (${pnlSign}${t.pnlPct}%) ${t.holdingDays}日`,
       );

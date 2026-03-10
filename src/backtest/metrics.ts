@@ -18,7 +18,8 @@ export function calculateMetrics(
     (t) =>
       t.exitReason === "take_profit" ||
       t.exitReason === "stop_loss" ||
-      t.exitReason === "trailing_profit",
+      t.exitReason === "trailing_profit" ||
+      t.exitReason === "time_stop",
   );
   const stillOpen = trades.filter((t) => t.exitReason === "still_open").length;
 
@@ -81,6 +82,16 @@ export function calculateMetrics(
   const byRank = calculateByRank(closedTrades);
   const byRegime = calculateByRegime(closedTrades);
 
+  // 期待値 = (勝率 × 平均利益%) + (敗率 × 平均損失%)
+  const winRateDecimal = closedTrades.length > 0 ? wins.length / closedTrades.length : 0;
+  const lossRateDecimal = 1 - winRateDecimal;
+  const expectancy = (winRateDecimal * avgWinPct) + (lossRateDecimal * avgLossPct);
+
+  // リスクリワード実績 = |平均利益%| / |平均損失%|
+  const riskRewardRatio = avgLossPct !== 0
+    ? Math.abs(avgWinPct / avgLossPct)
+    : avgWinPct > 0 ? Infinity : 0;
+
   return {
     totalTrades: closedTrades.length,
     wins: wins.length,
@@ -104,6 +115,8 @@ export function calculateMetrics(
     totalNetPnl: Math.round(totalNetPnl),
     netReturnPct: round2(netReturnPct),
     costImpactPct: round2(costImpactPct),
+    expectancy: round2(expectancy),
+    riskRewardRatio: round2(riskRewardRatio),
   };
 }
 

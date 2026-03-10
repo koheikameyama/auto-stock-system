@@ -25,7 +25,7 @@ export const DAILY_BACKTEST = {
   /** デフォルトシミュレーションパラメータ */
   DEFAULT_PARAMS: {
     scoreThreshold: 65,
-    takeProfitRatio: 1.03,
+    takeProfitRatio: 1.05,
     stopLossRatio: 0.98,
     atrMultiplier: 1.0,
     strategy: "swing" as const,
