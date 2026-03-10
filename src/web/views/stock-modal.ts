@@ -10,6 +10,7 @@ import type { HtmlEscapedString } from "hono/utils/html";
 import type { Stock } from "@prisma/client";
 import type { TechnicalSummary, OHLCVData } from "../../core/technical-analysis";
 import type { PatternsResponse } from "../../lib/candlestick-patterns";
+import { tt } from "./components";
 
 type HtmlContent = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -118,9 +119,9 @@ function infoTab(s: Stock): HtmlContent {
     ${modalRow("現在価格", fmtYen(s.latestPrice))}
     ${modalRow("日次変動", fmtPctHtml(s.dailyChangeRate))}
     ${modalRow("週次変動", fmtPctHtml(s.weekChangeRate))}
-    ${modalRow("出来高", s.latestVolume != null ? Number(s.latestVolume).toLocaleString("ja-JP") : "-")}
-    ${modalRow("ATR(14)", fmt(s.atr14))}
-    ${modalRow("ボラティリティ", fmt(s.volatility, "%"))}
+    ${modalRow(tt("出来高", "1日の売買された株数"), s.latestVolume != null ? Number(s.latestVolume).toLocaleString("ja-JP") : "-")}
+    ${modalRow(tt("ATR(14)", "14日間の平均的な値幅。損切り幅の基準に使用"), fmt(s.atr14))}
+    ${modalRow(tt("ボラティリティ", "価格変動の大きさ。高いほどリスク・リターンが大きい"), fmt(s.volatility, "%"))}
     ${modalRow("更新日", fmtDate(s.latestPriceDate))}
 
     <div class="modal-section">ステータス</div>
@@ -148,12 +149,12 @@ function financeTab(s: Stock): HtmlContent {
     style="display:none"
   >
     <div class="modal-section">財務指標</div>
-    ${modalRow("PER", fmt(s.per))}
-    ${modalRow("PBR", fmt(s.pbr))}
-    ${modalRow("ROE", fmt(s.roe, "%"))}
-    ${modalRow("EPS", fmt(s.eps))}
-    ${modalRow("配当利回り", fmt(s.dividendYield, "%"))}
-    ${modalRow("時価総額", s.marketCap != null ? Number(s.marketCap).toLocaleString("ja-JP") + "億円" : "-")}
+    ${modalRow(tt("PER", "株価収益率。株価÷EPS。低いほど割安"), fmt(s.per))}
+    ${modalRow(tt("PBR", "株価純資産倍率。1倍未満は資産対比で割安"), fmt(s.pbr))}
+    ${modalRow(tt("ROE", "自己資本利益率。高いほど効率的に利益を出している"), fmt(s.roe, "%"))}
+    ${modalRow(tt("EPS", "1株当たり利益。高いほど収益力が高い"), fmt(s.eps))}
+    ${modalRow(tt("配当利回り", "年間配当÷株価。インカムゲインの指標"), fmt(s.dividendYield, "%"))}
+    ${modalRow(tt("時価総額", "企業の市場評価額。株価×発行済株式数"), s.marketCap != null ? Number(s.marketCap).toLocaleString("ja-JP") + "億円" : "-")}
     ${modalRow("収益性", profitText)}
   </div>`;
 }
@@ -191,14 +192,14 @@ function combinedSignal(patterns: PatternsResponse): HtmlContent {
 function technicalGrid(t: TechnicalSummary): HtmlContent {
   return html`<div class="modal-section">テクニカル指標</div>
     <div class="indicator-grid">
-      ${indicatorItem("RSI(14)", t.rsi != null ? t.rsi.toFixed(1) : "-", rsiColor(t.rsi))}
-      ${indicatorItem("MACD", t.macd.histogram != null ? (t.macd.histogram >= 0 ? "+" : "") + t.macd.histogram.toFixed(2) : "-", t.macd.histogram != null ? (t.macd.histogram >= 0 ? "#22c55e" : "#ef4444") : null)}
-      ${indicatorItem("SMA5", t.sma5 != null ? "¥" + Math.round(t.sma5).toLocaleString() : "-", null)}
-      ${indicatorItem("SMA25", t.sma25 != null ? "¥" + Math.round(t.sma25).toLocaleString() : "-", null)}
-      ${indicatorItem("BB上", t.bollingerBands.upper != null ? "¥" + Math.round(t.bollingerBands.upper).toLocaleString() : "-", null)}
-      ${indicatorItem("BB下", t.bollingerBands.lower != null ? "¥" + Math.round(t.bollingerBands.lower).toLocaleString() : "-", null)}
-      ${indicatorItem("ATR(14)", t.atr14 != null ? "¥" + t.atr14.toLocaleString() : "-", null)}
-      ${indicatorItem("乖離率", t.deviationRate25 != null ? t.deviationRate25 + "%" : "-", t.deviationRate25 != null && Math.abs(t.deviationRate25) > 5 ? "#f59e0b" : null)}
+      ${indicatorItem(tt("RSI(14)", "相対力指数。70以上で買われすぎ、30以下で売られすぎ"), t.rsi != null ? t.rsi.toFixed(1) : "-", rsiColor(t.rsi))}
+      ${indicatorItem(tt("MACD", "移動平均の収束・拡散。ヒストグラムが+なら上昇圧力"), t.macd.histogram != null ? (t.macd.histogram >= 0 ? "+" : "") + t.macd.histogram.toFixed(2) : "-", t.macd.histogram != null ? (t.macd.histogram >= 0 ? "#22c55e" : "#ef4444") : null)}
+      ${indicatorItem(tt("SMA5", "5日単純移動平均線。短期トレンドの目安"), t.sma5 != null ? "¥" + Math.round(t.sma5).toLocaleString() : "-", null)}
+      ${indicatorItem(tt("SMA25", "25日単純移動平均線。中期トレンドの目安"), t.sma25 != null ? "¥" + Math.round(t.sma25).toLocaleString() : "-", null)}
+      ${indicatorItem(tt("BB上", "ボリンジャーバンド上限。ここを超えると過熱感"), t.bollingerBands.upper != null ? "¥" + Math.round(t.bollingerBands.upper).toLocaleString() : "-", null)}
+      ${indicatorItem(tt("BB下", "ボリンジャーバンド下限。ここを割ると売られすぎ"), t.bollingerBands.lower != null ? "¥" + Math.round(t.bollingerBands.lower).toLocaleString() : "-", null)}
+      ${indicatorItem(tt("ATR(14)", "14日間の平均的な値幅。ボラティリティの指標"), t.atr14 != null ? "¥" + t.atr14.toLocaleString() : "-", null)}
+      ${indicatorItem(tt("乖離率", "25日移動平均線からの乖離。±5%超で反転の兆候"), t.deviationRate25 != null ? t.deviationRate25 + "%" : "-", t.deviationRate25 != null && Math.abs(t.deviationRate25) > 5 ? "#f59e0b" : null)}
     </div>`;
 }
 
@@ -220,10 +221,10 @@ function trendInfo(t: TechnicalSummary): HtmlContent {
         : "#94a3b8";
 
   return html`<div style="margin-top:8px;font-size:12px;color:#94a3b8">
-    MA方向:
+    ${tt("MA方向", "移動平均線のトレンド方向")}:
     <span style="color:${trendColor}">${trendLabel}</span>
     ${trend.orderAligned
-      ? html`<span style="color:#22c55e;font-size:11px">整列</span>`
+      ? html`${tt("整列", "短期・中期・長期MAが順序通りに並んでいる状態")}`
       : ""}
   </div>`;
 }
@@ -239,14 +240,14 @@ function supportResistanceInfo(t: TechnicalSummary): HtmlContent {
   return html`<div style="margin-top:8px;font-size:12px">
     ${t.supports.length > 0
       ? html`<span style="color:#22c55e"
-          >支持: ¥${t.supports
+          >${tt("支持", "サポートライン。この価格帯で下げ止まりやすい")}: ¥${t.supports
             .map((v) => v.toLocaleString())
             .join(", ¥")}</span
         > `
       : ""}
     ${t.resistances.length > 0
       ? html`<span style="color:#ef4444"
-          >抵抗: ¥${t.resistances
+          >${tt("抵抗", "レジスタンスライン。この価格帯で上値が重くなりやすい")}: ¥${t.resistances
             .map((v) => v.toLocaleString())
             .join(", ¥")}</span
         >`
@@ -342,7 +343,8 @@ function scoringSection(
       >
       ${scoring.isDisqualified
         ? html`<span
-            class="badge"
+            class="badge tt"
+            data-tooltip="${scoring.disqualifyReason || "即死ルールに該当し自動失格"}"
             style="background:rgba(239,68,68,0.15);color:#ef4444"
             >即死</span
           >`
@@ -360,10 +362,10 @@ function scoringSection(
           })()
         : ""}
     </div>
-    ${scoreBar("テクニカル", scoring.technicalScore, 40, "#3b82f6")}
-    ${scoreBar("パターン", scoring.patternScore, 20, "#a855f7")}
-    ${scoreBar("流動性", scoring.liquidityScore, 25, "#22c55e")}
-    ${scoreBar("ファンダ", scoring.fundamentalScore, 15, "#f59e0b")}`;
+    ${scoreBar(tt("テクニカル", "チャート分析（RSI・MACD等）による評価"), scoring.technicalScore, 40, "#3b82f6")}
+    ${scoreBar(tt("パターン", "ローソク足・チャートパターンによる評価"), scoring.patternScore, 20, "#a855f7")}
+    ${scoreBar(tt("流動性", "出来高・売買代金による売買しやすさの評価"), scoring.liquidityScore, 25, "#22c55e")}
+    ${scoreBar(tt("ファンダ", "PER・PBR・ROE等の財務指標による評価"), scoring.fundamentalScore, 15, "#f59e0b")}`;
 }
 
 // ========================================
@@ -549,7 +551,7 @@ function candlestickChart(
 
 /** モーダル行（ラベル: 値） */
 function modalRow(
-  label: string,
+  label: string | HtmlContent,
   value: string | HtmlContent,
 ): HtmlContent {
   return html`<div class="modal-row">
@@ -560,7 +562,7 @@ function modalRow(
 
 /** テクニカル指標1個 */
 function indicatorItem(
-  label: string,
+  label: string | HtmlContent,
   value: string,
   color: string | null,
 ): HtmlContent {
@@ -574,7 +576,7 @@ function indicatorItem(
 
 /** スコアバー */
 function scoreBar(
-  label: string,
+  label: string | HtmlContent,
   value: number,
   max: number,
   color: string,
