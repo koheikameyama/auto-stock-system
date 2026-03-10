@@ -9,6 +9,7 @@ import { getStartOfDayJST, getEndOfDayJST } from "../lib/date-utils";
 import { UNIT_SHARES, STOP_LOSS, POSITION_SIZING } from "../lib/constants";
 import { canAddToSector } from "./sector-analyzer";
 import { calculateDrawdownStatus } from "./drawdown-manager";
+import { fetchStockQuotesBatch } from "./market-data";
 
 /**
  * 新規ポジションを建てられるかチェックする
@@ -125,6 +126,9 @@ export async function canOpenPosition(
 
 /**
  * 日次損失制限に達しているかチェックする
+ *
+ * 確定損益 + 含み損益の合計で判定する。
+ * 含み損が大きい状態で新規ポジションを建てることを防ぐ。
  */
 export async function checkDailyLossLimit(): Promise<boolean> {
   const config = await prisma.tradingConfig.findFirst({
@@ -139,15 +143,21 @@ export async function checkDailyLossLimit(): Promise<boolean> {
   const maxDailyLossPct = Number(config.maxDailyLossPct);
   const maxDailyLoss = totalBudget * (maxDailyLossPct / 100);
 
-  const todayPnl = await getDailyPnl();
+  const todayPnl = await getDailyPnl(undefined, { includeUnrealized: true });
 
   return todayPnl < 0 && Math.abs(todayPnl) >= maxDailyLoss;
 }
 
 /**
- * 指定日の確定損益を計算する
+ * 指定日の損益を計算する
+ *
+ * @param date - 対象日（デフォルト: 今日）
+ * @param options.includeUnrealized - 含み損益を含めるか（デフォルト: false）
  */
-export async function getDailyPnl(date?: Date): Promise<number> {
+export async function getDailyPnl(
+  date?: Date,
+  options?: { includeUnrealized?: boolean },
+): Promise<number> {
   const startOfDay = getStartOfDayJST(date);
   const endOfDay = getEndOfDayJST(date);
 
@@ -161,8 +171,44 @@ export async function getDailyPnl(date?: Date): Promise<number> {
     },
   });
 
-  return closedPositions.reduce((sum, pos) => {
+  const realizedPnl = closedPositions.reduce((sum, pos) => {
     return sum + (pos.realizedPnl ? Number(pos.realizedPnl) : 0);
+  }, 0);
+
+  if (!options?.includeUnrealized) {
+    return realizedPnl;
+  }
+
+  const unrealizedPnl = await getUnrealizedPnlTotal();
+  return realizedPnl + unrealizedPnl;
+}
+
+/**
+ * オープン中の全ポジションの含み損益合計を計算する
+ *
+ * 最新の株価をバッチ取得し、エントリー価格との差分を算出する。
+ * 株価取得に失敗した銘柄はエントリー価格で評価（含み損益 = 0）。
+ */
+async function getUnrealizedPnlTotal(): Promise<number> {
+  const openPositions = await prisma.tradingPosition.findMany({
+    where: { status: "open" },
+    include: { stock: true },
+  });
+
+  if (openPositions.length === 0) {
+    return 0;
+  }
+
+  const tickerCodes = openPositions.map((pos) => pos.stock.tickerCode);
+  const quotes = await fetchStockQuotesBatch(tickerCodes);
+
+  return openPositions.reduce((sum, pos) => {
+    const quote = quotes.get(pos.stock.tickerCode);
+    if (!quote) {
+      return sum; // 株価取得失敗時は含み損益0として扱う
+    }
+    const entryPrice = Number(pos.entryPrice);
+    return sum + (quote.price - entryPrice) * pos.quantity;
   }, 0);
 }
 

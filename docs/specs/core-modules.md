@@ -245,8 +245,8 @@ interface MarketData {
 | 関数 | 引数 | 戻り値 | 説明 |
 |------|------|--------|------|
 | `canOpenPosition` | stockId, quantity, price | { allowed, reason } | 新規ポジション可否 |
-| `checkDailyLossLimit` | - | boolean | 日次損失制限チェック |
-| `getDailyPnl` | date | number | 日次損益 |
+| `checkDailyLossLimit` | - | boolean | 日次損失制限チェック（確定損益+含み損益） |
+| `getDailyPnl` | date?, options? | number | 日次損益（`includeUnrealized: true` で含み損益を含む） |
 | `calculatePositionSize` | price, budget, maxPct | number | 最適ポジションサイズ |
 
 ### canOpenPosition チェック項目
@@ -255,7 +255,7 @@ interface MarketData {
 2. **ポジション上限**: 現在ポジション数 < maxPositions（5）
 3. **資金**: キャッシュ残高 >= 必要金額
 4. **集中度**: 1銘柄のウェイト <= maxPositionPct（30%）
-5. **日次損失**: 当日損益が maxDailyLossPct（3%）以内
+5. **日次損失**: 当日損益（確定損益 + 含み損益）が maxDailyLossPct（3%）以内
 
 ### ポジションサイズ計算
 
