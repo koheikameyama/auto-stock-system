@@ -3,9 +3,9 @@
  *
  * 1. 今日のMarketAssessmentを取得
  * 2. 市場指標データを再取得（前場終了時点）
- * 3. AIで再評価
- * 4. センチメント悪化判定（sentinel: 悪化方向のみ適用）
- * 5. 悪化時 → MarketAssessment.sentiment を更新（→ position-monitorのディフェンシブモードが自動発動）
+ * 3. ニュース再取得 & AI再分析
+ * 4. セクターモメンタム再計算
+ * 5. AI再評価 + センチメント比較（悪化方向のみ適用）
  * 6. 未約定買い注文のキャンセル判定
  * 7. Slack通知
  */
@@ -16,6 +16,8 @@ import { DEFENSIVE_MODE } from "../lib/constants";
 import { fetchMarketData } from "../core/market-data";
 import { reassessMarketMidday } from "../core/ai-decision";
 import { notifySlack, notifyRiskAlert } from "../lib/slack";
+import { collectAndAnalyzeNews } from "./news-collector";
+import { calculateSectorMomentum } from "../core/sector-analyzer";
 
 /** センチメントの深刻度（大きいほど悪い） */
 const SENTIMENT_SEVERITY: Record<string, number> = {
@@ -46,7 +48,7 @@ export async function main() {
   }
 
   // 2. 市場指標データを再取得
-  console.log("[1/4] 市場指標データ再取得中...");
+  console.log("[1/6] 市場指標データ再取得中...");
   const marketData = await fetchMarketData();
 
   if (!marketData.nikkei || !marketData.vix) {
@@ -59,8 +61,68 @@ export async function main() {
     return;
   }
 
-  // 3. AI再評価
-  console.log("[2/4] AI再評価中...");
+  // 3. ニュース再取得 & AI再分析
+  console.log("[3/6] ニュース再取得 & AI再分析中...");
+  let newsSummary: string | undefined;
+  let newsArticleCount = 0;
+  try {
+    const newsResult = await collectAndAnalyzeNews();
+    newsArticleCount = newsResult.newArticleCount;
+    if (newsResult.analysis) {
+      const sectorText = newsResult.analysis.sectorImpacts
+        .map((s) => `  - ${s.sector}: ${s.impact} — ${s.summary}`)
+        .join("\n");
+
+      newsSummary = `- 地政学リスクレベル: ${newsResult.analysis.geopoliticalRiskLevel}/5
+- ${newsResult.analysis.geopoliticalSummary}
+- 市場インパクト: ${newsResult.analysis.marketImpact}
+- ${newsResult.analysis.marketImpactSummary}
+- 主要イベント: ${newsResult.analysis.keyEvents}
+- セクター別影響:
+${sectorText || "  特になし"}`;
+
+      console.log(
+        `  ニュース再取得完了（新着: ${newsArticleCount}件, 地政学リスク: ${newsResult.analysis.geopoliticalRiskLevel}/5, 市場: ${newsResult.analysis.marketImpact}）`,
+      );
+    } else {
+      console.log("  新着ニュースなし");
+    }
+  } catch (error) {
+    console.error("  ニュース再取得エラー（スキップして続行）:", error);
+  }
+
+  // 4. セクターモメンタム再計算
+  console.log("[4/6] セクターモメンタム再計算中...");
+  let sectorContext: string | undefined;
+  try {
+    const nikkeiWeekChange = marketData.nikkei.changePercent;
+    const sectorMomentum = await calculateSectorMomentum(nikkeiWeekChange);
+    const weakSectors = sectorMomentum.filter((s) => s.isWeak);
+    const strongSectors = sectorMomentum.filter((s) => s.isStrong);
+
+    if (weakSectors.length > 0 || strongSectors.length > 0) {
+      const parts: string[] = [];
+      if (weakSectors.length > 0) {
+        parts.push(
+          `弱体化セクター: ${weakSectors.map((s) => `${s.sectorGroup}（日経比${s.relativeStrength.toFixed(1)}%）`).join(", ")}`,
+        );
+      }
+      if (strongSectors.length > 0) {
+        parts.push(
+          `好調セクター: ${strongSectors.map((s) => `${s.sectorGroup}（日経比+${s.relativeStrength.toFixed(1)}%）`).join(", ")}`,
+        );
+      }
+      sectorContext = parts.join("\n");
+      console.log(`  ${sectorContext}`);
+    } else {
+      console.log("  セクター動向: 特筆すべき偏りなし");
+    }
+  } catch (error) {
+    console.error("  セクターモメンタム計算エラー（スキップして続行）:", error);
+  }
+
+  // 5. AI再評価
+  console.log("[5/6] AI再評価中...");
   const morningNikkeiPrice = assessment.nikkeiPrice
     ? Number(assessment.nikkeiPrice)
     : 0;
@@ -76,14 +138,15 @@ export async function main() {
     currentVix: marketData.vix.price,
     currentSp500Change: marketData.sp500?.changePercent ?? 0,
     currentUsdJpy: marketData.usdjpy?.price ?? 0,
+    newsSummary,
+    sectorContext,
   });
 
   console.log(
     `  → AI再評価: ${result.sentiment}（朝: ${assessment.sentiment}）`,
   );
 
-  // 4. Sentinel判定: 悪化方向のみ適用
-  console.log("[3/4] センチメント比較...");
+  // センチメント比較
   const morningSeverity = SENTIMENT_SEVERITY[assessment.sentiment] ?? 0;
   const middaySeverity = SENTIMENT_SEVERITY[result.sentiment] ?? 0;
   const sentimentWorsened = middaySeverity > morningSeverity;
@@ -113,8 +176,8 @@ export async function main() {
     data: updateData,
   });
 
-  // 5. 未約定注文キャンセル判定
-  console.log("[4/4] 未約定注文キャンセル判定...");
+  // 6. 未約定注文キャンセル判定
+  console.log("[6/6] 未約定注文キャンセル判定...");
   const effectiveSentiment = sentimentWorsened
     ? result.sentiment
     : assessment.sentiment;
@@ -159,17 +222,23 @@ export async function main() {
     }
   }
 
-  // 6. Slack通知
+  // Slack通知
   if (sentimentWorsened) {
     await notifyRiskAlert({
       type: "昼休み再評価（悪化）",
       message: [
         `センチメント: ${assessment.sentiment} → ${result.sentiment}`,
         `理由: ${result.reasoning}`,
+        newsArticleCount > 0
+          ? `新着ニュース: ${newsArticleCount}件`
+          : "",
+        sectorContext ? `セクター動向: ${sectorContext}` : "",
         cancelledCount > 0
           ? `キャンセル注文: ${cancelledCount}件（${cancelledTickers.join(", ")}）`
           : "キャンセル対象注文なし",
-      ].join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n"),
     });
   } else {
     await notifySlack({
@@ -178,6 +247,10 @@ export async function main() {
         `朝のセンチメント: ${assessment.sentiment}（維持）`,
         `昼の評価: ${result.sentiment}`,
         `理由: ${result.reasoning}`,
+        newsArticleCount > 0
+          ? `新着ニュース: ${newsArticleCount}件`
+          : "",
+        sectorContext ? `セクター動向: ${sectorContext}` : "",
         cancelledCount > 0
           ? `キャンセル注文: ${cancelledCount}件（${cancelledTickers.join(", ")}）`
           : "",
