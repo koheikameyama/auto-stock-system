@@ -10,7 +10,7 @@ export const POSITION_DEFAULTS = {
 
 // 注文有効期限
 export const ORDER_EXPIRY = {
-  SWING_DAYS: 3, // スイングトレード注文の有効日数
+  SWING_DAYS: 5, // スイングトレード注文の有効日数
 } as const;
 
 // 株価取得関連

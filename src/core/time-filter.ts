@@ -44,6 +44,15 @@ export function checkTimeWindow(
     TIME_WINDOW.OPENING_VOLATILITY.end.minute;
   const isOpeningVolatility = timeMinutes >= openStart && timeMinutes < openEnd;
 
+  // スイング: 寄付き30分は新規エントリー不可（乱高下回避）
+  if (strategy === "swing" && isOpeningVolatility) {
+    return {
+      canTrade: false,
+      reason: "寄付き30分の乱高下回避（09:30以降にエントリー）",
+      isOpeningVolatility: true,
+    };
+  }
+
   // デイトレ: 14:30以降は新規エントリー不可
   if (strategy === "day_trade") {
     const cutoff =
