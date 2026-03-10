@@ -13,6 +13,7 @@ import {
   TRADING_SCHEDULE,
   POSITION_DEFAULTS,
   DEFENSIVE_MODE,
+  TIME_STOP,
 } from "../lib/constants";
 import { fetchStockQuote } from "../core/market-data";
 import {
@@ -31,6 +32,11 @@ import { calculateTrailingStop } from "../core/trailing-stop";
 import { notifyOrderFilled, notifyRiskAlert } from "../lib/slack";
 import type { ExitSnapshot } from "../types/snapshots";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 export async function main() {
   console.log("=== Position Monitor 開始 ===");
@@ -186,6 +192,23 @@ export async function main() {
       exitPrice =
         quote.open < effectiveSL ? quote.open : effectiveSL;
       exitReason = trailingResult.isActivated ? "トレーリング利確" : "損切り";
+    }
+
+    // タイムストップ: 最大保有日数超過で強制決済（スイングのみ）
+    if (exitPrice === null && position.strategy !== "day_trade") {
+      const entryDate = dayjs(position.createdAt).tz("Asia/Tokyo");
+      const now = dayjs().tz("Asia/Tokyo");
+      let businessDays = 0;
+      let d = entryDate.add(1, "day");
+      while (d.isBefore(now, "day") || d.isSame(now, "day")) {
+        const dow = d.day();
+        if (dow !== 0 && dow !== 6) businessDays++;
+        d = d.add(1, "day");
+      }
+      if (businessDays >= TIME_STOP.MAX_HOLDING_DAYS) {
+        exitReason = "タイムストップ";
+        exitPrice = quote.price;
+      }
     }
 
     if (exitPrice !== null) {

@@ -217,6 +217,16 @@ export function runBacktest(
           todayBar.close >= pos.entryPrice ? "take_profit" : "stop_loss";
       }
 
+      // スイング: タイムストップ（最大保有日数）
+      if (!exitPrice && config.strategy === "swing") {
+        const entryDayIdx = tradingDays.indexOf(pos.entryDate);
+        const holdingDays = entryDayIdx >= 0 ? dayIdx - entryDayIdx : 0;
+        if (holdingDays >= 10) {
+          exitPrice = todayBar.close;
+          exitReason = "time_stop";
+        }
+      }
+
       if (exitPrice != null && exitReason != null) {
         const grossPnl = (exitPrice - pos.entryPrice) * pos.quantity;
         const pnlPct = pos.entryPrice > 0

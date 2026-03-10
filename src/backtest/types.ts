@@ -41,6 +41,7 @@ export interface SimulatedPosition {
     | "take_profit"
     | "stop_loss"
     | "trailing_profit"
+    | "time_stop"
     | "expired"
     | "still_open"
     | null;
@@ -95,6 +96,8 @@ export interface PerformanceMetrics {
   totalNetPnl: number;
   netReturnPct: number;
   costImpactPct: number;
+  expectancy: number;
+  riskRewardRatio: number;
 }
 
 export interface RankMetrics {

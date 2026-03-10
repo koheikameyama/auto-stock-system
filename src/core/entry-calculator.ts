@@ -58,7 +58,7 @@ export function calculateEntryCondition(
   limitPrice = Math.max(limitPrice, currentPrice * 0.97);
   limitPrice = Math.round(limitPrice);
 
-  // 2. 利確: レジスタンスライン or ATR×1.5（手前の方を採用）
+  // 2. 利確参考値: レジスタンス or ATR×1.5（実際の利確はトレーリングストップが担う）
   const nearestResistance =
     summary.resistances.length > 0
       ? summary.resistances
@@ -67,16 +67,13 @@ export function calculateEntryCondition(
       : null;
   const atrTarget = summary.atr14
     ? limitPrice + summary.atr14 * 1.5
-    : limitPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
+    : null;
 
   let takeProfitPrice = nearestResistance
-    ? Math.min(nearestResistance, atrTarget)
-    : atrTarget;
-  // 最低利確: POSITION_DEFAULTS.TAKE_PROFIT_RATIO
-  takeProfitPrice = Math.max(
-    takeProfitPrice,
-    limitPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO,
-  );
+    ? atrTarget
+      ? Math.min(nearestResistance, atrTarget)
+      : nearestResistance
+    : atrTarget ?? Math.round(limitPrice * 1.05);
   takeProfitPrice = Math.round(takeProfitPrice);
 
   // 3. 損切り: ATR×1.0（validateStopLoss で検証）
@@ -105,6 +102,18 @@ export function calculateEntryCondition(
   const reward = takeProfitPrice - limitPrice;
   const riskRewardRatio =
     risk > 0 ? Math.round((reward / risk) * 100) / 100 : 0;
+
+  // RRフィルタ: 期待RR < 1.5 → 数量0にしてエントリー見送り
+  if (riskRewardRatio < 1.5) {
+    return {
+      limitPrice,
+      takeProfitPrice,
+      stopLossPrice,
+      quantity: 0,
+      riskRewardRatio,
+      strategy,
+    };
+  }
 
   return {
     limitPrice,
