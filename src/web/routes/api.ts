@@ -9,6 +9,9 @@ import { getPendingOrders } from "../../core/order-executor";
 import { jobState } from "./dashboard";
 import { authMiddleware } from "../middleware/auth";
 import { notifySlack } from "../../lib/slack";
+import { fetchHistoricalData } from "../../core/market-data";
+import { analyzeTechnicals } from "../../core/technical-analysis";
+import { generatePatternsResponse } from "../../lib/candlestick-patterns";
 
 const app = new Hono();
 
@@ -95,6 +98,62 @@ app.get("/stock/:tickerCode", async (c) => {
   return c.json({
     ...stock,
     latestVolume: stock.latestVolume != null ? String(stock.latestVolume) : null,
+  });
+});
+
+/**
+ * GET /api/stock/:tickerCode/analysis - テクニカル分析データ（チャート・パターン・シグナル）
+ */
+app.get("/stock/:tickerCode/analysis", async (c) => {
+  const tickerCode = c.req.param("tickerCode");
+
+  // 並列: ヒストリカルデータ取得 + 最新スコアリング取得
+  const [ohlcv, scoring] = await Promise.all([
+    fetchHistoricalData(tickerCode),
+    prisma.scoringRecord.findFirst({
+      where: { tickerCode },
+      orderBy: { date: "desc" },
+      select: {
+        date: true,
+        totalScore: true,
+        rank: true,
+        technicalScore: true,
+        patternScore: true,
+        liquidityScore: true,
+        fundamentalScore: true,
+        isDisqualified: true,
+        disqualifyReason: true,
+        aiDecision: true,
+      },
+    }),
+  ]);
+
+  if (!ohlcv || ohlcv.length === 0) {
+    return c.json({ error: "historical data not available" }, 404);
+  }
+
+  // テクニカル分析
+  const technical = analyzeTechnicals(ohlcv);
+
+  // パターン検出（oldest-first に変換）
+  const oldestFirst = [...ohlcv].reverse();
+  const chartData = oldestFirst.map((bar, i) => ({
+    date: bar.date,
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    // 最終バーにのみテクニカル指標を付与（combinedSignal計算用）
+    rsi: i === oldestFirst.length - 1 ? technical.rsi : null,
+    histogram: i === oldestFirst.length - 1 ? technical.macd.histogram : null,
+  }));
+  const patterns = generatePatternsResponse(chartData);
+
+  return c.json({
+    ohlcv: oldestFirst,
+    technical,
+    patterns,
+    scoring,
   });
 });
 

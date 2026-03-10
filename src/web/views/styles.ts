@@ -400,4 +400,123 @@ export const CSS = `
     color: ${COLORS.textDim};
     font-size: 13px;
   }
+
+  /* Modal tabs */
+  .modal-tabs {
+    display: flex;
+    border-bottom: 1px solid ${COLORS.border};
+    padding: 0 16px;
+    gap: 0;
+  }
+  .modal-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${COLORS.textDim};
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+  .modal-tab.active {
+    color: ${COLORS.accent};
+    border-bottom-color: ${COLORS.accent};
+  }
+
+  /* Modal chart */
+  .modal-chart {
+    padding: 12px 0;
+  }
+  .modal-chart svg {
+    width: 100%;
+    display: block;
+  }
+
+  /* Signal badge */
+  .signal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .signal-buy { background: rgba(34,197,94,0.15); color: ${COLORS.profit}; }
+  .signal-sell { background: rgba(239,68,68,0.15); color: ${COLORS.loss}; }
+  .signal-neutral { background: rgba(148,163,184,0.15); color: ${COLORS.neutral}; }
+
+  /* Pattern card */
+  .pattern-card {
+    background: ${COLORS.bg};
+    border: 1px solid ${COLORS.border};
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 8px;
+  }
+  .pattern-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .pattern-card-name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .pattern-card-meta {
+    font-size: 11px;
+    color: ${COLORS.textMuted};
+    margin-top: 4px;
+  }
+
+  /* Indicator grid */
+  .indicator-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .indicator-item {
+    background: ${COLORS.bg};
+    border: 1px solid ${COLORS.border};
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .indicator-label {
+    font-size: 10px;
+    color: ${COLORS.textDim};
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .indicator-value {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Scoring bar */
+  .score-bar-wrap {
+    margin-top: 6px;
+  }
+  .score-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+  .score-bar-label span:first-child { color: ${COLORS.textMuted}; }
+  .score-bar-track {
+    height: 6px;
+    background: ${COLORS.bg};
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
 `;
