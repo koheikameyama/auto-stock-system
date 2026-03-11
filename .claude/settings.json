@@ -11,7 +11,13 @@
       "Bash(source:*)",
       "Bash(for id in 7344604 7321805 7321804 7321801 7321800 7319332 7322607 7322609 7322611 7324104 7324105 7324335 7344605 7319338 7319339)",
       "Bash(do echo -n \"Deleting $id... \")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(grep:*)",
+      "Bash(npm run backtest:*)",
+      "Bash(wc:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx prisma db pull:*)",
+      "Bash(gtimeout 15 npx tsx:*)"
     ]
   },
   "hooks": {
