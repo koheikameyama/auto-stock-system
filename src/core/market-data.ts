@@ -329,6 +329,11 @@ async function fetchIndexQuote(symbol: string): Promise<IndexQuote | null> {
       symbol,
     );
 
+    if (!result) {
+      console.warn(`[market-data] No data returned for ${symbol}`);
+      return null;
+    }
+
     return {
       price: result.regularMarketPrice ?? 0,
       previousClose: result.regularMarketPreviousClose ?? 0,
