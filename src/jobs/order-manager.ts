@@ -95,6 +95,28 @@ export async function main() {
     return;
   }
 
+  // 1.5. 当日選定外のpending買い注文をキャンセル
+  const selectedTickerCodes = new Set(selectedStocks.map((s) => s.tickerCode));
+  const pendingBuyOrders = await prisma.tradingOrder.findMany({
+    where: { side: "buy", status: "pending" },
+    include: { stock: true },
+  });
+  const staleOrders = pendingBuyOrders.filter(
+    (o) => !selectedTickerCodes.has(o.stock.tickerCode),
+  );
+  if (staleOrders.length > 0) {
+    await prisma.tradingOrder.updateMany({
+      where: { id: { in: staleOrders.map((o) => o.id) } },
+      data: { status: "cancelled" },
+    });
+    for (const o of staleOrders) {
+      console.log(
+        `  [${o.stock.tickerCode}] 当日選定外のためpending注文キャンセル (order: ${o.id})`,
+      );
+    }
+    console.log(`  選定外pending注文キャンセル: ${staleOrders.length}件`);
+  }
+
   // 2. 残高を取得（ループ内で注文作成ごとに減算する）
   let cashBalance = await getCashBalance();
 
