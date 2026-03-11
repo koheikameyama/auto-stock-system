@@ -42,7 +42,8 @@ SIDECAR_SECRET = os.environ.get("SIDECAR_SECRET", "")
 
 PROXY = os.environ.get("YFINANCE_PROXY", "")
 if PROXY:
-    yf.config.network.proxy = PROXY
+    # curl_cffi の Session.proxies は dict を期待する
+    yf.config.network.proxy = {"http": PROXY, "https": PROXY}
     logger.info(f"Proxy configured: {PROXY.split('@')[-1] if '@' in PROXY else PROXY}")
 
 
@@ -243,11 +244,13 @@ async def get_quote(symbol: str):
     try:
         def _fetch():
             ticker = yf.Ticker(symbol)
-            info = ticker.info
-            if isinstance(info, dict):
-                return info
-            # info が dict でない場合、fast_info にフォールバック
-            logger.warning(f"ticker.info returned {type(info).__name__} for {symbol}, falling back to fast_info")
+            try:
+                info = ticker.info
+                if isinstance(info, dict):
+                    return info
+                logger.warning(f"ticker.info returned {type(info).__name__} for {symbol}, falling back to fast_info")
+            except Exception as e:
+                logger.warning(f"ticker.info raised {type(e).__name__} for {symbol}: {e}, falling back to fast_info")
             return _build_info_from_fast_info(ticker)
         info = await throttled_with_retry(_fetch)
         return parse_quote_from_info(info, symbol)
@@ -270,10 +273,13 @@ async def get_quotes_batch(req: QuotesBatchRequest):
         try:
             def _fetch(s=symbol):
                 ticker = yf.Ticker(s)
-                info = ticker.info
-                if isinstance(info, dict):
-                    return info
-                logger.warning(f"ticker.info returned {type(info).__name__} for {s}, falling back to fast_info")
+                try:
+                    info = ticker.info
+                    if isinstance(info, dict):
+                        return info
+                    logger.warning(f"ticker.info returned {type(info).__name__} for {s}, falling back to fast_info")
+                except Exception as e:
+                    logger.warning(f"ticker.info raised {type(e).__name__} for {s}: {e}, falling back to fast_info")
                 return _build_info_from_fast_info(ticker)
             info = await throttled_with_retry(_fetch)
             results.append(parse_quote_from_info(info, symbol))
@@ -383,10 +389,13 @@ async def get_market():
         try:
             def _fetch(s=symbol):
                 ticker = yf.Ticker(s)
-                info = ticker.info
-                if isinstance(info, dict):
-                    return info
-                logger.warning(f"ticker.info returned {type(info).__name__} for {s}, falling back to fast_info")
+                try:
+                    info = ticker.info
+                    if isinstance(info, dict):
+                        return info
+                    logger.warning(f"ticker.info returned {type(info).__name__} for {s}, falling back to fast_info")
+                except Exception as e:
+                    logger.warning(f"ticker.info raised {type(e).__name__} for {s}: {e}, falling back to fast_info")
                 return _build_info_from_fast_info(ticker)
             info = await throttled_with_retry(_fetch)
             result[key] = parse_index_quote_from_info(info)
@@ -403,9 +412,13 @@ async def get_events(symbol: str):
     try:
         def _fetch():
             ticker = yf.Ticker(symbol)
-            info = ticker.info
-            if not isinstance(info, dict):
-                logger.warning(f"ticker.info returned {type(info).__name__} for {symbol}, falling back to fast_info")
+            try:
+                info = ticker.info
+                if not isinstance(info, dict):
+                    logger.warning(f"ticker.info returned {type(info).__name__} for {symbol}, falling back to fast_info")
+                    info = _build_info_from_fast_info(ticker)
+            except Exception as e:
+                logger.warning(f"ticker.info raised {type(e).__name__} for {symbol}: {e}, falling back to fast_info")
                 info = _build_info_from_fast_info(ticker)
             cal = None
             try:
