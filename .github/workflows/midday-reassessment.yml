@@ -1,4 +1,4 @@
-name: Midday Reassessment
+name: "[cron-job.org] Midday Reassessment"
 
 on:
   workflow_dispatch:

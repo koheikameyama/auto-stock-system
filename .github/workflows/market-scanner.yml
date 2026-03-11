@@ -1,4 +1,4 @@
-name: Market Scanner
+name: "[← morning-analysis] Market Scanner"
 
 on:
   # schedule:

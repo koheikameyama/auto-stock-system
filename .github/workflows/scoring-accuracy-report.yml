@@ -1,4 +1,4 @@
-name: Scoring Accuracy Report
+name: "[Scheduled] Scoring Accuracy Report"
 
 on:
   schedule:

@@ -1,4 +1,4 @@
-name: JPX Delisting Sync
+name: "[cron-job.org] JPX Delisting Sync"
 
 on:
   workflow_dispatch:

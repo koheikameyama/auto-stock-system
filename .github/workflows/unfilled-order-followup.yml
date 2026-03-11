@@ -1,4 +1,4 @@
-name: Unfilled Order Follow-Up
+name: "[Scheduled] Unfilled Order Follow-Up"
 
 on:
   schedule:

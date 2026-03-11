@@ -1,4 +1,4 @@
-name: End of Day
+name: "[cron-job.org] End of Day"
 
 on:
   workflow_dispatch:

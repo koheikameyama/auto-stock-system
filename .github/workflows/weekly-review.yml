@@ -1,4 +1,4 @@
-name: Weekly Review
+name: "[Scheduled] Weekly Review"
 
 on:
   schedule:

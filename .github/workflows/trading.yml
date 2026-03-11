@@ -1,4 +1,4 @@
-name: Trading System
+name: "[Manual] Trading System"
 
 on:
   workflow_dispatch:

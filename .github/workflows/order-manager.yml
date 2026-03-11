@@ -1,4 +1,4 @@
-name: Order Manager
+name: "[cron-job.org] Order Manager"
 
 on:
   workflow_dispatch:

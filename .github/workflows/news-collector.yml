@@ -1,4 +1,4 @@
-name: News Collector
+name: "[← morning-analysis] News Collector"
 
 on:
   workflow_dispatch:

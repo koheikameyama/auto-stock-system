@@ -1,4 +1,4 @@
-name: Defensive Exit Follow-Up
+name: "[Scheduled] Defensive Exit Follow-Up"
 
 on:
   schedule:

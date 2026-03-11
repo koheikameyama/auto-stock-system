@@ -1,4 +1,4 @@
-name: Ghost Review
+name: "[cron-job.org] Ghost Review"
 
 on:
   # schedule:

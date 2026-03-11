@@ -1,4 +1,4 @@
-name: Check OpenAI API Usage
+name: "[Scheduled] Check OpenAI API Usage"
 
 on:
   schedule:

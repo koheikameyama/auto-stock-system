@@ -1,4 +1,4 @@
-name: Morning Analysis
+name: "[Scheduled] Morning Analysis"
 
 on:
   schedule:
