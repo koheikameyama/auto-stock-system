@@ -8,7 +8,7 @@ import { YAHOO_FINANCE } from "./constants";
 import { markFailure, markSuccess } from "./yahoo-finance-client";
 
 /** インスタンス再生成後の追加リトライ回数 */
-const EXTRA_RETRIES_AFTER_RECREATE = 2;
+const EXTRA_RETRIES_AFTER_RECREATE = 1;
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

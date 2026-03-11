@@ -17,7 +17,16 @@
       "Bash(wc:*)",
       "Bash(npx tsx:*)",
       "Bash(npx prisma db pull:*)",
-      "Bash(gtimeout 15 npx tsx:*)"
+      "Bash(gtimeout 15 npx tsx:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run:*)",
+      "Bash(pip3 show:*)",
+      "Bash(/Users/kouheikameyama/.asdf/shims/pip3 install:*)",
+      "Bash(git -C /Users/kouheikameyama/development/auto-stock-system status)",
+      "Bash(git -C /Users/kouheikameyama/development/auto-stock-system diff)",
+      "Bash(git -C /Users/kouheikameyama/development/auto-stock-system log --oneline -5)",
+      "Bash(git -C /Users/kouheikameyama/development/auto-stock-system add src/lib/yfinance-client.ts src/lib/constants/trading.ts src/lib/retry-utils.ts yfinance-service/requirements.txt .claude/settings.json)",
+      "Bash(git -C:*)"
     ]
   },
   "hooks": {

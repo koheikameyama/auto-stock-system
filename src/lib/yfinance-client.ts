@@ -9,6 +9,10 @@ const YFINANCE_URL = process.env.YFINANCE_URL || "http://localhost:8000";
 const SIDECAR_SECRET = process.env.SIDECAR_SECRET || "";
 const TIMEOUT_MS = 30_000;
 
+// リトライ設定
+const RETRY_MAX = 3;
+const RETRY_BASE_DELAY_MS = 2_000; // 2s → 4s → 8s
+
 // ========================================
 // レスポンス型
 // ========================================
@@ -69,27 +73,64 @@ export interface YfNewsItem {
 }
 
 // ========================================
+// リトライヘルパー
+// ========================================
+
+function isRetryable(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message;
+  // 429 Rate Limit / 500 内部エラー
+  if (msg.includes("429") || msg.includes("500")) return true;
+  // fetch failed（ネットワーク系）
+  if (msg.includes("fetch failed")) return true;
+  // タイムアウト
+  if (error.name === "TimeoutError" || error.name === "AbortError") return true;
+  // ネットワークエラー
+  if (/ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENETUNREACH|EAI_AGAIN/.test(msg))
+    return true;
+  return false;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ========================================
 // HTTP ヘルパー
 // ========================================
 
 async function yfinanceFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${YFINANCE_URL}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(SIDECAR_SECRET ? { "X-Api-Key": SIDECAR_SECRET } : {}),
-      ...options?.headers,
-    },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  for (let attempt = 0; attempt <= RETRY_MAX; attempt++) {
+    try {
+      const url = `${YFINANCE_URL}${path}`;
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(SIDECAR_SECRET ? { "X-Api-Key": SIDECAR_SECRET } : {}),
+          ...options?.headers,
+        },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`yfinance ${path}: ${response.status} ${text}`);
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`yfinance ${path}: ${response.status} ${text}`);
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error: unknown) {
+      if (!isRetryable(error) || attempt >= RETRY_MAX) {
+        throw error;
+      }
+      const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;
+      console.warn(
+        `[yfinance-client] ${path}: リトライ ${attempt + 1}/${RETRY_MAX} after ${delay}ms [${error instanceof Error ? error.message.slice(0, 60) : "unknown"}]`,
+      );
+      await sleep(delay);
+    }
   }
-
-  return response.json() as Promise<T>;
+  throw new Error("unreachable");
 }
 
 // ========================================
