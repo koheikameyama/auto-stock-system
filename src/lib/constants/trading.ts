@@ -187,6 +187,7 @@ export function getSectorGroup(tseSector: string | null): string | null {
 export const SECTOR_RISK = {
   MAX_SAME_SECTOR_POSITIONS: 1, // 同一セクター最大保有数
   WEAK_SECTOR_THRESHOLD: -2.0, // 弱セクター判定（日経比 相対パフォーマンス%）
+  NEWS_SENTIMENT_DAYS: 3, // ニュースセンチメント集約日数
 } as const;
 
 // ========================================

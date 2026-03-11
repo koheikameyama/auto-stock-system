@@ -27,6 +27,7 @@ import {
   UNIT_SHARES,
   TRADING_DEFAULTS,
   MARKET_INDEX,
+  SECTOR_RISK,
   getSectorGroup,
 } from "../lib/constants";
 import {
@@ -65,12 +66,18 @@ import {
 import type { MarketRegime } from "../core/market-regime";
 import { calculateDrawdownStatus } from "../core/drawdown-manager";
 import type { DrawdownStatus } from "../core/drawdown-manager";
-import { calculateSectorMomentum } from "../core/sector-analyzer";
+import {
+  calculateSectorMomentum,
+  getNewsSectorSentiment,
+} from "../core/sector-analyzer";
 import {
   aggregateDailyToWeekly,
   analyzeWeeklyTrend,
 } from "../lib/technical-indicators";
-import type { SectorMomentum } from "../core/sector-analyzer";
+import type {
+  SectorMomentum,
+  NewsSectorSentiment,
+} from "../core/sector-analyzer";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -588,18 +595,32 @@ ${sectorText || "  特になし"}`;
   // セクターモメンタムフィルタ（弱セクター銘柄を除外）
   const nikkeiWeekChange = marketData.nikkei.changePercent;
   const sectorMomentum = await calculateSectorMomentum(nikkeiWeekChange);
+  const newsSentiment = await getNewsSectorSentiment();
+  const newsNegativeSectors = new Set(
+    newsSentiment.filter((s) => s.isNewsNegative).map((s) => s.sectorGroup),
+  );
+
+  // テクニカル弱 OR ニュース連続ネガティブ → 弱セクター
   const weakSectors = new Set(
-    sectorMomentum.filter((s) => s.isWeak).map((s) => s.sectorGroup),
+    sectorMomentum
+      .filter((s) => s.isWeak || newsNegativeSectors.has(s.sectorGroup))
+      .map((s) => s.sectorGroup),
   );
 
   if (weakSectors.size > 0) {
     console.log(`  弱セクター: ${[...weakSectors].join(", ")}`);
+    if (newsNegativeSectors.size > 0) {
+      console.log(`    うちニュース起因: ${[...newsNegativeSectors].join(", ")}`);
+    }
     const beforeCount = filtered.length;
     filtered = filtered.filter((c) => {
       const stock = candidates.find((s) => s.tickerCode === c.tickerCode);
       const sectorGroup = getSectorGroup(stock?.jpxSectorName ?? null);
       if (sectorGroup && weakSectors.has(sectorGroup)) {
-        console.log(`  弱セクター除外: ${c.tickerCode}（${sectorGroup}）`);
+        const reason = newsNegativeSectors.has(sectorGroup) && !sectorMomentum.find((s) => s.sectorGroup === sectorGroup)?.isWeak
+          ? "ニュース連続ネガティブ"
+          : "テクニカル弱";
+        console.log(`  弱セクター除外: ${c.tickerCode}（${sectorGroup} / ${reason}）`);
         return false;
       }
       return true;
@@ -740,6 +761,14 @@ ${sectorText || "  特になし"}`;
       if (sectorInfo) {
         riskParts.push(
           `セクター(${sectorGroup}): 相対強度 ${sectorInfo.relativeStrength >= 0 ? "+" : ""}${sectorInfo.relativeStrength.toFixed(1)}%`,
+        );
+      }
+      const newsInfo = sectorGroup
+        ? newsSentiment.find((s) => s.sectorGroup === sectorGroup)
+        : null;
+      if (newsInfo && newsInfo.score !== 0) {
+        riskParts.push(
+          `ニュース傾向(${sectorGroup}): ${newsInfo.score > 0 ? "ポジティブ" : "ネガティブ"}（直近${SECTOR_RISK.NEWS_SENTIMENT_DAYS}日: +${newsInfo.positiveCount}/-${newsInfo.negativeCount}）`,
         );
       }
       const contrarianInfo = contrarianBonusMap.get(c.tickerCode);
