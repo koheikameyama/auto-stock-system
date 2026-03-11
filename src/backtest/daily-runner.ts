@@ -55,10 +55,19 @@ async function buildCandidateMap(): Promise<CandidateMapResult> {
     select: { date: true },
   });
 
-  if (!oldest) {
-    // ScoringRecordが空 → Stockテーブルから出来高上位銘柄でフォールバック
+  // ScoringRecordが空 or 蓄積期間が短い場合はフォールバック
+  const scoringMonths = oldest
+    ? dayjs().diff(dayjs(oldest.date), "month")
+    : 0;
+  const needsFallback =
+    !oldest || scoringMonths < DAILY_BACKTEST.MIN_SCORING_RECORD_MONTHS;
+
+  if (needsFallback) {
+    const reason = !oldest
+      ? "ScoringRecord が空"
+      : `ScoringRecord 蓄積期間が短い (${scoringMonths}ヶ月 < ${DAILY_BACKTEST.MIN_SCORING_RECORD_MONTHS}ヶ月)`;
     console.log(
-      "[daily-backtest] ScoringRecord が空のため、Stockテーブルから出来高上位銘柄を使用",
+      `[daily-backtest] ${reason} → Stockテーブルから出来高上位銘柄を使用（${DAILY_BACKTEST.LOOKBACK_MONTHS}ヶ月ルックバック）`,
     );
     const stocks = await prisma.stock.findMany({
       where: {

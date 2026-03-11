@@ -14,6 +14,9 @@ export const DAILY_BACKTEST = {
   /** シミュレーション期間（ローリング） */
   LOOKBACK_MONTHS: 6,
 
+  /** ScoringRecord蓄積がこの月数未満ならフォールバックモードを使用 */
+  MIN_SCORING_RECORD_MONTHS: 3,
+
   /** ScoringRecordからのティッカー選定 */
   TICKER_SELECTION: {
     LOOKBACK_DAYS: 30,
