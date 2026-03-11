@@ -11,7 +11,8 @@ import { calculateTradeCosts } from "./trading-costs";
 /**
  * 新規ポジションを建てる
  *
- * ポジションレコードと買い注文（約定済み）をトランザクションで同時に作成する。
+ * ポジションレコードを作成する。
+ * 注文レコードはposition-monitorで元の注文にpositionIdを紐づけるため、ここでは作成しない。
  */
 export async function openPosition(
   stockId: string,
@@ -23,42 +24,21 @@ export async function openPosition(
   entrySnapshot?: object,
   entryAtr?: number | null,
 ): Promise<TradingPosition> {
-  return prisma.$transaction(async (tx) => {
-    const position = await tx.tradingPosition.create({
-      data: {
-        stockId,
-        strategy,
-        entryPrice,
-        quantity,
-        takeProfitPrice,
-        stopLossPrice,
-        status: "open",
-        entrySnapshot: entrySnapshot ?? undefined,
-        maxHighDuringHold: entryPrice,
-        minLowDuringHold: entryPrice,
-        trailingStopPrice: null,
-        entryAtr: entryAtr ?? null,
-      },
-    });
-
-    // 買い注文を約定済みで作成（エントリー記録）
-    await tx.tradingOrder.create({
-      data: {
-        stockId,
-        side: "buy",
-        orderType: "limit",
-        strategy,
-        limitPrice: entryPrice,
-        quantity,
-        status: "filled",
-        filledPrice: entryPrice,
-        filledAt: new Date(),
-        reasoning: `新規ポジション建て（${strategy}）`,
-        positionId: position.id,
-      },
-    });
-
-    return position;
+  return prisma.tradingPosition.create({
+    data: {
+      stockId,
+      strategy,
+      entryPrice,
+      quantity,
+      takeProfitPrice,
+      stopLossPrice,
+      status: "open",
+      entrySnapshot: entrySnapshot ?? undefined,
+      maxHighDuringHold: entryPrice,
+      minLowDuringHold: entryPrice,
+      trailingStopPrice: null,
+      entryAtr: entryAtr ?? null,
+    },
   });
 }
 
