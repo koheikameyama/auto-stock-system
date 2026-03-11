@@ -1,23 +1,20 @@
 /**
  * バックテスト用ヒストリカルデータ取得
  *
- * Yahoo Finance から指定期間の OHLCV データを取得する。
+ * market-data-provider を経由して指定期間の OHLCV データを取得する。
  * oldest-first（時系列順）で返す。
  */
 
 import pLimit from "p-limit";
 import dayjs from "dayjs";
 import type { OHLCVData } from "../core/technical-analysis";
-import { getYahooFinance } from "../lib/yahoo-finance-client";
 import { normalizeTickerCode } from "../lib/ticker-utils";
-import { withRetry as _withRetry } from "../lib/retry-utils";
-import { throttledYahooRequest } from "../lib/yahoo-finance-throttle";
+import {
+  providerFetchHistoricalRange,
+} from "../lib/market-data-provider";
 
 const LOOKBACK_CALENDAR_DAYS = 120;
 const FETCH_CONCURRENCY = 3;
-
-const retry = <T>(fn: () => Promise<T>, label: string) =>
-  _withRetry(fn, label, "backtest");
 
 /**
  * 単一銘柄のヒストリカルデータを取得
@@ -29,24 +26,18 @@ export async function fetchBacktestData(
   endDate: string,
 ): Promise<OHLCVData[]> {
   const symbol = normalizeTickerCode(tickerCode);
-  const period1 = dayjs(startDate)
+  const adjustedStart = dayjs(startDate)
     .subtract(LOOKBACK_CALENDAR_DAYS, "day")
-    .toDate();
-  const period2 = dayjs(endDate).add(1, "day").toDate();
+    .format("YYYY-MM-DD");
+  const adjustedEnd = dayjs(endDate).add(1, "day").format("YYYY-MM-DD");
 
-  const result = await retry(
-    () =>
-      throttledYahooRequest(async () =>
-        (await getYahooFinance()).chart(symbol, {
-          period1,
-          period2,
-          interval: "1d",
-        }),
-      ),
+  const bars = await providerFetchHistoricalRange(
     symbol,
+    adjustedStart,
+    adjustedEnd,
   );
 
-  const bars: OHLCVData[] = result.quotes
+  return bars
     .filter(
       (bar) =>
         bar.open != null &&
@@ -55,16 +46,14 @@ export async function fetchBacktestData(
         bar.close != null,
     )
     .map((bar) => ({
-      date: dayjs(bar.date).format("YYYY-MM-DD"),
-      open: bar.open!,
-      high: bar.high!,
-      low: bar.low!,
-      close: bar.close!,
+      date: bar.date,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
       volume: bar.volume ?? 0,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
-
-  return bars;
 }
 
 /**
@@ -76,27 +65,23 @@ export async function fetchNikkeiViData(
   startDate: string,
   endDate: string,
 ): Promise<Map<string, number>> {
-  const period1 = dayjs(startDate).subtract(LOOKBACK_CALENDAR_DAYS, "day").toDate();
-  const period2 = dayjs(endDate).add(1, "day").toDate();
+  const adjustedStart = dayjs(startDate)
+    .subtract(LOOKBACK_CALENDAR_DAYS, "day")
+    .format("YYYY-MM-DD");
+  const adjustedEnd = dayjs(endDate).add(1, "day").format("YYYY-MM-DD");
 
   // 日経VIを試行
   try {
-    const result = await retry(
-      () =>
-        throttledYahooRequest(async () =>
-          (await getYahooFinance()).chart("^JNV", {
-            period1,
-            period2,
-            interval: "1d",
-          }),
-        ),
+    const bars = await providerFetchHistoricalRange(
       "^JNV",
+      adjustedStart,
+      adjustedEnd,
     );
 
     const nikkeiViMap = new Map<string, number>();
-    for (const bar of result.quotes) {
+    for (const bar of bars) {
       if (bar.close != null) {
-        nikkeiViMap.set(dayjs(bar.date).format("YYYY-MM-DD"), bar.close);
+        nikkeiViMap.set(bar.date, bar.close);
       }
     }
 
@@ -109,22 +94,16 @@ export async function fetchNikkeiViData(
   }
 
   // フォールバック: VIXデータ × 1.3 で日経VIを近似
-  const result = await retry(
-    () =>
-      throttledYahooRequest(async () =>
-        (await getYahooFinance()).chart("^VIX", {
-          period1,
-          period2,
-          interval: "1d",
-        }),
-      ),
-    "^VIX (fallback)",
+  const bars = await providerFetchHistoricalRange(
+    "^VIX",
+    adjustedStart,
+    adjustedEnd,
   );
 
   const nikkeiViMap = new Map<string, number>();
-  for (const bar of result.quotes) {
+  for (const bar of bars) {
     if (bar.close != null) {
-      nikkeiViMap.set(dayjs(bar.date).format("YYYY-MM-DD"), bar.close * 1.3);
+      nikkeiViMap.set(bar.date, bar.close * 1.3);
     }
   }
 

@@ -13,7 +13,7 @@ import {
   NEWS_RSS_FEEDS,
   NEWS_CONCURRENCY,
 } from "../lib/constants";
-import { throttledYahooRequest } from "../lib/yahoo-finance-throttle";
+import { providerFetchNews } from "../lib/market-data-provider";
 
 // ========================================
 // 共通インターフェース
@@ -172,33 +172,29 @@ export async function fetchFromGoogleRSS(): Promise<RawNewsItem[]> {
 export async function fetchFromYahooFinance(
   tickerCodes: string[],
 ): Promise<RawNewsItem[]> {
-  const { getYahooFinance } = await import("../lib/yahoo-finance-client");
   const limit = pLimit(NEWS_CONCURRENCY.YAHOO_STOCK_NEWS);
 
   const results = await Promise.all(
     tickerCodes.map((ticker) =>
       limit(async (): Promise<RawNewsItem[]> => {
         try {
-          const result = await throttledYahooRequest(async () =>
-            (await getYahooFinance()).search(ticker, {
-              newsCount: NEWS_SOURCES.YAHOO_FINANCE.MAX_RESULTS,
-            }),
+          const newsItems = await providerFetchNews(
+            ticker,
+            NEWS_SOURCES.YAHOO_FINANCE.MAX_RESULTS,
           );
 
-          if (!result.news || result.news.length === 0) return [];
+          if (newsItems.length === 0) return [];
 
-          return result.news
-            .filter((n) => n.title && n.link)
-            .map((n) => ({
-              source: "yahoo_finance" as const,
-              title: n.title,
-              url: n.link,
-              publishedAt: n.providerPublishTime
-                ? new Date(n.providerPublishTime)
-                : new Date(),
-              category: "stock" as const,
-              tickerCode: ticker,
-            }));
+          return newsItems.map((n) => ({
+            source: "yahoo_finance" as const,
+            title: n.title,
+            url: n.link,
+            publishedAt: n.providerPublishTime
+              ? new Date(n.providerPublishTime)
+              : new Date(),
+            category: "stock" as const,
+            tickerCode: ticker,
+          }));
         } catch (error) {
           console.error(`[news-fetcher] Yahoo Finance error for ${ticker}:`, error);
           return [];

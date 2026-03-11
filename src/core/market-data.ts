@@ -1,19 +1,23 @@
 /**
  * 市場データ取得モジュール
  *
- * yahoo-finance2 を使用して株価・市場指標データを取得する
+ * market-data-provider を使用して株価・市場指標データを取得する。
+ * プライマリ: yfinance (Python sidecar)
+ * フォールバック: yahoo-finance2 (Node.js)
  */
 
 import dayjs from "dayjs";
 
-import { getYahooFinance } from "../lib/yahoo-finance-client";
-import { YAHOO_FINANCE, DATA_QUALITY } from "../lib/constants";
 import { normalizeTickerCode } from "../lib/ticker-utils";
-import { sleep, withRetry as _withRetry } from "../lib/retry-utils";
-import { throttledYahooRequest } from "../lib/yahoo-finance-throttle";
-
-const retry = <T>(fn: () => Promise<T>, label: string) =>
-  _withRetry(fn, label, "market-data");
+import { DATA_QUALITY, YAHOO_FINANCE } from "../lib/constants";
+import { sleep } from "../lib/retry-utils";
+import {
+  providerFetchQuote,
+  providerFetchQuotesBatch,
+  providerFetchHistorical,
+  providerFetchMarket,
+  providerFetchEvents,
+} from "../lib/market-data-provider";
 
 // ========================================
 // インターフェース
@@ -62,43 +66,6 @@ export interface MarketData {
 }
 
 // ========================================
-// 市場指標シンボル
-// ========================================
-
-const MARKET_SYMBOLS = {
-  NIKKEI: "^N225",
-  SP500: "^GSPC",
-  VIX: "^VIX",
-  NIKKEI_VI: "^JNV",
-  USDJPY: "JPY=X",
-  CME_FUTURES: "NKD=F",
-} as const;
-
-// ========================================
-// ユーティリティ
-// ========================================
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseQuoteResult(result: any, symbol: string): StockQuote {
-  return {
-    tickerCode: symbol,
-    price: result.regularMarketPrice ?? 0,
-    previousClose: result.regularMarketPreviousClose ?? 0,
-    change: result.regularMarketChange ?? 0,
-    changePercent: result.regularMarketChangePercent ?? 0,
-    volume: result.regularMarketVolume ?? 0,
-    high: result.regularMarketDayHigh ?? 0,
-    low: result.regularMarketDayLow ?? 0,
-    open: result.regularMarketOpen ?? 0,
-    // ファンダメンタルズ
-    per: result.trailingPE ?? null,
-    pbr: result.priceToBook ?? null,
-    eps: result.epsTrailingTwelveMonths ?? null,
-    marketCap: result.marketCap ?? null,
-  };
-}
-
-// ========================================
 // 個別銘柄データ取得
 // ========================================
 
@@ -111,12 +78,8 @@ export async function fetchStockQuote(
   const symbol = normalizeTickerCode(tickerCode);
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await retry(
-      () => throttledYahooRequest(async () => (await getYahooFinance()).quote(symbol)),
-      symbol,
-    );
-    return parseQuoteResult(result, symbol);
+    const result = await providerFetchQuote(symbol);
+    return result as StockQuote;
   } catch (error) {
     console.error(`[market-data] Failed to fetch quote for ${symbol}:`, error);
     return null;
@@ -124,8 +87,7 @@ export async function fetchStockQuote(
 }
 
 /**
- * 複数銘柄のクォートをバッチ取得（yahoo-finance2のネイティブバッチAPI使用）
- * 1リクエストで複数銘柄を取得するため、個別取得よりはるかに高速
+ * 複数銘柄のクォートをバッチ取得（1リクエストで複数銘柄）
  */
 export async function fetchStockQuotesBatch(
   tickerCodes: string[],
@@ -137,16 +99,11 @@ export async function fetchStockQuotesBatch(
     const batch = symbols.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const batchResults: any[] = await retry(
-        () => throttledYahooRequest(async () => (await getYahooFinance()).quote(batch)),
-        `batch[${i}..${i + batch.length}]`,
-      );
+      const batchResults = await providerFetchQuotesBatch(batch);
 
       for (const result of batchResults) {
-        const symbol = result.symbol as string;
-        if (symbol) {
-          results.set(symbol, parseQuoteResult(result, symbol));
+        if (result && result.tickerCode) {
+          results.set(result.tickerCode, result as StockQuote);
         }
       }
     } catch (error) {
@@ -157,12 +114,8 @@ export async function fetchStockQuotesBatch(
       // バッチ失敗時は個別にフォールバック
       for (const symbol of batch) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result: any = await retry(
-            () => throttledYahooRequest(async () => (await getYahooFinance()).quote(symbol)),
-            symbol,
-          );
-          results.set(symbol, parseQuoteResult(result, symbol));
+          const result = await providerFetchQuote(symbol);
+          results.set(result.tickerCode, result as StockQuote);
         } catch {
           console.error(`[market-data] Individual fallback failed: ${symbol}`);
         }
@@ -195,7 +148,7 @@ export async function fetchStockQuotes(
 // ========================================
 
 /**
- * 過去60日間のOHLCVデータを取得（テクニカル分析用）
+ * 過去のOHLCVデータを取得（テクニカル分析用）
  * @returns OHLCVデータ配列（新しい順 = newest-first）
  */
 export async function fetchHistoricalData(
@@ -204,34 +157,19 @@ export async function fetchHistoricalData(
   const symbol = normalizeTickerCode(tickerCode);
 
   try {
-    const period1 = dayjs().subtract(YAHOO_FINANCE.HISTORICAL_DAYS, "day").toDate();
+    const bars = await providerFetchHistorical(symbol, YAHOO_FINANCE.HISTORICAL_DAYS);
 
-    const result = await retry(() => throttledYahooRequest(async () => (await getYahooFinance()).chart(symbol, {
-      period1,
-      period2: dayjs().toDate(),
-      interval: "1d",
-    })), symbol);
+    const totalBars = bars.length;
 
-    const totalBars = result.quotes.length;
-
-    // null/無効なOHLCバーを除外（close=0はテクニカル指標の除算エラーを引き起こす）
-    const validBars = result.quotes
-      .filter(
-        (bar) =>
-          bar.open != null &&
-          bar.high != null &&
-          bar.low != null &&
-          bar.close != null &&
-          bar.close > 0,
-      )
-      .map((bar) => ({
-        date: dayjs(bar.date).format("YYYY-MM-DD"),
-        open: bar.open!,
-        high: bar.high!,
-        low: bar.low!,
-        close: bar.close!,
-        volume: bar.volume ?? 0,
-      }));
+    // 有効なバーのみ残す（provider 側でフィルタ済みだが念のため）
+    const validBars = bars.filter(
+      (bar) =>
+        bar.open != null &&
+        bar.high != null &&
+        bar.low != null &&
+        bar.close != null &&
+        bar.close > 0,
+    );
 
     // 欠損率チェック
     if (totalBars > 0) {
@@ -272,9 +210,6 @@ export async function fetchHistoricalData(
 /**
  * 前日比が異常に大きいバーを除外する
  * テクニカル指標の歪みを防ぐが、株式分割日は正常な価格変動なのでスキップする
- *
- * @param bars OHLCVバー
- * @param knownSplitDates 分割日のセット（"YYYY-MM-DD"形式）。該当日は除外しない
  */
 function removeAnomalies(
   bars: OHLCVBar[],
@@ -296,7 +231,6 @@ function removeAnomalies(
     if (changePct <= DATA_QUALITY.MAX_DAILY_CHANGE_PCT) {
       result.push(sorted[i]);
     } else if (knownSplitDates?.has(sorted[i].date)) {
-      // 株式分割日: 正常な価格変動なので除外しない
       result.push(sorted[i]);
     } else {
       console.warn(
@@ -312,48 +246,23 @@ function removeAnomalies(
 // 市場指標データ取得
 // ========================================
 
-async function fetchIndexQuote(symbol: string): Promise<IndexQuote | null> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await retry(
-      () => throttledYahooRequest(async () => (await getYahooFinance()).quote(symbol)),
-      symbol,
-    );
-
-    if (!result) {
-      console.warn(`[market-data] No data returned for ${symbol}`);
-      return null;
-    }
-
-    return {
-      price: result.regularMarketPrice ?? 0,
-      previousClose: result.regularMarketPreviousClose ?? 0,
-      change: result.regularMarketChange ?? 0,
-      changePercent: result.regularMarketChangePercent ?? 0,
-    };
-  } catch (error) {
-    console.error(
-      `[market-data] Failed to fetch index quote for ${symbol}:`,
-      error,
-    );
-    return null;
-  }
-}
-
 /**
  * 市場指標データを一括取得
  */
 export async function fetchMarketData(): Promise<MarketData> {
-  const [nikkei, sp500, vix, nikkeiVi, usdjpy, cmeFutures] = await Promise.all([
-    fetchIndexQuote(MARKET_SYMBOLS.NIKKEI),
-    fetchIndexQuote(MARKET_SYMBOLS.SP500),
-    fetchIndexQuote(MARKET_SYMBOLS.VIX),
-    fetchIndexQuote(MARKET_SYMBOLS.NIKKEI_VI),
-    fetchIndexQuote(MARKET_SYMBOLS.USDJPY),
-    fetchIndexQuote(MARKET_SYMBOLS.CME_FUTURES),
-  ]);
-
-  return { nikkei, sp500, vix, nikkeiVi, usdjpy, cmeFutures };
+  try {
+    return await providerFetchMarket();
+  } catch (error) {
+    console.error("[market-data] Failed to fetch market data:", error);
+    return {
+      nikkei: null,
+      sp500: null,
+      vix: null,
+      nikkeiVi: null,
+      usdjpy: null,
+      cmeFutures: null,
+    };
+  }
 }
 
 // ========================================
@@ -369,10 +278,7 @@ export interface CorporateEvents {
 }
 
 /**
- * 銘柄のコーポレートイベント情報を一括取得（quoteSummary API使用）
- *
- * 決算日・配当落ち日・株式分割情報を1回のAPI呼び出しで取得する。
- * 取得失敗時はnullを返す（即死ルール適用せず）。
+ * 銘柄のコーポレートイベント情報を一括取得
  */
 export async function fetchCorporateEvents(
   tickerCode: string,
@@ -386,57 +292,19 @@ export async function fetchCorporateEvents(
   };
   const symbol = normalizeTickerCode(tickerCode);
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await retry(
-      () =>
-        throttledYahooRequest(async () =>
-          (await getYahooFinance()).quoteSummary(symbol, {
-            modules: ["calendarEvents", "summaryDetail", "defaultKeyStatistics"],
-          }),
-        ),
-      `corporate-events-${symbol}`,
-    );
-
-    // 決算日
-    let nextEarningsDate: Date | null = null;
-    const dates = result.calendarEvents?.earnings?.earningsDate;
-    if (dates && dates.length > 0) {
-      const now = new Date();
-      const futureDates = dates.filter((d: Date) => d >= now);
-      nextEarningsDate =
-        futureDates.length > 0 ? futureDates[0] : dates[dates.length - 1];
-    }
-
-    // 配当落ち日
-    const exDividendDate: Date | null =
-      result.calendarEvents?.exDividendDate ??
-      result.summaryDetail?.exDividendDate ??
-      null;
-
-    // 1株あたり配当金額（年間配当を2で割る: 日本株は通常年2回）
-    const dividendRate = result.summaryDetail?.dividendRate ?? null;
-    const dividendPerShare =
-      dividendRate != null && Number.isFinite(dividendRate)
-        ? Math.round((dividendRate / 2) * 100) / 100
-        : null;
-
-    // 株式分割
-    const lastSplitFactor: string | null =
-      result.defaultKeyStatistics?.lastSplitFactor ?? null;
-    const lastSplitDateRaw = result.defaultKeyStatistics?.lastSplitDate ?? null;
-    const lastSplitDate: Date | null =
-      lastSplitDateRaw instanceof Date
-        ? lastSplitDateRaw
-        : typeof lastSplitDateRaw === "number"
-          ? new Date(lastSplitDateRaw * 1000)
-          : null;
-
+    const result = await providerFetchEvents(symbol);
     return {
-      nextEarningsDate,
-      exDividendDate,
-      dividendPerShare,
-      lastSplitFactor,
-      lastSplitDate,
+      nextEarningsDate: result.nextEarningsDate
+        ? new Date(result.nextEarningsDate)
+        : null,
+      exDividendDate: result.exDividendDate
+        ? new Date(result.exDividendDate)
+        : null,
+      dividendPerShare: result.dividendPerShare,
+      lastSplitFactor: result.lastSplitFactor,
+      lastSplitDate: result.lastSplitDate
+        ? new Date(result.lastSplitDate)
+        : null,
     };
   } catch {
     return empty;
