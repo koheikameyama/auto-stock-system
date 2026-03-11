@@ -27,10 +27,11 @@ const { values } = parseArgs({
     budget: { type: "string", default: "100000" },
     "max-positions": { type: "string", default: "3" },
     "score-threshold": { type: "string", default: "65" },
-    "tp-ratio": { type: "string", default: "1.03" },
+    "tp-ratio": { type: "string", default: "1.50" },
     "sl-ratio": { type: "string", default: "0.98" },
     "atr-multiplier": { type: "string", default: "1.0" },
-    "trailing-activation": { type: "string", default: "1.0" },
+    "trailing-activation": { type: "string", default: "1.5" },
+    "cooldown-days": { type: "string", default: "5" },
     "max-price": { type: "string", default: "1000" },
     strategy: { type: "string", default: "swing" },
     "no-costs": { type: "boolean", default: false },
@@ -57,10 +58,11 @@ function printHelp(): void {
   --budget <yen>          初期資金                   デフォルト: 100000
   --max-positions <n>     最大同時保有数             デフォルト: 3
   --score-threshold <n>   スコア閾値                 デフォルト: 65
-  --tp-ratio <n>          利確比率                   デフォルト: 1.03
+  --tp-ratio <n>          利確比率（TS有効時は高く設定）デフォルト: 1.50
   --sl-ratio <n>          損切比率                   デフォルト: 0.98
   --atr-multiplier <n>    ATR倍率（損切り）           デフォルト: 1.0
-  --trailing-activation <n> TS起動ATR倍率            デフォルト: 1.0
+  --trailing-activation <n> TS起動ATR倍率            デフォルト: 1.5
+  --cooldown-days <n>     SL後の同一銘柄再エントリー禁止日数 デフォルト: 5
   --max-price <yen>       即死ルール価格上限         デフォルト: 1000
   --strategy <type>       day_trade | swing          デフォルト: swing
   --no-costs              取引コストモデルを無効化
@@ -106,6 +108,7 @@ async function main(): Promise<void> {
     costModelEnabled: !values["no-costs"],
     priceLimitEnabled: values["price-limits"] ?? false,
     gapRiskEnabled: !(values["no-gap-risk"] ?? false),
+    cooldownDays: Number(values["cooldown-days"]),
     outputFile: values.output,
     verbose: values.verbose ?? false,
   };

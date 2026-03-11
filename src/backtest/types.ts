@@ -19,6 +19,7 @@ export interface BacktestConfig {
   costModelEnabled: boolean;
   priceLimitEnabled: boolean;
   gapRiskEnabled: boolean;
+  cooldownDays: number;
   outputFile?: string;
   verbose: boolean;
 }

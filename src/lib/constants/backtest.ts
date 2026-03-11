@@ -25,12 +25,13 @@ export const DAILY_BACKTEST = {
   /** デフォルトシミュレーションパラメータ */
   DEFAULT_PARAMS: {
     scoreThreshold: 65,
-    takeProfitRatio: 1.05,
+    takeProfitRatio: 1.50,    // 固定利確は実質無効化（TSで利確する設計思想）
     stopLossRatio: 0.98,
     atrMultiplier: 1.0,
-    trailingActivationMultiplier: 1.0,
+    trailingActivationMultiplier: 1.5,  // TRAILING_STOP定数と同期
     strategy: "swing" as const,
     trailingStopEnabled: true,
+    cooldownDays: 5,          // ストップアウト後の同一銘柄再エントリー禁止日数
   },
 
   /** トレンド表示の日数 */

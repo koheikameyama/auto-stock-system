@@ -26,20 +26,21 @@ export const JOB_CONCURRENCY = {
 } as const;
 
 // トレーリングストップ
+// 制約: ACTIVATION_ATR_MULTIPLIER > TRAIL_ATR_MULTIPLIER（発動時にストップが必ずエントリー以上）
 export const TRAILING_STOP = {
   // アクティベーション閾値（エントリー価格からATR×N上昇で発動）
   ACTIVATION_ATR_MULTIPLIER: {
-    day_trade: 0.5,
-    swing: 1.0,   // 0.5 → 1.0（ATR1本分の上昇で発動、ノイズ耐性向上）
+    day_trade: 1.2,  // 0.5 → 1.2（trail=0.8より大きく設定しBE保証不要に）
+    swing: 1.5,      // 1.0 → 1.5（trail=1.0より大きく設定、実質的な利益確定開始）
   },
   // トレール幅（最高値 - ATR×N がストップライン）
   TRAIL_ATR_MULTIPLIER: {
-    day_trade: 1.0,
-    swing: 1.2,   // 1.5 → 1.2（やや引き締め）
+    day_trade: 0.8,  // 1.0 → 0.8（activation=1.2に対して十分小さく）
+    swing: 1.0,      // 1.2 → 1.0（1日の平均変動幅分の余裕を確保）
   },
-  // ATR不明時のフォールバック（%ベース）
-  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.01 },   // 0.015 → 0.01
-  TRAIL_PCT: { day_trade: 0.015, swing: 0.02 },        // 0.025 → 0.02
+  // ATR不明時のフォールバック（%ベース）— 同じ制約: ACTIVATION > TRAIL
+  ACTIVATION_PCT: { day_trade: 0.015, swing: 0.03 },   // 0.01 → 0.03
+  TRAIL_PCT: { day_trade: 0.01, swing: 0.02 },
 } as const;
 
 // ディフェンシブモード（市場環境悪化時のポジション防衛）

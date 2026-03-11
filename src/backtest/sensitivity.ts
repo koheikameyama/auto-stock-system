@@ -14,10 +14,10 @@ const SENSITIVITY_PARAMS: Record<
   number[]
 > = {
   scoreThreshold: [60, 65, 70, 75, 80],
-  takeProfitRatio: [1.015, 1.02, 1.025, 1.03, 1.04, 1.05],
+  takeProfitRatio: [1.03, 1.05, 1.10, 1.20, 1.50],
   stopLossRatio: [0.975, 0.98, 0.985, 0.99],
   atrMultiplier: [0.5, 0.8, 1.0, 1.2, 1.5],
-  trailingActivationMultiplier: [0.5, 0.8, 1.0, 1.2, 1.5],
+  trailingActivationMultiplier: [1.0, 1.2, 1.5, 2.0, 2.5],
 };
 
 const PARAM_LABELS: Record<string, string> = {

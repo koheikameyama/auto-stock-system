@@ -17,10 +17,12 @@ export function printBacktestReport(result: BacktestResult): void {
   console.log(`  初期資金: ¥${config.initialBudget.toLocaleString()}`);
   console.log(`  戦略: ${config.strategy}`);
   console.log(`  スコア閾値: ${config.scoreThreshold}`);
-  console.log(`  TP: ${((config.takeProfitRatio - 1) * 100).toFixed(1)}%`);
+  const tpPct = ((config.takeProfitRatio - 1) * 100).toFixed(1);
+  console.log(`  TP: ${config.takeProfitRatio >= 1.20 ? `${tpPct}%（実質TS任せ）` : `${tpPct}%`}`);
   console.log(`  SL: ${((1 - config.stopLossRatio) * 100).toFixed(1)}%`);
   console.log(`  ATR倍率: ${config.atrMultiplier}`);
   console.log(`  TS起動ATR倍率: ${config.trailingActivationMultiplier}`);
+  console.log(`  クールダウン: ${config.cooldownDays}営業日`);
   console.log(`  価格上限: ¥${config.maxPrice.toLocaleString()}`);
   console.log("");
 

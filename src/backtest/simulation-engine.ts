@@ -44,6 +44,8 @@ export function runBacktest(
   const openPositions: SimulatedPosition[] = [];
   const closedTrades: SimulatedPosition[] = [];
   const equityCurve: DailyEquity[] = [];
+  // ストップアウト後のクールダウン: ticker → 最終決済日のdayIdx
+  const lastExitDayIdx = new Map<string, number>();
   let cash = config.initialBudget;
 
   // 全銘柄の営業日をマージしてソート（重複排除）
@@ -312,9 +314,11 @@ export function runBacktest(
       }
     }
 
-    // クローズ済みを移動
+    // クローズ済みを移動 + クールダウン記録
     for (let i = toClose.length - 1; i >= 0; i--) {
-      closedTrades.push(openPositions[toClose[i]]);
+      const closedPos = openPositions[toClose[i]];
+      closedTrades.push(closedPos);
+      lastExitDayIdx.set(closedPos.ticker, dayIdx);
       openPositions.splice(toClose[i], 1);
     }
 
@@ -395,7 +399,9 @@ export function runBacktest(
       }
 
       for (let i = defensiveToClose.length - 1; i >= 0; i--) {
-        closedTrades.push(openPositions[defensiveToClose[i]]);
+        const closedPos = openPositions[defensiveToClose[i]];
+        closedTrades.push(closedPos);
+        lastExitDayIdx.set(closedPos.ticker, dayIdx);
         openPositions.splice(defensiveToClose[i], 1);
       }
     }
@@ -416,6 +422,8 @@ export function runBacktest(
         cash,
         openPositions,
         todayCandidates,
+        lastExitDayIdx,
+        dayIdx,
       );
 
       // スコア上位から注文を作成
@@ -515,6 +523,8 @@ function evaluateTickers(
   cash: number,
   openPositions: SimulatedPosition[],
   candidateTickers?: string[],
+  lastExitDayIdxMap?: Map<string, number>,
+  currentDayIdx?: number,
 ): EntryCandidate[] {
   const candidates: EntryCandidate[] = [];
 
@@ -528,6 +538,14 @@ function evaluateTickers(
   for (const [ticker, bars] of tickersToEvaluate) {
     // 同一銘柄のオープンポジションがある場合はスキップ
     if (openPositions.some((p) => p.ticker === ticker)) continue;
+
+    // クールダウン: 直近N営業日以内にクローズした銘柄はスキップ
+    if (config.cooldownDays > 0 && lastExitDayIdxMap && currentDayIdx != null) {
+      const lastExit = lastExitDayIdxMap.get(ticker);
+      if (lastExit != null && currentDayIdx - lastExit < config.cooldownDays) {
+        continue;
+      }
+    }
 
     const todayIdx = bars.findIndex((b) => b.date === today);
     if (todayIdx < 0) continue;
