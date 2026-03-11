@@ -9,6 +9,7 @@ import { getPendingOrders } from "../../core/order-executor";
 import { jobState } from "./dashboard";
 import { authMiddleware } from "../middleware/auth";
 import { notifySlack } from "../../lib/slack";
+import { cronControl } from "../../lib/cron-control";
 import { fetchHistoricalData, fetchStockQuote } from "../../core/market-data";
 import { analyzeTechnicals } from "../../core/technical-analysis";
 import { generatePatternsResponse } from "../../lib/candlestick-patterns";
@@ -75,6 +76,13 @@ app.post("/trading/toggle", authMiddleware, async (c) => {
     where: { id: config.id },
     data: { isActive: body.active },
   });
+
+  // cron タスク自体を停止/再開（スケジュール発火を根本から止める）
+  if (body.active) {
+    cronControl.start();
+  } else {
+    cronControl.stop();
+  }
 
   const action = body.active ? "再開" : "緊急停止";
   console.log(`[${new Date().toISOString()}] Trading ${body.active ? "ENABLED" : "DISABLED"} via API`);

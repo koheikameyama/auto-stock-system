@@ -22,6 +22,7 @@ import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
 import { notifySlack } from "./lib/slack";
 import { isMarketDay } from "./lib/market-calendar";
+import { cronControl } from "./lib/cron-control";
 
 // ジョブ状態（ダッシュボード・cronルートから参照可能）
 const jobState = {
@@ -32,6 +33,9 @@ const jobState = {
   >(),
   startedAt: new Date(),
 };
+
+// cron タスク参照（動的停止/再開用）
+const cronTasks: cron.ScheduledTask[] = [];
 
 // ダッシュボードに状態を共有
 setJobState(jobState);
@@ -122,13 +126,35 @@ const schedules = [
 
 // cron 登録
 for (const s of schedules) {
-  cron.schedule(
+  const task = cron.schedule(
     s.cron,
     () => runJob(s.name, s.job, s.requiresMarketDay),
     { timezone: "Asia/Tokyo" },
   );
+  cronTasks.push(task);
   console.log(`  スケジュール登録: ${s.name} → ${s.cron} (JST)`);
 }
+
+// cron 制御関数を登録（api.ts から cronControl.stop()/start() で呼べる）
+cronControl.register(
+  () => {
+    for (const task of cronTasks) task.stop();
+    console.log(`[${nowJST()}] cron タスク停止（${cronTasks.length}件）`);
+  },
+  () => {
+    for (const task of cronTasks) task.start();
+    holidaySkipLogged.delete("position-monitor:inactive");
+    console.log(`[${nowJST()}] cron タスク再開（${cronTasks.length}件）`);
+  },
+);
+
+// 起動時に isActive=false なら cron を停止した状態で開始
+prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } }).then((config) => {
+  if (config && !config.isActive) {
+    cronControl.stop();
+    console.log("  起動時 isActive=false → cron タスク停止状態で開始");
+  }
+}).catch(() => {});
 
 // 日次リセット: 休場日スキップログをクリア
 cron.schedule("0 0 * * *", () => {
