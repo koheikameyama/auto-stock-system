@@ -14,13 +14,35 @@ const FETCH_TIMEOUT_MS = 30_000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-function createInstance(): YahooFinance {
+/**
+ * リクエストごとに新しい AbortSignal.timeout を付与するカスタム fetch。
+ *
+ * AbortSignal.timeout() はインスタンス作成時にタイマーが開始されるため、
+ * fetchOptions.signal に固定で渡すと、インスタンス作成から30秒後に
+ * すべてのリクエストが即座に TimeoutError になる致命的なバグがあった。
+ */
+function fetchWithTimeout(
+  input: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    headers: {
+      ...Object.fromEntries(
+        init?.headers instanceof Headers
+          ? init.headers.entries()
+          : Object.entries(init?.headers ?? {}),
+      ),
+      "User-Agent": USER_AGENT,
+    },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+}
+
+function createInstance(): InstanceType<typeof YahooFinance> {
   return new YahooFinance({
     suppressNotices: ["yahooSurvey"],
-    fetchOptions: {
-      headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    },
+    fetch: fetchWithTimeout,
   });
 }
 
@@ -33,7 +55,7 @@ let consecutiveFailures = 0;
  * crumb/fetch 失敗が連続した場合、インスタンスを再生成して
  * 内部キャッシュをクリアする。
  */
-export function getYahooFinance(): YahooFinance {
+export function getYahooFinance(): InstanceType<typeof YahooFinance> {
   return instance;
 }
 
