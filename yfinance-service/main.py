@@ -129,6 +129,20 @@ def safe_float_or_none(value: Any) -> float | None:
         return None
 
 
+def _build_info_from_fast_info(ticker: yf.Ticker) -> dict:
+    """fast_info から info 互換の dict を構築する"""
+    fi = ticker.fast_info
+    return {
+        "currentPrice": safe_float_or_none(getattr(fi, "last_price", None)),
+        "previousClose": safe_float_or_none(getattr(fi, "previous_close", None)),
+        "volume": safe_float_or_none(getattr(fi, "last_volume", None)),
+        "dayHigh": safe_float_or_none(getattr(fi, "day_high", None)),
+        "dayLow": safe_float_or_none(getattr(fi, "day_low", None)),
+        "open": safe_float_or_none(getattr(fi, "open", None)),
+        "marketCap": safe_float_or_none(getattr(fi, "market_cap", None)),
+    }
+
+
 def parse_quote_from_info(info: dict, symbol: str) -> dict:
     """yfinance の info dict を StockQuote 形式に変換"""
     if not isinstance(info, dict):
@@ -192,7 +206,12 @@ async def get_quote(symbol: str):
     try:
         def _fetch():
             ticker = yf.Ticker(symbol)
-            return ticker.info
+            info = ticker.info
+            if isinstance(info, dict):
+                return info
+            # info が dict でない場合、fast_info にフォールバック
+            logger.warning(f"ticker.info returned {type(info).__name__} for {symbol}, falling back to fast_info")
+            return _build_info_from_fast_info(ticker)
         info = await throttled(_fetch)
         return parse_quote_from_info(info, symbol)
     except Exception as e:
@@ -214,7 +233,11 @@ async def get_quotes_batch(req: QuotesBatchRequest):
         try:
             def _fetch(s=symbol):
                 ticker = yf.Ticker(s)
-                return ticker.info
+                info = ticker.info
+                if isinstance(info, dict):
+                    return info
+                logger.warning(f"ticker.info returned {type(info).__name__} for {s}, falling back to fast_info")
+                return _build_info_from_fast_info(ticker)
             info = await throttled(_fetch)
             results.append(parse_quote_from_info(info, symbol))
         except Exception as e:
@@ -323,7 +346,11 @@ async def get_market():
         try:
             def _fetch(s=symbol):
                 ticker = yf.Ticker(s)
-                return ticker.info
+                info = ticker.info
+                if isinstance(info, dict):
+                    return info
+                logger.warning(f"ticker.info returned {type(info).__name__} for {s}, falling back to fast_info")
+                return _build_info_from_fast_info(ticker)
             info = await throttled(_fetch)
             result[key] = parse_index_quote_from_info(info)
         except Exception as e:
@@ -340,6 +367,9 @@ async def get_events(symbol: str):
         def _fetch():
             ticker = yf.Ticker(symbol)
             info = ticker.info
+            if not isinstance(info, dict):
+                logger.warning(f"ticker.info returned {type(info).__name__} for {symbol}, falling back to fast_info")
+                info = _build_info_from_fast_info(ticker)
             cal = None
             try:
                 cal = ticker.calendar
