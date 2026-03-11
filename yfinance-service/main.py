@@ -37,13 +37,12 @@ app = FastAPI(title="yfinance sidecar")
 SIDECAR_SECRET = os.environ.get("SIDECAR_SECRET", "")
 
 # ========================================
-# プロキシ設定
+# プロキシ設定（グローバル）
 # ========================================
 
 PROXY = os.environ.get("YFINANCE_PROXY", "")
-_proxy_dict: dict[str, str] | None = None
 if PROXY:
-    _proxy_dict = {"http": PROXY, "https": PROXY}
+    yf.config.network.proxy = {"http": PROXY, "https": PROXY}
     logger.info(f"Proxy configured: {PROXY.split('@')[-1] if '@' in PROXY else PROXY}")
 
 
@@ -188,7 +187,7 @@ async def get_quote(symbol: str):
     symbol = normalize_ticker(symbol)
     try:
         def _fetch():
-            ticker = yf.Ticker(symbol, proxy=PROXY or None)
+            ticker = yf.Ticker(symbol)
             return ticker.info
         info = await throttled(_fetch)
         return parse_quote_from_info(info, symbol)
@@ -210,7 +209,7 @@ async def get_quotes_batch(req: QuotesBatchRequest):
     for symbol in symbols:
         try:
             def _fetch(s=symbol):
-                ticker = yf.Ticker(s, proxy=PROXY or None)
+                ticker = yf.Ticker(s)
                 return ticker.info
             info = await throttled(_fetch)
             results.append(parse_quote_from_info(info, symbol))
@@ -227,7 +226,7 @@ async def get_historical(symbol: str, days: int = 200):
     symbol = normalize_ticker(symbol)
     try:
         def _fetch():
-            ticker = yf.Ticker(symbol, proxy=PROXY or None)
+            ticker = yf.Ticker(symbol)
             df = ticker.history(period=f"{days}d", interval="1d")
             return df
 
@@ -270,7 +269,7 @@ async def get_historical_range(req: HistoricalRangeRequest):
     symbol = normalize_ticker(req.symbol)
     try:
         def _fetch():
-            ticker = yf.Ticker(symbol, proxy=PROXY or None)
+            ticker = yf.Ticker(symbol)
             df = ticker.history(start=req.start, end=req.end, interval="1d")
             return df
 
@@ -319,7 +318,7 @@ async def get_market():
     for key, symbol in MARKET_SYMBOLS.items():
         try:
             def _fetch(s=symbol):
-                ticker = yf.Ticker(s, proxy=PROXY or None)
+                ticker = yf.Ticker(s)
                 return ticker.info
             info = await throttled(_fetch)
             result[key] = parse_index_quote_from_info(info)
@@ -335,7 +334,7 @@ async def get_events(symbol: str):
     symbol = normalize_ticker(symbol)
     try:
         def _fetch():
-            ticker = yf.Ticker(symbol, proxy=PROXY or None)
+            ticker = yf.Ticker(symbol)
             info = ticker.info
             cal = None
             try:
@@ -416,7 +415,7 @@ async def search_news(req: SearchRequest):
     """銘柄関連ニュースを検索"""
     try:
         def _fetch():
-            search = yf.Search(req.query, news_count=req.news_count, proxy=PROXY or None)
+            search = yf.Search(req.query, news_count=req.news_count)
             return search.news
 
         news = await throttled(_fetch)
