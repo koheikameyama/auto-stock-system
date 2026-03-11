@@ -596,6 +596,33 @@ function candlestickChart(
         ${label}
       </text>`;
     })}
+
+    <!-- クリックターゲット -->
+    ${data.map((d, i) => {
+      const x = xPos(i);
+      const hitW = Math.max(4, chartW / data.length);
+      const change = i > 0 ? d.close - data[i - 1].close : 0;
+      const changePct = i > 0 && data[i - 1].close !== 0
+        ? (change / data[i - 1].close) * 100
+        : 0;
+      return html`<rect
+        x="${x - hitW / 2}"
+        y="${padT}"
+        width="${hitW}"
+        height="${chartH + volH}"
+        fill="transparent"
+        data-chart-bar
+        data-date="${d.date}"
+        data-open="${d.open}"
+        data-high="${d.high}"
+        data-low="${d.low}"
+        data-close="${d.close}"
+        data-volume="${d.volume}"
+        data-change="${i > 0 ? change.toFixed(1) : ""}"
+        data-change-pct="${i > 0 ? changePct.toFixed(2) : ""}"
+        style="cursor:pointer"
+      />`;
+    })}
   </svg>`;
 }
 

@@ -436,6 +436,34 @@ export const CSS = `
     display: block;
   }
 
+  /* Chart tooltip */
+  .chart-tip {
+    position: fixed;
+    z-index: 10001;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #e2e8f0;
+    pointer-events: none;
+    display: none;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .chart-tip .ct-date {
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .chart-tip .ct-row {
+    display: flex;
+    gap: 12px;
+  }
+  .chart-tip .ct-label {
+    color: #94a3b8;
+  }
+
   /* Signal badge */
   .signal-badge {
     display: inline-flex;

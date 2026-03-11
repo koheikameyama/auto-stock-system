@@ -168,6 +168,66 @@ export function layout(
             }, true);
           })();
 
+          // Chart tooltip
+          (function() {
+            var ct = document.createElement('div');
+            ct.className = 'chart-tip';
+            document.body.appendChild(ct);
+            var activeBar = null;
+            var DAYS = ['日','月','火','水','木','金','土'];
+
+            function fmt(v) {
+              return Number(v).toLocaleString('ja-JP');
+            }
+
+            function showChart(el, e) {
+              var d = el.dataset;
+              var parts = d.date.split('-');
+              var dt = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+              var dayName = DAYS[dt.getDay()];
+              var dateStr = +parts[1] + '/' + +parts[2] + '(' + dayName + ')';
+
+              var lines = '<div class="ct-date">' + dateStr + '</div>';
+              lines += '<div class="ct-row"><span><span class="ct-label">始</span> ' + fmt(d.open) + '</span><span><span class="ct-label">高</span> ' + fmt(d.high) + '</span></div>';
+              lines += '<div class="ct-row"><span><span class="ct-label">安</span> ' + fmt(d.low) + '</span><span><span class="ct-label">終</span> ' + fmt(d.close) + '</span></div>';
+              lines += '<div><span class="ct-label">出来高</span> ' + fmt(d.volume) + '</div>';
+              if (d.change) {
+                var chg = parseFloat(d.change);
+                var pct = parseFloat(d.changePct);
+                var sign = chg >= 0 ? '+' : '';
+                var color = chg >= 0 ? '#22c55e' : '#ef4444';
+                lines += '<div style="color:' + color + '">' + sign + fmt(d.change) + ' (' + sign + pct.toFixed(2) + '%)</div>';
+              }
+              ct.innerHTML = lines;
+              ct.style.display = 'block';
+
+              var tw = ct.offsetWidth;
+              var th = ct.offsetHeight;
+              var left = e.clientX - tw / 2;
+              left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+              var top = e.clientY - th - 12;
+              if (top < 8) top = e.clientY + 12;
+              ct.style.left = left + 'px';
+              ct.style.top = top + 'px';
+              activeBar = el;
+            }
+
+            function hideChart() {
+              ct.style.display = 'none';
+              activeBar = null;
+            }
+
+            document.addEventListener('click', function(e) {
+              var el = e.target && e.target.closest ? e.target.closest('[data-chart-bar]') : null;
+              if (el) {
+                e.stopPropagation();
+                if (activeBar === el) { hideChart(); } else { showChart(el, e); }
+              } else {
+                hideChart();
+              }
+            }, true);
+          })();
+
           // Stock detail modal
           function openStockModal(tickerCode) {
             var modal = document.getElementById('stock-modal');
