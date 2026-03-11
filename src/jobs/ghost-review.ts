@@ -324,6 +324,26 @@ export async function main() {
       where: { date: today },
     });
 
+    // 当日の全スコアリング結果を取得（rejected以外も含む）
+    const allTodayRecords = await prisma.scoringRecord.findMany({
+      where: { date: today },
+      select: {
+        aiDecision: true,
+        rejectionReason: true,
+        rank: true,
+      },
+    });
+    const aiGoCount = allTodayRecords.filter(
+      (r) => r.aiDecision === "go",
+    ).length;
+    const rankCounts = allTodayRecords.reduce(
+      (acc, r) => {
+        acc[r.rank] = (acc[r.rank] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
     const marketHaltedToday = recordsWithPnl.filter(
       (r) => r.rejectionReason === "market_halted",
     );
@@ -339,6 +359,11 @@ export async function main() {
     const btRising = belowThresholdToday.filter((r) => r.ghostProfitPctNum > 0);
 
     interface DecisionAuditData {
+      scoringSummary: {
+        totalScored: number;
+        aiApproved: number;
+        rankBreakdown: Record<string, number>;
+      };
       marketHalt: {
         wasHalted: boolean;
         sentiment: string;
@@ -362,6 +387,11 @@ export async function main() {
     }
 
     const auditData: DecisionAuditData = {
+      scoringSummary: {
+        totalScored: allTodayRecords.length,
+        aiApproved: aiGoCount,
+        rankBreakdown: rankCounts,
+      },
       marketHalt: todayAssessment
         ? {
             wasHalted: !todayAssessment.shouldTrade,
@@ -405,18 +435,28 @@ export async function main() {
     };
 
     // AI verdict 生成
+    const rankSummary = Object.entries(auditData.scoringSummary.rankBreakdown)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([rank, count]) => `${rank}=${count}`)
+      .join(", ");
+
     const verdictPrompt = `本日の自動売買システムの意思決定を評価してください。
+
+【スコアリング全体像】
+- 総スコアリング銘柄: ${auditData.scoringSummary.totalScored}件（${rankSummary}）
+- AI承認（go）: ${auditData.scoringSummary.aiApproved}件
+- AI却下（no_go）: ${auditData.aiRejection.total}件
 
 【市場停止判断】
 ${auditData.marketHalt ? `- 判定: ${auditData.marketHalt.wasHalted ? "取引停止" : "取引実行"}（センチメント: ${auditData.marketHalt.sentiment}）
 - 日経変化率: ${auditData.marketHalt.nikkeiChange != null ? `${auditData.marketHalt.nikkeiChange.toFixed(2)}%` : "不明"}
-- スコア対象銘柄: ${auditData.marketHalt.totalScored}件のうち上昇 ${auditData.marketHalt.risingCount}件 (${auditData.marketHalt.risingRate ?? "-"}%)` : "- 市場評価データなし"}
+- 市場停止による見送り: ${auditData.marketHalt.totalScored}件のうち上昇 ${auditData.marketHalt.risingCount}件 (${auditData.marketHalt.risingRate ?? "-"}%)` : "- 市場評価データなし"}
 
 【AI却下精度】
-- 却下銘柄: ${auditData.aiRejection.total}件
+${auditData.aiRejection.total > 0 ? `- 却下銘柄: ${auditData.aiRejection.total}件
 - 正確な却下（実際に下落）: ${auditData.aiRejection.correctlyRejected}件
 - 誤却下（実際に上昇）: ${auditData.aiRejection.falselyRejected}件
-- 精度: ${auditData.aiRejection.accuracy ?? "-"}%
+- 精度: ${auditData.aiRejection.accuracy}%` : "- AI却下銘柄なし（全銘柄がgo判定）"}
 
 【スコアリング閾値】
 - 閾値未達で却下: ${auditData.scoreThreshold.total}件のうち上昇 ${auditData.scoreThreshold.rising}件

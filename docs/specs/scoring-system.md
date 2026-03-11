@@ -595,6 +595,25 @@ ghostAnalysis     String?  @db.Text           // AI後悔分析（JSON）
 4. DB更新（closingPrice + ghostProfitPct）
 5. 利益率1%以上の上位5銘柄にAI後悔分析を実行
 6. Slack通知
+7. 前日レコードに翌日価格を記録（`nextDayClosingPrice` / `nextDayProfitPct`）
+8. 意思決定整合性評価（後述）
+9. 逆行ウィナー分析（市場停止日のみ）
+
+### 意思決定整合性評価
+
+当日のスコアリング全体像と各判断の結果を集約し、AIでverdictを生成して `TradingDailySummary.decisionAudit` に保存する。
+
+#### decisionAudit の構造
+
+| フィールド | 内容 |
+|-----------|------|
+| `scoringSummary.totalScored` | 当日の総スコアリング銘柄数 |
+| `scoringSummary.aiApproved` | AI承認（go）銘柄数 |
+| `scoringSummary.rankBreakdown` | ランク別内訳（例: `{S: 2, A: 120, B: 130, C: 30}`） |
+| `marketHalt` | 市場停止判断の詳細（停止時のみ。見送り銘柄のうち上昇した割合等） |
+| `aiRejection` | AI却下（no_go）の精度（正確な却下 / 誤却下 / 精度%） |
+| `scoreThreshold` | 閾値未達で却下された銘柄の上昇件数・平均利益率 |
+| `overallVerdict` | AIが生成した200文字以内の意思決定評価 |
 
 ### AI後悔分析の出力
 
