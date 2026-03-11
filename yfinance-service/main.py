@@ -42,7 +42,7 @@ SIDECAR_SECRET = os.environ.get("SIDECAR_SECRET", "")
 
 PROXY = os.environ.get("YFINANCE_PROXY", "")
 if PROXY:
-    yf.set_config(proxy=PROXY)
+    yf.config.network.proxy = PROXY
     logger.info(f"Proxy configured: {PROXY.split('@')[-1] if '@' in PROXY else PROXY}")
 
 
