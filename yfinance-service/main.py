@@ -131,6 +131,8 @@ def safe_float_or_none(value: Any) -> float | None:
 
 def parse_quote_from_info(info: dict, symbol: str) -> dict:
     """yfinance の info dict を StockQuote 形式に変換"""
+    if not isinstance(info, dict):
+        raise ValueError(f"Expected dict from yfinance info, got {type(info).__name__}: {info}")
     price = safe_float(info.get("currentPrice") or info.get("regularMarketPrice"))
     prev_close = safe_float(info.get("previousClose") or info.get("regularMarketPreviousClose"))
     change = price - prev_close if price and prev_close else 0.0
@@ -155,6 +157,8 @@ def parse_quote_from_info(info: dict, symbol: str) -> dict:
 
 def parse_index_quote_from_info(info: dict) -> dict:
     """yfinance の info dict を IndexQuote 形式に変換"""
+    if not isinstance(info, dict):
+        raise ValueError(f"Expected dict from yfinance info, got {type(info).__name__}: {info}")
     price = safe_float(
         info.get("regularMarketPrice") or info.get("currentPrice")
     )
