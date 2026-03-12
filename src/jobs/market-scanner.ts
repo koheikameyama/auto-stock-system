@@ -61,8 +61,9 @@ import {
   determineMarketRegime,
   determinePreMarketRegime,
   calculateCmeDivergence,
+  determineTradingStrategy,
 } from "../core/market-regime";
-import type { MarketRegime } from "../core/market-regime";
+import type { MarketRegime, StrategyDecision } from "../core/market-regime";
 import { calculateDrawdownStatus } from "../core/drawdown-manager";
 import type { DrawdownStatus } from "../core/drawdown-manager";
 import {
@@ -182,6 +183,7 @@ ${sectorText || "  特になし"}`;
         shouldTrade: false,
         reasoning: `[CME先物乖離率キルスイッチ] ${preMarket.reason}`,
         selectedStocks: [],
+        tradingStrategy: "day_trade",
       };
       await prisma.marketAssessment.upsert({
         where: { date: getTodayForDB() },
@@ -219,6 +221,13 @@ ${sectorText || "  特になし"}`;
 
   console.log(`  → レジーム: ${regime.level}（${regime.reason}）`);
 
+  // 1.8.1. 戦略決定（市場環境ベース — 全銘柄共通）
+  const strategyDecision: StrategyDecision = determineTradingStrategy(
+    marketData.vix.price,
+    cmeDivergencePct,
+  );
+  console.log(`[1.8.1/5] 戦略決定: ${strategyDecision.strategy}（${strategyDecision.reason}）`);
+
   if (regime.shouldHaltTrading && !isShadowMode) {
     console.log("レジームにより取引停止。MarketAssessment を保存してシャドウスコアリングへ");
     await notifyRiskAlert({
@@ -236,6 +245,7 @@ ${sectorText || "  特になし"}`;
       shouldTrade: false,
       reasoning: `[VIXレジーム自動停止] ${regime.reason}`,
       selectedStocks: [],
+      tradingStrategy: strategyDecision.strategy,
     };
     await prisma.marketAssessment.upsert({
       where: { date: getTodayForDB() },
@@ -268,6 +278,7 @@ ${sectorText || "  特になし"}`;
       shouldTrade: false,
       reasoning: `[日経平均キルスイッチ] ${reason}`,
       selectedStocks: [],
+      tradingStrategy: strategyDecision.strategy,
     };
     await prisma.marketAssessment.upsert({
       where: { date: getTodayForDB() },
@@ -302,6 +313,7 @@ ${sectorText || "  特になし"}`;
       shouldTrade: false,
       reasoning: `[ドローダウン自動停止] ${drawdown.reason}`,
       selectedStocks: [],
+      tradingStrategy: strategyDecision.strategy,
     };
     await prisma.marketAssessment.upsert({
       where: { date: getTodayForDB() },
@@ -356,6 +368,7 @@ ${sectorText || "  特になし"}`;
         shouldTrade: false,
         reasoning: assessment.reasoning,
         selectedStocks: [],
+        tradingStrategy: strategyDecision.strategy,
       };
       await prisma.marketAssessment.upsert({
         where: { date: getTodayForDB() },
@@ -778,7 +791,7 @@ ${sectorText || "  特になし"}`;
       };
     });
 
-    const reviews = await reviewStocks(assessment!, reviewCandidates);
+    const reviews = await reviewStocks(assessment!, reviewCandidates, strategyDecision.strategy);
     const goStocks = reviews.filter((r) => r.decision === "go");
     console.log(
       `  → AIレビュー: ${reviews.length}銘柄中 ${goStocks.length}銘柄承認`,
@@ -810,6 +823,7 @@ ${sectorText || "  特になし"}`;
       shouldTrade: true,
       reasoning: assessment!.reasoning,
       selectedStocks: JSON.parse(JSON.stringify(selectedStocksData)),
+      tradingStrategy: strategyDecision.strategy,
     };
     await prisma.marketAssessment.upsert({
       where: { date: today },
