@@ -234,9 +234,12 @@ export const MARKET_REGIME = {
 // オーバーナイトリスクが高い環境ではデイトレに切り替え、持ち越しを回避
 export const STRATEGY_SWITCHING = {
   // VIXがこの値以上 → day_trade（オーバーナイトリスク回避）
-  VIX_DAY_TRADE_THRESHOLD: 25,
+  // VIX_THRESHOLDS.ELEVATED（25）と一致 = highレジーム（最大1ポジ・Sランクのみ）で取引する場合はデイトレ
+  // VIX > 30（crisis）は取引停止なので戦略切り替えは無関係
+  VIX_DAY_TRADE_THRESHOLD: VIX_THRESHOLDS.ELEVATED,
   // CME先物乖離率がこの値以下 → day_trade（翌朝ギャップリスク回避）
-  CME_DIVERGENCE_DAY_TRADE_THRESHOLD: -1.5,
+  // CME_NIGHT_DIVERGENCE.WARNING（-1.5%）と一致 = レジームelevated引き上げと連動
+  CME_DIVERGENCE_DAY_TRADE_THRESHOLD: CME_NIGHT_DIVERGENCE.WARNING,
   // デフォルト戦略（上記条件に該当しない場合）
   DEFAULT_STRATEGY: "swing" as const,
 } as const;
