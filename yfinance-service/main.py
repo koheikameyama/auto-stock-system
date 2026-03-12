@@ -45,6 +45,8 @@ if PROXY:
     # curl_cffi の Session.proxies は dict を期待する
     yf.config.network.proxy = {"http": PROXY, "https": PROXY}
     logger.info(f"Proxy configured: {PROXY.split('@')[-1] if '@' in PROXY else PROXY}")
+else:
+    logger.info("No proxy configured (YFINANCE_PROXY not set)")
 
 
 @app.middleware("http")
@@ -64,13 +66,17 @@ async def auth_middleware(request: Request, call_next):
 
 _semaphore = asyncio.Semaphore(1)
 _MIN_DELAY_S = 1.0
+_REQUEST_TIMEOUT_S = 30.0  # yfinance リクエストのタイムアウト（秒）
 
 
 async def throttled(fn: Callable[[], T]) -> T:
     """Yahoo Finance へのリクエストを直列化し、リクエスト間に1秒ディレイを入れる"""
     async with _semaphore:
         loop = asyncio.get_event_loop()
-        result: T = await loop.run_in_executor(None, fn)  # type: ignore[arg-type]
+        result: T = await asyncio.wait_for(
+            loop.run_in_executor(None, fn),  # type: ignore[arg-type]
+            timeout=_REQUEST_TIMEOUT_S,
+        )
         await asyncio.sleep(_MIN_DELAY_S)
         return result
 
@@ -101,6 +107,9 @@ _RETRY_DELAY_S = 2.0
 
 def _is_retryable(e: Exception) -> bool:
     """リトライ可能なエラーか判定"""
+    # asyncio.wait_for によるタイムアウト
+    if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+        return True
     msg = str(e)
     # yfinance 内部のパースエラー（'str' object has no attribute 'get' 等）
     if "has no attribute" in msg:
@@ -142,7 +151,19 @@ def _is_rate_limit_error(e: Exception) -> bool:
 
 def _error_status(e: Exception) -> int:
     """例外に応じた HTTP ステータスコードを返す"""
-    return 429 if _is_rate_limit_error(e) else 500
+    if _is_rate_limit_error(e):
+        return 429
+    if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+        return 504
+    return 500
+
+
+def _error_detail(e: Exception) -> str:
+    """例外のエラーメッセージを返す（空なら型名を使う）"""
+    msg = str(e)
+    if msg:
+        return msg
+    return f"{type(e).__name__}: request timed out after {_REQUEST_TIMEOUT_S}s"
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -256,7 +277,7 @@ async def get_quote(symbol: str):
         return parse_quote_from_info(info, symbol)
     except Exception as e:
         logger.error(f"Failed to fetch quote for {symbol}: {e}")
-        raise HTTPException(status_code=_error_status(e), detail=str(e))
+        raise HTTPException(status_code=_error_status(e), detail=_error_detail(e))
 
 
 class QuotesBatchRequest(BaseModel):
@@ -329,7 +350,7 @@ async def get_historical(symbol: str, days: int = 200):
         return _df_to_bars(df, require_positive_close=True)
     except Exception as e:
         logger.error(f"Failed to fetch historical data for {symbol}: {e}")
-        raise HTTPException(status_code=_error_status(e), detail=str(e))
+        raise HTTPException(status_code=_error_status(e), detail=_error_detail(e))
 
 
 class HistoricalRangeRequest(BaseModel):
@@ -351,7 +372,7 @@ async def get_historical_range(req: HistoricalRangeRequest):
         return _df_to_bars(df)
     except Exception as e:
         logger.error(f"Failed to fetch historical range for {symbol}: {e}")
-        raise HTTPException(status_code=_error_status(e), detail=str(e))
+        raise HTTPException(status_code=_error_status(e), detail=_error_detail(e))
 
 
 class HistoricalBatchRequest(BaseModel):
@@ -392,7 +413,7 @@ async def get_historical_batch(req: HistoricalBatchRequest):
         return result
     except Exception as e:
         logger.error(f"Failed to fetch historical batch: {e}")
-        raise HTTPException(status_code=_error_status(e), detail=str(e))
+        raise HTTPException(status_code=_error_status(e), detail=_error_detail(e))
 
 
 # 市場指標シンボル
