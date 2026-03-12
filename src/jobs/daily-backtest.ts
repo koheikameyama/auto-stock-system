@@ -2,8 +2,8 @@
  * 日次バックテスト（16:30 JST / 平日）
  *
  * 1. ScoringRecordからS/Aランク銘柄を選定
- * 2. 6ヶ月のヒストリカルデータを取得
- * 3. 4つの予算ティアでバックテスト実行
+ * 2. ヒストリカルデータを取得
+ * 3. 13のパラメータ条件でバックテスト実行
  * 4. 結果をDB保存
  * 5. Slackサマリー通知
  */
@@ -24,60 +24,62 @@ export async function main() {
   console.log("[daily-backtest] DB保存中...");
   const today = getTodayForDB();
 
-  for (const tr of result.tierResults) {
+  for (const cr of result.conditionResults) {
     const pf =
-      tr.metrics.profitFactor === Infinity ? 999.99 : tr.metrics.profitFactor;
+      cr.metrics.profitFactor === Infinity ? 999.99 : cr.metrics.profitFactor;
 
     await prisma.backtestDailyResult.upsert({
       where: {
-        date_budgetTier: {
+        date_conditionKey: {
           date: today,
-          budgetTier: tr.tier.label,
+          conditionKey: cr.condition.key,
         },
       },
       create: {
         date: today,
-        budgetTier: tr.tier.label,
-        initialBudget: tr.tier.budget,
-        maxPrice: tr.tier.maxPrice,
-        maxPositions: tr.tier.maxPositions,
-        tickerCount: tr.tickerCount,
-        totalTrades: tr.metrics.totalTrades,
-        wins: tr.metrics.wins,
-        losses: tr.metrics.losses,
-        winRate: tr.metrics.winRate,
+        conditionKey: cr.condition.key,
+        conditionLabel: cr.condition.label,
+        initialBudget: cr.config.initialBudget,
+        maxPrice: cr.config.maxPrice,
+        maxPositions: cr.config.maxPositions,
+        tickerCount: cr.tickerCount,
+        totalTrades: cr.metrics.totalTrades,
+        wins: cr.metrics.wins,
+        losses: cr.metrics.losses,
+        winRate: cr.metrics.winRate,
         profitFactor: pf,
-        maxDrawdown: tr.metrics.maxDrawdown,
-        sharpeRatio: tr.metrics.sharpeRatio,
-        totalPnl: tr.metrics.totalPnl,
-        totalReturnPct: tr.metrics.totalReturnPct,
-        avgHoldingDays: tr.metrics.avgHoldingDays,
-        byRank: tr.metrics.byRank as object,
-        fullResult: tr.metrics as object,
+        maxDrawdown: cr.metrics.maxDrawdown,
+        sharpeRatio: cr.metrics.sharpeRatio,
+        totalPnl: cr.metrics.totalPnl,
+        totalReturnPct: cr.metrics.totalReturnPct,
+        avgHoldingDays: cr.metrics.avgHoldingDays,
+        byRank: cr.metrics.byRank as object,
+        fullResult: cr.metrics as object,
         periodStart: result.periodStart,
         periodEnd: result.periodEnd,
-        executionTimeMs: tr.executionTimeMs,
+        executionTimeMs: cr.executionTimeMs,
       },
       update: {
-        initialBudget: tr.tier.budget,
-        maxPrice: tr.tier.maxPrice,
-        maxPositions: tr.tier.maxPositions,
-        tickerCount: tr.tickerCount,
-        totalTrades: tr.metrics.totalTrades,
-        wins: tr.metrics.wins,
-        losses: tr.metrics.losses,
-        winRate: tr.metrics.winRate,
+        conditionLabel: cr.condition.label,
+        initialBudget: cr.config.initialBudget,
+        maxPrice: cr.config.maxPrice,
+        maxPositions: cr.config.maxPositions,
+        tickerCount: cr.tickerCount,
+        totalTrades: cr.metrics.totalTrades,
+        wins: cr.metrics.wins,
+        losses: cr.metrics.losses,
+        winRate: cr.metrics.winRate,
         profitFactor: pf,
-        maxDrawdown: tr.metrics.maxDrawdown,
-        sharpeRatio: tr.metrics.sharpeRatio,
-        totalPnl: tr.metrics.totalPnl,
-        totalReturnPct: tr.metrics.totalReturnPct,
-        avgHoldingDays: tr.metrics.avgHoldingDays,
-        byRank: tr.metrics.byRank as object,
-        fullResult: tr.metrics as object,
+        maxDrawdown: cr.metrics.maxDrawdown,
+        sharpeRatio: cr.metrics.sharpeRatio,
+        totalPnl: cr.metrics.totalPnl,
+        totalReturnPct: cr.metrics.totalReturnPct,
+        avgHoldingDays: cr.metrics.avgHoldingDays,
+        byRank: cr.metrics.byRank as object,
+        fullResult: cr.metrics as object,
         periodStart: result.periodStart,
         periodEnd: result.periodEnd,
-        executionTimeMs: tr.executionTimeMs,
+        executionTimeMs: cr.executionTimeMs,
       },
     });
   }
@@ -89,14 +91,15 @@ export async function main() {
     period: `${result.periodStart} ~ ${result.periodEnd}`,
     dataFetchTimeMs: result.dataFetchTimeMs,
     totalTimeMs: Date.now() - startTime,
-    tierResults: result.tierResults.map((tr) => ({
-      label: tr.tier.label,
-      winRate: tr.metrics.winRate,
-      profitFactor: tr.metrics.profitFactor,
-      totalReturnPct: tr.metrics.totalReturnPct,
-      totalPnl: tr.metrics.totalPnl,
-      totalTrades: tr.metrics.totalTrades,
-      maxDrawdown: tr.metrics.maxDrawdown,
+    conditionResults: result.conditionResults.map((cr) => ({
+      key: cr.condition.key,
+      label: cr.condition.label,
+      winRate: cr.metrics.winRate,
+      profitFactor: cr.metrics.profitFactor,
+      totalReturnPct: cr.metrics.totalReturnPct,
+      totalPnl: cr.metrics.totalPnl,
+      totalTrades: cr.metrics.totalTrades,
+      maxDrawdown: cr.metrics.maxDrawdown,
     })),
   });
 

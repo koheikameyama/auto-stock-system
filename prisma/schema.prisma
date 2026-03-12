@@ -343,7 +343,8 @@ model CorporateEventLog {
 model BacktestDailyResult {
   id              String   @id @default(cuid())
   date            DateTime @db.Date
-  budgetTier      String   // "10万" / "30万" / "50万" / "100万"
+  conditionKey    String   // "baseline" / "ts_act_1.5" / "score_60" / "atr_0.8" / "trail_0.8" etc.
+  conditionLabel  String   // "ベースライン" / "TS起動1.5" etc.
   initialBudget   Int
   maxPrice        Int
   maxPositions    Int
@@ -366,7 +367,7 @@ model BacktestDailyResult {
 
   createdAt DateTime @default(now())
 
-  @@unique([date, budgetTier])
+  @@unique([date, conditionKey])
   @@index([date(sort: Desc)])
 }
 

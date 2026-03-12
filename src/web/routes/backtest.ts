@@ -24,20 +24,23 @@ app.get("/", async (c) => {
   const trendDays = DAILY_BACKTEST.TREND_DAYS;
   const sinceDate = dayjs().subtract(trendDays, "day").toDate();
 
+  const conditionCount = DAILY_BACKTEST.PARAMETER_CONDITIONS.length;
+
   const [latestResults, trendData] = await Promise.all([
-    // 最新日の結果（4ティア）
+    // 最新日の結果（全条件）
     prisma.backtestDailyResult.findMany({
       orderBy: { date: "desc" },
-      take: 4,
-      distinct: ["budgetTier"],
+      take: conditionCount,
+      distinct: ["conditionKey"],
     }),
-    // トレンドデータ（過去30日、全ティア）
+    // トレンドデータ（過去30日、ベースラインのみ）
     prisma.backtestDailyResult.findMany({
-      where: { date: { gte: sinceDate } },
+      where: { date: { gte: sinceDate }, conditionKey: "baseline" },
       orderBy: { date: "asc" },
       select: {
         date: true,
-        budgetTier: true,
+        conditionKey: true,
+        conditionLabel: true,
         winRate: true,
         totalReturnPct: true,
         profitFactor: true,
@@ -48,23 +51,17 @@ app.get("/", async (c) => {
     }),
   ]);
 
-  // ティア別にグループ化
-  const trendByTier = new Map<string, typeof trendData>();
-  for (const row of trendData) {
-    const existing = trendByTier.get(row.budgetTier) ?? [];
-    existing.push(row);
-    trendByTier.set(row.budgetTier, existing);
-  }
-
   const latestDate =
     latestResults.length > 0
       ? dayjs(latestResults[0].date).format("YYYY/M/D")
       : null;
 
-  // ティア順にソート
-  const tierOrder = DAILY_BACKTEST.BUDGET_TIERS.map((t) => t.label);
+  // 条件定義順にソート
+  const conditionOrder = DAILY_BACKTEST.PARAMETER_CONDITIONS.map((c) => c.key);
   const sortedLatest = [...latestResults].sort(
-    (a, b) => tierOrder.indexOf(a.budgetTier) - tierOrder.indexOf(b.budgetTier),
+    (a, b) =>
+      conditionOrder.indexOf(a.conditionKey) -
+      conditionOrder.indexOf(b.conditionKey),
   );
 
   const content = html`
@@ -78,7 +75,7 @@ app.get("/", async (c) => {
             <table>
               <thead>
                 <tr>
-                  <th>${tt("ティア", "運用資金の規模区分")}</th>
+                  <th>${tt("条件", "パラメータ条件")}</th>
                   <th>${tt("勝率", "取引のうち利益が出た割合")}</th>
                   <th>${tt("PF", "プロフィットファクター。総利益÷総損失（1超が黒字）")}</th>
                   <th>${tt("リターン", "期間中の総収益率")}</th>
@@ -90,7 +87,9 @@ app.get("/", async (c) => {
                 ${sortedLatest.map(
                   (r) => html`
                     <tr>
-                      <td style="font-weight:600">${r.budgetTier}</td>
+                      <td style="font-weight:${r.conditionKey === "baseline" ? "700" : "400"}">
+                        ${r.conditionLabel}
+                      </td>
                       <td>${Number(r.winRate)}%</td>
                       <td>
                         ${Number(r.profitFactor) >= 999
@@ -112,7 +111,7 @@ app.get("/", async (c) => {
           ${sortedLatest.map(
             (r) => html`
               <details style="margin:0 16px 8px">
-                <summary>${r.budgetTier}ティア詳細</summary>
+                <summary>${r.conditionLabel} 詳細</summary>
                 <div class="card" style="margin:8px 0">
                   ${detailRow("初期資金", `¥${formatYen(r.initialBudget)}`)}
                   ${detailRow("価格上限", `¥${formatYen(r.maxPrice)}`)}
@@ -149,34 +148,28 @@ app.get("/", async (c) => {
         `
       : html`<div class="card">${emptyState("バックテスト結果なし")}</div>`}
 
-    <!-- 勝率トレンド -->
-    <p class="section-title">勝率トレンド（過去${trendDays}日）</p>
-    ${trendByTier.size > 0
+    <!-- 勝率トレンド（ベースラインのみ） -->
+    <p class="section-title">勝率トレンド（過去${trendDays}日・ベースライン）</p>
+    ${trendData.length > 0
       ? html`
-          ${DAILY_BACKTEST.BUDGET_TIERS.map((tier) => {
-            const data = trendByTier.get(tier.label) ?? [];
-            const chartData = data.map((d) => ({
+          ${(() => {
+            const chartData = trendData.map((d) => ({
               label: dayjs(d.date).format("M/D"),
               value: Number(d.winRate),
             }));
             return html`
               <div class="chart-container">
-                <div
-                  style="font-size:12px;color:#94a3b8;margin-bottom:4px;padding-left:8px"
-                >
-                  ${tier.label}
-                </div>
                 ${chartData.length >= 2
                   ? sparklineChart(chartData, 340, 80)
                   : emptyState("データ不足")}
               </div>
             `;
-          })}
+          })()}
         `
       : html`<div class="card">${emptyState("トレンドデータなし")}</div>`}
 
-    <!-- 履歴テーブル -->
-    <p class="section-title">バックテスト履歴</p>
+    <!-- 履歴テーブル（ベースラインのみ） -->
+    <p class="section-title">バックテスト履歴（ベースライン）</p>
     ${trendData.length > 0
       ? html`
           <div class="card table-wrap">
@@ -184,10 +177,10 @@ app.get("/", async (c) => {
               <thead>
                 <tr>
                   <th>日付</th>
-                  <th>ティア</th>
                   <th>勝率</th>
                   <th>リターン</th>
                   <th>PF</th>
+                  <th>取引</th>
                 </tr>
               </thead>
               <tbody>
@@ -195,7 +188,6 @@ app.get("/", async (c) => {
                   (r) => html`
                     <tr>
                       <td>${dayjs(r.date).format("M/D")}</td>
-                      <td>${r.budgetTier}</td>
                       <td>${Number(r.winRate)}%</td>
                       <td>${pnlPercent(Number(r.totalReturnPct))}</td>
                       <td>
@@ -203,6 +195,7 @@ app.get("/", async (c) => {
                           ? "∞"
                           : Number(r.profitFactor)}
                       </td>
+                      <td>${r.totalTrades}</td>
                     </tr>
                   `,
                 )}

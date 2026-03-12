@@ -259,7 +259,8 @@ export async function notifyBacktestResult(data: {
   period: string;
   dataFetchTimeMs: number;
   totalTimeMs: number;
-  tierResults: Array<{
+  conditionResults: Array<{
+    key: string;
     label: string;
     winRate: number;
     profitFactor: number;
@@ -269,18 +270,37 @@ export async function notifyBacktestResult(data: {
     maxDrawdown: number;
   }>;
 }): Promise<void> {
-  const tierLines = data.tierResults
-    .map((t) => {
-      const pnlSign = t.totalPnl >= 0 ? "+" : "";
-      const pf =
-        t.profitFactor === Infinity ? "∞" : t.profitFactor.toFixed(2);
-      return `${t.label}: 勝率${t.winRate}% | PF ${pf} | ${pnlSign}${t.totalReturnPct}% (${pnlSign}¥${t.totalPnl.toLocaleString()}) | DD -${t.maxDrawdown}% | ${t.totalTrades}件`;
-    })
-    .join("\n");
+  const lines: string[] = [];
+
+  // ベースラインを先頭に表示
+  const baseline = data.conditionResults.find((c) => c.key === "baseline");
+  if (baseline) {
+    const pf = baseline.profitFactor === Infinity ? "∞" : baseline.profitFactor.toFixed(2);
+    const sign = baseline.totalReturnPct >= 0 ? "+" : "";
+    lines.push(`*${baseline.label}*: 勝率${baseline.winRate}% | PF ${pf} | ${sign}${baseline.totalReturnPct}% | DD -${baseline.maxDrawdown}% | ${baseline.totalTrades}件`);
+    lines.push("");
+  }
+
+  // パラメータ軸ごとにグループ化して1行ずつ表示
+  const axisOrder = ["ts_act", "score", "atr", "trail"];
+  for (const axis of axisOrder) {
+    const conditions = data.conditionResults.filter(
+      (c) => c.key !== "baseline" && c.key.startsWith(axis),
+    );
+    if (conditions.length === 0) continue;
+
+    const condLine = conditions
+      .map((c) => {
+        const pf = c.profitFactor === Infinity ? "∞" : c.profitFactor.toFixed(2);
+        return `${c.label}: PF ${pf}`;
+      })
+      .join(" | ");
+    lines.push(condLine);
+  }
 
   await notifySlack({
     title: "📊 日次バックテスト完了",
-    message: tierLines,
+    message: lines.join("\n"),
     color: "#439FE0",
     fields: [
       {
@@ -289,6 +309,11 @@ export async function notifyBacktestResult(data: {
         short: true,
       },
       { title: "期間", value: data.period, short: true },
+      {
+        title: "条件数",
+        value: `${data.conditionResults.length}条件`,
+        short: true,
+      },
       {
         title: "実行時間",
         value: `${(data.totalTimeMs / 1000).toFixed(1)}秒`,
