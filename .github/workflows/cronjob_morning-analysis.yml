@@ -1,18 +1,24 @@
-name: "[Scheduled] End of Day"
+name: "[cron-job.org] Morning Analysis"
 
 on:
-  schedule:
-    # 15:50 JST = 06:50 UTC
-    - cron: "50 6 * * 1-5"
   workflow_dispatch:
     inputs:
+      job:
+        description: "実行するジョブ"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - news
+          - scan
       skip_market_day_check:
         description: "休場日チェックをスキップ"
         type: boolean
         default: false
 
 concurrency:
-  group: end-of-day
+  group: morning-analysis
   cancel-in-progress: false
 
 env:
@@ -52,9 +58,11 @@ jobs:
             echo "should_run=$CHECK" >> "$GITHUB_OUTPUT"
           fi
 
-  end-of-day:
+  news-collector:
     needs: check-market-day
-    if: needs.check-market-day.outputs.should_run == 'true'
+    if: |
+      needs.check-market-day.outputs.should_run == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'news')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -65,10 +73,29 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
-      - run: npm run eod
+      - run: npm run news
+
+  market-scanner:
+    needs: [check-market-day, news-collector]
+    if: |
+      always() &&
+      needs.check-market-day.outputs.should_run == 'true' &&
+      needs.news-collector.result != 'failure' &&
+      (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'scan')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run scan
 
   notify-success:
-    needs: end-of-day
+    needs: [news-collector, market-scanner]
     if: success()
     runs-on: ubuntu-latest
     steps:
@@ -76,23 +103,23 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "✅ end-of-day 完了"
-          SLACK_MESSAGE: "end-of-day が正常に完了しました"
+          SLACK_TITLE: "Morning Analysis 完了"
+          SLACK_MESSAGE: "ニュース収集・市場スキャンが正常に完了しました"
           SLACK_COLOR: good
           SLACK_FOOTER: "Stock Buddy"
 
   notify-failure:
-    needs: end-of-day
-    if: failure()
+    needs: [news-collector, market-scanner]
+    if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: Notify Slack on failure
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "❌ end-of-day 失敗"
+          SLACK_TITLE: "Morning Analysis 失敗"
           SLACK_MESSAGE: |
-            end-of-day が失敗しました。
+            朝の分析ジョブが失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
           SLACK_FOOTER: "Stock Buddy"
