@@ -19,6 +19,7 @@ export interface TrailingStopInput {
   entryAtr: number | null;
   strategy: "day_trade" | "swing";
   activationMultiplierOverride?: number;
+  trailMultiplierOverride?: number;
 }
 
 export interface TrailingStopResult {
@@ -50,6 +51,7 @@ export function calculateTrailingStop(
     entryAtr,
     strategy,
     activationMultiplierOverride,
+    trailMultiplierOverride,
   } = input;
 
   // 1. アクティベーション閾値を算出
@@ -71,8 +73,10 @@ export function calculateTrailingStop(
   }
 
   // 3. トレール幅を算出
+  const trailMultiplier =
+    trailMultiplierOverride ?? TRAILING_STOP.TRAIL_ATR_MULTIPLIER[strategy];
   const trailWidth = entryAtr
-    ? entryAtr * TRAILING_STOP.TRAIL_ATR_MULTIPLIER[strategy]
+    ? entryAtr * trailMultiplier
     : maxHighDuringHold * TRAILING_STOP.TRAIL_PCT[strategy];
 
   const rawTrailingStop = maxHighDuringHold - trailWidth;

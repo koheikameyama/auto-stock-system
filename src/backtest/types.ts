@@ -20,6 +20,7 @@ export interface BacktestConfig {
   gapRiskEnabled: boolean;
   cooldownDays: number;
   overrideTpSl: boolean;
+  trailMultiplier?: number;
   outputFile?: string;
   verbose: boolean;
 }

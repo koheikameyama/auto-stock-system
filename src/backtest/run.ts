@@ -9,7 +9,7 @@
 
 import { parseArgs } from "node:util";
 import dayjs from "dayjs";
-import { fetchMultipleBacktestData, fetchNikkeiViData } from "./data-fetcher";
+import { fetchMultipleBacktestData, fetchVixData } from "./data-fetcher";
 import { runBacktest } from "./simulation-engine";
 import { runSensitivityAnalysis } from "./sensitivity";
 import {
@@ -31,6 +31,7 @@ const { values } = parseArgs({
     "sl-ratio": { type: "string", default: "0.98" },
     "atr-multiplier": { type: "string", default: "1.0" },
     "trailing-activation": { type: "string", default: "1.5" },
+    "trail-multiplier": { type: "string" },
     "cooldown-days": { type: "string", default: "5" },
     "max-price": { type: "string", default: "1000" },
     strategy: { type: "string", default: "swing" },
@@ -63,6 +64,7 @@ function printHelp(): void {
   --sl-ratio <n>          損切比率                   デフォルト: 0.98
   --atr-multiplier <n>    ATR倍率（損切り）           デフォルト: 1.0
   --trailing-activation <n> TS起動ATR倍率            デフォルト: 1.5
+  --trail-multiplier <n>  トレール幅ATR倍率          デフォルト: 定数値
   --cooldown-days <n>     SL後の同一銘柄再エントリー禁止日数 デフォルト: 5
   --max-price <yen>       即死ルール価格上限         デフォルト: 1000
   --strategy <type>       day_trade | swing          デフォルト: swing
@@ -111,6 +113,9 @@ async function main(): Promise<void> {
     gapRiskEnabled: !(values["no-gap-risk"] ?? false),
     cooldownDays: Number(values["cooldown-days"]),
     overrideTpSl: values["override-tp-sl"] ?? false,
+    trailMultiplier: values["trail-multiplier"]
+      ? Number(values["trail-multiplier"])
+      : undefined,
     outputFile: values.output,
     verbose: values.verbose ?? false,
   };
@@ -118,11 +123,11 @@ async function main(): Promise<void> {
   console.log("[backtest] 開始");
   const startTime = Date.now();
 
-  // 1. データ取得（日経VIを並行取得）
-  const [allData, nikkeiViData] = await Promise.all([
+  // 1. データ取得（VIXを並行取得）
+  const [allData, vixData] = await Promise.all([
     fetchMultipleBacktestData(tickers, config.startDate, config.endDate),
-    fetchNikkeiViData(config.startDate, config.endDate).catch((err) => {
-      console.warn("[backtest] 日経VIデータ取得失敗（crisis halt なし）:", err);
+    fetchVixData(config.startDate, config.endDate).catch((err) => {
+      console.warn("[backtest] VIXデータ取得失敗（crisis halt なし）:", err);
       return new Map<string, number>();
     }),
   ]);
@@ -134,7 +139,7 @@ async function main(): Promise<void> {
 
   // 2. バックテスト実行
   console.log("[backtest] シミュレーション実行中...");
-  const result = runBacktest(config, allData, nikkeiViData);
+  const result = runBacktest(config, allData, vixData);
 
   // 3. 結果表示
   printBacktestReport(result);
@@ -143,7 +148,7 @@ async function main(): Promise<void> {
   let sensitivityResults = null;
   if (values.sensitivity) {
     console.log("[backtest] パラメータ感度分析...");
-    sensitivityResults = runSensitivityAnalysis(config, allData, nikkeiViData);
+    sensitivityResults = runSensitivityAnalysis(config, allData, vixData);
     printSensitivityReport(sensitivityResults);
   }
 

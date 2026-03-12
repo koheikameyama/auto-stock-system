@@ -39,7 +39,7 @@ const MIN_WINDOW_BARS = 80;
 export function runBacktest(
   config: BacktestConfig,
   allData: Map<string, OHLCVData[]>,
-  nikkeiViData?: Map<string, number>,
+  vixData?: Map<string, number>,
   candidateMap?: Map<string, string[]> | null,
 ): BacktestResult {
   const openPositions: SimulatedPosition[] = [];
@@ -166,6 +166,7 @@ export function runBacktest(
           strategy: config.strategy,
           holdingBusinessDays: holdingDays,
           activationMultiplierOverride: config.trailingActivationMultiplier,
+          trailMultiplierOverride: config.trailMultiplier,
         },
         { open: todayBar.open, high: todayBar.high, low: todayBar.low, close: todayBar.close },
       );
@@ -276,9 +277,9 @@ export function runBacktest(
     // 2.5. ディフェンシブモード（本番の position-monitor と同等）
     //   crisis → 全ポジション即時決済
     //   high   → 含み益ポジション微益撤退
-    const todayNikkeiVi = nikkeiViData?.get(today);
+    const todayVix = vixData?.get(today);
     const todayRegime: RegimeLevel =
-      todayNikkeiVi != null ? determineMarketRegime(todayNikkeiVi).level : "normal";
+      todayVix != null ? determineMarketRegime(todayVix).level : "normal";
 
     if (
       (todayRegime === "crisis" || todayRegime === "high") &&
@@ -361,7 +362,7 @@ export function runBacktest(
     // crisis時は新規エントリーをスキップ（本番のshouldTrade=falseと同等）
     if (todayRegime === "crisis") {
       if (config.verbose) {
-        console.log(`  [${today}] 日経VI=${todayNikkeiVi?.toFixed(1)} → crisis: 新規エントリースキップ`);
+        console.log(`  [${today}] VIX=${todayVix?.toFixed(1)} → crisis: 新規エントリースキップ`);
       }
     } else if (openPositions.length < config.maxPositions && cash > 0) {
       // candidateMapがある場合、当日の候補銘柄のみ評価（生存者バイアス除去）

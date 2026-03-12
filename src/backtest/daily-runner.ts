@@ -3,19 +3,23 @@
  *
  * 1. ScoringRecordから日付別S/Aランク銘柄マップを構築（生存者バイアス除去）
  * 2. Yahoo Financeからデータを一括取得（1回のみ）
- * 3. 4つの予算ティアでシミュレーション実行
+ * 3. 13のパラメータ条件でシミュレーション実行
  * 4. 結果を返す（DB保存・通知は呼び出し側で行う）
  */
 
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
-import { DAILY_BACKTEST, type BudgetTier } from "../lib/constants";
-import { fetchMultipleBacktestData, fetchNikkeiViData } from "./data-fetcher";
+import {
+  DAILY_BACKTEST,
+  type ParameterCondition,
+  hasParamOverride,
+} from "../lib/constants";
+import { fetchMultipleBacktestData, fetchVixData } from "./data-fetcher";
 import { runBacktest } from "./simulation-engine";
 import type { BacktestConfig, PerformanceMetrics } from "./types";
 
-export interface DailyBacktestTierResult {
-  tier: BudgetTier;
+export interface DailyBacktestConditionResult {
+  condition: ParameterCondition;
   config: BacktestConfig;
   metrics: PerformanceMetrics;
   tickerCount: number;
@@ -26,7 +30,7 @@ export interface DailyBacktestRunResult {
   tickers: string[];
   periodStart: string;
   periodEnd: string;
-  tierResults: DailyBacktestTierResult[];
+  conditionResults: DailyBacktestConditionResult[];
   dataFetchTimeMs: number;
 }
 
@@ -154,12 +158,12 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
   // 2. 期間設定（ScoringRecord蓄積量に基づく動的期間）
   const endDate = dayjs().format("YYYY-MM-DD");
 
-  // 3. データ一括取得（全ティア共通）
+  // 3. データ一括取得（全条件共通）
   const fetchStart = Date.now();
-  const [allData, nikkeiViData] = await Promise.all([
+  const [allData, vixData] = await Promise.all([
     fetchMultipleBacktestData(allTickers, startDate, endDate),
-    fetchNikkeiViData(startDate, endDate).catch((err: unknown) => {
-      console.warn("[daily-backtest] 日経VIデータ取得失敗（レジーム集計なし）:", err);
+    fetchVixData(startDate, endDate).catch((err: unknown) => {
+      console.warn("[daily-backtest] VIXデータ取得失敗（レジーム集計なし）:", err);
       return new Map<string, number>();
     }),
   ]);
@@ -170,23 +174,24 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
   }
 
   console.log(
-    `[daily-backtest] データ取得完了: ${allData.size}銘柄 日経VI${nikkeiViData.size}件 (${(dataFetchTimeMs / 1000).toFixed(1)}秒)`,
+    `[daily-backtest] データ取得完了: ${allData.size}銘柄 VIX${vixData.size}件 (${(dataFetchTimeMs / 1000).toFixed(1)}秒)`,
   );
 
-  // 4. 各ティアでシミュレーション実行
-  const tierResults: DailyBacktestTierResult[] = [];
-  const { DEFAULT_PARAMS } = DAILY_BACKTEST;
+  // 4. 各パラメータ条件でシミュレーション実行
+  const conditionResults: DailyBacktestConditionResult[] = [];
+  const { DEFAULT_PARAMS, FIXED_BUDGET, PARAMETER_CONDITIONS } = DAILY_BACKTEST;
 
-  for (const tier of DAILY_BACKTEST.BUDGET_TIERS) {
-    const tierStart = Date.now();
+  for (const condition of PARAMETER_CONDITIONS) {
+    const condStart = Date.now();
 
+    // ベースconfig: デフォルトパラメータ + 固定予算
     const config: BacktestConfig = {
       tickers: allTickers,
       startDate,
       endDate,
-      initialBudget: tier.budget,
-      maxPositions: tier.maxPositions,
-      maxPrice: tier.maxPrice,
+      initialBudget: FIXED_BUDGET.budget,
+      maxPositions: FIXED_BUDGET.maxPositions,
+      maxPrice: FIXED_BUDGET.maxPrice,
       scoreThreshold: DEFAULT_PARAMS.scoreThreshold,
       takeProfitRatio: DEFAULT_PARAMS.takeProfitRatio,
       stopLossRatio: DEFAULT_PARAMS.stopLossRatio,
@@ -201,20 +206,32 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
       verbose: false,
     };
 
-    console.log(`[daily-backtest] ${tier.label}ティア シミュレーション中...`);
-    const result = runBacktest(config, allData, nikkeiViData, candidateMap);
+    // 条件のパラメータオーバーライドを適用
+    if (hasParamOverride(condition)) {
+      if (condition.param === "trailMultiplier") {
+        config.trailMultiplier = condition.value;
+      } else {
+        (config as unknown as Record<string, unknown>)[condition.param] = condition.value;
+      }
+      if (condition.overrideTpSl) {
+        config.overrideTpSl = true;
+      }
+    }
 
-    tierResults.push({
-      tier,
+    console.log(`[daily-backtest] ${condition.label} シミュレーション中...`);
+    const result = runBacktest(config, allData, vixData, candidateMap);
+
+    conditionResults.push({
+      condition,
       config,
       metrics: result.metrics,
       tickerCount: allData.size,
-      executionTimeMs: Date.now() - tierStart,
+      executionTimeMs: Date.now() - condStart,
     });
 
     const sign = result.metrics.totalReturnPct >= 0 ? "+" : "";
     console.log(
-      `[daily-backtest] ${tier.label}: 勝率${result.metrics.winRate}% PF${result.metrics.profitFactor} ${sign}${result.metrics.totalReturnPct}%`,
+      `[daily-backtest] ${condition.label}: 勝率${result.metrics.winRate}% PF${result.metrics.profitFactor} ${sign}${result.metrics.totalReturnPct}%`,
     );
   }
 
@@ -222,7 +239,7 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
     tickers: allTickers,
     periodStart: startDate,
     periodEnd: endDate,
-    tierResults,
+    conditionResults,
     dataFetchTimeMs,
   };
 }

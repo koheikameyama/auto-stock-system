@@ -24,6 +24,7 @@ export interface PositionForExit {
   strategy: "day_trade" | "swing";
   holdingBusinessDays: number;
   activationMultiplierOverride?: number;
+  trailMultiplierOverride?: number;
 }
 
 export interface BarForExit {
@@ -70,6 +71,7 @@ export function checkPositionExit(
     entryAtr: position.entryAtr,
     strategy: position.strategy,
     activationMultiplierOverride: position.activationMultiplierOverride,
+    trailMultiplierOverride: position.trailMultiplierOverride,
   });
 
   const effectiveTP = trailingResult.effectiveTakeProfit;
