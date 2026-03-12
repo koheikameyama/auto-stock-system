@@ -28,7 +28,16 @@
       "Bash(git -C /Users/kouheikameyama/development/auto-stock-system add src/lib/yfinance-client.ts src/lib/constants/trading.ts src/lib/retry-utils.ts yfinance-service/requirements.txt .claude/settings.json)",
       "Bash(git -C:*)",
       "Bash(git mv:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git status:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(gh run view:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma migrate resolve:*)",
+      "Bash(psql:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(gh pr create:*)"
     ]
   },
   "hooks": {
