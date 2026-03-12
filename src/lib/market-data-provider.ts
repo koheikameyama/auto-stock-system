@@ -15,6 +15,7 @@ import {
   yfFetchQuotesBatch,
   yfFetchHistorical,
   yfFetchHistoricalRange,
+  yfFetchHistoricalBatch,
   yfFetchMarket,
   yfFetchEvents,
   yfFetchNews,
@@ -225,6 +226,62 @@ export async function providerFetchHistoricalRange(
           close: bar.close!,
           volume: bar.volume ?? 0,
         }));
+    },
+  );
+}
+
+/**
+ * 複数銘柄のヒストリカルデータをバッチ取得（yf.download 一括）
+ */
+export async function providerFetchHistoricalBatch(
+  symbols: string[],
+  start: string,
+  end: string,
+): Promise<Record<string, YfOHLCVBar[]>> {
+  return withFallback(
+    `historical-batch[${symbols.length}]`,
+    () => yfFetchHistoricalBatch(symbols, start, end),
+    async () => {
+      // フォールバック: 個別に取得
+      const dayjs = (await import("dayjs")).default;
+      const result: Record<string, YfOHLCVBar[]> = {};
+      for (const symbol of symbols) {
+        try {
+          const chartResult = await retry(
+            () =>
+              throttledYahooRequest(async () =>
+                (await getYahooFinance()).chart(symbol, {
+                  period1: new Date(start),
+                  period2: new Date(end),
+                  interval: "1d",
+                }),
+              ),
+            symbol,
+          );
+          const bars = chartResult.quotes
+            .filter(
+              (bar) =>
+                bar.open != null &&
+                bar.high != null &&
+                bar.low != null &&
+                bar.close != null,
+            )
+            .map((bar) => ({
+              date: dayjs(bar.date).format("YYYY-MM-DD"),
+              open: bar.open!,
+              high: bar.high!,
+              low: bar.low!,
+              close: bar.close!,
+              volume: bar.volume ?? 0,
+            }));
+          if (bars.length > 0) {
+            result[symbol] = bars;
+          }
+        } catch (error) {
+          console.error(`[market-data-provider] Fallback failed for ${symbol}:`, error);
+        }
+      }
+      return result;
     },
   );
 }

@@ -177,6 +177,20 @@ export async function yfFetchHistoricalRange(
 }
 
 /**
+ * 複数銘柄のヒストリカル OHLCV データをバッチ取得（yf.download 一括）
+ */
+export async function yfFetchHistoricalBatch(
+  symbols: string[],
+  start: string,
+  end: string,
+): Promise<Record<string, YfOHLCVBar[]>> {
+  return yfinanceFetch<Record<string, YfOHLCVBar[]>>("/historical/batch", {
+    method: "POST",
+    body: JSON.stringify({ symbols, start, end }),
+  });
+}
+
+/**
  * 市場指標データを一括取得
  */
 export async function yfFetchMarket(): Promise<YfMarketData> {

@@ -5,16 +5,15 @@
  * oldest-first（時系列順）で返す。
  */
 
-import pLimit from "p-limit";
 import dayjs from "dayjs";
 import type { OHLCVData } from "../core/technical-analysis";
 import { normalizeTickerCode } from "../lib/ticker-utils";
 import {
   providerFetchHistoricalRange,
+  providerFetchHistoricalBatch,
 } from "../lib/market-data-provider";
 
 const LOOKBACK_CALENDAR_DAYS = 120;
-const FETCH_CONCURRENCY = 3;
 
 /**
  * 単一銘柄のヒストリカルデータを取得
@@ -87,35 +86,73 @@ export async function fetchVixData(
 }
 
 /**
- * 複数銘柄のヒストリカルデータを一括取得
+ * 複数銘柄のヒストリカルデータを一括取得（yf.download バッチ）
  */
 export async function fetchMultipleBacktestData(
   tickers: string[],
   startDate: string,
   endDate: string,
 ): Promise<Map<string, OHLCVData[]>> {
-  const limit = pLimit(FETCH_CONCURRENCY);
   const results = new Map<string, OHLCVData[]>();
+  const symbols = tickers.map(normalizeTickerCode);
 
-  console.log(`[backtest] ${tickers.length}銘柄のデータを取得中...`);
+  const adjustedStart = dayjs(startDate)
+    .subtract(LOOKBACK_CALENDAR_DAYS, "day")
+    .format("YYYY-MM-DD");
+  const adjustedEnd = dayjs(endDate).add(1, "day").format("YYYY-MM-DD");
 
-  const tasks = tickers.map((ticker) =>
-    limit(async () => {
+  console.log(`[backtest] ${tickers.length}銘柄のデータを yf.download バッチ取得中...`);
+
+  try {
+    const batchResult = await providerFetchHistoricalBatch(
+      symbols,
+      adjustedStart,
+      adjustedEnd,
+    );
+
+    for (let i = 0; i < tickers.length; i++) {
+      const ticker = tickers[i];
+      const symbol = symbols[i];
+      const bars = batchResult[symbol];
+      if (bars && bars.length > 0) {
+        const data = bars
+          .filter(
+            (bar) =>
+              bar.open != null &&
+              bar.high != null &&
+              bar.low != null &&
+              bar.close != null,
+          )
+          .map((bar) => ({
+            date: bar.date,
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+            volume: bar.volume ?? 0,
+          }))
+          .sort((a, b) => a.date.localeCompare(b.date));
+        if (data.length > 0) {
+          results.set(ticker, data);
+          console.log(`  ${ticker}: ${data.length}本取得`);
+        }
+      } else {
+        console.warn(`  ${ticker}: データなし`);
+      }
+    }
+  } catch (error) {
+    console.error(`[backtest] バッチ取得失敗、個別取得にフォールバック:`, error);
+    // フォールバック: 個別取得
+    for (const ticker of tickers) {
       try {
         const data = await fetchBacktestData(ticker, startDate, endDate);
-        console.log(`  ${ticker}: ${data.length}本取得`);
-        return { ticker, data };
-      } catch (error) {
-        console.error(`  ${ticker}: 取得失敗`, error);
-        return { ticker, data: [] as OHLCVData[] };
+        if (data.length > 0) {
+          results.set(ticker, data);
+          console.log(`  ${ticker}: ${data.length}本取得 (個別)`);
+        }
+      } catch (e) {
+        console.error(`  ${ticker}: 取得失敗`, e);
       }
-    }),
-  );
-
-  const fetchResults = await Promise.all(tasks);
-  for (const { ticker, data } of fetchResults) {
-    if (data.length > 0) {
-      results.set(ticker, data);
     }
   }
 

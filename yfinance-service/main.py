@@ -290,38 +290,43 @@ async def get_quotes_batch(req: QuotesBatchRequest):
     return results
 
 
+def _df_to_bars(df, *, require_positive_close: bool = False) -> list[dict]:
+    """DataFrame を OHLCV バー一覧に変換する共通ヘルパー"""
+    if df is None or df.empty:
+        return []
+    bars = []
+    for date, row in df.iterrows():
+        o = safe_float_or_none(row.get("Open"))
+        h = safe_float_or_none(row.get("High"))
+        l = safe_float_or_none(row.get("Low"))
+        c = safe_float_or_none(row.get("Close"))
+        if o is None or h is None or l is None or c is None:
+            continue
+        if require_positive_close and c <= 0:
+            continue
+        ts = date if hasattr(date, "strftime") else date[1] if isinstance(date, tuple) else date
+        bars.append({
+            "date": ts.strftime("%Y-%m-%d"),
+            "open": o,
+            "high": h,
+            "low": l,
+            "close": c,
+            "volume": safe_float(row.get("Volume")),
+        })
+    return bars
+
+
 @app.get("/historical")
 async def get_historical(symbol: str, days: int = 200):
     """ヒストリカルOHLCVデータを取得"""
     symbol = normalize_ticker(symbol)
     try:
         def _fetch():
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(period=f"{days}d", interval="1d")
+            df = yf.download(symbol, period=f"{days}d", interval="1d", progress=False, auto_adjust=True)
             return df
 
         df = await throttled_with_retry(_fetch)
-
-        if df is None or df.empty:
-            return []
-
-        bars = []
-        for date, row in df.iterrows():
-            o = safe_float_or_none(row.get("Open"))
-            h = safe_float_or_none(row.get("High"))
-            l = safe_float_or_none(row.get("Low"))
-            c = safe_float_or_none(row.get("Close"))
-            if o is not None and h is not None and l is not None and c is not None and c > 0:
-                bars.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "open": o,
-                    "high": h,
-                    "low": l,
-                    "close": c,
-                    "volume": safe_float(row.get("Volume")),
-                })
-
-        return bars
+        return _df_to_bars(df, require_positive_close=True)
     except Exception as e:
         logger.error(f"Failed to fetch historical data for {symbol}: {e}")
         raise HTTPException(status_code=_error_status(e), detail=str(e))
@@ -339,34 +344,54 @@ async def get_historical_range(req: HistoricalRangeRequest):
     symbol = normalize_ticker(req.symbol)
     try:
         def _fetch():
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(start=req.start, end=req.end, interval="1d")
+            df = yf.download(symbol, start=req.start, end=req.end, interval="1d", progress=False, auto_adjust=True)
+            return df
+
+        df = await throttled_with_retry(_fetch)
+        return _df_to_bars(df)
+    except Exception as e:
+        logger.error(f"Failed to fetch historical range for {symbol}: {e}")
+        raise HTTPException(status_code=_error_status(e), detail=str(e))
+
+
+class HistoricalBatchRequest(BaseModel):
+    symbols: list[str]
+    start: str   # YYYY-MM-DD
+    end: str     # YYYY-MM-DD
+
+
+@app.post("/historical/batch")
+async def get_historical_batch(req: HistoricalBatchRequest):
+    """複数銘柄のヒストリカルデータを yf.download() で一括取得"""
+    symbols = [normalize_ticker(s) for s in req.symbols]
+    try:
+        def _fetch():
+            df = yf.download(symbols, start=req.start, end=req.end, interval="1d", progress=False, auto_adjust=True, group_by="ticker")
             return df
 
         df = await throttled_with_retry(_fetch)
 
         if df is None or df.empty:
-            return []
+            return {}
 
-        bars = []
-        for date, row in df.iterrows():
-            o = safe_float_or_none(row.get("Open"))
-            h = safe_float_or_none(row.get("High"))
-            l = safe_float_or_none(row.get("Low"))
-            c = safe_float_or_none(row.get("Close"))
-            if o is not None and h is not None and l is not None and c is not None:
-                bars.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "open": o,
-                    "high": h,
-                    "low": l,
-                    "close": c,
-                    "volume": safe_float(row.get("Volume")),
-                })
+        result: dict[str, list[dict]] = {}
 
-        return bars
+        if len(symbols) == 1:
+            # 単一銘柄の場合、MultiIndex にならない
+            result[symbols[0]] = _df_to_bars(df)
+        else:
+            for symbol in symbols:
+                try:
+                    symbol_df = df[symbol]
+                    bars = _df_to_bars(symbol_df)
+                    if bars:
+                        result[symbol] = bars
+                except KeyError:
+                    logger.warning(f"No data for {symbol} in batch download")
+
+        return result
     except Exception as e:
-        logger.error(f"Failed to fetch historical range for {symbol}: {e}")
+        logger.error(f"Failed to fetch historical batch: {e}")
         raise HTTPException(status_code=_error_status(e), detail=str(e))
 
 
@@ -382,26 +407,64 @@ MARKET_SYMBOLS = {
 
 @app.get("/market")
 async def get_market():
-    """市場指標データを一括取得"""
-    result: dict[str, dict | None] = {}
-    for key, symbol in MARKET_SYMBOLS.items():
-        try:
-            def _fetch(s=symbol):
-                ticker = yf.Ticker(s)
-                try:
-                    info = ticker.info
-                    if isinstance(info, dict):
-                        return info
-                    logger.warning(f"ticker.info returned {type(info).__name__} for {s}, falling back to fast_info")
-                except Exception as e:
-                    logger.warning(f"ticker.info raised {type(e).__name__} for {s}: {e}, falling back to fast_info")
-                return _build_info_from_fast_info(ticker)
-            info = await throttled_with_retry(_fetch)
-            result[key] = parse_index_quote_from_info(info)
-        except Exception as e:
-            logger.warning(f"Failed to fetch market index {symbol}: {e}")
-            result[key] = None
-    return result
+    """市場指標データを yf.download() で一括取得"""
+    symbols_list = list(MARKET_SYMBOLS.values())
+
+    try:
+        def _fetch():
+            df = yf.download(symbols_list, period="5d", interval="1d", progress=False, auto_adjust=True, group_by="ticker")
+            return df
+
+        df = await throttled_with_retry(_fetch)
+
+        result: dict[str, dict | None] = {}
+        for key, symbol in MARKET_SYMBOLS.items():
+            try:
+                symbol_df = df[symbol] if len(symbols_list) > 1 else df
+                # 直近の有効な2行を取得（当日 + 前日）
+                valid = symbol_df.dropna(subset=["Close"])
+                if valid.empty:
+                    result[key] = None
+                    continue
+
+                last_row = valid.iloc[-1]
+                price = safe_float(last_row.get("Close"))
+                prev_close = safe_float(valid.iloc[-2].get("Close")) if len(valid) >= 2 else price
+                change = price - prev_close if price and prev_close else 0.0
+                change_pct = (change / prev_close * 100) if prev_close else 0.0
+
+                result[key] = {
+                    "price": price,
+                    "previousClose": prev_close,
+                    "change": round(change, 2),
+                    "changePercent": round(change_pct, 4),
+                }
+            except Exception as e:
+                logger.warning(f"Failed to parse market index {symbol} from batch: {e}")
+                result[key] = None
+
+        return result
+    except Exception as e:
+        logger.warning(f"Failed to fetch market data via yf.download: {e}")
+        # フォールバック: 個別取得
+        result: dict[str, dict | None] = {}
+        for key, symbol in MARKET_SYMBOLS.items():
+            try:
+                def _fetch_single(s=symbol):
+                    ticker = yf.Ticker(s)
+                    try:
+                        info = ticker.info
+                        if isinstance(info, dict):
+                            return info
+                    except Exception:
+                        pass
+                    return _build_info_from_fast_info(ticker)
+                info = await throttled_with_retry(_fetch_single)
+                result[key] = parse_index_quote_from_info(info)
+            except Exception as inner_e:
+                logger.warning(f"Failed to fetch market index {symbol}: {inner_e}")
+                result[key] = None
+        return result
 
 
 @app.get("/events")
