@@ -6,7 +6,8 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
-import { QUERY_LIMITS, ROUTE_LOOKBACK_DAYS } from "../../lib/constants";
+import { QUERY_LIMITS, ROUTE_LOOKBACK_DAYS, POSITION_DEFAULTS } from "../../lib/constants";
+import { calculateTrailingStop } from "../../core/trailing-stop";
 import { layout } from "../views/layout";
 import {
   formatYen,
@@ -64,9 +65,8 @@ app.get("/", async (c) => {
                   <th>${tt("現在価格", "Yahoo Financeからのリアルタイム価格")}</th>
                   <th>${tt("含み損益", "（現在価格 − 建値）× 数量")}</th>
                   <th>${tt("損益率", "（現在価格 − 建値）÷ 建値 × 100")}</th>
-                  <th>${tt("利確", "利益確定の目標価格（TP）")}</th>
-                  <th>${tt("損切", "損失を限定する売却価格（SL）")}</th>
-                  <th>${tt("RR比", "リスクリワード比（利幅÷損幅）。1.5以上が目標")}</th>
+                  <th>${tt("損切", "現在有効な損切り価格（固定SL/BE/TS）")}</th>
+                  <th>${tt("出口状態", "SL=固定損切り、BE=建値撤退、TS=トレーリングストップ")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -88,29 +88,42 @@ app.get("/", async (c) => {
                       <td>${currentPrice != null ? `¥${formatYen(currentPrice)}` : "-"}</td>
                       <td>${unrealizedPnl != null ? pnlText(unrealizedPnl) : "-"}</td>
                       <td>${pnlRate != null ? pnlPercent(pnlRate) : "-"}</td>
-                      <td>
-                        ${p.takeProfitPrice
-                          ? `¥${formatYen(Number(p.takeProfitPrice))}`
-                          : "-"}
-                      </td>
-                      <td>
-                        ${p.stopLossPrice
-                          ? `¥${formatYen(Number(p.stopLossPrice))}`
-                          : "-"}
-                      </td>
-                      <td>
-                        ${(() => {
-                          const tp = p.takeProfitPrice ? Number(p.takeProfitPrice) : null;
-                          const sl = p.stopLossPrice ? Number(p.stopLossPrice) : null;
-                          if (tp == null || sl == null) return "-";
-                          const risk = entryPrice - sl;
-                          const reward = tp - entryPrice;
-                          if (risk <= 0) return "-";
-                          const rr = reward / risk;
-                          const cls = rr >= 1.5 ? "pnl-positive" : "pnl-negative";
-                          return html`<span class="${cls}">1:${rr.toFixed(1)}</span>`;
-                        })()}
-                      </td>
+                      ${(() => {
+                        const sl = p.stopLossPrice ? Number(p.stopLossPrice) : entryPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
+                        const tp = p.takeProfitPrice ? Number(p.takeProfitPrice) : entryPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;
+                        const entryAtr = p.entryAtr ? Number(p.entryAtr) : null;
+                        const maxHigh = p.maxHighDuringHold ? Number(p.maxHighDuringHold) : entryPrice;
+                        const currentTS = p.trailingStopPrice ? Number(p.trailingStopPrice) : null;
+
+                        const tsResult = calculateTrailingStop({
+                          entryPrice,
+                          maxHighDuringHold: maxHigh,
+                          currentTrailingStop: currentTS,
+                          originalStopLoss: sl,
+                          originalTakeProfit: tp,
+                          entryAtr,
+                          strategy: p.strategy as "day_trade" | "swing",
+                        });
+
+                        const effectiveSL = tsResult.effectiveStopLoss;
+                        let statusLabel: string;
+                        let statusColor: string;
+                        if (tsResult.isActivated) {
+                          statusLabel = `TS ¥${formatYen(effectiveSL)}`;
+                          statusColor = "#3b82f6";
+                        } else if (effectiveSL >= entryPrice) {
+                          statusLabel = `BE ¥${formatYen(effectiveSL)}`;
+                          statusColor = "#22c55e";
+                        } else {
+                          statusLabel = `SL ¥${formatYen(effectiveSL)}`;
+                          statusColor = "#94a3b8";
+                        }
+
+                        return html`
+                          <td>¥${formatYen(effectiveSL)}</td>
+                          <td><span class="badge" style="background:${statusColor}20;color:${statusColor}">${statusLabel}</span></td>
+                        `;
+                      })()}
                     </tr>
                   `;
                   },
