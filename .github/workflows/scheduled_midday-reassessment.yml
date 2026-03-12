@@ -1,6 +1,9 @@
-name: "[cron-job.org] End of Day"
+name: "[Scheduled] Midday Reassessment"
 
 on:
+  schedule:
+    # 12:15 JST = 03:15 UTC
+    - cron: "15 3 * * 1-5"
   workflow_dispatch:
     inputs:
       skip_market_day_check:
@@ -9,7 +12,7 @@ on:
         default: false
 
 concurrency:
-  group: end-of-day
+  group: midday-reassessment
   cancel-in-progress: false
 
 env:
@@ -49,7 +52,7 @@ jobs:
             echo "should_run=$CHECK" >> "$GITHUB_OUTPUT"
           fi
 
-  end-of-day:
+  midday-reassessment:
     needs: check-market-day
     if: needs.check-market-day.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -62,10 +65,10 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
-      - run: npm run eod
+      - run: npm run midday
 
   notify-success:
-    needs: end-of-day
+    needs: midday-reassessment
     if: success()
     runs-on: ubuntu-latest
     steps:
@@ -73,13 +76,13 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "✅ end-of-day 完了"
-          SLACK_MESSAGE: "end-of-day が正常に完了しました"
+          SLACK_TITLE: "✅ midday-reassessment 完了"
+          SLACK_MESSAGE: "midday-reassessment が正常に完了しました"
           SLACK_COLOR: good
           SLACK_FOOTER: "Stock Buddy"
 
   notify-failure:
-    needs: end-of-day
+    needs: midday-reassessment
     if: failure()
     runs-on: ubuntu-latest
     steps:
@@ -87,9 +90,9 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "❌ end-of-day 失敗"
+          SLACK_TITLE: "❌ midday-reassessment 失敗"
           SLACK_MESSAGE: |
-            end-of-day が失敗しました。
+            midday-reassessment が失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
           SLACK_FOOTER: "Stock Buddy"
