@@ -118,12 +118,15 @@ function nowJST(): string {
 // ※ news-collector, market-scanner, ghost-review, weekly-review は
 //   GitHub Actions cron に移行済み（KOH-296）
 const schedules = [
-  // 9:00-11:29, 12:30-15:19 毎分 ポジション監視（平日）— 昼休み11:30-12:30除外
-  { cron: "* 9-10 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
-  { cron: "0-29 11 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
-  { cron: "30-59 12 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
+  // 9:20-11:49, 12:50-15:39 毎分 ポジション監視（平日）
+  // ※ yfinance の約20分遅延を考慮して各セッション+20分ずらし
+  //   前場 9:00-11:30 → 監視 9:20-11:49 / 後場 12:30-15:00 → 監視 12:50-15:39
+  { cron: "20-59 9 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
+  { cron: "* 10 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
+  { cron: "0-49 11 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
+  { cron: "50-59 12 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
   { cron: "* 13-14 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
-  { cron: "0-19 15 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
+  { cron: "0-39 15 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
 ];
 
 // cron 登録
