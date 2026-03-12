@@ -21,6 +21,7 @@ import {
   detailRow,
   emptyState,
   regimeBadge,
+  sentimentBadge,
   tt,
 } from "../views/components";
 
@@ -49,7 +50,41 @@ app.get("/", async (c) => {
     (a, b) => b.relativeStrength - a.relativeStrength,
   );
 
+  // Trading verdict: AND of all three gates
+  const regimeOk = regime ? !regime.shouldHaltTrading : false;
+  const aiOk = assessment?.shouldTrade ?? false;
+  const drawdownOk = !drawdown.shouldHaltTrading;
+  const canTrade = regimeOk && aiOk && drawdownOk;
+
   const content = html`
+    <!-- Trading Verdict -->
+    <div class="card">
+      <div class="card-title">取引判定</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        ${canTrade
+          ? html`<span class="badge" style="background:#22c55e20;color:#22c55e;font-size:14px;padding:6px 12px">取引許可</span>`
+          : html`<span class="badge" style="background:#ef444420;color:#ef4444;font-size:14px;padding:6px 12px">取引見送り</span>`}
+      </div>
+      ${detailRow(
+        tt("VIXレジーム", "VIX水準による機械的なリスク判定"),
+        regimeOk
+          ? html`<span style="color:#22c55e">許可</span>`
+          : html`<span style="color:#ef4444">${regime ? "停止" : "データなし"}</span>`,
+      )}
+      ${detailRow(
+        tt("AI市場評価", "AIによる総合的な市場センチメント判断"),
+        aiOk
+          ? html`<span style="color:#22c55e">取引推奨</span>`
+          : html`<span style="color:#ef4444">${assessment ? `見送り（${sentimentBadge(assessment.sentiment)}）` : "データなし"}</span>`,
+      )}
+      ${detailRow(
+        tt("ドローダウン", "損失管理による取引制限"),
+        drawdownOk
+          ? html`<span style="color:#22c55e">正常</span>`
+          : html`<span style="color:#ef4444">停止</span>`,
+      )}
+    </div>
+
     <!-- Market Regime -->
     <div class="card">
       <div class="card-title">マーケットレジーム</div>
