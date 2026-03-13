@@ -39,6 +39,11 @@ const { values } = parseArgs({
     "price-limits": { type: "boolean", default: false },
     "no-gap-risk": { type: "boolean", default: false },
     "override-tp-sl": { type: "boolean", default: false },
+    "trend-filter": { type: "boolean", default: false },
+    "pullback-filter": { type: "boolean", default: false },
+    "vol-filter": { type: "boolean", default: false },
+    "rs-filter": { type: "boolean", default: false },
+    "max-holding-days": { type: "string" },
     sensitivity: { type: "boolean", default: false },
     output: { type: "string" },
     verbose: { type: "boolean", default: false },
@@ -113,6 +118,13 @@ async function main(): Promise<void> {
     gapRiskEnabled: !(values["no-gap-risk"] ?? false),
     cooldownDays: Number(values["cooldown-days"]),
     overrideTpSl: values["override-tp-sl"] ?? false,
+    trendFilterEnabled: values["trend-filter"] ?? false,
+    pullbackFilterEnabled: values["pullback-filter"] ?? false,
+    volatilityFilterEnabled: values["vol-filter"] ?? false,
+    rsFilterEnabled: values["rs-filter"] ?? false,
+    maxHoldingDays: values["max-holding-days"]
+      ? Number(values["max-holding-days"])
+      : undefined,
     trailMultiplier: values["trail-multiplier"]
       ? Number(values["trail-multiplier"])
       : undefined,
