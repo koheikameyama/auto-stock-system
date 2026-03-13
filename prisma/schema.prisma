@@ -103,6 +103,8 @@ model MarketAssessment {
   shouldTrade     Boolean // 今日取引すべきか
   reasoning       String  @db.Text // 判断理由
 
+  tradingStrategy String? // day_trade / swing
+
   // AI選定銘柄（JSON配列）
   selectedStocks Json? // [{ tickerCode, strategy, score, reasoning }]
 
