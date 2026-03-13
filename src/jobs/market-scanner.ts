@@ -28,6 +28,7 @@ import {
   TRADING_DEFAULTS,
   MARKET_INDEX,
   SECTOR_RISK,
+  STRATEGY_SWITCHING,
   getSectorGroup,
 } from "../lib/constants";
 import {
@@ -227,6 +228,18 @@ ${sectorText || "  特になし"}`;
     cmeDivergencePct,
   );
   console.log(`[1.8.1/5] 戦略決定: ${strategyDecision.strategy}（${strategyDecision.reason}）`);
+
+  // VIX ≥ 30: 既存スイングポジションの戦略をday_tradeに切替（ギャップダウンでSLが機能しないリスク）
+  // 14:50にposition-monitorがday_tradeとして強制決済する
+  if (marketData.vix.price >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
+    const updated = await prisma.tradingPosition.updateMany({
+      where: { status: "open", strategy: "swing" },
+      data: { strategy: "day_trade" },
+    });
+    if (updated.count > 0) {
+      console.log(`  → VIX ${marketData.vix.price.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: ${updated.count}件のスイングポジションをday_tradeに切替`);
+    }
+  }
 
   if (regime.shouldHaltTrading && !isShadowMode) {
     console.log("レジームにより取引停止。MarketAssessment を保存してシャドウスコアリングへ");

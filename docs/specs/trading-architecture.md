@@ -663,8 +663,8 @@ market-scanner（朝）:
 
 end-of-day（引け前）:
   1a. デイトレポジション強制決済
-  1b. ★ MarketAssessment.tradingStrategy == "day_trade" の場合
-      → スイングポジションも強制決済（オーバーナイトリスク回避）
+  1b. ★ MarketAssessment.vix >= 30 の場合
+      → スイングポジションも強制決済（VIX高騰オーバーナイトリスク回避）
   2-5. 注文キャンセル → 日次サマリー → AIレビュー → Slack通知
 ```
 
@@ -678,25 +678,27 @@ end-of-day（引け前）:
 
 ```typescript
 export const STRATEGY_SWITCHING = {
-  VIX_DAY_TRADE_THRESHOLD: 25,          // VIXがこの値以上でデイトレ
-  CME_DIVERGENCE_DAY_TRADE_THRESHOLD: -1.5, // CME乖離率がこの値以下でデイトレ
-  DEFAULT_STRATEGY: "swing",             // デフォルト戦略
+  VIX_DAY_TRADE_THRESHOLD: 25,              // VIXがこの値以上で新規エントリーをデイトレに切替
+  VIX_SWING_FORCE_CLOSE_THRESHOLD: 30,      // VIXがこの値以上で既存スイングも強制決済
+  CME_DIVERGENCE_DAY_TRADE_THRESHOLD: -1.5,  // CME乖離率がこの値以下でデイトレ
+  DEFAULT_STRATEGY: "swing",                  // デフォルト戦略
 } as const;
 ```
 
-#### 既存スイングポジションの扱い
+#### 既存スイングポジションの扱い（3段階ルール）
 
-デイトレ判定日には、既存のスイングポジションもオーバーナイトリスク回避のため引け前に強制決済する。
+新規エントリーと既存スイングで閾値を分離し、利益を伸ばす機会を確保しつつ危機時は防御する。
 
-| 当日の戦略判定 | デイトレポジション | スイングポジション |
-|---------------|-------------------|-------------------|
-| swing | EOD強制決済 | 保持（通常運用） |
-| day_trade | EOD強制決済 | **EOD強制決済**（オーバーナイトリスク回避） |
+| VIX | 新規エントリー | 既存スイングポジション |
+|-----|---------------|---------------------|
+| < 25 | スイングOK | 保持（通常運用） |
+| 25-30 | デイトレのみ | **保持**（ストップロスに委ねる） |
+| ≥ 30 | 見送り | **EOD強制決済** |
 
 - **実装**: `src/jobs/end-of-day.ts`（ステップ 1b）
-- **データソース**: `MarketAssessment.tradingStrategy` に当日のシステム決定値を保存
-- **決済理由**: `"デイトレ判定日オーバーナイトリスク回避"` として `exitSnapshot` に記録
-- **設計意図**: VIX ≥ 25 やCME乖離率悪化は市場全体のリスクを示すため、スイングで入ったポジションも翌日のギャップダウンリスクを受ける。戦略切り替えの意味がオーバーナイトリスク回避である以上、既存ポジションも同様に保護する必要がある。
+- **判定**: `MarketAssessment.vix >= VIX_SWING_FORCE_CLOSE_THRESHOLD`（VIX値で直接判定）
+- **決済理由**: `"VIX高騰オーバーナイトリスク回避"` として `exitSnapshot` に記録
+- **設計意図**: VIX 25-30は「荒れ始め」であり既存ストップロスで対応可能。VIX ≥ 30は危機水準でギャップダウンによりSLが機能しないリスクがあるため強制決済する。
 
 ### 日経平均キルスイッチ
 

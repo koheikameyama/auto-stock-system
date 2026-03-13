@@ -2,7 +2,7 @@
  * 日次締め処理（15:50 JST / 平日）
  *
  * 1a. デイトレ未決済ポジションの強制決済
- * 1b. デイトレ判定日のスイングポジション強制決済（オーバーナイトリスク回避）
+ * 1b. VIX高騰時（≥30）のスイングポジション強制決済（オーバーナイトリスク回避）
  * 2. 期限切れ注文のキャンセル
  * 3. TradingDailySummary 作成
  * 4. AIによる日次レビュー
@@ -11,7 +11,7 @@
 
 import { prisma } from "../lib/prisma";
 import { getTodayForDB, getStartOfDayJST, getEndOfDayJST } from "../lib/date-utils";
-import { OPENAI_CONFIG } from "../lib/constants";
+import { OPENAI_CONFIG, STRATEGY_SWITCHING } from "../lib/constants";
 import { getOpenAIClient } from "../lib/openai";
 import { fetchStockQuote } from "../core/market-data";
 import { closePosition, getCashBalance, getTotalPortfolioValue } from "../core/position-manager";
@@ -91,21 +91,27 @@ export async function main() {
   });
   await forceClosePositions(dayTradePositions, "EOD強制決済");
 
-  // 1b. デイトレ判定日のスイングポジション強制決済（オーバーナイトリスク回避）
-  if (todayStrategy === "day_trade") {
-    console.log("[1b/5] デイトレ判定日: スイングポジションも強制決済（オーバーナイトリスク回避）...");
+  // 1b. VIX高騰時のスイングポジション強制決済（オーバーナイトリスク回避）
+  // VIX 25-30: 新規エントリーのみデイトレ化、既存スイングはSLに委ねて保持
+  // VIX ≥ 30: 既存スイングも強制決済（ギャップダウンでSLが機能しないリスク）
+  const todayVix = todayAssessmentForStrategy?.vix != null
+    ? Number(todayAssessmentForStrategy.vix)
+    : null;
+
+  if (todayVix != null && todayVix >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
+    console.log(`[1b/5] VIX ${todayVix.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: スイングポジション強制決済...`);
     const swingPositions = await prisma.tradingPosition.findMany({
       where: { status: "open", strategy: "swing" },
       include: { stock: true },
     });
     if (swingPositions.length > 0) {
       console.log(`  ${swingPositions.length}件のスイングポジションを決済`);
-      await forceClosePositions(swingPositions, "デイトレ判定日オーバーナイトリスク回避");
+      await forceClosePositions(swingPositions, "VIX高騰オーバーナイトリスク回避");
     } else {
       console.log("  対象なし");
     }
   } else {
-    console.log("[1b/5] スイング判定日: スイングポジション保持");
+    console.log(`[1b/5] VIX ${todayVix?.toFixed(1) ?? "N/A"}: スイングポジション保持`);
   }
 
   // 2. 期限切れ注文のキャンセル
