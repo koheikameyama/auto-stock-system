@@ -12,14 +12,11 @@ import { layout } from "../views/layout";
 import {
   formatYen,
   pnlText,
-  pnlPercent,
   strategyBadge,
   tickerLink,
   emptyState,
   tt,
 } from "../views/components";
-import { fetchStockQuotesBatch } from "../../core/market-data";
-
 const app = new Hono();
 
 app.get("/", async (c) => {
@@ -41,14 +38,6 @@ app.get("/", async (c) => {
       take: QUERY_LIMITS.POSITIONS_CLOSED,
     }),
   ]);
-
-  // オープンポジションのリアルタイム価格を一括取得
-  const openTickerCodes = openPositions
-    .map((p) => p.stock?.tickerCode)
-    .filter((t): t is string => t != null);
-  const quotes = openTickerCodes.length > 0
-    ? await fetchStockQuotesBatch(openTickerCodes)
-    : new Map();
 
   const content = html`
     <p class="section-title">オープンポジション (${openPositions.length})</p>
@@ -73,21 +62,17 @@ app.get("/", async (c) => {
                 ${openPositions.map(
                   (p) => {
                     const tickerCode = p.stock?.tickerCode ?? p.stockId;
-                    const quote = quotes.get(tickerCode + ".T") ?? quotes.get(tickerCode);
                     const entryPrice = Number(p.entryPrice);
-                    const currentPrice = quote?.price ?? null;
-                    const unrealizedPnl = currentPrice != null ? (currentPrice - entryPrice) * p.quantity : null;
-                    const pnlRate = currentPrice != null ? ((currentPrice - entryPrice) / entryPrice) * 100 : null;
 
                     return html`
-                    <tr>
+                    <tr data-quote-row data-ticker="${tickerCode}" data-entry-price="${entryPrice}" data-quantity="${p.quantity}">
                       <td>${tickerLink(tickerCode, p.stock?.name ?? p.stockId)}</td>
                       <td>${strategyBadge(p.strategy)}</td>
                       <td>¥${formatYen(entryPrice)}</td>
                       <td>${p.quantity}</td>
-                      <td>${currentPrice != null ? `¥${formatYen(currentPrice)}` : "-"}</td>
-                      <td>${unrealizedPnl != null ? pnlText(unrealizedPnl) : "-"}</td>
-                      <td>${pnlRate != null ? pnlPercent(pnlRate) : "-"}</td>
+                      <td data-quote-price><span class="quote-loading">...</span></td>
+                      <td data-quote-pnl><span class="quote-loading">...</span></td>
+                      <td data-quote-pnl-rate><span class="quote-loading">...</span></td>
                       ${(() => {
                         const sl = p.stopLossPrice ? Number(p.stopLossPrice) : entryPrice * POSITION_DEFAULTS.STOP_LOSS_RATIO;
                         const tp = p.takeProfitPrice ? Number(p.takeProfitPrice) : entryPrice * POSITION_DEFAULTS.TAKE_PROFIT_RATIO;

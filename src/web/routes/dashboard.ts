@@ -21,7 +21,6 @@ import {
   tt,
 } from "../views/components";
 import { isMarketDay } from "../../lib/market-calendar";
-import { fetchStockQuotesBatch } from "../../core/market-data";
 import { determineMarketRegime } from "../../core/market-regime";
 import { calculateDrawdownStatus } from "../../core/drawdown-manager";
 
@@ -64,24 +63,11 @@ app.get("/", async (c) => {
     calculateDrawdownStatus(),
   ]);
 
-  // オープンポジションのリアルタイム価格を一括取得
-  const openTickerCodes = openPositions
-    .map((p) => (p as any).stock?.tickerCode)
-    .filter((t): t is string => t != null);
-  const quotes = openTickerCodes.length > 0
-    ? await fetchStockQuotesBatch(openTickerCodes)
-    : new Map();
-
   const totalBudget = config ? Number(config.totalBudget) : 0;
   const cash = cashBalance ?? totalBudget;
-  // リアルタイム価格で時価評価額を計算
+  // 初期表示は建値ベース（リアルタイム価格はクライアント側で非同期取得）
   const investedValue = openPositions.reduce(
-    (sum, p) => {
-      const tickerCode = (p as any).stock?.tickerCode;
-      const quote = tickerCode ? (quotes.get(tickerCode + ".T") ?? quotes.get(tickerCode)) : null;
-      const price = quote?.price ?? Number(p.entryPrice);
-      return sum + price * p.quantity;
-    },
+    (sum, p) => sum + Number(p.entryPrice) * p.quantity,
     0,
   );
   const portfolioValue = cash + investedValue;
@@ -139,11 +125,11 @@ app.get("/", async (c) => {
     </div>
 
     <!-- Portfolio -->
-    <div class="grid-2">
+    <div class="grid-2" data-portfolio data-cash="${cash}" data-total-budget="${totalBudget}">
       <div class="card">
         <div class="card-title">ポートフォリオ</div>
-        <div class="card-value">¥${formatYen(portfolioValue)}</div>
-        <div class="card-sub">${pnlText(totalPnl)}</div>
+        <div class="card-value" data-portfolio-total>¥${formatYen(portfolioValue)}</div>
+        <div class="card-sub" data-portfolio-pnl>${pnlText(totalPnl)}</div>
       </div>
       <div class="card">
         <div class="card-title">キャッシュ残高</div>
@@ -201,19 +187,16 @@ app.get("/", async (c) => {
                 ${openPositions.map(
                   (p) => {
                     const tickerCode = (p as any).stock?.tickerCode ?? p.stockId;
-                    const quote = quotes.get(tickerCode + ".T") ?? quotes.get(tickerCode);
                     const entryPrice = Number(p.entryPrice);
-                    const currentPrice = quote?.price ?? null;
-                    const unrealizedPnl = currentPrice != null ? (currentPrice - entryPrice) * p.quantity : null;
 
                     return html`
-                    <tr>
+                    <tr data-quote-row data-ticker="${tickerCode}" data-entry-price="${entryPrice}" data-quantity="${p.quantity}">
                       <td>${tickerLink(tickerCode, (p as any).stock?.name ?? p.stockId)}</td>
                       <td>${strategyBadge(p.strategy)}</td>
                       <td>¥${formatYen(entryPrice)}</td>
                       <td>${p.quantity}</td>
-                      <td>${currentPrice != null ? `¥${formatYen(currentPrice)}` : "-"}</td>
-                      <td>${unrealizedPnl != null ? pnlText(unrealizedPnl) : "-"}</td>
+                      <td data-quote-price><span class="quote-loading">...</span></td>
+                      <td data-quote-pnl><span class="quote-loading">...</span></td>
                     </tr>
                   `;
                   },

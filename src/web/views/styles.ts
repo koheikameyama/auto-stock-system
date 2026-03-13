@@ -551,4 +551,8 @@ export const CSS = `
     border-radius: 3px;
     transition: width 0.3s;
   }
+  .quote-loading {
+    color: ${COLORS.textDim};
+    font-size: 12px;
+  }
 `;

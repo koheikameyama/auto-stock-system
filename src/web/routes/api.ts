@@ -9,7 +9,7 @@ import { getPendingOrders } from "../../core/order-executor";
 import { jobState } from "./dashboard";
 import { notifySlack } from "../../lib/slack";
 import { cronControl } from "../../lib/cron-control";
-import { fetchHistoricalData, fetchStockQuote } from "../../core/market-data";
+import { fetchHistoricalData, fetchStockQuote, fetchStockQuotesBatch } from "../../core/market-data";
 import { analyzeTechnicals } from "../../core/technical-analysis";
 import { generatePatternsResponse } from "../../lib/candlestick-patterns";
 import { stockModal } from "../views/stock-modal";
@@ -250,6 +250,26 @@ app.get("/stock/:tickerCode/modal", async (c) => {
   }
 
   return c.html(stockModal(stock, analysis, positionInfo));
+});
+
+/**
+ * GET /api/quotes?tickers=7203,8306 - リアルタイム株価を非同期取得
+ */
+app.get("/quotes", async (c) => {
+  const tickersParam = c.req.query("tickers");
+  if (!tickersParam) return c.json({});
+
+  const tickers = tickersParam.split(",").filter(Boolean);
+  if (tickers.length === 0) return c.json({});
+
+  const quotes = await fetchStockQuotesBatch(tickers);
+  const result: Record<string, { price: number }> = {};
+  for (const [key, value] of quotes) {
+    // キーを正規化（入力のtickerCodeで引けるようにする）
+    const normalized = key.replace(/\.T$/, "");
+    result[normalized] = { price: value.price };
+  }
+  return c.json(result);
 });
 
 /**

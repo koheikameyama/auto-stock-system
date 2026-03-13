@@ -37,7 +37,12 @@
       "Bash(npx prisma migrate resolve:*)",
       "Bash(psql:*)",
       "Bash(npx prisma generate:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "mcp__linear-server__list_teams",
+      "Bash(git remote get-url:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh workflow list:*)",
+      "Bash(gh run watch:*)"
     ]
   },
   "hooks": {

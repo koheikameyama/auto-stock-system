@@ -1114,6 +1114,92 @@ TP/SLチェック後に実行することで、通常の損切り・利確が先
 
 ---
 
+## 取引停止時の保持銘柄の扱い
+
+### 概要
+
+取引停止（shouldTrade = false）は**新規買い注文の抑制**のみを行い、既存ポジションには直接影響しない。保持銘柄の防衛決済は、取引停止とは独立した**ディフェンシブモード**（sentiment連動）で制御される。
+
+### 取引停止トリガーと保持銘柄への影響
+
+| トリガー | 停止条件 | 新規注文 | 保持銘柄 | sentimentへの影響 |
+|---------|---------|---------|---------|-----------------|
+| VIXレジーム | VIX > 30 | 停止 | **直接影響なし** | crisis → ディフェンシブ発動 |
+| CME先物乖離率 | ≤ -3.0% | 停止 | **直接影響なし** | crisis → ディフェンシブ発動 |
+| 日経平均急落 | 前日比 ≤ -3% | 停止 | **直接影響なし** | crisis → ディフェンシブ発動 |
+| ドローダウン | 週次≥5% / 月次≥10% / 5連敗 | 停止 | **直接影響なし** | bearish（ディフェンシブ発動） |
+| AI市場評価 | shouldTrade = false | 停止 | **直接影響なし** | sentiment次第 |
+
+### 保持銘柄に対するアクション（sentimentベース）
+
+保持銘柄の防衛決済は `position-monitor`（毎分実行）のフェーズ2.5で、`MarketAssessment.sentiment` を参照して判定する。
+
+```
+position-monitor 実行フロー:
+  [1/3] 未約定注文の約定チェック
+    └─ ディフェンシブモード中 → pending買い注文をキャンセル
+  [2/3] TP/SL/トレーリングストップチェック  ← 常に稼働
+  [2.5/3] ディフェンシブモード判定          ← sentiment連動
+    └─ bearish → 含み益ポジションのみ微益撤退
+    └─ crisis  → 全ポジション即時決済
+  [3/3] デイトレ強制決済チェック
+```
+
+| sentiment | 含み益ポジション | 含み損ポジション | 根拠 |
+|-----------|----------------|----------------|------|
+| bullish / neutral | 通常SL/TP監視 | 通常SL/TP監視 | - |
+| bearish | **微益撤退**（≥0.3%で決済） | 通常SL監視を継続 | 含み益の期待値がマイナス / 含み損はSLに委ねる方がリスク管理上健全 |
+| crisis | **全決済** | **全決済** | SL自体がギャップダウンで機能しないリスク / キャッシュ防衛最優先 |
+
+### 取引停止中も常に稼働する仕組み
+
+以下の出口判定はsentimentや取引停止状態に関わらず、**常にposition-monitorで稼働**する。
+
+| 出口判定 | 動作 | 実装 |
+|---------|------|------|
+| ストップロス（損切り） | 安値 ≤ SL → 強制決済 | `checkPositionExit()` |
+| トレーリングストップ | 最高値更新に追従、下落時に利確決済 | `checkPositionExit()` |
+| タイムストップ | 10営業日経過 → 強制決済 | `checkPositionExit()` |
+| デイトレ強制決済 | 14:50以降 → 強制決済 | position-monitor フェーズ3 |
+| コーポレートイベント調整 | 配当落ち・株式分割 → SL/TS自動調整 | `applyCorporateEventAdjustments()` |
+
+### 取引停止〜保持銘柄処理の全体フロー図
+
+```
+取引停止トリガー発動
+  │
+  ├─ 新規注文: 停止
+  │    ├─ market-scanner → shouldTrade=false, selectedStocks=[] 保存
+  │    ├─ order-manager → shouldTrade=false確認 → 注文作成せず終了
+  │    └─ position-monitor → pending買い注文キャンセル（ディフェンシブ時）
+  │
+  └─ 保持銘柄: sentiment に応じて処理
+       │
+       ├─ [常時] TP/SL/トレーリングストップ/タイムストップ → 通常通り稼働
+       │
+       ├─ [bearish] ディフェンシブモード
+       │    ├─ 含み益 ≥ 0.3% → 微益撤退
+       │    └─ 含み損 → 通常SL監視を継続（パニック売り回避）
+       │
+       └─ [crisis] ディフェンシブモード
+            └─ 全ポジション即時決済（資本防衛）
+```
+
+### 関連ファイル
+
+| ファイル | 役割 |
+|---------|------|
+| `src/jobs/market-scanner.ts` | 取引停止判定、MarketAssessment保存 |
+| `src/jobs/order-manager.ts` | shouldTrade/ディフェンシブ判定で新規注文抑制 |
+| `src/jobs/position-monitor.ts` | TP/SL常時監視 + ディフェンシブモード実行 |
+| `src/core/market-regime.ts` | VIX/CMEレジーム判定 |
+| `src/core/drawdown-manager.ts` | ドローダウン停止判定 |
+| `src/core/exit-checker.ts` | 出口判定ロジック（SL/TP/TS/タイムストップ） |
+| `src/lib/constants/jobs.ts` | `DEFENSIVE_MODE` 定数 |
+| `src/lib/constants/trading.ts` | `VIX_THRESHOLDS`, `DRAWDOWN` 等 |
+
+---
+
 ## コーポレートイベント対応
 
 ### 配当落ち日対応
