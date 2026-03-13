@@ -40,7 +40,7 @@ import {
   formatScoreForAI,
 } from "../core/technical-analysis";
 import type { TechnicalSummary } from "../core/technical-analysis";
-import { scoreTechnicals, getRank } from "../core/technical-scorer";
+import { scoreTechnicals, getRank, calculateRsScores } from "../core/technical-scorer";
 import type { LogicScore } from "../core/technical-scorer";
 import {
   getContrarianHistoryBatch,
@@ -445,6 +445,9 @@ ${sectorText || "  特になし"}`;
 
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 
+  // === Pass 1.5: RS スコア事前計算 ===
+  const rsScoreMap = await calculateRsScoresFromDB(candidates);
+
   // テクニカル分析 + パターン検出 + スコアリング（並列、バッチ制御）
   const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
   const scoredCandidates: ScoredCandidate[] = [];
@@ -512,6 +515,7 @@ ${sectorText || "  特になし"}`;
               },
               nextEarningsDate: stock.nextEarningsDate,
               exDividendDate: stock.exDividendDate,
+              rsScore: rsScoreMap.get(stock.tickerCode) ?? 0,
             });
 
             return {
@@ -710,6 +714,8 @@ ${sectorText || "  特になし"}`;
       ma: c.score.technical.ma,
       volume: c.score.technical.volume,
       volumeDirection: c.score.technical.volumeDirection,
+      macd: c.score.technical.macd,
+      rs: c.score.technical.rs,
       weeklyTrendPenalty: c.score.weeklyTrendPenalty,
     },
     patternBreakdown: {
@@ -899,6 +905,36 @@ ${sectorText || "  特になし"}`;
   }
 
   console.log("=== Market Scanner 終了 ===");
+}
+
+async function calculateRsScoresFromDB(
+  candidates: { tickerCode: string; sector: string | null }[],
+): Promise<Map<string, number>> {
+  const stocks = await prisma.stock.findMany({
+    where: { tickerCode: { in: candidates.map((c) => c.tickerCode) } },
+    select: { tickerCode: true, weekChangeRate: true, sector: true },
+  });
+
+  const sectorMap: Record<string, number[]> = {};
+  for (const s of stocks) {
+    if (s.weekChangeRate == null) continue;
+    const sector = s.sector ?? "その他";
+    if (!sectorMap[sector]) sectorMap[sector] = [];
+    sectorMap[sector].push(Number(s.weekChangeRate));
+  }
+
+  const sectorAvgs: Record<string, number> = {};
+  for (const [sector, rates] of Object.entries(sectorMap)) {
+    sectorAvgs[sector] = rates.reduce((a, b) => a + b, 0) / rates.length;
+  }
+
+  const rsInput = stocks.map((s) => ({
+    tickerCode: s.tickerCode,
+    weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
+    sector: s.sector ?? "その他",
+  }));
+
+  return calculateRsScores(rsInput, sectorAvgs);
 }
 
 const isDirectRun = process.argv[1]?.includes("market-scanner");
