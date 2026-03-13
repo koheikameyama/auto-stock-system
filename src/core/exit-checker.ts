@@ -25,6 +25,7 @@ export interface PositionForExit {
   holdingBusinessDays: number;
   activationMultiplierOverride?: number;
   trailMultiplierOverride?: number;
+  maxHoldingDaysOverride?: number;
 }
 
 export interface BarForExit {
@@ -98,7 +99,7 @@ export function checkPositionExit(
   //    トレーリングストップ発動中は利益を伸ばすためタイムストップを適用しない
   if (exitPrice === null && position.strategy !== "day_trade") {
     if (
-      position.holdingBusinessDays >= TIME_STOP.MAX_HOLDING_DAYS &&
+      position.holdingBusinessDays >= (position.maxHoldingDaysOverride ?? TIME_STOP.MAX_HOLDING_DAYS) &&
       !trailingResult.isActivated
     ) {
       exitPrice = bar.close;

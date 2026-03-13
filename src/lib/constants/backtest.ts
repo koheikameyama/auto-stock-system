@@ -15,7 +15,7 @@ interface ParameterOverrideCondition extends BaseCondition {
 }
 
 interface MultiOverrideCondition extends BaseCondition {
-  overrides: Record<string, number | boolean>;
+  overrides: Record<string, number | boolean | undefined>;
 }
 
 export type ParameterCondition =
@@ -74,6 +74,18 @@ export const DAILY_BACKTEST = {
     { key: "trend_on", label: "トレンドF", overrides: { trendFilterEnabled: true } },
     { key: "pullback_on", label: "プルバックF", overrides: { pullbackFilterEnabled: true } },
     { key: "trend_pullback", label: "トレンド+PB", overrides: { trendFilterEnabled: true, pullbackFilterEnabled: true } },
+
+    // ボラティリティ＆RSフィルター
+    { key: "vol_filter", label: "ボラF", overrides: { volatilityFilterEnabled: true } },
+    { key: "rs_filter", label: "RSフィルタ", overrides: { rsFilterEnabled: true } },
+    { key: "vol_rs", label: "ボラ+RS", overrides: { volatilityFilterEnabled: true, rsFilterEnabled: true } },
+
+    // タイムストップ延長
+    { key: "hold_15", label: "保有15日", overrides: { maxHoldingDays: 15 } },
+    { key: "hold_20", label: "保有20日", overrides: { maxHoldingDays: 20 } },
+
+    // 複合: ボラ+RS+保有15日
+    { key: "vol_rs_hold15", label: "ボラRS15日", overrides: { volatilityFilterEnabled: true, rsFilterEnabled: true, maxHoldingDays: 15 } },
   ] satisfies ParameterCondition[],
 
   /** シミュレーション期間（ローリング） */
@@ -100,6 +112,14 @@ export const DAILY_BACKTEST = {
     strategy: "swing" as const,
     overrideTpSl: false,      // false = 本番ロジック（calculateEntryCondition の値をそのまま使用）
     cooldownDays: 5,          // ストップアウト後の同一銘柄再エントリー禁止日数
+  },
+
+  /** ボラティリティ＆RSフィルターの閾値 */
+  UNIVERSE_FILTER: {
+    /** ATR(14)/終値 × 100 がこの%以上の銘柄のみ（低ボラメガキャップ除外） */
+    MIN_ATR_PCT: 1.5,
+    /** RS(0-15)がこの値以上の銘柄のみ（セクター上位のみ） */
+    MIN_RS_SCORE: 3.0,
   },
 
   /** トレンド＆プルバックフィルターの閾値 */

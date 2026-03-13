@@ -175,6 +175,7 @@ export function runBacktest(
           holdingBusinessDays: holdingDays,
           activationMultiplierOverride: config.trailingActivationMultiplier,
           trailMultiplierOverride: config.trailMultiplier,
+          maxHoldingDaysOverride: config.maxHoldingDays,
         },
         { open: todayBar.open, high: todayBar.high, low: todayBar.low, close: todayBar.close },
       );
@@ -581,6 +582,25 @@ function evaluateTickers(
         Math.abs((latest.close - summary.sma25) / summary.sma25) * 100 <=
           MAX_DEVIATION_FROM_SMA25;
       if (!rsiOk && !nearSma25) continue;
+    }
+
+    // ボラティリティフィルター: ATR%が低すぎる銘柄をスキップ（低ボラメガキャップ除外）
+    if (config.volatilityFilterEnabled) {
+      const { MIN_ATR_PCT } = DAILY_BACKTEST.UNIVERSE_FILTER;
+      if (
+        summary.atr14 == null ||
+        latest.close <= 0 ||
+        (summary.atr14 / latest.close) * 100 < MIN_ATR_PCT
+      ) {
+        continue;
+      }
+    }
+
+    // RSフィルター: セクター劣後銘柄をスキップ
+    if (config.rsFilterEnabled) {
+      const { MIN_RS_SCORE } = DAILY_BACKTEST.UNIVERSE_FILTER;
+      const rsScore = rsScoreMap.get(ticker) ?? 0;
+      if (rsScore < MIN_RS_SCORE) continue;
     }
 
     // チャートパターン（oldest-first を期待）

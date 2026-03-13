@@ -218,6 +218,8 @@ export async function runDailyBacktest(): Promise<DailyBacktestRunResult> {
       gapRiskEnabled: true,
       trendFilterEnabled: false,
       pullbackFilterEnabled: false,
+      volatilityFilterEnabled: false,
+      rsFilterEnabled: false,
       verbose: false,
     };
 

@@ -25,6 +25,12 @@ export interface BacktestConfig {
   trendFilterEnabled: boolean;
   /** プルバックエントリー: RSI < 60 OR SMA25乖離 <= 2% */
   pullbackFilterEnabled: boolean;
+  /** ボラティリティフィルター: ATR% > MIN_ATR_PCT の銘柄のみ */
+  volatilityFilterEnabled: boolean;
+  /** RSフィルター: RS > MIN_RS_SCORE の銘柄のみ */
+  rsFilterEnabled: boolean;
+  /** タイムストップ日数オーバーライド（デフォルト: TIME_STOP.MAX_HOLDING_DAYS） */
+  maxHoldingDays?: number;
   outputFile?: string;
   verbose: boolean;
 }
