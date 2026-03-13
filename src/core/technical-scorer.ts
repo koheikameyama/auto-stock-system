@@ -496,12 +496,9 @@ function scoreProfitability(eps: number | null, latestPrice: number): number {
   if (eps <= 0) return SCORING.FUNDAMENTAL.EPS_NEGATIVE;
 
   if (latestPrice > 0 && eps >= latestPrice * SCORING.FUNDAMENTAL.EPS_STRONG_RATIO) {
-    return SCORING.SUB_MAX.PROFITABILITY; // 4点
+    return SCORING.SUB_MAX.PROFITABILITY; // 2点
   }
-  if (latestPrice > 0 && eps >= latestPrice * SCORING.FUNDAMENTAL.EPS_GOOD_RATIO) {
-    return 3;
-  }
-  return SCORING.FUNDAMENTAL.EPS_POSITIVE; // 2点
+  return SCORING.FUNDAMENTAL.EPS_POSITIVE; // 1点
 }
 
 /** 時価総額スコア（0-2点） */
