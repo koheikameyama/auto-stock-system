@@ -265,9 +265,7 @@ app.get("/quotes", async (c) => {
   const quotes = await fetchStockQuotesBatch(tickers);
   const result: Record<string, { price: number }> = {};
   for (const [key, value] of quotes) {
-    // キーを正規化（入力のtickerCodeで引けるようにする）
-    const normalized = key.replace(/\.T$/, "");
-    result[normalized] = { price: value.price };
+    result[key] = { price: value.price };
   }
   return c.json(result);
 });
