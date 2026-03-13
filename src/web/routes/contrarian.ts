@@ -13,7 +13,7 @@ import { html } from "hono/html";
 import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
 import { getTodayForDB, getDaysAgoForDB } from "../../lib/date-utils";
-import { CONTRARIAN, GHOST_TRADING, getSectorGroup } from "../../lib/constants";
+import { CONTRARIAN, GHOST_TRADING, SCORING, getSectorGroup } from "../../lib/constants";
 import { calculateContrarianBonus } from "../../core/contrarian-analyzer";
 import { layout } from "../views/layout";
 import {
@@ -93,11 +93,11 @@ app.get("/", async (c) => {
     prisma.tradingDailySummary.findUnique({ where: { date: latestDate } }),
   ]);
 
-  // 傾向分析用: スコア80点以上で購入しなかった全銘柄（market_halted + ai_no_go + below_threshold）
+  // 傾向分析用: Bランク以上で購入しなかった全銘柄（ランク妥当性検証のため広めに取得）
   const highScoreTrendRecords = await prisma.scoringRecord.findMany({
     where: {
       rejectionReason: { not: null },
-      totalScore: { gte: 80 },
+      totalScore: { gte: SCORING.THRESHOLDS.B_RANK },
       closingPrice: { not: null },
       date: { gte: since90 },
     },
