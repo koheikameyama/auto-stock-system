@@ -225,16 +225,21 @@ export function calculateRsScores(
   const result = new Map<string, number>();
   const maxScore = SCORING.RELATIVE_STRENGTH.MAX_SCORE;
   const minStocks = SCORING.RELATIVE_STRENGTH.MIN_SECTOR_STOCKS;
+  // セクター別有効銘柄数を事前計算（O(n)）
+  const sectorCountMap = new Map<string, number>();
+  for (const c of candidates) {
+    if (c.weekChangeRate != null) {
+      sectorCountMap.set(c.sector, (sectorCountMap.get(c.sector) ?? 0) + 1);
+    }
+  }
+
   const rsValues: { tickerCode: string; rs: number }[] = [];
   for (const c of candidates) {
     if (c.weekChangeRate == null || sectorAvgs[c.sector] == null) {
       result.set(c.tickerCode, 0);
       continue;
     }
-    const sectorCount = candidates.filter(
-      (x) => x.sector === c.sector && x.weekChangeRate != null,
-    ).length;
-    if (sectorCount < minStocks) {
+    if ((sectorCountMap.get(c.sector) ?? 0) < minStocks) {
       result.set(c.tickerCode, 0);
       continue;
     }

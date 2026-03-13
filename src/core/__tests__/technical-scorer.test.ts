@@ -284,14 +284,14 @@ describe("scoreChartPattern", () => {
 
   it("S rank buy → 10", () => {
     const result = scoreChartPattern([
-      { pattern: "cup", patternName: "カップ", signal: "buy", rank: "S", winRate: 70 },
+      { pattern: "cup", patternName: "カップ", signal: "buy", rank: "S", winRate: 70, strength: 90, confidence: 0.8, description: "", explanation: "", startIndex: 0, endIndex: 10 },
     ]);
     expect(result.score).toBe(10);
   });
 
   it("neutral pattern → 4", () => {
     const result = scoreChartPattern([
-      { pattern: "flag", patternName: "フラッグ", signal: "neutral", rank: "C", winRate: 50 },
+      { pattern: "flag", patternName: "フラッグ", signal: "neutral", rank: "C", winRate: 50, strength: 50, confidence: 0.5, description: "", explanation: "", startIndex: 0, endIndex: 5 },
     ]);
     expect(result.score).toBe(4);
   });
@@ -308,7 +308,7 @@ describe("scoreCandlestick", () => {
 
   it("buy signal strength 80 → 4", () => {
     // Math.round(80 * 5 / 100) = Math.round(4) = 4
-    expect(scoreCandlestick({ signal: "buy", strength: 80, pattern: "hammer", name: "ハンマー" })).toBe(4);
+    expect(scoreCandlestick({ signal: "buy", strength: 80, pattern: "hammer", description: "ハンマー", learnMore: "" })).toBe(4);
   });
 });
 
