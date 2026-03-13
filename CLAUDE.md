@@ -80,6 +80,7 @@
 - フロントエンドのUI実装前 → `frontend.md`
 - LLM API連携を実装する前 → `llm-api.md`
 - コード全般を書く前 → `coding-standards.md`
+- Claude Code の設定を変更する前 → `claude-code-settings.md`
 
 ### 仕様書の管理
 
@@ -133,3 +134,4 @@
 | [frontend.md](.claude/rules/frontend.md) | データ取得・スケルトン表示パターン |
 | [llm-api.md](.claude/rules/llm-api.md) | LLM API連携（構造化出力） |
 | [coding-standards.md](.claude/rules/coding-standards.md) | マジックナンバー、後方互換性、並列化、設計ファイル |
+| [claude-code-settings.md](.claude/rules/claude-code-settings.md) | Claude Code 設定管理（permissions はローカルファイル） |
