@@ -204,6 +204,49 @@ export function getPrevHistogram(historicalData: OHLCVData[]): number | null {
   return result.histogram;
 }
 
+/** 相対強度スコア（0-15点）— 呼び出し元で事前計算したRSスコアをクランプ */
+export function scoreRS(rsScore: number | undefined): number {
+  if (rsScore == null) return 0;
+  return Math.min(SCORING.SUB_MAX.RELATIVE_STRENGTH, Math.max(0, Math.round(rsScore)));
+}
+
+/**
+ * 銘柄群のセクター内相対強度スコアを一括計算
+ *
+ * - セクター平均との差分（相対パフォーマンス）でパーセンタイルを算出
+ * - セクター銘柄数が MIN_SECTOR_STOCKS 未満の場合は 0 を返す
+ */
+export function calculateRsScores(
+  candidates: { tickerCode: string; weekChangeRate: number | null; sector: string }[],
+  sectorAvgs: Record<string, number>,
+): Map<string, number> {
+  const result = new Map<string, number>();
+  const maxScore = SCORING.RELATIVE_STRENGTH.MAX_SCORE;
+  const minStocks = SCORING.RELATIVE_STRENGTH.MIN_SECTOR_STOCKS;
+  const rsValues: { tickerCode: string; rs: number }[] = [];
+  for (const c of candidates) {
+    if (c.weekChangeRate == null || sectorAvgs[c.sector] == null) {
+      result.set(c.tickerCode, 0);
+      continue;
+    }
+    const sectorCount = candidates.filter(
+      (x) => x.sector === c.sector && x.weekChangeRate != null,
+    ).length;
+    if (sectorCount < minStocks) {
+      result.set(c.tickerCode, 0);
+      continue;
+    }
+    rsValues.push({ tickerCode: c.tickerCode, rs: c.weekChangeRate - sectorAvgs[c.sector] });
+  }
+  if (rsValues.length === 0) return result;
+  const sorted = [...rsValues].sort((a, b) => a.rs - b.rs);
+  for (let i = 0; i < sorted.length; i++) {
+    const percentile = sorted.length === 1 ? 50 : (i / (sorted.length - 1)) * 100;
+    result.set(sorted[i].tickerCode, Math.round((percentile / 100) * maxScore));
+  }
+  return result;
+}
+
 /** 移動平均線 / 乖離率 スコア（0-18点） */
 export function scoreMA(summary: TechnicalSummary): number {
   const { trend, orderAligned, slopesAligned } = summary.maAlignment;
