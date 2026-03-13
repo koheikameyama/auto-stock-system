@@ -274,11 +274,11 @@ src/web/routes/backtest.ts       -- ダッシュボードページ
 2. `Map<date, tickerCode[]>` を構築（日付別候補マップ）
 3. 各日付でSランク銘柄が5件未満ならS+Aランクで補完
 4. シミュレーション内で各日付の候補マップから銘柄を参照
-5. ScoringRecordが空の場合、Stockテーブルから出来高上位50銘柄でフォールバック
+5. ScoringRecordが空の場合、Stockテーブルから出来高上位100銘柄でフォールバック
 
 ### バックテスト期間
 
-ScoringRecordの蓄積量に基づく動的期間。最古のScoringRecord日付〜当日。ScoringRecordが空の場合はフォールバックとして6ヶ月。
+ScoringRecordの蓄積量に基づく動的期間。最古のScoringRecord日付〜当日。ScoringRecordが空の場合はフォールバックとして12ヶ月。
 
 ### 実行フロー
 

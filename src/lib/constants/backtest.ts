@@ -58,7 +58,7 @@ export const DAILY_BACKTEST = {
   ] satisfies ParameterCondition[],
 
   /** シミュレーション期間（ローリング） */
-  LOOKBACK_MONTHS: 6,
+  LOOKBACK_MONTHS: 12,
 
   /** ScoringRecord蓄積がこの月数未満ならフォールバックモードを使用 */
   MIN_SCORING_RECORD_MONTHS: 3,

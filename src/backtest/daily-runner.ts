@@ -81,7 +81,7 @@ async function buildCandidateMap(): Promise<CandidateMapResult> {
         latestVolume: { not: null },
       },
       orderBy: { latestVolume: "desc" },
-      take: 50,
+      take: 100,
       select: { tickerCode: true },
     });
     const tickers = stocks.map((s) => s.tickerCode);
