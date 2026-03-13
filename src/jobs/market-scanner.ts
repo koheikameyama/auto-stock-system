@@ -446,7 +446,8 @@ ${sectorText || "  特になし"}`;
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 
   // === Pass 1.5: RS スコア事前計算 ===
-  const rsScoreMap = await calculateRsScoresFromDB(candidates);
+  const rsScoreMap = calculateRsScoresFromCandidates(candidates);
+  console.log(`  RS スコア算出: ${rsScoreMap.size}銘柄`);
 
   // テクニカル分析 + パターン検出 + スコアリング（並列、バッチ制御）
   const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
@@ -907,32 +908,27 @@ ${sectorText || "  特になし"}`;
   console.log("=== Market Scanner 終了 ===");
 }
 
-async function calculateRsScoresFromDB(
-  candidates: { tickerCode: string; sector: string | null }[],
-): Promise<Map<string, number>> {
-  const stocks = await prisma.stock.findMany({
-    where: { tickerCode: { in: candidates.map((c) => c.tickerCode) } },
-    select: { tickerCode: true, weekChangeRate: true, sector: true },
-  });
-
+function calculateRsScoresFromCandidates(
+  candidates: { tickerCode: string; jpxSectorName: string | null; weekChangeRate: unknown }[],
+): Map<string, number> {
+  // jpxSectorName + getSectorGroup() でセクター分類（sector-analyzerと統一）
   const sectorMap: Record<string, number[]> = {};
-  for (const s of stocks) {
-    if (s.weekChangeRate == null) continue;
-    const sector = s.sector ?? "その他";
-    if (!sectorMap[sector]) sectorMap[sector] = [];
-    sectorMap[sector].push(Number(s.weekChangeRate));
+  const rsInput: { tickerCode: string; weekChangeRate: number | null; sector: string }[] = [];
+
+  for (const c of candidates) {
+    const sector = getSectorGroup(c.jpxSectorName) ?? "その他";
+    const rate = c.weekChangeRate != null ? Number(c.weekChangeRate) : null;
+    rsInput.push({ tickerCode: c.tickerCode, weekChangeRate: rate, sector });
+    if (rate != null) {
+      if (!sectorMap[sector]) sectorMap[sector] = [];
+      sectorMap[sector].push(rate);
+    }
   }
 
   const sectorAvgs: Record<string, number> = {};
   for (const [sector, rates] of Object.entries(sectorMap)) {
     sectorAvgs[sector] = rates.reduce((a, b) => a + b, 0) / rates.length;
   }
-
-  const rsInput = stocks.map((s) => ({
-    tickerCode: s.tickerCode,
-    weekChangeRate: s.weekChangeRate ? Number(s.weekChangeRate) : null,
-    sector: s.sector ?? "その他",
-  }));
 
   return calculateRsScores(rsInput, sectorAvgs);
 }
