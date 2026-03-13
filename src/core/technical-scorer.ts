@@ -453,11 +453,11 @@ export function scoreCandlestick(pattern: PatternResult | null): number {
 // カテゴリ3: 流動性（25点）
 // ========================================
 
-/** 売買代金スコア（0-10点） */
-function scoreTradingValue(price: number, volume: number): number {
+/** 売買代金スコア（0-5点） */
+export function scoreTradingValue(price: number, volume: number): number {
   const tradingValue = price * volume;
   const tiers = SCORING.LIQUIDITY.TRADING_VALUE_TIERS;
-  const scores = [10, 7, 5, 3];
+  const scores = [5, 4, 3, 1];
 
   for (let i = 0; i < tiers.length; i++) {
     if (tradingValue >= tiers[i]) return scores[i];
@@ -465,15 +465,15 @@ function scoreTradingValue(price: number, volume: number): number {
   return 0;
 }
 
-/** 値幅率スコア（スプレッド代替）（0-8点） */
-function scoreSpreadProxy(historicalData: OHLCVData[]): number {
-  if (historicalData.length === 0) return 4;
+/** 値幅率スコア（スプレッド代替）（0-3点）— 空データ=0 */
+export function scoreSpreadProxy(historicalData: OHLCVData[]): number {
+  if (historicalData.length === 0) return 0;
 
   const latest = historicalData[0];
   if (latest.close <= 0) return 0;
   const spreadPct = (latest.high - latest.low) / latest.close;
   const tiers = SCORING.LIQUIDITY.SPREAD_PROXY_TIERS;
-  const scores = [8, 6, 3, 1];
+  const scores = [3, 2, 1, 0];
 
   for (let i = 0; i < tiers.length; i++) {
     if (spreadPct <= tiers[i]) return scores[i];
@@ -481,10 +481,10 @@ function scoreSpreadProxy(historicalData: OHLCVData[]): number {
   return 0;
 }
 
-/** 売買代金安定性スコア（0-7点）：過去5日の売買代金の変動係数 */
-function scoreStability(historicalData: OHLCVData[]): number {
+/** 売買代金安定性スコア（0-2点）：過去5日の売買代金の変動係数 */
+export function scoreStability(historicalData: OHLCVData[]): number {
   const days = Math.min(historicalData.length, 5);
-  if (days < 2) return 4; // データ不足は中立
+  if (days < 2) return 0; // データ不足は0
 
   const tradingValues = historicalData.slice(0, days).map(
     (d) => d.close * d.volume,
@@ -497,20 +497,20 @@ function scoreStability(historicalData: OHLCVData[]): number {
   const cv = Math.sqrt(variance) / mean; // 変動係数
 
   const tiers = SCORING.LIQUIDITY.STABILITY_CV_TIERS;
-  const scores = [7, 5, 3];
+  const scores = [2, 1, 1];
 
   for (let i = 0; i < tiers.length; i++) {
     if (cv <= tiers[i]) return scores[i];
   }
-  return 1;
+  return 0;
 }
 
 // ========================================
 // カテゴリ4: ファンダメンタルズ（15点）
 // ========================================
 
-/** PER スコア（0-5点） */
-function scorePER(per: number | null): number {
+/** PER スコア（0-4点） */
+export function scorePER(per: number | null): number {
   if (per == null || per <= 0) return SCORING.FUNDAMENTAL.PER_DEFAULT;
 
   for (const tier of SCORING.FUNDAMENTAL.PER_TIERS) {
@@ -519,8 +519,8 @@ function scorePER(per: number | null): number {
   return SCORING.FUNDAMENTAL.PER_DEFAULT; // PER >= 50
 }
 
-/** PBR スコア（0-4点） */
-function scorePBR(pbr: number | null): number {
+/** PBR スコア（0-3点） */
+export function scorePBR(pbr: number | null): number {
   if (pbr == null) return SCORING.FUNDAMENTAL.PBR_DEFAULT;
   if (pbr > 5.0) return SCORING.FUNDAMENTAL.PBR_OVER_5;
 
@@ -530,8 +530,8 @@ function scorePBR(pbr: number | null): number {
   return SCORING.FUNDAMENTAL.PBR_DEFAULT;
 }
 
-/** 収益性スコア（0-4点）— EPS基準 */
-function scoreProfitability(eps: number | null, latestPrice: number): number {
+/** 収益性スコア（0-2点）— EPS基準 */
+export function scoreProfitability(eps: number | null, latestPrice: number): number {
   if (eps == null) return SCORING.FUNDAMENTAL.EPS_NULL;
   if (eps <= 0) return SCORING.FUNDAMENTAL.EPS_NEGATIVE;
 
@@ -541,8 +541,8 @@ function scoreProfitability(eps: number | null, latestPrice: number): number {
   return SCORING.FUNDAMENTAL.EPS_POSITIVE; // 1点
 }
 
-/** 時価総額スコア（0-2点） */
-function scoreMarketCapFundamental(marketCap: number | null): number {
+/** 時価総額スコア（0-1点） */
+export function scoreMarketCapFundamental(marketCap: number | null): number {
   if (marketCap == null) return SCORING.FUNDAMENTAL.MARKET_CAP_DEFAULT;
 
   for (const tier of SCORING.FUNDAMENTAL.MARKET_CAP_TIERS) {
