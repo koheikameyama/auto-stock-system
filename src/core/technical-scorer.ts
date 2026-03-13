@@ -310,23 +310,15 @@ export function calculateVolumeDirection(
   return { direction, buyingRatio, obvTrend };
 }
 
-/** 出来高変化スコア（0-9点）— 出来高の量 × 方向性で評価 */
-function scoreVolumeChange(
+/** 出来高変化スコア（0-13点）— 出来高の量 × 方向性で評価（連続関数） */
+export function scoreVolumeChange(
   volumeRatio: number | null,
   direction: VolumeDirection,
 ): number {
-  if (volumeRatio == null) return 5;
-
-  // 出来高が少ない場合: 方向性の影響は軽微
-  if (volumeRatio <= 0.5) return 2;
-  if (volumeRatio < 1.0) return direction === "accumulation" ? 4 : 3;
-
-  // 出来高が多い場合: 方向性が決定的に重要
-  const scores = SCORING.VOLUME_DIRECTION.SCORES;
-
-  if (volumeRatio >= 2.0) return scores.HIGH_VOLUME[direction];
-  if (volumeRatio >= 1.5) return scores.MEDIUM_VOLUME[direction];
-  return scores.NORMAL_VOLUME[direction]; // 1.0 <= ratio < 1.5
+  if (volumeRatio == null) return 0;
+  const baseScore = Math.max(0, Math.min(10, volumeRatio * 5));
+  const multiplier = direction === "accumulation" ? 1.3 : direction === "distribution" ? 0.5 : 1.0;
+  return Math.min(SCORING.SUB_MAX.VOLUME_CHANGE, Math.round(baseScore * multiplier));
 }
 
 // ========================================
