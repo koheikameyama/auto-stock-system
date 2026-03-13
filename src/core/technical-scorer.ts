@@ -169,14 +169,15 @@ function checkDisqualify(input: LogicScoreInput): DisqualifyResult {
 // カテゴリ1: テクニカル指標（40点）
 // ========================================
 
-/** RSI スコア（0-10点）— モメンタム型: RSI 50-65 に最高得点 */
-function scoreRSI(rsi: number | null): number {
-  if (rsi == null) return 5;
-  if (rsi >= 50 && rsi < 65) return SCORING.SUB_MAX.RSI; // 10点: モメンタム
-  if (rsi >= 40 && rsi < 50) return 7;                    // トレンド初動
-  if (rsi >= 65 && rsi < 75) return 5;                    // 強いが過熱気味
-  if (rsi >= 30 && rsi < 40) return 3;                    // 下降トレンドの可能性
-  return 0;                                                // rsi < 30 or rsi >= 75
+/** RSI スコア（0-12点）— 区分線形: RSI 50-65 に最高得点 */
+export function scoreRSI(rsi: number | null): number {
+  if (rsi == null) return 0;
+  const max = SCORING.SUB_MAX.RSI; // 12
+  if (rsi >= 50 && rsi < 65) return max;
+  if (rsi >= 40 && rsi < 50) return Math.round(4 + (rsi - 40) / 10 * (max - 4));
+  if (rsi >= 65 && rsi < 75) return Math.round(max - (rsi - 65) / 10 * (max - 4));
+  if (rsi >= 30 && rsi < 40) return Math.round((rsi - 30) / 10 * 4);
+  return 0;
 }
 
 /** MACD スコア（0-5点） */
