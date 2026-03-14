@@ -156,6 +156,13 @@ export function runBacktest(
       const entryDayIdx = tradingDays.indexOf(pos.entryDate);
       const holdingDays = entryDayIdx >= 0 ? dayIdx - entryDayIdx : 0;
 
+      // スイング: エントリー日はSL判定をスキップ（日中ノイズで刈られるのを防止）
+      if (config.strategy === "swing" && holdingDays === 0) {
+        // 高値更新のみ記録（トレーリングストップ用）
+        pos.maxHighDuringHold = Math.max(pos.maxHighDuringHold, todayBar.high);
+        continue;
+      }
+
       // 共通出口判定（本番 position-monitor.ts と同一ロジック）
       const exitResult = checkPositionExit(
         {

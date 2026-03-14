@@ -437,6 +437,7 @@ export async function runDailyBacktest(
       stopLossRatio: DEFAULT_PARAMS.stopLossRatio,
       atrMultiplier: DEFAULT_PARAMS.atrMultiplier,
       trailingActivationMultiplier: DEFAULT_PARAMS.trailingActivationMultiplier,
+      trailMultiplier: DEFAULT_PARAMS.trailMultiplier,
       strategy: DEFAULT_PARAMS.strategy,
       costModelEnabled: true,
       cooldownDays: DEFAULT_PARAMS.cooldownDays,

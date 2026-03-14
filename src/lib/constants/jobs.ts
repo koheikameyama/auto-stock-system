@@ -27,32 +27,32 @@ export const JOB_CONCURRENCY = {
 
 // ブレイクイーブンストップ（トレーリングストップ発動前の建値撤退）
 // エントリー + ATR × N 以上の含み益が出たらSLをエントリー価格に引き上げ
-// トレーリングストップ発動（ATR×2.0）までの空白期間で「最悪でもトントン」を確保
+// トレーリングストップ発動までの空白期間で「最悪でもトントン」を確保
 export const BREAK_EVEN_STOP = {
   ACTIVATION_ATR_MULTIPLIER: {
     day_trade: 0.8,  // ATR×0.8の含み益でBE発動（トレーリング発動=1.2より手前）
-    swing: 1.0,      // ATR×1.0の含み益でBE発動（トレーリング発動=2.0より手前）
+    swing: 1.5,      // ATR×1.5の含み益でBE発動（トレーリング発動=2.0より手前）
   },
   // ATR不明時のフォールバック（%ベース）
-  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.02 },
+  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.03 },
 } as const;
 
 // トレーリングストップ
-// 制約: ACTIVATION_ATR_MULTIPLIER > TRAIL_ATR_MULTIPLIER（発動時にストップが必ずエントリー以上）
+// 制約: ACTIVATION_ATR_MULTIPLIER >= TRAIL_ATR_MULTIPLIER（発動時にストップがエントリー以上）
 export const TRAILING_STOP = {
   // アクティベーション閾値（エントリー価格からATR×N上昇で発動）
   ACTIVATION_ATR_MULTIPLIER: {
-    day_trade: 1.2,  // 0.5 → 1.2（trail=0.8より大きく設定しBE保証不要に）
-    swing: 1.5,      // 2.0 → 1.5（24ヶ月BT: PF 1.06, 勝率26%。+ボラフィルタでPF 1.07）
+    day_trade: 1.2,  // trail=0.8より大きく設定しBE保証不要に
+    swing: 2.0,      // ATR×2.0上昇で発動（日中ノイズで早期発動を防止）
   },
   // トレール幅（最高値 - ATR×N がストップライン）
   TRAIL_ATR_MULTIPLIER: {
-    day_trade: 0.8,  // 1.0 → 0.8（activation=1.2に対して十分小さく）
-    swing: 1.0,      // 1.2 → 1.0（1日の平均変動幅分の余裕を確保）
+    day_trade: 0.8,  // activation=1.2に対して十分小さく
+    swing: 2.0,      // activation=2.0と同値→発動時ブレイクイーブン、以降広めのトレールで利益確保
   },
-  // ATR不明時のフォールバック（%ベース）— 同じ制約: ACTIVATION > TRAIL
-  ACTIVATION_PCT: { day_trade: 0.015, swing: 0.03 },   // 0.04 → 0.03（ATR倍率1.5に合わせて調整）
-  TRAIL_PCT: { day_trade: 0.01, swing: 0.02 },
+  // ATR不明時のフォールバック（%ベース）— 同じ制約: ACTIVATION >= TRAIL
+  ACTIVATION_PCT: { day_trade: 0.015, swing: 0.04 },
+  TRAIL_PCT: { day_trade: 0.01, swing: 0.04 },
 } as const;
 
 // ディフェンシブモード（市場環境悪化時のポジション防衛）

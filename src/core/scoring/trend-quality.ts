@@ -15,14 +15,21 @@ export function scoreMaAlignment(
 ): number {
   if (sma25 == null || sma5 == null) return 0;
 
-  // SMA25下 → 0
-  if (close < sma25) return 0;
-
   // SMA75なし → SMA25のみで判定（最大14点）
   if (sma75 == null) {
     if (close > sma5 && sma5 > sma25) return 14;
     if (close > sma25 && close < sma5) return 8;
-    return 4;
+    if (close > sma25) return 4;
+    return 0;
+  }
+
+  // SMA25下の場合: 上昇トレンド中の調整かどうかで加点
+  if (close < sma25) {
+    // SMA75上 + SMA25>SMA75（上昇トレンド中の一時的な調整）→ 4
+    if (close > sma75 && sma25 > sma75) return 4;
+    // SMA75上だが配列崩れ → 2
+    if (close > sma75) return 2;
+    return 0;
   }
 
   // 完全パーフェクトオーダー

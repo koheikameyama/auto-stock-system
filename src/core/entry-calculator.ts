@@ -64,22 +64,12 @@ export function calculateEntryCondition(
   limitPrice = Math.max(limitPrice, currentPrice * 0.97);
   limitPrice = Math.round(limitPrice);
 
-  // 2. 利確参考値: レジスタンス or ATR×1.5（実際の利確はトレーリングストップが担う）
-  const nearestResistance =
-    summary.resistances.length > 0
-      ? summary.resistances
-          .filter((r) => r > limitPrice)
-          .sort((a, b) => a - b)[0] ?? null
-      : null;
+  // 2. 利確参考値: ATR×5.0（実際の利確はトレーリングストップが担う、TPは安全弁）
   const atrTarget = summary.atr14
-    ? limitPrice + summary.atr14 * 1.5
+    ? limitPrice + summary.atr14 * 5.0
     : null;
 
-  let takeProfitPrice = nearestResistance
-    ? atrTarget
-      ? Math.min(nearestResistance, atrTarget)
-      : nearestResistance
-    : atrTarget ?? Math.round(limitPrice * 1.05);
+  let takeProfitPrice = atrTarget ?? Math.round(limitPrice * 1.15);
   takeProfitPrice = Math.round(takeProfitPrice);
 
   // 3. 損切り: ATR×1.0（validateStopLoss で検証）

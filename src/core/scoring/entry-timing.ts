@@ -34,6 +34,9 @@ export function scorePullbackDepth(
 ): number {
   if (sma25 == null || deviationRate25 == null) return 0;
 
+  // SMA25大幅下 → 0（先に判定）
+  if (deviationRate25 < ENTRY.PULLBACK_DEEP_THRESHOLD) return 0;
+
   // 条件1: SMA25付近 + 反発サイン → 15
   if (
     deviationRate25 >= ENTRY.PULLBACK_NEAR_MIN &&
@@ -43,12 +46,17 @@ export function scorePullbackDepth(
     return SUB_MAX.PULLBACK_DEPTH;
   }
 
-  // 条件2: SMA5-SMA25間（浅い押し目）→ 10
+  // 条件2: SMA25付近（反発サインなし）→ 10
+  if (deviationRate25 >= ENTRY.PULLBACK_NEAR_MIN && deviationRate25 <= ENTRY.PULLBACK_NEAR_MAX) {
+    return 10;
+  }
+
+  // 条件3: SMA5-SMA25間（浅い押し目）→ 10
   if (sma5 != null && close < sma5 && close > sma25 && deviationRate25 > ENTRY.PULLBACK_NEAR_MAX) {
     return 10;
   }
 
-  // 条件3: SMA25一時割れ復帰 → 8
+  // 条件4: SMA25一時割れ復帰 → 8
   if (close > sma25 && recentBars.length >= 3) {
     const recentBelow = recentBars.slice(1, 4).some((bar) => {
       return bar.close < sma25;
@@ -56,11 +64,13 @@ export function scorePullbackDepth(
     if (recentBelow) return 8;
   }
 
-  // 条件4: SMA5上（押してない）→ 3
-  if (sma5 != null && close >= sma5) return 3;
+  // 条件5: SMA25上で適度な乖離（2-5%）→ 6
+  if (deviationRate25 > ENTRY.PULLBACK_NEAR_MAX && deviationRate25 <= 5) {
+    return 6;
+  }
 
-  // 条件5: SMA25大幅下 → 0
-  if (deviationRate25 < ENTRY.PULLBACK_DEEP_THRESHOLD) return 0;
+  // 条件6: SMA5上（トレンド中だが押してない）→ 4
+  if (sma5 != null && close >= sma5) return 4;
 
   return 0;
 }
@@ -88,11 +98,21 @@ export function scoreBreakout(
       ? currentVolume / avgVolume25
       : 1;
     if (volumeRatio > ENTRY.BREAKOUT_VOLUME_RATIO) return SUB_MAX.BREAKOUT; // 12
+    if (volumeRatio > 1.2) return 9;
     return 7;
   }
 
   if (currentClose > max10 && lookback10.length >= ENTRY.BREAKOUT_LOOKBACK_10) {
-    return 4;
+    const volumeRatio = avgVolume25 && avgVolume25 > 0
+      ? currentVolume / avgVolume25
+      : 1;
+    if (volumeRatio > ENTRY.BREAKOUT_VOLUME_RATIO) return 8;
+    return 5;
+  }
+
+  // 10日高値の95%以上（高値圏だがブレイクしていない）→ 2
+  if (max10 < Infinity && currentClose >= max10 * 0.95) {
+    return 2;
   }
 
   return 0;
@@ -140,8 +160,17 @@ export function scoreCandlestickSignal(
     }
   }
 
-  // 十字線（実体がほぼゼロ）→ 3
+  // 強い陽線（終値が高値に近い + 実体が足レンジの60%超）→ 4
   const totalRange = today.high - today.low;
+  if (totalRange > 0 && todayBullish) {
+    const closeToHigh = (today.high - today.close) / totalRange;
+    const bodyRatio = realBody / totalRange;
+    if (closeToHigh < 0.15 && bodyRatio > 0.6) {
+      maxScore = Math.max(maxScore, 4);
+    }
+  }
+
+  // 十字線（実体がほぼゼロ）→ 3
   if (totalRange > 0 && realBody / totalRange < 0.1) {
     maxScore = Math.max(maxScore, 3);
   }
