@@ -19,12 +19,6 @@ export const NEWS_SOURCES = {
   },
 } as const;
 
-// 保持期間
-export const NEWS_RETENTION = {
-  ARTICLE_DAYS: 90,
-  ANALYSIS_DAYS: 90,
-} as const;
-
 // 検索キーワード
 export const NEWS_KEYWORDS = {
   GEOPOLITICAL: [

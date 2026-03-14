@@ -1,17 +1,14 @@
 /**
  * ニュースコレクター（8:00 JST / 平日）
  *
- * 1. 3ソースからニュースをフェッチ
- * 2. 重複排除・DB保存
- * 3. AI分析 → NewsAnalysis に保存
- * 4. 古い記事のクリーンアップ
- * 5. Slack通知
+ * 1. 3ソースからニュースをフェッチ・重複排除・DB保存・AI分析
+ * 2. 上場廃止ニュース検知
  */
 
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB, getDaysAgoForDB } from "../lib/date-utils";
-import { OPENAI_CONFIG, NEWS_RETENTION, NEWS_AI_MAX_ARTICLES, DELISTING_NEWS_KEYWORDS } from "../lib/constants";
+import { OPENAI_CONFIG, NEWS_AI_MAX_ARTICLES, DELISTING_NEWS_KEYWORDS } from "../lib/constants";
 import { getOpenAIClient } from "../lib/openai";
 import {
   fetchFromNewsAPI,
@@ -210,7 +207,7 @@ export async function main() {
   console.log("=== News Collector 開始 ===");
 
   // 1. ニュース収集 + AI分析
-  console.log("[1/3] ニュース収集・AI分析中...");
+  console.log("[1/2] ニュース収集・AI分析中...");
   const { analysis } = await collectAndAnalyzeNews();
 
   if (!analysis) {
@@ -224,7 +221,7 @@ export async function main() {
   }
 
   // 2. 上場廃止関連ニュース検知
-  console.log("[2/3] 上場廃止ニュース検知中...");
+  console.log("[2/2] 上場廃止ニュース検知中...");
   let delistingFlagCount = 0;
 
   const oneDayAgo = dayjs().subtract(1, "day").toDate();
@@ -270,25 +267,6 @@ export async function main() {
     console.log(`  ${delistingFlagCount}銘柄にフラグ設定`);
   } else {
     console.log("  廃止関連ニュースなし");
-  }
-
-  // 3. クリーンアップ
-  console.log("[3/3] クリーンアップ中...");
-
-  const articleRetentionDate = getDaysAgoForDB(NEWS_RETENTION.ARTICLE_DAYS);
-  const deletedArticles = await prisma.newsArticle.deleteMany({
-    where: { publishedAt: { lt: articleRetentionDate } },
-  });
-  if (deletedArticles.count > 0) {
-    console.log(`  古い記事削除: ${deletedArticles.count}件`);
-  }
-
-  const analysisRetentionDate = getDaysAgoForDB(NEWS_RETENTION.ANALYSIS_DAYS);
-  const deletedAnalyses = await prisma.newsAnalysis.deleteMany({
-    where: { date: { lt: analysisRetentionDate } },
-  });
-  if (deletedAnalyses.count > 0) {
-    console.log(`  古い分析結果削除: ${deletedAnalyses.count}件`);
   }
 
   // Slack通知
