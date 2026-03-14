@@ -8,19 +8,8 @@
 
 import { analyzeTechnicals } from "../core/technical-analysis";
 import type { OHLCVData } from "../core/technical-analysis";
-import {
-  scoreTechnicals,
-  calculateRsScores,
-} from "../core/technical-scorer";
-import { detectChartPatterns } from "../lib/chart-patterns";
-import { analyzeSingleCandle } from "../lib/candlestick-patterns";
-import {
-  aggregateDailyToWeekly,
-  analyzeWeeklyTrend,
-} from "../lib/technical-indicators";
-import { getSectorGroup } from "../lib/constants/trading";
+import { scoreStock } from "../core/scoring";
 import { TECHNICAL_MIN_DATA } from "../lib/constants/technical";
-import { SCORING_V1 as SCORING } from "../lib/constants/scoring";
 
 // ========================================
 // 型定義
@@ -43,30 +32,23 @@ export interface ScoredRecord {
   tickerCode: string;
   totalScore: number;
   rank: string;
-  technicalScore: number;
-  technicalBreakdown: {
-    rsi: number;
-    ma: number;
-    volume: number;
-    volumeDirection: string;
-    macd: number;
-    rs: number;
-    weeklyTrendPenalty: number;
+  trendQualityScore: number;
+  trendQualityBreakdown: {
+    maAlignment: number;
+    weeklyTrend: number;
+    trendContinuity: number;
   };
-  patternScore: number;
-  patternBreakdown: { chart: number; candlestick: number };
-  liquidityScore: number;
-  liquidityBreakdown: {
-    tradingValue: number;
-    spreadProxy: number;
-    stability: number;
+  entryTimingScore: number;
+  entryTimingBreakdown: {
+    pullbackDepth: number;
+    breakout: number;
+    candlestickSignal: number;
   };
-  fundamentalScore: number;
-  fundamentalBreakdown: {
-    per: number;
-    pbr: number;
-    profitability: number;
-    marketCap: number;
+  riskQualityScore: number;
+  riskQualityBreakdown: {
+    atrStability: number;
+    rangeContraction: number;
+    volumeStability: number;
   };
   isDisqualified: boolean;
   disqualifyReason: string | null;
@@ -85,7 +67,7 @@ export function scoreDayForAllStocks(
   targetDate: string,
   allOhlcv: Map<string, OHLCVData[]>,
   fundamentalsMap: Map<string, StockFundamentals>,
-  stocks: { tickerCode: string; jpxSectorName: string | null }[],
+  _stocks: { tickerCode: string; jpxSectorName: string | null }[],
 ): ScoredRecord[] {
   // 各銘柄の targetDate 以前のデータをスライス
   const stockSlices = new Map<string, OHLCVData[]>();
@@ -100,44 +82,6 @@ export function scoreDayForAllStocks(
 
   if (stockSlices.size === 0) return [];
 
-  // weekChangeRate を計算し、RS スコアを算出
-  const rsInput: {
-    tickerCode: string;
-    weekChangeRate: number | null;
-    sector: string;
-  }[] = [];
-  const sectorMap: Record<string, number[]> = {};
-
-  for (const [ticker, slice] of stockSlices) {
-    const stock = stocks.find((s) => s.tickerCode === ticker);
-    const sector = getSectorGroup(stock?.jpxSectorName ?? null) ?? "その他";
-
-    // slice は oldest-first なので末尾が最新
-    const latestIdx = slice.length - 1;
-    let weekChangeRate: number | null = null;
-    if (slice.length >= 5) {
-      const current = slice[latestIdx].close;
-      const weekAgo = slice[latestIdx - 4].close;
-      if (weekAgo > 0) {
-        weekChangeRate =
-          Math.round(((current - weekAgo) / weekAgo) * 10000) / 100;
-      }
-    }
-
-    rsInput.push({ tickerCode: ticker, weekChangeRate, sector });
-    if (weekChangeRate != null) {
-      if (!sectorMap[sector]) sectorMap[sector] = [];
-      sectorMap[sector].push(weekChangeRate);
-    }
-  }
-
-  const sectorAvgs: Record<string, number> = {};
-  for (const [sector, rates] of Object.entries(sectorMap)) {
-    sectorAvgs[sector] = rates.reduce((a, b) => a + b, 0) / rates.length;
-  }
-
-  const rsScoreMap = calculateRsScores(rsInput, sectorAvgs);
-
   // 各銘柄をスコアリング
   const results: ScoredRecord[] = [];
 
@@ -149,64 +93,18 @@ export function scoreDayForAllStocks(
       // analyzeTechnicals は newest-first を期待
       const newestFirst = [...slice].reverse();
       const summary = analyzeTechnicals(newestFirst);
-
-      // detectChartPatterns は oldest-first を期待
-      const chartPatterns = detectChartPatterns(
-        slice.map((d) => ({
-          date: d.date,
-          open: d.open,
-          high: d.high,
-          low: d.low,
-          close: d.close,
-        })),
-      );
-
-      // 最新のローソク足
       const latest = newestFirst[0];
-      const candlestickPattern = analyzeSingleCandle({
-        date: latest.date,
-        open: latest.open,
-        high: latest.high,
-        low: latest.low,
-        close: latest.close,
-      });
 
-      // 週足トレンド
-      const weeklyBars = aggregateDailyToWeekly(
-        slice.map((d) => ({
-          date: d.date,
-          open: d.open,
-          high: d.high,
-          low: d.low,
-          close: d.close,
-          volume: d.volume,
-        })),
-      );
-      const weeklyTrend =
-        weeklyBars.length >= SCORING.WEEKLY_TREND.MIN_WEEKLY_BARS
-          ? analyzeWeeklyTrend(weeklyBars)
-          : null;
-
-      // スコアリング
-      const score = scoreTechnicals({
-        summary,
-        chartPatterns,
-        candlestickPattern,
+      // 新スコアリング
+      const score = scoreStock({
         historicalData: newestFirst,
         latestPrice: latest.close,
         latestVolume: latest.volume,
         weeklyVolatility: fund.volatility,
-        weeklyTrend,
-        fundamentals: {
-          per: fund.per,
-          pbr: fund.pbr,
-          eps: fund.eps,
-          marketCap: fund.marketCap,
-          latestPrice: latest.close,
-        },
+        summary,
+        avgVolume25: summary.volumeAnalysis.avgVolume20,
         nextEarningsDate: fund.nextEarningsDate,
         exDividendDate: fund.exDividendDate,
-        rsScore: rsScoreMap.get(ticker) ?? 0,
       });
 
       let rejectionReason: string | null = null;
@@ -220,33 +118,23 @@ export function scoreDayForAllStocks(
         tickerCode: ticker,
         totalScore: score.totalScore,
         rank: score.rank,
-        technicalScore: score.technical.total,
-        technicalBreakdown: {
-          rsi: score.technical.rsi,
-          ma: score.technical.ma,
-          volume: score.technical.volume,
-          volumeDirection: score.technical.volumeDirection,
-          macd: score.technical.macd,
-          rs: score.technical.rs,
-          weeklyTrendPenalty: score.weeklyTrendPenalty,
+        trendQualityScore: score.trendQuality.total,
+        trendQualityBreakdown: {
+          maAlignment: score.trendQuality.maAlignment,
+          weeklyTrend: score.trendQuality.weeklyTrend,
+          trendContinuity: score.trendQuality.trendContinuity,
         },
-        patternScore: score.pattern.total,
-        patternBreakdown: {
-          chart: score.pattern.chart,
-          candlestick: score.pattern.candlestick,
+        entryTimingScore: score.entryTiming.total,
+        entryTimingBreakdown: {
+          pullbackDepth: score.entryTiming.pullbackDepth,
+          breakout: score.entryTiming.breakout,
+          candlestickSignal: score.entryTiming.candlestickSignal,
         },
-        liquidityScore: score.liquidity.total,
-        liquidityBreakdown: {
-          tradingValue: score.liquidity.tradingValue,
-          spreadProxy: score.liquidity.spreadProxy,
-          stability: score.liquidity.stability,
-        },
-        fundamentalScore: score.fundamental.total,
-        fundamentalBreakdown: {
-          per: score.fundamental.per,
-          pbr: score.fundamental.pbr,
-          profitability: score.fundamental.profitability,
-          marketCap: score.fundamental.marketCap,
+        riskQualityScore: score.riskQuality.total,
+        riskQualityBreakdown: {
+          atrStability: score.riskQuality.atrStability,
+          rangeContraction: score.riskQuality.rangeContraction,
+          volumeStability: score.riskQuality.volumeStability,
         },
         isDisqualified: score.isDisqualified,
         disqualifyReason: score.disqualifyReason,

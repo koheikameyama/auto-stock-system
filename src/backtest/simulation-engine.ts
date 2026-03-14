@@ -7,16 +7,10 @@
 
 import type { OHLCVData } from "../core/technical-analysis";
 import { analyzeTechnicals } from "../core/technical-analysis";
-import { scoreTechnicals, calculateRsScores } from "../core/technical-scorer";
-import type { LogicScore } from "../core/technical-scorer";
+import { scoreStock } from "../core/scoring";
+import type { NewLogicScore } from "../core/scoring";
 import { calculateEntryCondition } from "../core/entry-calculator";
-import { detectChartPatterns } from "../lib/chart-patterns";
-import { analyzeSingleCandle } from "../lib/candlestick-patterns";
-import {
-  aggregateDailyToWeekly,
-  analyzeWeeklyTrend,
-} from "../lib/technical-indicators";
-import { TECHNICAL_MIN_DATA, SCORING_V1 as SCORING, DEFENSIVE_MODE, DAILY_BACKTEST } from "../lib/constants";
+import { TECHNICAL_MIN_DATA, DEFENSIVE_MODE, DAILY_BACKTEST } from "../lib/constants";
 import { checkPositionExit } from "../core/exit-checker";
 import { checkBuyLimitFill } from "../core/order-executor";
 import { determineMarketRegime } from "../core/market-regime";
@@ -456,7 +450,7 @@ interface PendingOrder {
   takeProfitPrice: number;
   stopLossPrice: number;
   quantity: number;
-  rank: "S" | "A" | "B" | "C";
+  rank: "S" | "A" | "B" | "C" | "D";
   score: number;
   entryAtr: number | null;
   regime: RegimeLevel;
@@ -468,7 +462,7 @@ interface FilledOrder extends PendingOrder {
 
 interface EntryCandidate {
   ticker: string;
-  score: LogicScore;
+  score: NewLogicScore;
   entry: {
     limitPrice: number;
     takeProfitPrice: number;
@@ -491,7 +485,7 @@ function evaluateTickers(
   lastExitDayIdxMap?: Map<string, number>,
   currentDayIdx?: number,
   minRank?: "S" | "A" | "B" | null,
-  sectorMap?: Map<string, string>,
+  _sectorMap?: Map<string, string>,
 ): EntryCandidate[] {
   const candidates: EntryCandidate[] = [];
 
@@ -501,36 +495,6 @@ function evaluateTickers(
         .filter((t) => allData.has(t))
         .map((t) => [t, allData.get(t)!] as [string, OHLCVData[]])
     : allData;
-
-  // RS計算: セクターデータがある場合、全銘柄の週次変化率からRSスコアを事前計算
-  let rsScoreMap = new Map<string, number>();
-  if (sectorMap && sectorMap.size > 0) {
-    const rsInput: { tickerCode: string; weekChangeRate: number | null; sector: string }[] = [];
-    const sectorRates: Record<string, number[]> = {};
-
-    for (const [ticker, bars] of tickersToEvaluate) {
-      const todayIdx = bars.findIndex((b) => b.date === today);
-      if (todayIdx < 0) continue;
-
-      const sector = sectorMap.get(ticker) ?? "その他";
-      const weekChangeRate = todayIdx >= 5 && bars[todayIdx - 5].close > 0
-        ? ((bars[todayIdx].close - bars[todayIdx - 5].close) / bars[todayIdx - 5].close) * 100
-        : null;
-
-      rsInput.push({ tickerCode: ticker, weekChangeRate, sector });
-      if (weekChangeRate != null) {
-        if (!sectorRates[sector]) sectorRates[sector] = [];
-        sectorRates[sector].push(weekChangeRate);
-      }
-    }
-
-    const sectorAvgs: Record<string, number> = {};
-    for (const [sector, rates] of Object.entries(sectorRates)) {
-      sectorAvgs[sector] = rates.reduce((a, b) => a + b, 0) / rates.length;
-    }
-
-    rsScoreMap = calculateRsScores(rsInput, sectorAvgs);
-  }
 
   for (const [ticker, bars] of tickersToEvaluate) {
     // 同一銘柄のオープンポジションがある場合はスキップ
@@ -596,81 +560,46 @@ function evaluateTickers(
       }
     }
 
-    // RSフィルター: セクター劣後銘柄をスキップ
-    if (config.rsFilterEnabled) {
-      const { MIN_RS_SCORE } = DAILY_BACKTEST.UNIVERSE_FILTER;
-      const rsScore = rsScoreMap.get(ticker) ?? 0;
-      if (rsScore < MIN_RS_SCORE) continue;
-    }
-
-    // チャートパターン（oldest-first を期待）
-    const chartPatterns = detectChartPatterns(
-      window.map((d) => ({
-        date: d.date,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-      })),
-    );
-    const candlestickPattern = analyzeSingleCandle({
-      date: latest.date,
-      open: latest.open,
-      high: latest.high,
-      low: latest.low,
-      close: latest.close,
-    });
-
     // 週次ボラティリティ算出
     const weeklyVolatility = computeWeeklyVolatility(window);
 
-    // 週足トレンド分析
-    const weeklyBars = aggregateDailyToWeekly(window);
-    const weeklyTrend =
-      weeklyBars.length >= SCORING.WEEKLY_TREND.MIN_WEEKLY_BARS
-        ? analyzeWeeklyTrend(weeklyBars)
-        : null;
-
-    // スコアリング
-    const tickerRsScore = rsScoreMap.get(ticker) ?? 0;
-    let score = scoreTechnicals({
-      summary,
-      chartPatterns,
-      candlestickPattern,
+    // 新スコアリング（3カテゴリ）
+    const score = scoreStock({
       historicalData: newestFirst,
       latestPrice: latest.close,
       latestVolume: latest.volume,
       weeklyVolatility,
-      weeklyTrend,
-      rsScore: tickerRsScore,
+      summary,
+      avgVolume25: summary.volumeAnalysis.avgVolume20,
     });
 
     // 即死ルール判定（価格上限は config.maxPrice で上書き）
     if (
       score.isDisqualified &&
-      score.disqualifyReason === "price_too_high" &&
+      score.gate.failedGate === "spread" &&
       latest.close <= config.maxPrice
     ) {
-      // maxPrice 以内 → latestPrice を即死回避値にして再スコアリング
-      score = scoreTechnicals({
-        summary,
-        chartPatterns,
-        candlestickPattern,
+      // maxPrice 以内 → ゲートの価格制限を回避して再スコアリング
+      const retryScore = scoreStock({
         historicalData: newestFirst,
-        latestPrice: SCORING.DISQUALIFY.MAX_PRICE,
+        latestPrice: config.maxPrice,
         latestVolume: latest.volume,
         weeklyVolatility,
-        weeklyTrend,
-        rsScore: tickerRsScore,
+        summary,
+        avgVolume25: summary.volumeAnalysis.avgVolume20,
       });
+      if (!retryScore.isDisqualified) {
+        // 再スコアリング成功 → そのまま続行
+        Object.assign(score, retryScore);
+      }
     }
     if (score.isDisqualified) continue;
     if (score.totalScore < config.scoreThreshold) continue;
 
     // レジームによるランク制限（本番 market-scanner.ts と同等）
     if (minRank) {
-      const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 };
-      if (rankOrder[score.rank] > rankOrder[minRank]) continue;
+      const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+      if ((rankOrder[score.rank] ?? 4) > rankOrder[minRank]) continue;
     }
 
     // エントリー条件算出
@@ -678,7 +607,7 @@ function evaluateTickers(
     const entry = calculateEntryCondition(
       latest.close,
       summary,
-      score,
+      score as any,
       config.strategy,
       cash,
       maxPositionPct,
