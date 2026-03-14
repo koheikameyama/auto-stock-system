@@ -23,31 +23,62 @@
 - **Recall**: TP / (TP + FN) — 上がった銘柄の捕捉率
 - **F1 Score**: 2 * (Precision * Recall) / (Precision + Recall)
 
+### エッジケース
+
+- **市場停止日（market_halted）**: 全銘柄が rejected になるため TP=0, FP=0。Precision は `null`（0/0）として記録する。エラーではなく正常な状態として扱う。
+- **終値 = エントリー価格**: FP（下落側）に分類する。手数料を考慮すると横ばいは実質損失のため。
+
 ## データ収集の変更
 
 ### 現行
 
 - rejected 銘柄のみ終値取得 → `closingPrice`、`ghostProfitPct` を ScoringRecord に記録
+- `rejectedRecords.length === 0` で早期リターン
 
 ### 変更後
 
 - **全 ScoringRecord**（accepted + rejected）の終値を取得
+- 早期リターン条件を「当日の ScoringRecord が0件」に変更（rejected が0件でも accepted があれば処理続行）
 - `closingPrice` フィールドは全銘柄に記録する
 - accepted 銘柄の利益率は `ghostProfitPct` フィールドを共用する（スキーマ変更を避ける）
-- 翌日価格記録（`nextDayClosingPrice`、`nextDayProfitPct`）も全銘柄に拡張
+- 翌日価格記録（`nextDayClosingPrice`、`nextDayProfitPct`）も全銘柄に拡張（既存のクエリが `closingPrice: { not: null }` でフィルタしているため、accepted 銘柄も自動的に対象になる）
 - `tradeResult`、`profitPct`、`tradingOrderId` の未使用フィールドは今回触れず、将来のトレード実績紐付け用に残す
+
+### 実装上の変数スコープ
+
+現行の `recordsWithPnl` は rejected のみ。変更後は以下の構造にする：
+
+```typescript
+// 全銘柄（accepted + rejected）の終値付きレコード
+const allRecordsWithPnl = [...]; // 全 ScoringRecord に closingPrice を付与
+
+// accepted / rejected に分離（各フェーズで使い分け）
+const acceptedRecords = allRecordsWithPnl.filter(r => r.rejectionReason === null);
+const rejectedRecords = allRecordsWithPnl.filter(r => r.rejectionReason !== null);
+
+// 4象限分類
+const tp = acceptedRecords.filter(r => r.profitPct > 0);
+const fp = acceptedRecords.filter(r => r.profitPct <= 0);
+const fn = rejectedRecords.filter(r => r.profitPct > 0);
+const tn = rejectedRecords.filter(r => r.profitPct <= 0);
+```
+
+既存の意思決定整合性評価（`marketHaltedToday`、`aiNoGoToday`、`belowThresholdToday`）は `rejectedRecords` から抽出する（現行と同じロジック）。
 
 ## AI分析の拡張
 
 ### FN分析（既存）
 
-見逃し銘柄の偽陰性パターン特定。現行の ghost-analysis プロンプトをそのまま移行。
+見逃し銘柄の偽陰性パターン特定。現行の enum 値をそのまま維持する：
+
+- misjudgmentType: `threshold_too_strict` / `ai_overcautious` / `pattern_not_recognized` / `market_context_changed` / `acceptable_miss`
+- recommendation: `lower_threshold` / `adjust_ai_criteria` / `add_pattern_rule` / `no_change_needed`
 
 ### FP分析（新規）
 
 買ったが下落した銘柄の偽陽性パターン特定。
 
-- 対象: `ghostProfitPct <= -1.0%` の FP 銘柄上位（上限5件）
+- 対象: `ghostProfitPct <= -SCORING_ACCURACY.MIN_LOSS_PCT_FOR_ANALYSIS` の FP 銘柄上位（上限 `SCORING_ACCURACY.MAX_AI_FP_ANALYSIS` 件）
 - プロンプト: 「なぜスコアリング+AIが通したのに下落したか」を分析
 - misjudgmentType:
   - `score_inflated` — スコア過大評価
@@ -59,6 +90,34 @@
   - `adjust_ai_criteria` — AI基準を調整
   - `add_risk_filter` — リスクフィルター追加
   - `no_change_needed` — 変更不要
+
+### プロンプトファイル構成
+
+`src/prompts/scoring-accuracy.ts` に統合。FN用とFP用で別々のシステムプロンプト・スキーマを export する：
+
+```typescript
+// FN分析（既存の ghost-analysis.ts から移行、enum値そのまま）
+export const FN_ANALYSIS_SYSTEM_PROMPT = "...";
+export const FN_ANALYSIS_SCHEMA = { ... };
+
+// FP分析（新規）
+export const FP_ANALYSIS_SYSTEM_PROMPT = "...";
+export const FP_ANALYSIS_SCHEMA = { ... };
+```
+
+DB の `ghostAnalysis` フィールドに保存する JSON は、FN/FP で異なる misjudgmentType 値を持つが、構造（misjudgmentType, analysis, recommendation, reasoning）は同じ。既存の FN データとの後方互換性を維持する。
+
+### 定数
+
+```typescript
+export const SCORING_ACCURACY = {
+  MIN_PROFIT_PCT_FOR_FN_ANALYSIS: 1.0,  // FN分析の最低利益率閾値
+  MIN_LOSS_PCT_FOR_FP_ANALYSIS: 1.0,    // FP分析の最低損失率閾値
+  MAX_AI_FN_ANALYSIS: 5,                // FN分析の最大件数
+  MAX_AI_FP_ANALYSIS: 5,                // FP分析の最大件数
+  AI_CONCURRENCY: 3,                    // AI並列数
+};
+```
 
 ## decisionAudit の拡張
 
@@ -73,8 +132,8 @@ confusionMatrix: {
   fp: number;
   fn: number;
   tn: number;
-  precision: number | null;
-  recall: number | null;
+  precision: number | null;  // accepted が0件の場合 null
+  recall: number | null;     // 上昇銘柄が0件の場合 null
   f1: number | null;
 };
 byRank: Record<string, {
@@ -92,6 +151,10 @@ fpAnalysis: Array<{
   misjudgmentType: string;
 }>;
 ```
+
+### 後方互換性
+
+過去の `decisionAudit` レコードには `confusionMatrix` フィールドが存在しない。週次レポートで集計する際はオプショナルチェーン（`?.confusionMatrix`）で安全にアクセスし、フィールドが無い日はスキップする。データバックフィルは行わない。
 
 ## Slack通知
 
@@ -126,10 +189,11 @@ S: 83.3% (5/6) | A: 60.0% (3/5)
 
 既存の `scoring-accuracy-report.ts` を拡張：
 
-- **Precision / Recall / F1 のトレンド**: 直近7日・30日の推移（decisionAudit から集計）
+- **Precision / Recall / F1 のトレンド**: 直近7日・30日の推移（decisionAudit.confusionMatrix から集計。フィールドが無い日はスキップ）
 - **ランク別 Precision トレンド**: S/A ランクの精度推移
 - **FP パターン集計**: 偽陽性の misjudgmentType 分布
 - 既存のカテゴリ弱点分析・却下コスト分析はそのまま維持
+- 既存の `analyzeRankAccuracy` 等の関数は rejected 銘柄のみの分析として維持し、新しい4象限メトリクスは `decisionAudit` からの集計として別セクションにする（既存メトリクスの意味が変わらないようにする）
 
 ## リネーム一覧
 
