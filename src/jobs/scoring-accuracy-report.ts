@@ -1,28 +1,30 @@
 /**
  * スコアリング精度レポート（土曜 11:00 JST）
  *
- * ゴースト実績データをもとにスコアリングシステムの弱点を定量集計し、Slackに送信する。
+ * スコアリング実績データをもとにシステムの弱点を定量集計し、Slackに送信する。
  *
- * 1. 直近7日間のScoringRecordを取得（ゴースト実績あり）
+ * 1. 直近7日間のScoringRecordを取得（実績あり）
  * 2. カテゴリ別の見逃し要因分析
  * 3. ランク別の的中率集計
  * 4. rejectionReason別の機会損失集計
  * 5. 週次/月次トレンド比較
- * 6. Slackにレポート送信
+ * 6. 4象限メトリクス（Precision/Recall/F1）トレンド
+ * 7. FPパターン分布
+ * 8. Slackにレポート送信
  */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { getDaysAgoForDB } from "../lib/date-utils";
-import { SCORING_V1 as SCORING, SCORING_ACCURACY_REPORT } from "../lib/constants";
+import { SCORING as SCORING_V2, SCORING_ACCURACY_REPORT } from "../lib/constants";
 import { notifyScoringAccuracyReport } from "../lib/slack";
 import dayjs from "dayjs";
 
 interface ScoringRecordRow {
   rank: string;
-  technicalScore: number;
-  patternScore: number;
-  liquidityScore: number;
-  fundamentalScore: number;
+  trendQualityScore: number;
+  entryTimingScore: number;
+  riskQualityScore: number;
   rejectionReason: string | null;
   ghostProfitPct: number; // Number()済み
 }
@@ -32,10 +34,9 @@ function toRows(
 ): ScoringRecordRow[] {
   return records.map((r) => ({
     rank: r.rank,
-    technicalScore: r.technicalScore,
-    patternScore: r.patternScore,
-    liquidityScore: r.liquidityScore,
-    fundamentalScore: r.fundamentalScore,
+    trendQualityScore: r.trendQualityScore,
+    entryTimingScore: r.entryTimingScore,
+    riskQualityScore: r.riskQualityScore,
     rejectionReason: r.rejectionReason,
     ghostProfitPct: Number(r.ghostProfitPct),
   }));
@@ -45,24 +46,19 @@ function toRows(
 function analyzeCategoryWeakness(missedStocks: ScoringRecordRow[]) {
   const categories = [
     {
-      key: "テクニカル",
-      maxScore: SCORING.CATEGORY_MAX.TECHNICAL,
-      getScore: (r: ScoringRecordRow) => r.technicalScore,
+      key: "トレンド品質",
+      maxScore: SCORING_V2.CATEGORY_MAX.TREND_QUALITY,
+      getScore: (r: ScoringRecordRow) => r.trendQualityScore,
     },
     {
-      key: "パターン",
-      maxScore: SCORING.CATEGORY_MAX.PATTERN,
-      getScore: (r: ScoringRecordRow) => r.patternScore,
+      key: "エントリータイミング",
+      maxScore: SCORING_V2.CATEGORY_MAX.ENTRY_TIMING,
+      getScore: (r: ScoringRecordRow) => r.entryTimingScore,
     },
     {
-      key: "流動性",
-      maxScore: SCORING.CATEGORY_MAX.LIQUIDITY,
-      getScore: (r: ScoringRecordRow) => r.liquidityScore,
-    },
-    {
-      key: "ファンダ",
-      maxScore: SCORING.CATEGORY_MAX.FUNDAMENTAL,
-      getScore: (r: ScoringRecordRow) => r.fundamentalScore,
+      key: "リスク品質",
+      maxScore: SCORING_V2.CATEGORY_MAX.RISK_QUALITY,
+      getScore: (r: ScoringRecordRow) => r.riskQualityScore,
     },
   ];
 
@@ -195,6 +191,86 @@ export async function main() {
     `  ランク別: ${rankAccuracy.map((r) => `${r.rank}=${r.count}件`).join(", ")}`,
   );
 
+  // 4象限メトリクスの集計（decisionAudit から取得）
+  console.log("  4象限メトリクス集計中...");
+  const dailySummaries = await prisma.tradingDailySummary.findMany({
+    where: {
+      date: {
+        gte: getDaysAgoForDB(SCORING_ACCURACY_REPORT.MONTHLY_LOOKBACK_DAYS),
+      },
+      decisionAudit: { not: Prisma.DbNull },
+    },
+    select: { date: true, decisionAudit: true },
+    orderBy: { date: "asc" },
+  });
+
+  interface ConfusionMatrix {
+    tp: number;
+    fp: number;
+    fn: number;
+    tn: number;
+    precision: number | null;
+    recall: number | null;
+    f1: number | null;
+  }
+
+  const weeklyDate = getDaysAgoForDB(SCORING_ACCURACY_REPORT.WEEKLY_LOOKBACK_DAYS);
+
+  const extractMatrix = (audit: unknown): ConfusionMatrix | null => {
+    const data = audit as Record<string, unknown> | null;
+    return (data?.confusionMatrix as ConfusionMatrix) ?? null;
+  };
+
+  const weeklyMatrices = dailySummaries
+    .filter((s) => s.date >= weeklyDate)
+    .map((s) => extractMatrix(s.decisionAudit))
+    .filter((m): m is ConfusionMatrix => m !== null);
+
+  const monthlyMatrices = dailySummaries
+    .map((s) => extractMatrix(s.decisionAudit))
+    .filter((m): m is ConfusionMatrix => m !== null);
+
+  const avgMetric = (
+    matrices: ConfusionMatrix[],
+    key: "precision" | "recall" | "f1",
+  ): number | null => {
+    const values = matrices
+      .map((m) => m[key])
+      .filter((v): v is number => v !== null);
+    return values.length > 0
+      ? values.reduce((s, v) => s + v, 0) / values.length
+      : null;
+  };
+
+  const precisionTrend = {
+    weekly: avgMetric(weeklyMatrices, "precision"),
+    monthly: avgMetric(monthlyMatrices, "precision"),
+  };
+  const recallTrend = {
+    weekly: avgMetric(weeklyMatrices, "recall"),
+    monthly: avgMetric(monthlyMatrices, "recall"),
+  };
+  const f1Trend = {
+    weekly: avgMetric(weeklyMatrices, "f1"),
+    monthly: avgMetric(monthlyMatrices, "f1"),
+  };
+
+  console.log(
+    `  Precision: 週次=${precisionTrend.weekly?.toFixed(1) ?? "N/A"}% 月次=${precisionTrend.monthly?.toFixed(1) ?? "N/A"}%`,
+  );
+
+  // FPパターン分布（週次の ghostAnalysis から集計）
+  const fpPatternDist: Record<string, number> = {};
+  for (const r of weeklyRaw) {
+    if (r.rejectionReason !== null || !r.ghostAnalysis) continue;
+    try {
+      const analysis = JSON.parse(r.ghostAnalysis as string) as { misjudgmentType: string };
+      fpPatternDist[analysis.misjudgmentType] = (fpPatternDist[analysis.misjudgmentType] || 0) + 1;
+    } catch {
+      // skip invalid JSON
+    }
+  }
+
   // Slack通知
   await notifyScoringAccuracyReport({
     periodLabel,
@@ -205,6 +281,10 @@ export async function main() {
     rejectionCost,
     weeklyStats,
     monthlyStats,
+    precisionTrend,
+    recallTrend,
+    f1Trend,
+    fpPatternDist,
   });
 
   console.log("=== Scoring Accuracy Report 終了 ===");

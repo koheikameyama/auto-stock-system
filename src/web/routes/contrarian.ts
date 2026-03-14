@@ -47,7 +47,7 @@ app.get("/", async (c) => {
     todaySummary,
   ] = await Promise.all([
     prisma.marketAssessment.findUnique({ where: { date: latestDate } }),
-    // 最新日の上昇確認銘柄: ghost-review 後に ghostProfitPct > 0 のもののみ表示
+    // 最新日の上昇確認銘柄: scoring-accuracy 後に ghostProfitPct > 0 のもののみ表示
     prisma.scoringRecord.findMany({
       where: {
         date: latestDate,

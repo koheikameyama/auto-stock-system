@@ -204,17 +204,6 @@ export const SCORING_ACCURACY = {
   AI_CONCURRENCY: 3,
 } as const;
 
-export const GHOST_TRADING = {
-  /** Ghost追跡対象の最低スコア */
-  MIN_SCORE_FOR_TRACKING: 60,
-  /** AI後悔分析の最大件数/日 */
-  MAX_AI_REGRET_ANALYSIS: 5,
-  /** AI分析トリガーの最低利益率(%) */
-  MIN_PROFIT_PCT_FOR_ANALYSIS: 1.0,
-  /** AI並列数 */
-  AI_CONCURRENCY: 3,
-} as const;
-
 export const CONTRARIAN = {
   /** 逆行実績の検索期間（日） */
   LOOKBACK_DAYS: 90,
