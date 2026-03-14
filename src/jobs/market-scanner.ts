@@ -8,11 +8,10 @@
  * 4. shouldTrade = true → 銘柄選定
  *    a. 対象銘柄のヒストリカルデータ取得
  *    b. テクニカル分析
- *    c. チャートパターン・ローソク足パターン検出
- *    d. テクニカルスコアリング（0-100）→ 上位10-20銘柄に絞り込み
- *    e. AIレビュー（Go/No-Go）
- *    f. MarketAssessment に結果を保存
- *    g. Slackに候補銘柄通知
+ *    c. 3カテゴリスコアリング（0-100）→ 上位10-20銘柄に絞り込み
+ *    d. AIレビュー（Go/No-Go）
+ *    e. MarketAssessment に結果を保存
+ *    f. Slackに候補銘柄通知
  */
 
 import { prisma } from "../lib/prisma";
@@ -22,7 +21,7 @@ import {
   YAHOO_FINANCE,
   JOB_CONCURRENCY,
   TECHNICAL_MIN_DATA,
-  SCORING_V1 as SCORING,
+  SCORING,
   SCORING_ACCURACY,
   UNIT_SHARES,
   TRADING_DEFAULTS,
@@ -35,21 +34,14 @@ import {
   fetchMarketData,
   fetchHistoricalData,
 } from "../core/market-data";
-import {
-  analyzeTechnicals,
-  formatScoreForAI,
-} from "../core/technical-analysis";
+import { analyzeTechnicals } from "../core/technical-analysis";
 import type { TechnicalSummary } from "../core/technical-analysis";
-import { scoreTechnicals, getRank, calculateRsScores } from "../core/technical-scorer";
-import type { LogicScore } from "../core/technical-scorer";
+import { scoreStock, getRank, formatScoreForAI } from "../core/scoring";
+import type { NewLogicScore } from "../core/scoring";
 import {
   getContrarianHistoryBatch,
   calculateContrarianBonus,
 } from "../core/contrarian-analyzer";
-import { detectChartPatterns } from "../lib/chart-patterns";
-import type { ChartPatternResult } from "../lib/chart-patterns";
-import { analyzeSingleCandle } from "../lib/candlestick-patterns";
-import type { PatternResult } from "../lib/candlestick-patterns";
 import { assessMarket, reviewStocks } from "../core/ai-decision";
 import type { MarketDataInput, StockReviewCandidateInput } from "../core/ai-decision";
 import {
@@ -71,10 +63,6 @@ import {
   calculateSectorMomentum,
   getNewsSectorSentiment,
 } from "../core/sector-analyzer";
-import {
-  aggregateDailyToWeekly,
-  analyzeWeeklyTrend,
-} from "../lib/technical-indicators";
 import type {
   SectorMomentum,
   NewsSectorSentiment,
@@ -89,9 +77,7 @@ interface ScoredCandidate {
   tickerCode: string;
   name: string;
   summary: TechnicalSummary;
-  score: LogicScore;
-  chartPatterns: ChartPatternResult[];
-  candlestickPattern: PatternResult | null;
+  score: NewLogicScore;
   newsContext?: string;
 }
 
@@ -210,7 +196,6 @@ ${sectorText || "  特になし"}`;
       const levelOrder: Record<string, number> = { normal: 0, elevated: 1, high: 2, crisis: 3 };
       if (levelOrder[preMarket.minLevel] > levelOrder[regime.level]) {
         console.log(`  → CME乖離率によりレジームを ${regime.level} → ${preMarket.minLevel} に引き上げ`);
-        // 引き上げたレジームで再判定
         if (preMarket.minLevel === "crisis") {
           regime = { ...regime, level: "crisis", maxPositions: 0, minRank: null, shouldHaltTrading: true, reason: `${regime.reason} + ${preMarket.reason}` };
         } else if (preMarket.minLevel === "elevated" && regime.level === "normal") {
@@ -229,8 +214,7 @@ ${sectorText || "  特になし"}`;
   );
   console.log(`[1.8.1/5] 戦略決定: ${strategyDecision.strategy}（${strategyDecision.reason}）`);
 
-  // VIX ≥ 30: 既存スイングポジションの戦略をday_tradeに切替（ギャップダウンでSLが機能しないリスク）
-  // 14:50にposition-monitorがday_tradeとして強制決済する
+  // VIX ≥ 30: 既存スイングポジションの戦略をday_tradeに切替
   if (marketData.vix.price >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
     const updated = await prisma.tradingPosition.updateMany({
       where: { status: "open", strategy: "swing" },
@@ -445,11 +429,7 @@ ${sectorText || "  特になし"}`;
 
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 
-  // === Pass 1.5: RS スコア事前計算 ===
-  const rsScoreMap = calculateRsScoresFromCandidates(candidates);
-  console.log(`  RS スコア算出: ${rsScoreMap.size}銘柄`);
-
-  // テクニカル分析 + パターン検出 + スコアリング（並列、バッチ制御）
+  // テクニカル分析 + スコアリング（並列、バッチ制御）
   const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
   const scoredCandidates: ScoredCandidate[] = [];
 
@@ -470,53 +450,16 @@ ${sectorText || "  特になし"}`;
             // テクニカル分析
             const summary = analyzeTechnicals(historical);
 
-            // チャートパターン検出（oldest-first を期待）
-            const historicalOldestFirst = [...historical].reverse().map((d) => ({
-              date: d.date,
-              open: d.open,
-              high: d.high,
-              low: d.low,
-              close: d.close,
-            }));
-            const chartPatterns = detectChartPatterns(historicalOldestFirst);
-
-            // ローソク足パターン検出（最新のローソク足）
-            const latestCandle = {
-              date: historical[0].date,
-              open: historical[0].open,
-              high: historical[0].high,
-              low: historical[0].low,
-              close: historical[0].close,
-            };
-            const candlestickPattern = analyzeSingleCandle(latestCandle);
-
-            // 週足トレンド分析（volume含むoldest-firstデータが必要）
-            const weeklyBars = aggregateDailyToWeekly([...historical].reverse());
-            const weeklyTrend =
-              weeklyBars.length >= SCORING.WEEKLY_TREND.MIN_WEEKLY_BARS
-                ? analyzeWeeklyTrend(weeklyBars)
-                : null;
-
-            // スコアリング
-            const score = scoreTechnicals({
-              summary,
-              chartPatterns,
-              candlestickPattern,
+            // スコアリング（3カテゴリ: トレンド品質+エントリータイミング+リスク品質）
+            const score = scoreStock({
               historicalData: historical,
               latestPrice: Number(stock.latestPrice),
               latestVolume: Number(stock.latestVolume),
               weeklyVolatility: stock.volatility ? Number(stock.volatility) : null,
-              weeklyTrend,
-              fundamentals: {
-                per: stock.per ? Number(stock.per) : null,
-                pbr: stock.pbr ? Number(stock.pbr) : null,
-                eps: stock.eps ? Number(stock.eps) : null,
-                marketCap: stock.marketCap ? Number(stock.marketCap) : null,
-                latestPrice: Number(stock.latestPrice),
-              },
               nextEarningsDate: stock.nextEarningsDate,
               exDividendDate: stock.exDividendDate,
-              rsScore: rsScoreMap.get(stock.tickerCode) ?? 0,
+              avgVolume25: summary.volumeAnalysis.avgVolume20,
+              summary,
             });
 
             return {
@@ -524,8 +467,6 @@ ${sectorText || "  特になし"}`;
               name: stock.name,
               summary,
               score,
-              chartPatterns,
-              candlestickPattern,
             } as ScoredCandidate;
           } catch (error) {
             console.error(
@@ -603,7 +544,7 @@ ${sectorText || "  特になし"}`;
 
   // レジームによるランク制限
   if (regime.minRank) {
-    const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 };
+    const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2, C: 3, D: 4 };
     const minRankOrder = rankOrder[regime.minRank];
     const beforeCount = filtered.length;
     filtered = filtered.filter((c) => rankOrder[c.score.rank] <= minRankOrder);
@@ -667,12 +608,12 @@ ${sectorText || "  特になし"}`;
   );
 
   // スコア分布ログ
-  const rankCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0 };
+  const rankCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0 };
   for (const c of qualified) {
     rankCounts[c.score.rank]++;
   }
   console.log(
-    `  ランク分布: S=${rankCounts.S} A=${rankCounts.A} B=${rankCounts.B} C=${rankCounts.C}`,
+    `  ランク分布: S=${rankCounts.S} A=${rankCounts.A} B=${rankCounts.B} C=${rankCounts.C} D=${rankCounts.D}`,
   );
 
   // 銘柄別ニュースコンテキストを添付
@@ -706,33 +647,23 @@ ${sectorText || "  特になし"}`;
     tickerCode: c.tickerCode,
     totalScore: c.score.totalScore,
     rank: c.score.rank,
-    technicalScore: c.score.technical.total,
-    patternScore: c.score.pattern.total,
-    liquidityScore: c.score.liquidity.total,
-    fundamentalScore: c.score.fundamental.total,
-    technicalBreakdown: {
-      rsi: c.score.technical.rsi,
-      ma: c.score.technical.ma,
-      volume: c.score.technical.volume,
-      volumeDirection: c.score.technical.volumeDirection,
-      macd: c.score.technical.macd,
-      rs: c.score.technical.rs,
-      weeklyTrendPenalty: c.score.weeklyTrendPenalty,
+    trendQualityScore: c.score.trendQuality.total,
+    entryTimingScore: c.score.entryTiming.total,
+    riskQualityScore: c.score.riskQuality.total,
+    trendQualityBreakdown: {
+      maAlignment: c.score.trendQuality.maAlignment,
+      weeklyTrend: c.score.trendQuality.weeklyTrend,
+      trendContinuity: c.score.trendQuality.trendContinuity,
     },
-    patternBreakdown: {
-      chart: c.score.pattern.chart,
-      candlestick: c.score.pattern.candlestick,
+    entryTimingBreakdown: {
+      pullbackDepth: c.score.entryTiming.pullbackDepth,
+      breakout: c.score.entryTiming.breakout,
+      candlestickSignal: c.score.entryTiming.candlestickSignal,
     },
-    liquidityBreakdown: {
-      tradingValue: c.score.liquidity.tradingValue,
-      spreadProxy: c.score.liquidity.spreadProxy,
-      stability: c.score.liquidity.stability,
-    },
-    fundamentalBreakdown: {
-      per: c.score.fundamental.per,
-      pbr: c.score.fundamental.pbr,
-      profitability: c.score.fundamental.profitability,
-      marketCap: c.score.fundamental.marketCap,
+    riskQualityBreakdown: {
+      atrStability: c.score.riskQuality.atrStability,
+      rangeContraction: c.score.riskQuality.rangeContraction,
+      volumeStability: c.score.riskQuality.volumeStability,
     },
     isDisqualified: false,
     contrarianBonus: contrarianBonusMap.get(c.tickerCode)?.bonus ?? 0,
@@ -906,31 +837,6 @@ ${sectorText || "  特になし"}`;
   }
 
   console.log("=== Market Scanner 終了 ===");
-}
-
-function calculateRsScoresFromCandidates(
-  candidates: { tickerCode: string; jpxSectorName: string | null; weekChangeRate: unknown }[],
-): Map<string, number> {
-  // jpxSectorName + getSectorGroup() でセクター分類（sector-analyzerと統一）
-  const sectorMap: Record<string, number[]> = {};
-  const rsInput: { tickerCode: string; weekChangeRate: number | null; sector: string }[] = [];
-
-  for (const c of candidates) {
-    const sector = getSectorGroup(c.jpxSectorName) ?? "その他";
-    const rate = c.weekChangeRate != null ? Number(c.weekChangeRate) : null;
-    rsInput.push({ tickerCode: c.tickerCode, weekChangeRate: rate, sector });
-    if (rate != null) {
-      if (!sectorMap[sector]) sectorMap[sector] = [];
-      sectorMap[sector].push(rate);
-    }
-  }
-
-  const sectorAvgs: Record<string, number> = {};
-  for (const [sector, rates] of Object.entries(sectorMap)) {
-    sectorAvgs[sector] = rates.reduce((a, b) => a + b, 0) / rates.length;
-  }
-
-  return calculateRsScores(rsInput, sectorAvgs);
 }
 
 const isDirectRun = process.argv[1]?.includes("market-scanner");

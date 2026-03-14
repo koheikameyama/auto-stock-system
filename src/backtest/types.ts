@@ -44,7 +44,7 @@ export interface SimulatedPosition {
   takeProfitPrice: number;
   stopLossPrice: number;
   quantity: number;
-  rank: "S" | "A" | "B" | "C";
+  rank: "S" | "A" | "B" | "C" | "D";
   score: number;
   regime: RegimeLevel | null;
   maxHighDuringHold: number;

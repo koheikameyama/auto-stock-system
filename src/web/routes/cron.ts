@@ -21,7 +21,7 @@ import { main as runEod } from "../../jobs/end-of-day";
 import { main as runDailyBacktest } from "../../jobs/daily-backtest";
 import { main as runDelistingSync } from "../../jobs/jpx-delisting-sync";
 import { main as runMarketScanner } from "../../jobs/market-scanner";
-import { main as runGhostReview } from "../../jobs/ghost-review";
+import { main as runScoringAccuracy } from "../../jobs/scoring-accuracy";
 import { main as runDefensiveExitFollowup } from "../../jobs/defensive-exit-followup";
 import { main as runUnfilledOrderFollowup } from "../../jobs/unfilled-order-followup";
 import { main as runDataCleanup } from "../../jobs/data-cleanup";
@@ -45,7 +45,7 @@ const JOBS: Record<string, JobDef> = {
   "end-of-day": { fn: runEod, requiresMarketDay: true },
   "daily-backtest": { fn: runDailyBacktest, requiresMarketDay: true },
   "market-scanner": { fn: runMarketScanner, requiresMarketDay: true },
-  "ghost-review": { fn: runGhostReview, requiresMarketDay: true },
+  "scoring-accuracy": { fn: runScoringAccuracy, requiresMarketDay: true },
   "defensive-exit-followup": { fn: runDefensiveExitFollowup, requiresMarketDay: true },
   "unfilled-order-followup": { fn: runUnfilledOrderFollowup, requiresMarketDay: true },
   "jpx-delisting-sync": { fn: runDelistingSync, requiresMarketDay: false },

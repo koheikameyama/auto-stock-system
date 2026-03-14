@@ -22,10 +22,9 @@ export interface ModalAnalysis {
   scoring: {
     totalScore: number;
     rank: string;
-    technicalScore: number;
-    patternScore: number;
-    liquidityScore: number;
-    fundamentalScore: number;
+    trendQualityScore: number;
+    entryTimingScore: number;
+    riskQualityScore: number;
     isDisqualified: boolean;
     disqualifyReason: string | null;
     aiDecision: string | null;
@@ -418,10 +417,9 @@ function scoringSection(
           })()
         : ""}
     </div>
-    ${scoreBar(tt("テクニカル", "チャート分析（RSI・MACD等）による評価"), scoring.technicalScore, 40, "#3b82f6")}
-    ${scoreBar(tt("パターン", "ローソク足・チャートパターンによる評価"), scoring.patternScore, 20, "#a855f7")}
-    ${scoreBar(tt("流動性", "出来高・売買代金による売買しやすさの評価"), scoring.liquidityScore, 25, "#22c55e")}
-    ${scoreBar(tt("ファンダ", "PER・PBR・ROE等の財務指標による評価"), scoring.fundamentalScore, 15, "#f59e0b")}`;
+    ${scoreBar(tt("トレンド品質", "MA整列・週足トレンド・トレンド継続性の評価"), scoring.trendQualityScore, 40, "#3b82f6")}
+    ${scoreBar(tt("エントリー", "押し目深さ・ブレイクアウト・ローソク足シグナルの評価"), scoring.entryTimingScore, 35, "#a855f7")}
+    ${scoreBar(tt("リスク品質", "ATR安定性・レンジ収束・出来高安定性の評価"), scoring.riskQualityScore, 25, "#22c55e")}`;
 }
 
 // ========================================

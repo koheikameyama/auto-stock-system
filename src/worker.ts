@@ -115,7 +115,7 @@ function nowJST(): string {
 // ※ position-monitor のみ Worker cron で実行
 // ※ バッチジョブ（order-manager, midday-reassessment, end-of-day,
 //   daily-backtest, jpx-delisting-sync）は cron-job.org → /api/cron/* に移行
-// ※ news-collector, market-scanner, ghost-review, weekly-review は
+// ※ news-collector, market-scanner, scoring-accuracy, weekly-review は
 //   GitHub Actions cron に移行済み（KOH-296）
 const schedules = [
   // 9:20-11:49, 12:50-15:39 毎分 ポジション監視（平日）

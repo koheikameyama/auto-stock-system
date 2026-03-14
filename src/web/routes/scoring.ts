@@ -47,52 +47,35 @@ function reasonBadge(reason: string | null) {
 
 /** 内訳行を生成 */
 function breakdownDetail(
-  technical: Record<string, number> | null,
-  pattern: Record<string, number> | null,
-  liquidity: Record<string, number> | null,
-  fundamental: Record<string, number> | null,
+  trendQuality: Record<string, number> | null,
+  entryTiming: Record<string, number> | null,
+  riskQuality: Record<string, number> | null,
 ) {
   const items: string[] = [];
 
-  if (technical) {
+  if (trendQuality) {
     const parts = [];
-    if (technical.rsi != null) parts.push(`RSI:${technical.rsi}`);
-    if (technical.ma != null) parts.push(`MA:${technical.ma}`);
-    if (technical.volume != null) parts.push(`出来高:${technical.volume}`);
-    if (technical.macd != null) parts.push(`MACD:${technical.macd}`);
-    if (technical.rs != null) parts.push(`RS:${technical.rs}`);
-    if (technical.volumeDirection != null) parts.push(`方向:${technical.volumeDirection}`);
-    if (technical.weeklyTrendPenalty) parts.push(`週足減点:${technical.weeklyTrendPenalty}`);
-    if (parts.length > 0) items.push(`技術: ${parts.join(" / ")}`);
+    if (trendQuality.maAlignment != null) parts.push(`MA整列:${trendQuality.maAlignment}`);
+    if (trendQuality.weeklyTrend != null) parts.push(`週足:${trendQuality.weeklyTrend}`);
+    if (trendQuality.trendContinuity != null) parts.push(`継続:${trendQuality.trendContinuity}`);
+    if (parts.length > 0) items.push(`トレンド: ${parts.join(" / ")}`);
   }
-  if (pattern) {
+  if (entryTiming) {
     const parts = [];
-    if (pattern.chart != null) parts.push(`チャート:${pattern.chart}`);
-    if (pattern.candlestick != null) parts.push(`ローソク:${pattern.candlestick}`);
-    if (parts.length > 0) items.push(`パターン: ${parts.join(" / ")}`);
+    if (entryTiming.pullbackDepth != null) parts.push(`押し目:${entryTiming.pullbackDepth}`);
+    if (entryTiming.breakout != null) parts.push(`ブレイク:${entryTiming.breakout}`);
+    if (entryTiming.candlestickSignal != null) parts.push(`ローソク:${entryTiming.candlestickSignal}`);
+    if (parts.length > 0) items.push(`エントリー: ${parts.join(" / ")}`);
   }
-  if (liquidity) {
+  if (riskQuality) {
     const parts = [];
-    if (liquidity.tradingValue != null) parts.push(`売買代金:${liquidity.tradingValue}`);
-    if (liquidity.spreadProxy != null) parts.push(`スプレッド:${liquidity.spreadProxy}`);
-    if (liquidity.stability != null) parts.push(`安定性:${liquidity.stability}`);
-    if (parts.length > 0) items.push(`流動性: ${parts.join(" / ")}`);
-  }
-  if (fundamental) {
-    const parts = [];
-    if (fundamental.per != null) parts.push(`PER:${fundamental.per}`);
-    if (fundamental.pbr != null) parts.push(`PBR:${fundamental.pbr}`);
-    if (fundamental.profitability != null) parts.push(`収益性:${fundamental.profitability}`);
-    if (fundamental.marketCap != null) parts.push(`時価総額:${fundamental.marketCap}`);
-    if (parts.length > 0) items.push(`ファンダ: ${parts.join(" / ")}`);
+    if (riskQuality.atrStability != null) parts.push(`ATR安定:${riskQuality.atrStability}`);
+    if (riskQuality.rangeContraction != null) parts.push(`収束:${riskQuality.rangeContraction}`);
+    if (riskQuality.volumeStability != null) parts.push(`出来高安定:${riskQuality.volumeStability}`);
+    if (parts.length > 0) items.push(`リスク: ${parts.join(" / ")}`);
   }
 
   return items.join("　|　");
-}
-
-/** カテゴリスコアをコンパクトに表示 */
-function scoreBreakdownCompact(tech: number, pat: number, liq: number, fund: number) {
-  return html`<span style="font-size:0.8rem">技<b>${tech}</b> パ<b>${pat}</b> 流<b>${liq}</b> フ<b>${fund}</b></span>`;
 }
 
 // ---- 日付別一覧 ----
@@ -127,7 +110,7 @@ app.get("/", async (c) => {
   const nameMap = new Map(stocks.map((s) => [s.tickerCode, s.name]));
 
   // サマリー集計
-  const rankCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0 };
+  const rankCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0 };
   let disqualifiedCount = 0;
   for (const r of records) {
     rankCounts[r.rank] = (rankCounts[r.rank] ?? 0) + 1;
@@ -155,6 +138,7 @@ app.get("/", async (c) => {
           <span style="color:#3b82f6;margin-left:4px">A:${rankCounts.A ?? 0}</span>
           <span style="color:#22c55e;margin-left:4px">B:${rankCounts.B ?? 0}</span>
           <span style="color:#94a3b8;margin-left:4px">C:${rankCounts.C ?? 0}</span>
+          <span style="color:#64748b;margin-left:4px">D:${rankCounts.D ?? 0}</span>
         </div>
       </div>
       <div>
@@ -168,10 +152,9 @@ app.get("/", async (c) => {
       ? records.map((r) => {
           const name = nameMap.get(r.tickerCode) ?? "";
           const detail = breakdownDetail(
-            r.technicalBreakdown as Record<string, number> | null,
-            r.patternBreakdown as Record<string, number> | null,
-            r.liquidityBreakdown as Record<string, number> | null,
-            r.fundamentalBreakdown as Record<string, number> | null,
+            r.trendQualityBreakdown as Record<string, number> | null,
+            r.entryTimingBreakdown as Record<string, number> | null,
+            r.riskQualityBreakdown as Record<string, number> | null,
           );
           const cardOpacity = r.isDisqualified ? "opacity:0.5;" : "";
           return html`
@@ -191,10 +174,9 @@ app.get("/", async (c) => {
               <!-- カテゴリスコア + AI判定 -->
               <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.8rem;color:#94a3b8">
                 <div>
-                  技<span style="color:#e2e8f0;font-weight:600">${r.technicalScore}</span>
-                  パ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.patternScore}</span>
-                  流<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.liquidityScore}</span>
-                  フ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.fundamentalScore}</span>
+                  趨<span style="color:#e2e8f0;font-weight:600">${r.trendQualityScore}</span>
+                  入<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.entryTimingScore}</span>
+                  危<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.riskQualityScore}</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:0.35rem">
                   ${aiDecisionBadge(r.aiDecision)}
@@ -272,10 +254,9 @@ app.get("/:tickerCode", async (c) => {
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.8rem;color:#94a3b8">
                 <div>
-                  技<span style="color:#e2e8f0;font-weight:600">${r.technicalScore}</span>
-                  パ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.patternScore}</span>
-                  流<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.liquidityScore}</span>
-                  フ<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.fundamentalScore}</span>
+                  趨<span style="color:#e2e8f0;font-weight:600">${r.trendQualityScore}</span>
+                  入<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.entryTimingScore}</span>
+                  危<span style="color:#e2e8f0;font-weight:600;margin-left:0.35rem">${r.riskQualityScore}</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:0.35rem">
                   ${aiDecisionBadge(r.aiDecision)}

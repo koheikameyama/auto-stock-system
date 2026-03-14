@@ -10,7 +10,7 @@ import {
   SUPPORT_RESISTANCE,
   MA_ALIGNMENT,
   TRENDLINE_SCORE,
-  SCORING_V1 as SCORING,
+  TECHNICAL_MIN_DATA,
 } from "./constants";
 
 interface PriceData {
@@ -925,7 +925,7 @@ export function analyzeWeeklyTrend(
 ): WeeklyTrendResult {
   const noTrend: WeeklyTrendResult = { trend: "none", sma13: null, sma26: null };
 
-  if (weeklyBars.length < SCORING.WEEKLY_TREND.MIN_WEEKLY_BARS) {
+  if (weeklyBars.length < TECHNICAL_MIN_DATA.WEEKLY_MIN_BARS) {
     return noTrend;
   }
 

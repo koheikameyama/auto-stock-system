@@ -366,58 +366,104 @@ export async function notifyContrarianWinners(data: {
   });
 }
 
-/** ゴースト・トレーディング分析通知 */
-export async function notifyGhostReview(data: {
-  totalRejected: number;
-  totalProfitable: number;
-  totalLoss: number;
-  avgProfitPct: number;
-  topMissed: Array<{
+/** スコアリング精度分析 日次通知 */
+export async function notifyScoringAccuracy(data: {
+  confusionMatrix: {
+    tp: number;
+    fp: number;
+    fn: number;
+    tn: number;
+    precision: number | null;
+    recall: number | null;
+    f1: number | null;
+  };
+  byRank: Record<string, { tp: number; fp: number; fn: number; tn: number; precision: number | null }>;
+  fpList: Array<{
     tickerCode: string;
     score: number;
     rank: string;
+    profitPct: number;
+    misjudgmentType?: string;
+  }>;
+  fnList: Array<{
+    tickerCode: string;
+    score: number;
+    rank: string;
+    profitPct: number;
     rejectionReason: string;
-    ghostProfitPct: number;
     misjudgmentType?: string;
   }>;
 }): Promise<void> {
+  const { tp, fp, fn, tn, precision, recall, f1 } = data.confusionMatrix;
+
+  const precisionStr = precision != null ? `${precision.toFixed(1)}%` : "N/A";
+  const recallStr = recall != null ? `${recall.toFixed(1)}%` : "N/A";
+  const f1Str = f1 != null ? `${f1.toFixed(1)}%` : "N/A";
+
+  // ランク別 Precision
+  const rankLines = Object.entries(data.byRank)
+    .filter(([, v]) => v.tp + v.fp > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([rank, v]) => {
+      const total = v.tp + v.fp;
+      const pStr = v.precision != null ? `${v.precision.toFixed(1)}%` : "N/A";
+      return `${rank}: ${pStr} (${v.tp}/${total})`;
+    })
+    .join(" | ");
+
   const reasonLabel: Record<string, string> = {
     below_threshold: "閾値未達",
     ai_no_go: "AI見送り",
     disqualified: "即死ルール",
+    market_halted: "市場停止",
   };
 
-  const missedList =
-    data.topMissed
+  // FP注目銘柄
+  const fpLines =
+    data.fpList
       .map(
         (m, i) =>
-          `${i + 1}. ${m.tickerCode} [${m.rank}:${m.score}点] +${m.ghostProfitPct.toFixed(2)}% (${reasonLabel[m.rejectionReason] || m.rejectionReason})${m.misjudgmentType ? ` → ${m.misjudgmentType}` : ""}`,
+          `${i + 1}. ${m.tickerCode} [${m.rank}:${m.score}点] ${m.profitPct.toFixed(2)}%${m.misjudgmentType ? ` → ${m.misjudgmentType}` : ""}`,
       )
-      .join("\n") || "利益が出ていた見送り銘柄はありませんでした";
+      .join("\n") || "なし";
+
+  // FN注目銘柄
+  const fnLines =
+    data.fnList
+      .map(
+        (m, i) =>
+          `${i + 1}. ${m.tickerCode} [${m.rank}:${m.score}点] +${m.profitPct.toFixed(2)}% (${reasonLabel[m.rejectionReason] || m.rejectionReason})${m.misjudgmentType ? ` → ${m.misjudgmentType}` : ""}`,
+      )
+      .join("\n") || "なし";
+
+  const message = [
+    "━━ 精度メトリクス ━━",
+    `Precision: ${precisionStr} | Recall: ${recallStr} | F1: ${f1Str}`,
+    "",
+    "━━ 4象限 ━━",
+    `✅ TP（買い→上昇）: ${tp}件  |  ❌ FP（買い→下落）: ${fp}件`,
+    `⚠️ FN（見送り→上昇）: ${fn}件 | ✅ TN（見送り→下落）: ${tn}件`,
+    "",
+    rankLines ? `━━ ランク別 Precision ━━\n${rankLines}` : "",
+    "",
+    "━━ FP注目銘柄（買ったが下落） ━━",
+    fpLines,
+    "",
+    "━━ FN注目銘柄（見逃し） ━━",
+    fnLines,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   await notifySlack({
-    title: `👻 ゴースト・トレード分析: ${data.totalProfitable}件の機会損失`,
-    message: missedList,
-    color: data.totalProfitable > 0 ? "warning" : "good",
+    title: "📊 スコアリング精度分析",
+    message,
+    color: fp > 0 || fn > 0 ? "warning" : "good",
     fields: [
-      {
-        title: "見送り銘柄数",
-        value: `${data.totalRejected}件`,
-        short: true,
-      },
-      {
-        title: "利益/損失",
-        value: `📈${data.totalProfitable}件 / 📉${data.totalLoss}件`,
-        short: true,
-      },
-      {
-        title: "平均利益率(利益銘柄)",
-        value:
-          data.totalProfitable > 0
-            ? `+${data.avgProfitPct.toFixed(2)}%`
-            : "N/A",
-        short: true,
-      },
+      { title: "Precision", value: precisionStr, short: true },
+      { title: "Recall", value: recallStr, short: true },
+      { title: "総スコアリング数", value: `${tp + fp + fn + tn}件`, short: true },
+      { title: "F1", value: f1Str, short: true },
     ],
   });
 }
@@ -446,6 +492,10 @@ export async function notifyScoringAccuracyReport(data: {
   }>;
   weeklyStats: { positiveRate: number; avgProfit: number };
   monthlyStats: { positiveRate: number; avgProfit: number };
+  precisionTrend: { weekly: number | null; monthly: number | null };
+  recallTrend: { weekly: number | null; monthly: number | null };
+  f1Trend: { weekly: number | null; monthly: number | null };
+  fpPatternDist: Record<string, number>;
 }): Promise<void> {
   const reasonLabel: Record<string, string> = {
     below_threshold: "閾値未達",
@@ -497,6 +547,31 @@ export async function notifyScoringAccuracyReport(data: {
     `月次: 上昇率${data.monthlyStats.positiveRate.toFixed(0)}% / 平均${data.monthlyStats.avgProfit >= 0 ? "+" : ""}${data.monthlyStats.avgProfit.toFixed(2)}%`,
   ].join("\n");
 
+  const fmtPct = (v: number | null) =>
+    v != null ? `${v.toFixed(1)}%` : "N/A";
+
+  const matrixTrend = [
+    "━━ 4象限メトリクス推移 ━━",
+    `Precision: 週次${fmtPct(data.precisionTrend.weekly)} / 月次${fmtPct(data.precisionTrend.monthly)}`,
+    `Recall: 週次${fmtPct(data.recallTrend.weekly)} / 月次${fmtPct(data.recallTrend.monthly)}`,
+    `F1: 週次${fmtPct(data.f1Trend.weekly)} / 月次${fmtPct(data.f1Trend.monthly)}`,
+  ].join("\n");
+
+  const fpPatternLabel: Record<string, string> = {
+    score_inflated: "スコア過大評価",
+    ai_overconfident: "AI楽観",
+    market_shift: "市場変化",
+    acceptable_loss: "許容範囲",
+  };
+  const fpPatternEntries = Object.entries(data.fpPatternDist);
+  const fpPatternLines = fpPatternEntries.length > 0
+    ? fpPatternEntries
+        .sort(([, a], [, b]) => b - a)
+        .map(([type, count]) => `${fpPatternLabel[type] || type}: ${count}件`)
+        .join(" / ")
+    : "データなし";
+  const fpPatternSection = `━━ FPパターン分布 ━━\n${fpPatternLines}`;
+
   const message = [
     "━━ カテゴリ別弱点 ━━",
     categoryLines || "データなし",
@@ -509,6 +584,10 @@ export async function notifyScoringAccuracyReport(data: {
     "",
     "━━ トレンド ━━",
     trendLines,
+    "",
+    matrixTrend,
+    "",
+    fpPatternSection,
   ].join("\n");
 
   // Sランクの上昇率を取得
