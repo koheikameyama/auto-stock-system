@@ -162,3 +162,50 @@ function computeAtr14Series(data: OHLCVData[]): number[] {
 }
 
 type OHLCVData = ScoringInput["historicalData"][0];
+
+/**
+ * NewLogicScore をAIレビュー向けにフォーマット
+ */
+export function formatScoreForAI(
+  score: NewLogicScore,
+  summary: { rsi: number | null; sma25: number | null; atr14: number | null },
+): string {
+  const lines: string[] = [];
+  lines.push(`【総合スコア】${score.totalScore}/100（${score.rank}ランク）`);
+
+  if (score.isDisqualified) {
+    lines.push(`【即死ルール】${score.disqualifyReason}`);
+    return lines.join("\n");
+  }
+
+  lines.push(`【カテゴリ別】`);
+
+  // トレンド品質（40点）
+  lines.push(`  トレンド品質: ${score.trendQuality.total}/${SCORING.CATEGORY_MAX.TREND_QUALITY}`);
+  lines.push(`    MA整列: ${score.trendQuality.maAlignment}/${SCORING.SUB_MAX.MA_ALIGNMENT}`);
+  lines.push(`    週足トレンド: ${score.trendQuality.weeklyTrend}/${SCORING.SUB_MAX.WEEKLY_TREND}`);
+  lines.push(`    トレンド継続: ${score.trendQuality.trendContinuity}/${SCORING.SUB_MAX.TREND_CONTINUITY}`);
+
+  // エントリータイミング（35点）
+  lines.push(`  エントリータイミング: ${score.entryTiming.total}/${SCORING.CATEGORY_MAX.ENTRY_TIMING}`);
+  lines.push(`    押し目深さ: ${score.entryTiming.pullbackDepth}/${SCORING.SUB_MAX.PULLBACK_DEPTH}`);
+  lines.push(`    ブレイクアウト: ${score.entryTiming.breakout}/${SCORING.SUB_MAX.BREAKOUT}`);
+  lines.push(`    ローソク足シグナル: ${score.entryTiming.candlestickSignal}/${SCORING.SUB_MAX.CANDLESTICK_SIGNAL}`);
+
+  // リスク品質（25点）
+  lines.push(`  リスク品質: ${score.riskQuality.total}/${SCORING.CATEGORY_MAX.RISK_QUALITY}`);
+  lines.push(`    ATR安定性: ${score.riskQuality.atrStability}/${SCORING.SUB_MAX.ATR_STABILITY}`);
+  lines.push(`    レンジ収束: ${score.riskQuality.rangeContraction}/${SCORING.SUB_MAX.RANGE_CONTRACTION}`);
+  lines.push(`    出来高安定: ${score.riskQuality.volumeStability}/${SCORING.SUB_MAX.VOLUME_STABILITY}`);
+
+  // テクニカル参考値
+  const refParts: string[] = [];
+  if (summary.rsi != null) refParts.push(`RSI=${summary.rsi}`);
+  if (summary.sma25 != null) refParts.push(`SMA25=${summary.sma25.toFixed(0)}`);
+  if (summary.atr14 != null) refParts.push(`ATR14=${summary.atr14.toFixed(1)}`);
+  if (refParts.length > 0) {
+    lines.push(`【参考指標】${refParts.join(" / ")}`);
+  }
+
+  return lines.join("\n");
+}

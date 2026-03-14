@@ -13,7 +13,7 @@ import { html } from "hono/html";
 import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
 import { getTodayForDB, getDaysAgoForDB } from "../../lib/date-utils";
-import { CONTRARIAN, SCORING_ACCURACY, SCORING_V1 as SCORING, getSectorGroup } from "../../lib/constants";
+import { CONTRARIAN, SCORING_ACCURACY, SCORING, getSectorGroup } from "../../lib/constants";
 import { calculateContrarianBonus } from "../../core/contrarian-analyzer";
 import { layout } from "../views/layout";
 import {
@@ -83,9 +83,9 @@ app.get("/", async (c) => {
         tickerCode: true,
         ghostProfitPct: true,
         totalScore: true,
-        technicalScore: true,
-        patternScore: true,
-        liquidityScore: true,
+        trendQualityScore: true,
+        entryTimingScore: true,
+        riskQualityScore: true,
         rank: true,
         closingPrice: true,
       },
@@ -107,9 +107,9 @@ app.get("/", async (c) => {
       ghostProfitPct: true,
       nextDayProfitPct: true,
       totalScore: true,
-      technicalScore: true,
-      patternScore: true,
-      liquidityScore: true,
+      trendQualityScore: true,
+      entryTimingScore: true,
+      riskQualityScore: true,
       rank: true,
       closingPrice: true,
       rejectionReason: true,
@@ -130,9 +130,9 @@ app.get("/", async (c) => {
       date: true,
       ghostProfitPct: true,
       totalScore: true,
-      technicalScore: true,
-      patternScore: true,
-      liquidityScore: true,
+      trendQualityScore: true,
+      entryTimingScore: true,
+      riskQualityScore: true,
       rank: true,
       rejectionReason: true,
     },
@@ -230,7 +230,7 @@ app.get("/", async (c) => {
 
   const avgOf = (
     records: typeof analyzedRecords,
-    key: "totalScore" | "technicalScore" | "patternScore" | "liquidityScore",
+    key: "totalScore" | "trendQualityScore" | "entryTimingScore" | "riskQualityScore",
   ) =>
     records.length > 0
       ? Math.round(
@@ -260,12 +260,12 @@ app.get("/", async (c) => {
     losers: losers.length,
     winnerAvgScore: avgOf(winners, "totalScore"),
     loserAvgScore: avgOf(losers, "totalScore"),
-    winnerAvgTech: avgOf(winners, "technicalScore"),
-    loserAvgTech: avgOf(losers, "technicalScore"),
-    winnerAvgPattern: avgOf(winners, "patternScore"),
-    loserAvgPattern: avgOf(losers, "patternScore"),
-    winnerAvgLiquidity: avgOf(winners, "liquidityScore"),
-    loserAvgLiquidity: avgOf(losers, "liquidityScore"),
+    winnerAvgTrend: avgOf(winners, "trendQualityScore"),
+    loserAvgTrend: avgOf(losers, "trendQualityScore"),
+    winnerAvgEntry: avgOf(winners, "entryTimingScore"),
+    loserAvgEntry: avgOf(losers, "entryTimingScore"),
+    winnerAvgRisk: avgOf(winners, "riskQualityScore"),
+    loserAvgRisk: avgOf(losers, "riskQualityScore"),
     winnerAvgPct: avgPct(winners),
     loserAvgPct: avgPct(losers),
     nextDayContinuationRate,
@@ -341,17 +341,17 @@ app.get("/", async (c) => {
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  const lowScoreAvgTech =
+  const lowScoreAvgTrend =
     lowScoreWinners.length > 0
-      ? Math.round(lowScoreWinners.reduce((s, r) => s + r.technicalScore, 0) / lowScoreWinners.length)
+      ? Math.round(lowScoreWinners.reduce((s, r) => s + r.trendQualityScore, 0) / lowScoreWinners.length)
       : null;
-  const lowScoreAvgPattern =
+  const lowScoreAvgEntry =
     lowScoreWinners.length > 0
-      ? Math.round(lowScoreWinners.reduce((s, r) => s + r.patternScore, 0) / lowScoreWinners.length)
+      ? Math.round(lowScoreWinners.reduce((s, r) => s + r.entryTimingScore, 0) / lowScoreWinners.length)
       : null;
-  const lowScoreAvgLiquidity =
+  const lowScoreAvgRisk =
     lowScoreWinners.length > 0
-      ? Math.round(lowScoreWinners.reduce((s, r) => s + r.liquidityScore, 0) / lowScoreWinners.length)
+      ? Math.round(lowScoreWinners.reduce((s, r) => s + r.riskQualityScore, 0) / lowScoreWinners.length)
       : null;
   const lowScoreAvgPct =
     lowScoreWinners.length > 0
@@ -470,7 +470,7 @@ app.get("/", async (c) => {
               <thead>
                 <tr>
                   <th>銘柄</th>
-                  <th>${tt("スコア", "テクニカル・パターン・流動性を合算した100点満点のスコア")}</th>
+                  <th>${tt("スコア", "トレンド品質・エントリータイミング・リスク品質を合算した100点満点のスコア")}</th>
                   <th>ランク</th>
                   <th>${tt("エントリー", "仮想エントリー価格（市場停止日の始値）")}</th>
                   <th>終値</th>
@@ -684,16 +684,16 @@ app.get("/", async (c) => {
                     <td style="font-weight:600">${trendSummary.winnerAvgScore ?? "-"}</td>
                   </tr>
                   <tr>
-                    <td style="color:#94a3b8">技術</td>
-                    <td>${trendSummary.winnerAvgTech ?? "-"}</td>
+                    <td style="color:#94a3b8">トレンド</td>
+                    <td>${trendSummary.winnerAvgTrend ?? "-"}</td>
                   </tr>
                   <tr>
-                    <td style="color:#94a3b8">パターン</td>
-                    <td>${trendSummary.winnerAvgPattern ?? "-"}</td>
+                    <td style="color:#94a3b8">エントリー</td>
+                    <td>${trendSummary.winnerAvgEntry ?? "-"}</td>
                   </tr>
                   <tr>
-                    <td style="color:#94a3b8">流動性</td>
-                    <td>${trendSummary.winnerAvgLiquidity ?? "-"}</td>
+                    <td style="color:#94a3b8">リスク</td>
+                    <td>${trendSummary.winnerAvgRisk ?? "-"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -719,16 +719,16 @@ app.get("/", async (c) => {
                     <td style="font-weight:600">${trendSummary.loserAvgScore ?? "-"}</td>
                   </tr>
                   <tr>
-                    <td style="color:#94a3b8">技術</td>
-                    <td>${trendSummary.loserAvgTech ?? "-"}</td>
+                    <td style="color:#94a3b8">トレンド</td>
+                    <td>${trendSummary.loserAvgTrend ?? "-"}</td>
                   </tr>
                   <tr>
-                    <td style="color:#94a3b8">パターン</td>
-                    <td>${trendSummary.loserAvgPattern ?? "-"}</td>
+                    <td style="color:#94a3b8">エントリー</td>
+                    <td>${trendSummary.loserAvgEntry ?? "-"}</td>
                   </tr>
                   <tr>
-                    <td style="color:#94a3b8">流動性</td>
-                    <td>${trendSummary.loserAvgLiquidity ?? "-"}</td>
+                    <td style="color:#94a3b8">リスク</td>
+                    <td>${trendSummary.loserAvgRisk ?? "-"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -755,19 +755,19 @@ app.get("/", async (c) => {
                     l: trendSummary.loserAvgScore,
                   },
                   {
-                    label: "技術",
-                    w: trendSummary.winnerAvgTech,
-                    l: trendSummary.loserAvgTech,
+                    label: "トレンド",
+                    w: trendSummary.winnerAvgTrend,
+                    l: trendSummary.loserAvgTrend,
                   },
                   {
-                    label: "パターン",
-                    w: trendSummary.winnerAvgPattern,
-                    l: trendSummary.loserAvgPattern,
+                    label: "エントリー",
+                    w: trendSummary.winnerAvgEntry,
+                    l: trendSummary.loserAvgEntry,
                   },
                   {
-                    label: "流動性",
-                    w: trendSummary.winnerAvgLiquidity,
-                    l: trendSummary.loserAvgLiquidity,
+                    label: "リスク",
+                    w: trendSummary.winnerAvgRisk,
+                    l: trendSummary.loserAvgRisk,
                   },
                 ].map((row) => {
                   const diff =
@@ -903,16 +903,16 @@ app.get("/", async (c) => {
                       </div>
                     </div>
                     <div style="text-align:center">
-                      <div style="color:#94a3b8;font-size:0.75rem">技術avg</div>
-                      <div style="font-weight:600">${lowScoreAvgTech ?? "-"}</div>
+                      <div style="color:#94a3b8;font-size:0.75rem">トレンドavg</div>
+                      <div style="font-weight:600">${lowScoreAvgTrend ?? "-"}</div>
                     </div>
                     <div style="text-align:center">
-                      <div style="color:#94a3b8;font-size:0.75rem">パターンavg</div>
-                      <div style="font-weight:600">${lowScoreAvgPattern ?? "-"}</div>
+                      <div style="color:#94a3b8;font-size:0.75rem">エントリーavg</div>
+                      <div style="font-weight:600">${lowScoreAvgEntry ?? "-"}</div>
                     </div>
                     <div style="text-align:center">
-                      <div style="color:#94a3b8;font-size:0.75rem">流動性avg</div>
-                      <div style="font-weight:600">${lowScoreAvgLiquidity ?? "-"}</div>
+                      <div style="color:#94a3b8;font-size:0.75rem">リスクavg</div>
+                      <div style="font-weight:600">${lowScoreAvgRisk ?? "-"}</div>
                     </div>
                   </div>
                   ${baselineNikkeiAvg != null && lowScoreAvgPct != null

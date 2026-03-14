@@ -61,6 +61,7 @@ export const TECHNICAL_MIN_DATA = {
   BASIC: 2, // analyzeTechnicals の最低要件
   ATR: 15, // ATR(14)計算に必要
   SCANNER_MIN_BARS: 15, // 市場スキャナーの最低要件
+  WEEKLY_MIN_BARS: 14, // 週足トレンド分析に必要な最小バー数
 } as const;
 
 // トレンドラインスコアリングの重み

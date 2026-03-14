@@ -22,15 +22,10 @@ import {
   DEFENSIVE_MODE,
 } from "../lib/constants";
 import { fetchStockQuote, fetchHistoricalData } from "../core/market-data";
-import {
-  analyzeTechnicals,
-  formatScoreForAI,
-} from "../core/technical-analysis";
+import { analyzeTechnicals } from "../core/technical-analysis";
 import type { TechnicalSummary } from "../core/technical-analysis";
-import { scoreTechnicals } from "../core/technical-scorer";
-import type { LogicScore } from "../core/technical-scorer";
-import { detectChartPatterns } from "../lib/chart-patterns";
-import { analyzeSingleCandle } from "../lib/candlestick-patterns";
+import { scoreStock, formatScoreForAI } from "../core/scoring";
+import type { NewLogicScore } from "../core/scoring";
 import { calculateEntryCondition } from "../core/entry-calculator";
 import type { EntryCondition } from "../core/entry-calculator";
 import { reviewTrade } from "../core/ai-decision";
@@ -55,7 +50,7 @@ interface AnalysisResult {
   latestVolume: number;
   quote: { price: number };
   techSummary: TechnicalSummary;
-  score: LogicScore;
+  score: NewLogicScore;
   entryCondition: EntryCondition;
   review: TradeReviewResult;
   newsContext: string | undefined;
@@ -213,32 +208,14 @@ export async function main() {
 
         const techSummary = analyzeTechnicals(historical);
 
-        const historicalOldestFirst = [...historical].reverse().map((d) => ({
-          date: d.date,
-          open: d.open,
-          high: d.high,
-          low: d.low,
-          close: d.close,
-        }));
-        const chartPatterns = detectChartPatterns(historicalOldestFirst);
-
-        const latestCandle = {
-          date: historical[0].date,
-          open: historical[0].open,
-          high: historical[0].high,
-          low: historical[0].low,
-          close: historical[0].close,
-        };
-        const candlestickPattern = analyzeSingleCandle(latestCandle);
-
-        const score = scoreTechnicals({
-          summary: techSummary,
-          chartPatterns,
-          candlestickPattern,
+        // 新3カテゴリスコアリング
+        const score = scoreStock({
           historicalData: historical,
           latestPrice: quote.price,
           latestVolume: Number(stock.latestVolume ?? 0),
           weeklyVolatility: stock.volatility ? Number(stock.volatility) : null,
+          avgVolume25: techSummary.volumeAnalysis.avgVolume20,
+          summary: techSummary,
         });
 
         const strategy = selected.strategy as "day_trade" | "swing";
@@ -314,16 +291,16 @@ export async function main() {
   );
 
   // =========================================
-  // フェーズ2: 直列注文作成（スコア順 → 流動性タイブレーク）
+  // フェーズ2: 直列注文作成（スコア順 → リスク品質タイブレーク）
   // =========================================
   passed.sort((a, b) => {
     // 第1キー: totalScore 降順
     if (b.score.totalScore !== a.score.totalScore) {
       return b.score.totalScore - a.score.totalScore;
     }
-    // 第2キー: 流動性スコア 降順（タイブレーク）
-    if (b.score.liquidity.total !== a.score.liquidity.total) {
-      return b.score.liquidity.total - a.score.liquidity.total;
+    // 第2キー: リスク品質スコア 降順（タイブレーク）
+    if (b.score.riskQuality.total !== a.score.riskQuality.total) {
+      return b.score.riskQuality.total - a.score.riskQuality.total;
     }
     // 第3キー: 出来高実数値 降順
     return b.latestVolume - a.latestVolume;
@@ -346,7 +323,7 @@ export async function main() {
     } = result;
 
     console.log(
-      `\n  [${tickerCode}] スコア: ${score.totalScore}点（${score.rank}） / 流動性: ${score.liquidity.total}点`,
+      `\n  [${tickerCode}] スコア: ${score.totalScore}点（${score.rank}） / リスク品質: ${score.riskQuality.total}点`,
     );
     console.log(
       `    → ロジック算出: 指値¥${entryCondition.limitPrice} / 利確¥${entryCondition.takeProfitPrice} / 損切¥${entryCondition.stopLossPrice} / ${entryCondition.quantity}株 / RR 1:${entryCondition.riskRewardRatio}`,
@@ -452,11 +429,12 @@ export async function main() {
       score: {
         totalScore: score.totalScore,
         rank: score.rank,
-        technical: score.technical,
-        pattern: score.pattern,
-        liquidity: score.liquidity,
-        topPattern: score.topPattern,
-        technicalSignal: score.technicalSignal,
+        gate: score.gate,
+        trendQuality: score.trendQuality,
+        entryTiming: score.entryTiming,
+        riskQuality: score.riskQuality,
+        isDisqualified: score.isDisqualified,
+        disqualifyReason: score.disqualifyReason,
       },
       technicals: {
         rsi: techSummary.rsi,

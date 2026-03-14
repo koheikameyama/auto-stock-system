@@ -24,9 +24,7 @@ import {
   MACD_CONFIG,
   VOLUME_ANALYSIS,
   TECHNICAL_MIN_DATA,
-  SCORING_V1 as SCORING,
 } from "../lib/constants";
-import type { LogicScore } from "./technical-scorer";
 
 // ========================================
 // 型定義
@@ -305,70 +303,3 @@ export function formatTechnicalForAI(summary: TechnicalSummary): string {
   return lines.join("\n");
 }
 
-/**
- * ロジックスコアをAIプロンプト用テキスト（3カテゴリ形式）に変換
- *
- * AIには数値の再計算をさせず、ロジックが算出したスコア内訳を提示する。
- */
-export function formatScoreForAI(
-  score: LogicScore,
-  summary: TechnicalSummary,
-): string {
-  const lines: string[] = [];
-  lines.push(`【総合スコア】${score.totalScore}/100（${score.rank}ランク）`);
-
-  lines.push(`【カテゴリ別】`);
-
-  // テクニカル指標（65点）
-  lines.push(`  テクニカル: ${score.technical.total}/${SCORING.CATEGORY_MAX.TECHNICAL}`);
-  lines.push(
-    `    RSI: ${score.technical.rsi}/${SCORING.SUB_MAX.RSI}${summary.rsi != null ? `（RSI=${summary.rsi}）` : ""}`,
-  );
-  lines.push(`    移動平均: ${score.technical.ma}/${SCORING.SUB_MAX.MA}`);
-  if (score.weeklyTrendPenalty < 0) {
-    lines.push(
-      `      ※週足トレンドペナルティ: ${score.weeklyTrendPenalty}（日足↑と週足↓が矛盾）`,
-    );
-  }
-  const volDirLabel =
-    score.technical.volumeDirection === "accumulation"
-      ? "買い集め"
-      : score.technical.volumeDirection === "distribution"
-        ? "投げ売り"
-        : "中立";
-  lines.push(
-    `    出来高変化: ${score.technical.volume}/${SCORING.SUB_MAX.VOLUME_CHANGE}${summary.volumeAnalysis.volumeRatio ? `（${summary.volumeAnalysis.volumeRatio}倍 / ${volDirLabel}）` : ""}`,
-  );
-  lines.push(
-    `    MACD: ${score.technical.macd}/${SCORING.SUB_MAX.MACD}${summary.macd.macd != null ? `（MACD=${summary.macd.macd} / Signal=${summary.macd.signal} / Hist=${summary.macd.histogram}）` : ""}`,
-  );
-  lines.push(
-    `    相対強度: ${score.technical.rs}/${SCORING.SUB_MAX.RELATIVE_STRENGTH}`,
-  );
-
-  // パターン（15点）
-  lines.push(`  パターン: ${score.pattern.total}/${SCORING.CATEGORY_MAX.PATTERN}`);
-  lines.push(`    チャートパターン: ${score.pattern.chart}/${SCORING.SUB_MAX.CHART_PATTERN}`);
-  if (score.topPattern) {
-    lines.push(
-      `      → ${score.topPattern.name}（${score.topPattern.rank}ランク / 勝率${score.topPattern.winRate}%）`,
-    );
-  }
-  lines.push(`    ローソク足: ${score.pattern.candlestick}/${SCORING.SUB_MAX.CANDLESTICK}`);
-
-  // 流動性（10点）
-  lines.push(`  流動性: ${score.liquidity.total}/${SCORING.CATEGORY_MAX.LIQUIDITY}`);
-  lines.push(`    売買代金: ${score.liquidity.tradingValue}/${SCORING.SUB_MAX.TRADING_VALUE}`);
-  lines.push(`    値幅率: ${score.liquidity.spreadProxy}/${SCORING.SUB_MAX.SPREAD_PROXY}`);
-  lines.push(`    安定性: ${score.liquidity.stability}/${SCORING.SUB_MAX.STABILITY}`);
-
-  // ファンダメンタルズ（10点）
-  lines.push(`  ファンダメンタルズ: ${score.fundamental.total}/${SCORING.CATEGORY_MAX.FUNDAMENTAL}`);
-  lines.push(`    PER: ${score.fundamental.per}/${SCORING.SUB_MAX.PER}`);
-  lines.push(`    PBR: ${score.fundamental.pbr}/${SCORING.SUB_MAX.PBR}`);
-  lines.push(`    収益性: ${score.fundamental.profitability}/${SCORING.SUB_MAX.PROFITABILITY}`);
-  lines.push(`    時価総額: ${score.fundamental.marketCap}/${SCORING.SUB_MAX.MARKET_CAP}`);
-
-  lines.push(`【ロジック判定】${score.technicalSignal}`);
-  return lines.join("\n");
-}

@@ -6,7 +6,7 @@
  */
 
 import type { TechnicalSummary } from "./technical-analysis";
-import type { LogicScore } from "./technical-scorer";
+import type { NewLogicScore } from "./scoring";
 import {
   validateStopLoss,
   calculatePositionSize,
@@ -28,7 +28,7 @@ export interface EntryCondition {
  *
  * @param currentPrice - 現在価格
  * @param summary - テクニカル分析サマリー
- * @param score - テクニカルスコア（未使用だが将来の拡張用）
+ * @param score - スコアリング結果（未使用だが将来の拡張用）
  * @param strategy - 取引戦略
  * @param availableBudget - 利用可能予算
  * @param maxPositionPct - 1銘柄あたり最大投資比率（%）
@@ -37,7 +37,7 @@ export interface EntryCondition {
 export function calculateEntryCondition(
   currentPrice: number,
   summary: TechnicalSummary,
-  _score: LogicScore,
+  _score: NewLogicScore,
   strategy: "day_trade" | "swing",
   availableBudget: number,
   maxPositionPct: number,

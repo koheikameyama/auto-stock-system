@@ -9,21 +9,30 @@ export interface EntrySnapshot {
   score: {
     totalScore: number;
     rank: string;
-    technical: { total: number; rsi: number; ma: number; volume: number; volumeDirection?: string; macd?: number; rs?: number };
-    pattern: { total: number; chart: number; candlestick: number };
-    liquidity: {
-      total: number;
-      tradingValue: number;
-      spreadProxy: number;
-      stability: number;
+    gate: {
+      passed: boolean;
+      failedGate: string | null;
     };
-    topPattern: {
-      name: string;
-      rank: string;
-      winRate: number;
-      signal: string;
-    } | null;
-    technicalSignal: string;
+    trendQuality: {
+      total: number;
+      maAlignment: number;
+      weeklyTrend: number;
+      trendContinuity: number;
+    };
+    entryTiming: {
+      total: number;
+      pullbackDepth: number;
+      breakout: number;
+      candlestickSignal: number;
+    };
+    riskQuality: {
+      total: number;
+      atrStability: number;
+      rangeContraction: number;
+      volumeStability: number;
+    };
+    isDisqualified: boolean;
+    disqualifyReason: string | null;
   };
   technicals: {
     rsi: number | null;
