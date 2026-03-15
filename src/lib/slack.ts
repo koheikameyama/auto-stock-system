@@ -259,6 +259,7 @@ export async function notifyBacktestResult(data: {
     key: string;
     label: string;
     winRate: number;
+    expectancy: number;
     profitFactor: number;
     totalReturnPct: number;
     totalPnl: number;
@@ -270,11 +271,13 @@ export async function notifyBacktestResult(data: {
     oldLabel: string;
     newPf: number;
     newWinRate: number;
+    newExpectancy: number;
     newReturnPct: number;
     newMaxDd: number;
     newTrades: number;
     oldPf: number;
     oldWinRate: number;
+    oldExpectancy: number;
     oldReturnPct: number;
     oldMaxDd: number;
     oldTrades: number;
@@ -291,7 +294,8 @@ export async function notifyBacktestResult(data: {
   if (baseline) {
     const pf = baseline.profitFactor === Infinity ? "∞" : baseline.profitFactor.toFixed(2);
     const sign = baseline.totalReturnPct >= 0 ? "+" : "";
-    lines.push(`*${baseline.label}*: 勝率${baseline.winRate}% | PF ${pf} | ${sign}${baseline.totalReturnPct}% | DD -${baseline.maxDrawdown}% | ${baseline.totalTrades}件`);
+    const expSign = baseline.expectancy >= 0 ? "+" : "";
+    lines.push(`*${baseline.label}*: 期待値${expSign}${baseline.expectancy.toFixed(2)}% | PF ${pf} | ${sign}${baseline.totalReturnPct}% | DD -${baseline.maxDrawdown}% | ${baseline.totalTrades}件`);
     lines.push("");
   }
 
@@ -323,12 +327,13 @@ export async function notifyBacktestResult(data: {
 
     const fmtPf = (pf: number) => (pf === Infinity ? "∞" : pf.toFixed(2));
     const fmtSign = (v: number) => (v >= 0 ? "+" : "");
+    const fmtExp = (v: number) => (v >= 0 ? "+" : "") + v.toFixed(2);
 
     lines.push(
-      `${pt.newLabel}: PF ${fmtPf(pt.newPf)} | 勝率${pt.newWinRate}% | ${fmtSign(pt.newReturnPct)}${pt.newReturnPct}% | DD -${pt.newMaxDd}% | ${pt.newTrades}件`,
+      `${pt.newLabel}: PF ${fmtPf(pt.newPf)} | 期待値${fmtExp(pt.newExpectancy)}% | ${fmtSign(pt.newReturnPct)}${pt.newReturnPct}% | DD -${pt.newMaxDd}% | ${pt.newTrades}件`,
     );
     lines.push(
-      `${pt.oldLabel}: PF ${fmtPf(pt.oldPf)} | 勝率${pt.oldWinRate}% | ${fmtSign(pt.oldReturnPct)}${pt.oldReturnPct}% | DD -${pt.oldMaxDd}% | ${pt.oldTrades}件`,
+      `${pt.oldLabel}: PF ${fmtPf(pt.oldPf)} | 期待値${fmtExp(pt.oldExpectancy)}% | ${fmtSign(pt.oldReturnPct)}${pt.oldReturnPct}% | DD -${pt.oldMaxDd}% | ${pt.oldTrades}件`,
     );
     lines.push(`Go判定: ${judgmentLabel}（${pt.judgmentReasons.join(" ")}）`);
 
