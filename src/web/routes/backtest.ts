@@ -17,32 +17,6 @@ import {
 
 const app = new Hono();
 
-/** Chart.js 条件別カラー */
-const CONDITION_COLORS: Record<string, string> = {
-  baseline: "#ffffff",
-  "ts_act_2.0": "#93c5fd",
-  "ts_act_2.5": "#3b82f6",
-  "ts_act_3.5": "#1d4ed8",
-  score_60: "#86efac",
-  score_65: "#22c55e",
-  score_70: "#15803d",
-  "atr_0.8": "#fdba74",
-  "atr_1.0": "#f97316",
-  "atr_1.5": "#c2410c",
-  "trail_0.8": "#d8b4fe",
-  "trail_1.0": "#a855f7",
-  "trail_1.5": "#7e22ce",
-  trend_on: "#f472b6",
-  pullback_on: "#fb923c",
-  trend_pullback: "#ef4444",
-  vol_filter: "#facc15",
-  rs_filter: "#a3e635",
-  vol_rs: "#4ade80",
-  hold_15: "#67e8f9",
-  hold_20: "#22d3ee",
-  vol_rs_hold15: "#2dd4bf",
-};
-
 app.get("/", async (c) => {
   const trendDays = DAILY_BACKTEST.TREND_DAYS;
   const sinceDate = dayjs().subtract(trendDays, "day").toDate();
@@ -56,20 +30,17 @@ app.get("/", async (c) => {
       take: conditionCount,
       distinct: ["conditionKey"],
     }),
-    // トレンドデータ（過去30日、全条件）
+    // 履歴データ（過去30日、ベースラインのみ）
     prisma.backtestDailyResult.findMany({
-      where: { date: { gte: sinceDate } },
-      orderBy: [{ date: "asc" }, { conditionKey: "asc" }],
+      where: { date: { gte: sinceDate }, conditionKey: "baseline" },
+      orderBy: { date: "asc" },
       select: {
         date: true,
         conditionKey: true,
-        conditionLabel: true,
         winRate: true,
         totalReturnPct: true,
         profitFactor: true,
-        totalPnl: true,
         totalTrades: true,
-        maxDrawdown: true,
       },
     }),
   ]);
@@ -114,31 +85,6 @@ app.get("/", async (c) => {
       {} as Record<string, unknown>,
     ),
   );
-
-  // チャート用データ: conditionKey でグルーピング
-  const chartGrouped: Record<string, { labels: string[]; data: number[] }> = {};
-  for (const d of trendData) {
-    const key = d.conditionKey;
-    if (!chartGrouped[key]) chartGrouped[key] = { labels: [], data: [] };
-    chartGrouped[key].labels.push(dayjs(d.date).format("M/D"));
-    chartGrouped[key].data.push(Number(d.totalReturnPct));
-  }
-  const chartDataJson = JSON.stringify(chartGrouped);
-
-  const conditionLabelsJson = JSON.stringify(
-    DAILY_BACKTEST.PARAMETER_CONDITIONS.reduce(
-      (acc, c) => {
-        acc[c.key] = c.label;
-        return acc;
-      },
-      {} as Record<string, string>,
-    ),
-  );
-
-  const chartColorsJson = JSON.stringify(CONDITION_COLORS);
-
-  // 履歴テーブル用: ベースラインのみ
-  const baselineTrend = trendData.filter((d) => d.conditionKey === "baseline");
 
   const content = html`
     <!-- 最新結果 -->
@@ -188,86 +134,9 @@ app.get("/", async (c) => {
         `
       : html`<div class="card">${emptyState("バックテスト結果なし")}</div>`}
 
-    <!-- リターン推移チャート -->
-    <p class="section-title">リターン推移（過去${trendDays}日・全条件）</p>
-    ${trendData.length > 0
-      ? html`
-          <div class="card" style="padding:12px">
-            <canvas id="backtest-chart"></canvas>
-          </div>
-          <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4/dist/chart.umd.min.js"></script>
-          <script>
-            (function() {
-              if (typeof Chart === 'undefined') {
-                document.getElementById('backtest-chart').parentNode.innerHTML = '<div class="empty">チャートを読み込めませんでした</div>';
-                return;
-              }
-
-              var COLORS = ${raw(chartColorsJson)};
-              var raw = ${raw(chartDataJson)};
-              var conditionLabels = ${raw(conditionLabelsJson)};
-
-              var labels = raw['baseline'] ? raw['baseline'].labels : Object.values(raw)[0].labels;
-
-              var datasets = Object.keys(raw).map(function(key) {
-                return {
-                  label: conditionLabels[key] || key,
-                  data: raw[key].data,
-                  borderColor: COLORS[key] || '#888',
-                  borderWidth: key === 'baseline' ? 3 : 1.5,
-                  pointRadius: 0,
-                  tension: 0.3,
-                  fill: false
-                };
-              });
-
-              new Chart(document.getElementById('backtest-chart'), {
-                type: 'line',
-                data: { labels: labels, datasets: datasets },
-                options: {
-                  responsive: true,
-                  maintainAspectRatio: true,
-                  aspectRatio: 2,
-                  interaction: { mode: 'index', intersect: false },
-                  plugins: {
-                    legend: {
-                      position: 'top',
-                      labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 12, padding: 8 }
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function(ctx) {
-                          var v = ctx.parsed.y;
-                          var sign = v >= 0 ? '+' : '';
-                          return ctx.dataset.label + ': ' + sign + v.toFixed(2) + '%';
-                        }
-                      }
-                    }
-                  },
-                  scales: {
-                    x: {
-                      ticks: { color: '#64748b', font: { size: 10 } },
-                      grid: { color: 'rgba(100,116,139,0.2)' }
-                    },
-                    y: {
-                      ticks: {
-                        color: '#64748b',
-                        font: { size: 10 },
-                        callback: function(v) { return v + '%'; }
-                      },
-                      grid: { color: 'rgba(100,116,139,0.2)' }
-                    }
-                  }
-                }
-              });
-            })();
-          </script>
-        `
-      : html`<div class="card">${emptyState("トレンドデータなし")}</div>`}
-
     <!-- 履歴テーブル（ベースラインのみ） -->
     <p class="section-title">バックテスト履歴（ベースライン）</p>
-    ${baselineTrend.length > 0
+    ${trendData.length > 0
       ? html`
           <div class="card table-wrap">
             <table>
@@ -281,7 +150,7 @@ app.get("/", async (c) => {
                 </tr>
               </thead>
               <tbody>
-                ${[...baselineTrend].reverse().map(
+                ${[...trendData].reverse().map(
                   (r) => html`
                     <tr>
                       <td>${dayjs(r.date).format("M/D")}</td>
