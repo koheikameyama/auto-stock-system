@@ -298,6 +298,20 @@ ${sectorText || "  特になし"}`;
       type: "ドローダウン停止",
       message: drawdown.reason,
     });
+    // ドローダウンは自分の成績の問題であり市場環境とは無関係
+    // sentimentはAI市場評価を維持し、shouldTrade: falseのみで新規注文を停止する
+    const latestAssessment = await prisma.marketAssessment.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { sentiment: true },
+    });
+    const drawdownSentiment = (latestAssessment?.sentiment ?? "neutral") as
+      | "bullish"
+      | "neutral"
+      | "bearish"
+      | "crisis";
+    console.log(
+      `  → ドローダウン停止時のsentiment: ${drawdownSentiment}（AI市場評価を維持）`,
+    );
     const drawdownAssessmentData = {
       nikkeiPrice: marketData.nikkei.price,
       nikkeiChange: marketData.nikkei.changePercent,
@@ -306,9 +320,9 @@ ${sectorText || "  特になし"}`;
       nikkeiVi: null,
       usdjpy: marketData.usdjpy?.price,
       cmeFuturesPrice: marketData.cmeFutures?.price,
-      sentiment: "bearish" as const,
+      sentiment: drawdownSentiment,
       shouldTrade: false,
-      reasoning: `[ドローダウン自動停止] ${drawdown.reason}`,
+      reasoning: `[ドローダウン自動停止] ${drawdown.reason}（sentiment=${drawdownSentiment}はAI市場評価を維持）`,
       selectedStocks: [],
       tradingStrategy: strategyDecision.strategy,
     };
