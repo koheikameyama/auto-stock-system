@@ -112,8 +112,16 @@ app.get("/", async (c) => {
     }>;
     overallVerdict: string;
   };
-  const audit = latestSummary?.decisionAudit
+  const auditRaw = latestSummary?.decisionAudit
     ? (latestSummary.decisionAudit as unknown as DecisionAuditData)
+    : null;
+  const audit = auditRaw
+    ? {
+        ...auditRaw,
+        confusionMatrix: auditRaw.confusionMatrix ?? { tp: 0, fp: 0, fn: 0, tn: 0, precision: null, recall: null, f1: null },
+        byRank: auditRaw.byRank ?? {},
+        fpAnalysis: auditRaw.fpAnalysis ?? [],
+      }
     : null;
 
   const [
