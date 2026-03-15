@@ -93,13 +93,26 @@ app.get("/", async (c) => {
       })();
 
   const dateStr = dayjs(targetDate).format("YYYY-MM-DD");
-  const prevDate = dayjs(targetDate).subtract(1, "day").format("YYYY-MM-DD");
-  const nextDate = dayjs(targetDate).add(1, "day").format("YYYY-MM-DD");
 
-  const records = await prisma.scoringRecord.findMany({
-    where: { date: targetDate },
-    orderBy: { totalScore: "desc" },
-  });
+  // 前後の取引日（ScoringRecord がある日付）を取得
+  const [records, prevRecord, nextRecord] = await Promise.all([
+    prisma.scoringRecord.findMany({
+      where: { date: targetDate },
+      orderBy: { totalScore: "desc" },
+    }),
+    prisma.scoringRecord.findFirst({
+      where: { date: { lt: targetDate } },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }),
+    prisma.scoringRecord.findFirst({
+      where: { date: { gt: targetDate } },
+      orderBy: { date: "asc" },
+      select: { date: true },
+    }),
+  ]);
+  const prevDate = prevRecord ? dayjs(prevRecord.date).format("YYYY-MM-DD") : null;
+  const nextDate = nextRecord ? dayjs(nextRecord.date).format("YYYY-MM-DD") : null;
 
   // 銘柄名を一括取得（N+1回避）
   const tickerCodes = [...new Set(records.map((r) => r.tickerCode))];
@@ -120,9 +133,13 @@ app.get("/", async (c) => {
   const content = html`
     <!-- 日付ナビ -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin:0 16px 1rem">
-      <a href="/scoring?date=${prevDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem;padding:8px">&larr;</a>
+      ${prevDate
+        ? html`<a href="/scoring?date=${prevDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem;padding:8px">&larr;</a>`
+        : html`<span style="color:#334155;font-size:1.2rem;padding:8px">&larr;</span>`}
       <span style="font-size:1rem;font-weight:600">${dateStr}</span>
-      <a href="/scoring?date=${nextDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem;padding:8px">&rarr;</a>
+      ${nextDate
+        ? html`<a href="/scoring?date=${nextDate}" style="color:#3b82f6;text-decoration:none;font-size:1.2rem;padding:8px">&rarr;</a>`
+        : html`<span style="color:#334155;font-size:1.2rem;padding:8px">&rarr;</span>`}
     </div>
 
     <!-- サマリー -->
