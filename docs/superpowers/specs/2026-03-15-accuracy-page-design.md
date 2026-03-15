@@ -34,6 +34,9 @@
 |---------|---------|
 | `src/web/app.ts` | `app.route("/contrarian", ...)` → `app.route("/accuracy", accuracyRoute)` |
 | `src/web/views/layout.ts` | ナビ: `path: "/contrarian", label: "見送り"` → `path: "/accuracy", label: "精度"` |
+| `prisma/schema.prisma` | `rejectionReason` コメントに `market_halted` を追加 |
+
+**ページタイトル:** `layout("精度分析", "/accuracy", content)`
 
 ### 変更なし
 
@@ -129,8 +132,9 @@ FN/FP銘柄の詳細リスト、傾向分析用のスコア内訳に使用。
 
 - Precision/Recall/F1 は `decisionAudit.confusionMatrix` から取得
 - Precision >= 60% で緑、< 60% で赤
+- Recall >= 50% で緑、< 50% で赤
 - F1 >= 50% で緑、< 50% で赤
-- データなし時は「scoring-accuracy 実行後に更新されます（16:10 JST 以降）」を表示
+- `decisionAudit` が null の場合、セクション1〜2全体を「scoring-accuracy 実行後に更新されます（16:10 JST 以降）」に置き換える
 
 ### セクション2: 4象限詳細
 
@@ -168,6 +172,7 @@ FN/FP銘柄の詳細リスト、傾向分析用のスコア内訳に使用。
 **現行との差分:**
 - 現行: `ai_no_go` と `below_threshold` のみ
 - 新規: `market_halted` と `disqualified` も含める
+- 注: `disqualified` 銘柄は多くが `entryPrice` を持たないため `ghostProfitPct` が null となり、`ghostProfitPct > 0` フィルタで自然に除外される。結果として FN リストに出現するのは稀だが、クエリ上は棄却理由を限定しない
 
 **テーブル列:**
 
@@ -176,26 +181,28 @@ FN/FP銘柄の詳細リスト、傾向分析用のスコア内訳に使用。
 
 - 棄却理由をバッジ表示（AI却下=赤、スコア不足=黄、市場停止=橙、即死=赤紫）
 - 直近30件を表示（日付降順）
-- `ghostAnalysis` がある銘柄にはAI分析アイコンを表示（タップで内容展開）
+- `ghostAnalysis` がある銘柄にはAI分析アイコン（💡）を表示し、タップでインラインアコーディオン展開。展開時は `ghostAnalysis` JSON の `analysis`（分析テキスト）と `recommendation`（改善提案）を表示
 
 ### セクション4: FP分析（誤エントリー）
 
-**データソース**: `ScoringRecord`（`rejectionReason IS NULL` かつ `ghostProfitPct IS NOT NULL` かつ `ghostProfitPct < 0`）+ `decisionAudit.fpAnalysis`
+**データソース**: `ScoringRecord`（`rejectionReason IS NULL` かつ `ghostProfitPct IS NOT NULL` かつ `ghostProfitPct < 0` かつ `closingPrice IS NOT NULL`）
 
 承認(Go)したが下落した銘柄を表示する。新規セクション。
+
+`decisionAudit.fpAnalysis` は使用しない。`ScoringRecord` から直接クエリし、`ghostAnalysis` フィールドから `misjudgmentType` を取得する。これにより FP テーブルと AI 分析の重複・整合性問題を回避する。
 
 **テーブル列:**
 
 | 日付 | 銘柄 | スコア | ランク | 騰落率 | 誤判断タイプ |
 |------|------|-------|-------|-------|------------|
 
-- `fpAnalysis.misjudgmentType` をバッジ表示
+- `ghostAnalysis` JSON 内の `misjudgmentType` をバッジ表示（AI分析がない銘柄は「-」表示）
 - 直近30件を表示（日付降順）
-- `ghostAnalysis` がある銘柄にはAI分析アイコンを表示
+- `ghostAnalysis` がある銘柄にはAI分析アイコン（💡）を表示し、タップでインラインアコーディオン展開
 
 ### セクション5: 傾向分析
 
-**データソース**: `ScoringRecord`（過去90日、スコア50点以上、`closingPrice IS NOT NULL`）+ `Stock`（セクター情報）
+**データソース**: `ScoringRecord`（過去90日、`totalScore >= SCORING.THRESHOLDS.B_RANK`、`closingPrice IS NOT NULL`）+ `Stock`（セクター情報）
 
 現行の傾向分析セクションから必要なものを残し、不要なものを削除する。
 
@@ -214,7 +221,7 @@ FN/FP銘柄の詳細リスト、傾向分析用のスコア内訳に使用。
 
 **傾向分析の対象データ:**
 
-現行と同様、Bランク以上（50点以上）で購入しなかった全銘柄（`rejectionReason IS NOT NULL`、`closingPrice IS NOT NULL`）を対象とする。
+現行と同様、Bランク以上（`totalScore >= SCORING.THRESHOLDS.B_RANK`）で購入しなかった全銘柄（`rejectionReason IS NOT NULL`、`closingPrice IS NOT NULL`）を対象とする。
 
 ---
 
@@ -239,6 +246,8 @@ FN/FP銘柄の詳細リスト、傾向分析用のスコア内訳に使用。
 ## 不要になるimport
 
 - `calculateContrarianBonus` — 逆行ボーナス計算（ページで不使用に）
-- `CONTRARIAN` 定数 — `SCORING_ACCURACY.LOOKBACK_DAYS` 等で代替
+- `CONTRARIAN` 定数 — ページで不使用に
 
-ただし `CONTRARIAN.LOOKBACK_DAYS`（90日）は傾向分析で引き続き使うため、ルックバック日数の参照先を適切に選択する（`CONTRARIAN` または `SCORING_ACCURACY` の定数を使用）。
+### ルックバック日数
+
+傾向分析のルックバック日数（90日）には `CONTRARIAN.LOOKBACK_DAYS` を引き続き使用する。この定数は contrarian-analyzer でも使用されており、値を共有するのが合理的。ページのコンセプトは変わるが、定数の参照先変更はスコープ外とする。
