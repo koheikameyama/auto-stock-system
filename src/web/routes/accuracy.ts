@@ -17,7 +17,6 @@ import { getTodayForDB, getDaysAgoForDB } from "../../lib/date-utils";
 import { CONTRARIAN, SCORING, getSectorGroup } from "../../lib/constants";
 import { layout } from "../views/layout";
 import {
-  formatYen,
   pnlPercent,
   tickerLink,
   emptyState,
