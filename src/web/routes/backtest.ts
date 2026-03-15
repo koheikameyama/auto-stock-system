@@ -217,21 +217,14 @@ app.get("/", async (c) => {
     <!-- 時系列推移チャート -->
     ${trendChartData.length > 1
       ? html`
-          <p class="section-title">推移チャート</p>
+          <p class="section-title">推移チャート（全条件比較）</p>
           <div class="card" style="padding:16px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-              <select id="trend-condition" onchange="onTrendConditionChange()" style="padding:4px 8px;background:${COLORS.bg};color:${COLORS.text};border:1px solid ${COLORS.border};border-radius:6px;font-size:12px">
-                ${conditionKeys.map(
-                  (k) => html`<option value="${k.conditionKey}" ${k.conditionKey === "baseline" ? "selected" : ""}>${k.conditionLabel}</option>`,
-                )}
-              </select>
-              <div id="trend-tabs" style="display:flex;gap:4px">
-                <button class="chart-tab active" data-tab="both" onclick="switchTrendTab('both')">両方</button>
-                <button class="chart-tab" data-tab="expectancy" onclick="switchTrendTab('expectancy')">期待値</button>
-                <button class="chart-tab" data-tab="profitFactor" onclick="switchTrendTab('profitFactor')">PF</button>
-              </div>
+            <div id="trend-tabs" style="display:flex;gap:4px;margin-bottom:12px">
+              <button class="chart-tab active" data-tab="expectancy" onclick="switchTrendTab('expectancy')">期待値</button>
+              <button class="chart-tab" data-tab="profitFactor" onclick="switchTrendTab('profitFactor')">PF</button>
             </div>
             <div id="trend-chart"></div>
+            <div id="trend-legend" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px 12px"></div>
           </div>
         `
       : ""}
@@ -640,123 +633,118 @@ app.get("/", async (c) => {
       // 初期表示
       drawCompChart('expectancy');
 
-      // --- 時系列推移チャート ---
+      // --- 時系列推移チャート（全条件比較） ---
       var trendByCondition = ${raw(JSON.stringify(trendChartByCondition))};
-      var currentTrendCondition = 'baseline';
-      var currentTrendMode = 'both';
+      var trendLabels = ${raw(JSON.stringify(trendConditionLabels))};
+      var TREND_COLORS = [
+        '#3b82f6','#22c55e','#ef4444','#f59e0b','#a855f7',
+        '#06b6d4','#ec4899','#84cc16','#f97316','#6366f1',
+        '#14b8a6','#e11d48','#0ea5e9','#d946ef','#65a30d',
+        '#fb923c','#8b5cf6','#2dd4bf','#f43f5e','#0284c7',
+        '#c026d3','#4ade80',
+      ];
 
-      function onTrendConditionChange() {
-        currentTrendCondition = document.getElementById('trend-condition').value;
-        drawTrendChart(currentTrendMode);
-      }
-
-      function drawTrendChart(mode) {
-        currentTrendMode = mode;
+      function drawTrendChart(metric) {
         var el = document.getElementById('trend-chart');
-        var data = trendByCondition[currentTrendCondition] || [];
-        if (!el || data.length < 2) { if (el) el.innerHTML = '<div style="color:${COLORS.textDim};font-size:13px;padding:16px;text-align:center">データなし</div>'; return; }
+        var legendEl = document.getElementById('trend-legend');
+        if (!el) return;
 
-        var showExp = mode === 'both' || mode === 'expectancy';
-        var showPf = mode === 'both' || mode === 'profitFactor';
+        var condKeys = Object.keys(trendByCondition);
+        if (condKeys.length === 0) { el.innerHTML = ''; if (legendEl) legendEl.innerHTML = ''; return; }
 
-        var W = 640, H = 240;
-        var pad = { top: 20, right: showPf ? 55 : 20, bottom: 30, left: showExp ? 50 : 20 };
+        // 日付軸はベースラインから（最も多いデータ数の条件を使用）
+        var refKey = condKeys.reduce(function(a, b) { return (trendByCondition[a] || []).length >= (trendByCondition[b] || []).length ? a : b; });
+        var refData = trendByCondition[refKey];
+        var len = refData.length;
+        if (len < 2) { el.innerHTML = ''; if (legendEl) legendEl.innerHTML = ''; return; }
+
+        // 全条件の値を集めてY軸範囲を決定
+        var allVals = [];
+        condKeys.forEach(function(k) {
+          (trendByCondition[k] || []).forEach(function(d) {
+            var v = d[metric];
+            if (v != null) allVals.push(v);
+          });
+        });
+        if (allVals.length === 0) { el.innerHTML = ''; if (legendEl) legendEl.innerHTML = ''; return; }
+
+        var targetLine = metric === 'expectancy' ? 0 : 1.3;
+        var minV = Math.min.apply(null, allVals.concat([targetLine]));
+        var maxV = Math.max.apply(null, allVals.concat([targetLine]));
+        var range = maxV - minV || 1;
+        minV -= range * 0.1; maxV += range * 0.1; range = maxV - minV;
+
+        var W = 640, H = 280;
+        var pad = { top: 20, right: 20, bottom: 30, left: 50 };
         var cw = W - pad.left - pad.right;
         var ch = H - pad.top - pad.bottom;
-        var len = data.length;
-
-        var expVals = data.map(function(d) { return d.expectancy; }).filter(function(v) { return v != null; });
-        var pfVals = data.map(function(d) { return d.profitFactor; }).filter(function(v) { return v != null; });
-
-        var expMin = Math.min.apply(null, expVals.concat([0]));
-        var expMax = Math.max.apply(null, expVals.concat([0]));
-        var expRange = expMax - expMin || 1;
-        expMin -= expRange * 0.1; expMax += expRange * 0.1; expRange = expMax - expMin;
-
-        var pfMin = Math.min.apply(null, pfVals.concat([1.0]));
-        var pfMax = Math.max.apply(null, pfVals.concat([1.3]));
-        var pfRange = pfMax - pfMin || 1;
-        pfMin -= pfRange * 0.1; pfMax += pfRange * 0.1; pfRange = pfMax - pfMin;
 
         function xPos(i) { return pad.left + (i / (len - 1)) * cw; }
-        function yExp(v) { return pad.top + ch - ((v - expMin) / expRange) * ch; }
-        function yPf(v) { return pad.top + ch - ((v - pfMin) / pfRange) * ch; }
-
-        function buildPath(arr, key, yFn) {
-          var pts = [];
-          arr.forEach(function(d, i) {
-            var v = d[key];
-            if (v != null) pts.push((pts.length === 0 ? 'M' : 'L') + xPos(i).toFixed(1) + ',' + yFn(v).toFixed(1));
-          });
-          return pts.join(' ');
-        }
+        function yPos(v) { return pad.top + ch - ((v - minV) / range) * ch; }
 
         var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-width:' + W + 'px">';
 
-        // 期待値0ライン
-        if (showExp) {
-          var zeroY = yExp(0);
-          svg += '<line x1="' + pad.left + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - pad.right) + '" y2="' + zeroY.toFixed(1) + '" stroke="#64748b" stroke-dasharray="4" stroke-width="1" />';
-          svg += '<text x="' + (pad.left - 4) + '" y="' + (zeroY + 3).toFixed(1) + '" text-anchor="end" fill="#64748b" font-size="9">0%</text>';
-        }
+        // 目標ライン
+        var targetY = yPos(targetLine);
+        svg += '<line x1="' + pad.left + '" y1="' + targetY.toFixed(1) + '" x2="' + (W - pad.right) + '" y2="' + targetY.toFixed(1) + '" stroke="#64748b" stroke-dasharray="4" stroke-width="1" />';
+        var targetLabel = metric === 'expectancy' ? '0%' : 'PF 1.3';
+        svg += '<text x="' + (pad.left - 4) + '" y="' + (targetY + 3).toFixed(1) + '" text-anchor="end" fill="#64748b" font-size="9">' + targetLabel + '</text>';
 
-        // PF 1.3目標ライン
-        if (showPf) {
-          var pf13Y = yPf(1.3);
-          svg += '<line x1="' + pad.left + '" y1="' + pf13Y.toFixed(1) + '" x2="' + (W - pad.right) + '" y2="' + pf13Y.toFixed(1) + '" stroke="#f59e0b" stroke-dasharray="4" stroke-width="1" stroke-opacity="0.5" />';
-          svg += '<text x="' + (W - pad.right + 4) + '" y="' + (pf13Y + 3).toFixed(1) + '" text-anchor="start" fill="#f59e0b" font-size="9">PF1.3</text>';
-        }
+        // 各条件の線（ベースラインは最後に描画して前面に）
+        var sortedKeys = condKeys.filter(function(k) { return k !== 'baseline'; });
+        sortedKeys.push('baseline');
 
-        // 期待値ライン
-        if (showExp && expVals.length >= 2) {
-          svg += '<path d="' + buildPath(data, 'expectancy', yExp) + '" fill="none" stroke="#3b82f6" stroke-width="2" />';
-        }
+        sortedKeys.forEach(function(k, ci) {
+          var data = trendByCondition[k] || [];
+          if (data.length < 2) return;
+          var isBaseline = k === 'baseline';
+          var colorIdx = condKeys.indexOf(k);
+          var color = TREND_COLORS[colorIdx % TREND_COLORS.length];
 
-        // PFライン
-        if (showPf && pfVals.length >= 2) {
-          svg += '<path d="' + buildPath(data, 'profitFactor', yPf) + '" fill="none" stroke="#22c55e" stroke-width="2" />';
-        }
+          var pts = [];
+          data.forEach(function(d, i) {
+            var v = d[metric];
+            if (v != null) pts.push((pts.length === 0 ? 'M' : 'L') + xPos(i).toFixed(1) + ',' + yPos(v).toFixed(1));
+          });
+          if (pts.length < 2) return;
 
-        // Y軸ラベル（左: 期待値）
-        if (showExp) {
-          svg += '<text x="' + (pad.left - 4) + '" y="' + (pad.top + 4) + '" text-anchor="end" fill="#3b82f6" font-size="9">' + expMax.toFixed(1) + '%</text>';
-          svg += '<text x="' + (pad.left - 4) + '" y="' + (pad.top + ch + 4) + '" text-anchor="end" fill="#3b82f6" font-size="9">' + expMin.toFixed(1) + '%</text>';
-        }
+          svg += '<path d="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="' + (isBaseline ? '3' : '1.5') + '" stroke-opacity="' + (isBaseline ? '1' : '0.6') + '" />';
+        });
 
-        // Y軸ラベル（右: PF）
-        if (showPf) {
-          svg += '<text x="' + (W - pad.right + 4) + '" y="' + (pad.top + 4) + '" text-anchor="start" fill="#22c55e" font-size="9">' + pfMax.toFixed(2) + '</text>';
-          svg += '<text x="' + (W - pad.right + 4) + '" y="' + (pad.top + ch + 4) + '" text-anchor="start" fill="#22c55e" font-size="9">' + pfMin.toFixed(2) + '</text>';
-        }
+        // Y軸ラベル
+        svg += '<text x="' + (pad.left - 4) + '" y="' + (pad.top + 4) + '" text-anchor="end" fill="${COLORS.textDim}" font-size="9">' + (metric === 'expectancy' ? maxV.toFixed(1) + '%' : maxV.toFixed(2)) + '</text>';
+        svg += '<text x="' + (pad.left - 4) + '" y="' + (pad.top + ch + 4) + '" text-anchor="end" fill="${COLORS.textDim}" font-size="9">' + (metric === 'expectancy' ? minV.toFixed(1) + '%' : minV.toFixed(2)) + '</text>';
 
         // X軸ラベル
-        svg += '<text x="' + pad.left + '" y="' + (H - 4) + '" text-anchor="start" fill="#64748b" font-size="9">' + data[0].date + '</text>';
-        svg += '<text x="' + (W - pad.right) + '" y="' + (H - 4) + '" text-anchor="end" fill="#64748b" font-size="9">' + data[len - 1].date + '</text>';
-
-        // 凡例
-        var lx = pad.left + 10;
-        if (showExp) {
-          svg += '<rect x="' + lx + '" y="6" width="10" height="3" rx="1" fill="#3b82f6" />';
-          svg += '<text x="' + (lx + 14) + '" y="10" fill="#3b82f6" font-size="9">期待値</text>';
-          lx += 55;
-        }
-        if (showPf) {
-          svg += '<rect x="' + lx + '" y="6" width="10" height="3" rx="1" fill="#22c55e" />';
-          svg += '<text x="' + (lx + 14) + '" y="10" fill="#22c55e" font-size="9">PF</text>';
-        }
+        svg += '<text x="' + pad.left + '" y="' + (H - 4) + '" text-anchor="start" fill="#64748b" font-size="9">' + refData[0].date + '</text>';
+        svg += '<text x="' + (W - pad.right) + '" y="' + (H - 4) + '" text-anchor="end" fill="#64748b" font-size="9">' + refData[len - 1].date + '</text>';
 
         svg += '</svg>';
         el.innerHTML = svg;
+
+        // 凡例
+        if (legendEl) {
+          var legend = '';
+          condKeys.forEach(function(k, i) {
+            var color = TREND_COLORS[i % TREND_COLORS.length];
+            var isBaseline = k === 'baseline';
+            legend += '<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:' + (isBaseline ? '${COLORS.text}' : '${COLORS.textDim}') + ';font-weight:' + (isBaseline ? '700' : '400') + '">';
+            legend += '<span style="display:inline-block;width:12px;height:' + (isBaseline ? '3' : '2') + 'px;background:' + color + ';border-radius:1px;opacity:' + (isBaseline ? '1' : '0.6') + '"></span>';
+            legend += (trendLabels[k] || k);
+            legend += '</span>';
+          });
+          legendEl.innerHTML = legend;
+        }
       }
 
-      function switchTrendTab(mode) {
+      function switchTrendTab(metric) {
         var tabs = document.querySelectorAll('#trend-tabs .chart-tab');
-        tabs.forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === mode); });
-        drawTrendChart(mode);
+        tabs.forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === metric); });
+        drawTrendChart(metric);
       }
 
       // 初期表示
-      drawTrendChart('both');
+      drawTrendChart('expectancy');
 
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && document.querySelector('#backtest-detail-modal .modal-overlay')) {
