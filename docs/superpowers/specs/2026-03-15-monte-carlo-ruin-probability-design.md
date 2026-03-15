@@ -131,8 +131,10 @@ currentEquity += pnl
 ### エンドポイント
 
 ```
-POST /api/backtest/monte-carlo
+POST /backtest/api/monte-carlo
 ```
+
+（Honoルーターは `/backtest` にマウントされるため、ルート定義は `app.post("/api/monte-carlo", ...)` となる）
 
 ### リクエスト
 
