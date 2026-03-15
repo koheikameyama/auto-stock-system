@@ -148,7 +148,7 @@ app.get("/", async (c) => {
                         const fr = r.fullResult as Record<string, unknown> | null;
                         const exp = fr?.expectancy != null ? Number(fr.expectancy) : null;
                         if (exp == null) return "N/A";
-                        const color = exp > 0 ? "#22c55e" : exp < 0 ? "#ef4444" : COLORS.text;
+                        const color = exp >= 1.0 ? "#22c55e" : exp >= 0.5 ? "#3b82f6" : exp >= 0 ? "#f59e0b" : "#ef4444";
                         return html`<span style="color:${color}">${exp > 0 ? "+" : ""}${exp.toFixed(2)}%</span>`;
                       })()}</td>
                       <td>${(() => {
@@ -321,7 +321,7 @@ app.get("/", async (c) => {
           + '<div class="modal-row"><span class="modal-row-label">累計損益</span><span class="' + pnlCls + '">' + pnlSign + '&yen;' + fmt(Math.abs(d.totalPnl)) + '</span></div>'
           + '<div class="modal-row"><span class="modal-row-label">リターン</span><span class="' + retCls + '">' + retSign + d.totalReturnPct.toFixed(2) + '%</span></div>'
           + '<div class="modal-row"><span class="modal-row-label">PF</span><span>' + (d.profitFactor >= 999 ? '&infin;' : d.profitFactor) + '</span></div>'
-          + '<div class="modal-row"><span class="modal-row-label">期待値</span><span style="color:' + (d.expectancy > 0 ? '#22c55e' : d.expectancy < 0 ? '#ef4444' : 'inherit') + '">' + (d.expectancy != null ? (d.expectancy > 0 ? '+' : '') + d.expectancy.toFixed(2) + '%' : 'N/A') + '</span></div>'
+          + '<div class="modal-row"><span class="modal-row-label">期待値</span><span style="color:' + (d.expectancy == null ? 'inherit' : d.expectancy >= 1.0 ? '#22c55e' : d.expectancy >= 0.5 ? '#3b82f6' : d.expectancy >= 0 ? '#f59e0b' : '#ef4444') + '">' + (d.expectancy != null ? (d.expectancy > 0 ? '+' : '') + d.expectancy.toFixed(2) + '%' : 'N/A') + '</span></div>'
           + '<div class="modal-row"><span class="modal-row-label">RR比</span><span style="color:' + (d.riskRewardRatio >= 1.5 ? '#22c55e' : d.riskRewardRatio >= 1.0 ? '#f59e0b' : '#ef4444') + '">' + (d.riskRewardRatio != null ? d.riskRewardRatio.toFixed(2) : 'N/A') + '</span></div>'
           + '<div class="modal-row"><span class="modal-row-label">平均利益</span><span style="color:#22c55e">' + (d.avgWinPct != null ? '+' + d.avgWinPct.toFixed(2) + '%' : 'N/A') + '</span></div>'
           + '<div class="modal-row"><span class="modal-row-label">平均損失</span><span style="color:#ef4444">' + (d.avgLossPct != null ? d.avgLossPct.toFixed(2) + '%' : 'N/A') + '</span></div>'
