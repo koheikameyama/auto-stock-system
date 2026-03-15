@@ -434,15 +434,15 @@ app.get("/", async (c) => {
     ${missedStocks.length > 0
       ? html`
           <div class="card table-wrap">
-            <table style="table-layout:fixed">
+            <table>
               <thead>
                 <tr>
-                  <th>日付</th>
-                  <th>銘柄</th>
-                  <th>棄却理由</th>
-                  <th>スコア</th>
-                  <th>ランク</th>
-                  <th>騰落率</th>
+                  <th style="width:12%">日付</th>
+                  <th style="width:18%">銘柄</th>
+                  <th style="width:22%">棄却理由</th>
+                  <th style="width:14%">スコア</th>
+                  <th style="width:14%">ランク</th>
+                  <th style="width:20%">騰落率</th>
                 </tr>
               </thead>
               <tbody>
@@ -462,7 +462,7 @@ app.get("/", async (c) => {
                     </tr>
                     ${ghost ? html`
                       <tr class="ghost-detail" style="display:none">
-                        <td colspan="6" style="background:#1e293b;padding:0.75rem;font-size:0.82rem;line-height:1.6">
+                        <td colspan="6" style="background:#1e293b;padding:0.75rem;font-size:0.82rem;line-height:1.6;word-break:break-word;max-width:0">
                           <p style="margin:0 0 0.5rem;color:#cbd5e1">${ghost.analysis}</p>
                           ${ghost.recommendation ? html`<p style="margin:0;color:#94a3b8"><strong>改善提案:</strong> ${recommendationLabels[ghost.recommendation] ?? ghost.recommendation}</p>` : ""}
                         </td>
@@ -483,15 +483,15 @@ app.get("/", async (c) => {
     ${fpStocks.length > 0
       ? html`
           <div class="card table-wrap">
-            <table style="table-layout:fixed">
+            <table>
               <thead>
                 <tr>
-                  <th>日付</th>
-                  <th>銘柄</th>
-                  <th>スコア</th>
-                  <th>ランク</th>
-                  <th>騰落率</th>
-                  <th>${tt("誤判断タイプ", "AI分析による誤判断の分類")}</th>
+                  <th style="width:12%">日付</th>
+                  <th style="width:18%">銘柄</th>
+                  <th style="width:14%">スコア</th>
+                  <th style="width:14%">ランク</th>
+                  <th style="width:20%">騰落率</th>
+                  <th style="width:22%">${tt("誤判断タイプ", "AI分析による誤判断の分類")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -515,7 +515,7 @@ app.get("/", async (c) => {
                     </tr>
                     ${ghost ? html`
                       <tr class="ghost-detail" style="display:none">
-                        <td colspan="6" style="background:#1e293b;padding:0.75rem;font-size:0.82rem;line-height:1.6">
+                        <td colspan="6" style="background:#1e293b;padding:0.75rem;font-size:0.82rem;line-height:1.6;word-break:break-word;max-width:0">
                           <p style="margin:0 0 0.5rem;color:#cbd5e1">${ghost.analysis}</p>
                           ${ghost.recommendation ? html`<p style="margin:0;color:#94a3b8"><strong>改善提案:</strong> ${recommendationLabels[ghost.recommendation] ?? ghost.recommendation}</p>` : ""}
                         </td>
