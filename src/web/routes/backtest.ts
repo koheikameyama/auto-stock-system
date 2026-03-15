@@ -220,27 +220,35 @@ app.get("/", async (c) => {
               <thead>
                 <tr>
                   <th>日付</th>
-                  <th>勝率</th>
-                  <th>リターン</th>
                   <th>PF</th>
-                  <th>取引</th>
+                  <th>期待値</th>
+                  <th>リターン</th>
+                  <th>RR</th>
                 </tr>
               </thead>
               <tbody>
                 ${[...trendData].reverse().map(
-                  (r) => html`
+                  (r) => {
+                    const fr = (r as unknown as { fullResult: Record<string, unknown> | null }).fullResult;
+                    const exp = fr?.expectancy != null ? Number(fr.expectancy) : null;
+                    const rr = fr?.riskRewardRatio != null ? Number(fr.riskRewardRatio) : null;
+                    return html`
                     <tr>
                       <td>${dayjs(r.date).format("M/D")}</td>
-                      <td>${Number(r.winRate)}%</td>
-                      <td>${pnlPercent(Number(r.totalReturnPct))}</td>
                       <td>
                         ${Number(r.profitFactor) >= 999
                           ? "∞"
                           : Number(r.profitFactor)}
                       </td>
-                      <td>${r.totalTrades}</td>
+                      <td>${exp != null
+                        ? html`<span style="color:${exp >= 1.0 ? "#22c55e" : exp >= 0.5 ? "#3b82f6" : exp >= 0 ? "#f59e0b" : "#ef4444"}">${exp > 0 ? "+" : ""}${exp.toFixed(2)}%</span>`
+                        : "N/A"}</td>
+                      <td>${pnlPercent(Number(r.totalReturnPct))}</td>
+                      <td>${rr != null
+                        ? html`<span style="color:${rr >= 1.5 ? "#22c55e" : rr >= 1.0 ? "#f59e0b" : "#ef4444"}">${rr.toFixed(2)}</span>`
+                        : "N/A"}</td>
                     </tr>
-                  `,
+                  `},
                 )}
               </tbody>
             </table>
