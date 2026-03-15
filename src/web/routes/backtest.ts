@@ -35,13 +35,14 @@ app.get("/", async (c) => {
       take: conditionCount,
       distinct: ["conditionKey"],
     }),
-    // 履歴データ（過去30日、ベースラインのみ）
+    // 履歴データ（過去30日、全条件）
     prisma.backtestDailyResult.findMany({
-      where: { date: { gte: sinceDate }, conditionKey: "baseline" },
+      where: { date: { gte: sinceDate } },
       orderBy: { date: "asc" },
       select: {
         date: true,
         conditionKey: true,
+        conditionLabel: true,
         winRate: true,
         totalReturnPct: true,
         profitFactor: true,
@@ -121,15 +122,22 @@ app.get("/", async (c) => {
     };
   });
 
-  // 時系列チャート用データ
-  const trendChartData = trendData.map((r) => {
+  // 時系列チャート用データ（条件別にグループ化）
+  const trendChartByCondition: Record<string, { date: string; expectancy: number | null; profitFactor: number | null }[]> = {};
+  const trendConditionLabels: Record<string, string> = {};
+  for (const r of trendData) {
     const fr = (r as unknown as { fullResult: Record<string, unknown> | null }).fullResult;
-    return {
+    if (!trendChartByCondition[r.conditionKey]) {
+      trendChartByCondition[r.conditionKey] = [];
+      trendConditionLabels[r.conditionKey] = r.conditionLabel;
+    }
+    trendChartByCondition[r.conditionKey].push({
       date: dayjs(r.date).format("M/D"),
       expectancy: fr?.expectancy != null ? Number(fr.expectancy) : null,
       profitFactor: Number(r.profitFactor) >= 999 ? null : Number(r.profitFactor),
-    };
-  });
+    });
+  }
+  const trendChartData = trendChartByCondition["baseline"] ?? [];
 
   const content = html`
     <!-- 最新結果 -->
@@ -209,12 +217,19 @@ app.get("/", async (c) => {
     <!-- 時系列推移チャート -->
     ${trendChartData.length > 1
       ? html`
-          <p class="section-title">推移チャート（ベースライン）</p>
+          <p class="section-title">推移チャート</p>
           <div class="card" style="padding:16px">
-            <div id="trend-tabs" style="display:flex;gap:4px;margin-bottom:12px">
-              <button class="chart-tab active" data-tab="both" onclick="switchTrendTab('both')">両方</button>
-              <button class="chart-tab" data-tab="expectancy" onclick="switchTrendTab('expectancy')">期待値</button>
-              <button class="chart-tab" data-tab="profitFactor" onclick="switchTrendTab('profitFactor')">PF</button>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+              <select id="trend-condition" onchange="onTrendConditionChange()" style="padding:4px 8px;background:${COLORS.bg};color:${COLORS.text};border:1px solid ${COLORS.border};border-radius:6px;font-size:12px">
+                ${conditionKeys.map(
+                  (k) => html`<option value="${k.conditionKey}" ${k.conditionKey === "baseline" ? "selected" : ""}>${k.conditionLabel}</option>`,
+                )}
+              </select>
+              <div id="trend-tabs" style="display:flex;gap:4px">
+                <button class="chart-tab active" data-tab="both" onclick="switchTrendTab('both')">両方</button>
+                <button class="chart-tab" data-tab="expectancy" onclick="switchTrendTab('expectancy')">期待値</button>
+                <button class="chart-tab" data-tab="profitFactor" onclick="switchTrendTab('profitFactor')">PF</button>
+              </div>
             </div>
             <div id="trend-chart"></div>
           </div>
@@ -223,7 +238,7 @@ app.get("/", async (c) => {
 
     <!-- 履歴テーブル（ベースラインのみ） -->
     <p class="section-title">バックテスト履歴（ベースライン）</p>
-    ${trendData.length > 0
+    ${trendData.filter((r) => r.conditionKey === "baseline").length > 0
       ? html`
           <div class="card table-wrap">
             <table>
@@ -237,7 +252,7 @@ app.get("/", async (c) => {
                 </tr>
               </thead>
               <tbody>
-                ${[...trendData].reverse().map(
+                ${[...trendData].filter((r) => r.conditionKey === "baseline").reverse().map(
                   (r) => {
                     const fr = (r as unknown as { fullResult: Record<string, unknown> | null }).fullResult;
                     const exp = fr?.expectancy != null ? Number(fr.expectancy) : null;
@@ -626,12 +641,20 @@ app.get("/", async (c) => {
       drawCompChart('expectancy');
 
       // --- 時系列推移チャート ---
-      var trendRawData = ${raw(JSON.stringify(trendChartData))};
+      var trendByCondition = ${raw(JSON.stringify(trendChartByCondition))};
+      var currentTrendCondition = 'baseline';
+      var currentTrendMode = 'both';
+
+      function onTrendConditionChange() {
+        currentTrendCondition = document.getElementById('trend-condition').value;
+        drawTrendChart(currentTrendMode);
+      }
 
       function drawTrendChart(mode) {
+        currentTrendMode = mode;
         var el = document.getElementById('trend-chart');
-        if (!el || trendRawData.length < 2) return;
-        var data = trendRawData;
+        var data = trendByCondition[currentTrendCondition] || [];
+        if (!el || data.length < 2) { if (el) el.innerHTML = '<div style="color:${COLORS.textDim};font-size:13px;padding:16px;text-align:center">データなし</div>'; return; }
 
         var showExp = mode === 'both' || mode === 'expectancy';
         var showPf = mode === 'both' || mode === 'profitFactor';
