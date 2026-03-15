@@ -14,6 +14,10 @@ import {
   emptyState,
   tt,
 } from "../views/components";
+import {
+  runMonteCarloSimulation,
+  type MonteCarloConfig,
+} from "../../core/monte-carlo";
 
 const app = new Hono();
 
@@ -221,6 +225,89 @@ app.get("/", async (c) => {
   `;
 
   return c.html(layout("バックテスト", "/backtest", content));
+});
+
+app.post("/api/monte-carlo", async (c) => {
+  const body = await c.req.json<{
+    conditionKey?: string;
+    initialBudget?: number;
+    numPaths?: number;
+    tradesPerPath?: number;
+    ruinThreshold?: number;
+    riskPerTrade?: number;
+  }>();
+
+  const conditionKey = body.conditionKey ?? "baseline";
+  const initialBudget = body.initialBudget ?? 300000;
+  const numPaths = Math.min(Math.max(body.numPaths ?? 10000, 1000), 100000);
+  const tradesPerPath = Math.min(
+    Math.max(body.tradesPerPath ?? 1000, 100),
+    5000,
+  );
+  const ruinThreshold = Math.min(
+    Math.max(body.ruinThreshold ?? 50, 10),
+    90,
+  );
+  const riskPerTrade = Math.min(
+    Math.max(body.riskPerTrade ?? 2, 0.5),
+    5,
+  );
+
+  // パラメータ上限チェック
+  if (numPaths * tradesPerPath > 500_000_000) {
+    return c.json(
+      { error: "パラメータが大きすぎます。パス数またはトレード数を減らしてください" },
+      400,
+    );
+  }
+
+  // 最新のバックテスト結果を取得
+  const latest = await prisma.backtestDailyResult.findFirst({
+    where: { conditionKey },
+    orderBy: { date: "desc" },
+    select: { fullResult: true },
+  });
+
+  if (!latest) {
+    return c.json(
+      { error: "指定された条件キーが見つかりません" },
+      400,
+    );
+  }
+
+  const fullResult = latest.fullResult as Record<string, unknown> | null;
+  const tradeReturns = fullResult?.tradeReturns as number[] | undefined;
+
+  if (!tradeReturns || !Array.isArray(tradeReturns)) {
+    return c.json(
+      { error: "トレードデータがありません。バックテストを再実行してください" },
+      400,
+    );
+  }
+
+  if (tradeReturns.length < 30) {
+    return c.json(
+      { error: "統計的に有意なシミュレーションには最低30トレードが必要です" },
+      400,
+    );
+  }
+
+  // avgStopLossPct = abs(avgLossPct)
+  const avgLossPct = (fullResult?.avgLossPct as number) ?? 0;
+  const avgStopLossPct = Math.abs(avgLossPct) || 3; // フォールバック 3%
+
+  const config: MonteCarloConfig = {
+    tradeReturns,
+    initialBudget,
+    numPaths,
+    tradesPerPath,
+    ruinThresholdPct: ruinThreshold,
+    riskPerTradePct: riskPerTrade,
+    avgStopLossPct,
+  };
+
+  const result = runMonteCarloSimulation(config);
+  return c.json(result);
 });
 
 export default app;
