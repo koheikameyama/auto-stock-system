@@ -27,6 +27,27 @@ import {
 
 const app = new Hono();
 
+function rejectionBadge(reason: string | null) {
+  if (!reason) return html`<span style="color:#64748b">-</span>`;
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    ai_no_go: { label: "AI却下", bg: "#ef444420", color: "#ef4444" },
+    below_threshold: { label: "スコア不足", bg: "#f59e0b20", color: "#f59e0b" },
+    market_halted: { label: "市場停止", bg: "#fb923c20", color: "#fb923c" },
+    disqualified: { label: "即死", bg: "#a855f720", color: "#a855f7" },
+  };
+  const info = map[reason] ?? { label: reason, bg: "#64748b20", color: "#64748b" };
+  return html`<span class="badge" style="background:${info.bg};color:${info.color}">${info.label}</span>`;
+}
+
+function parseGhostAnalysis(raw: string | null): { analysis: string; recommendation: string; misjudgmentType: string | null } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.analysis) return { analysis: parsed.analysis, recommendation: parsed.recommendation ?? "", misjudgmentType: parsed.misjudgmentType ?? null };
+  } catch {}
+  return null;
+}
+
 app.get("/", async (c) => {
   const since90 = getDaysAgoForDB(CONTRARIAN.LOOKBACK_DAYS);
 
@@ -392,8 +413,8 @@ app.get("/", async (c) => {
           </div>
         `}
 
-    <!-- セクション2: 見逃し銘柄 -->
-    <p class="section-title">見逃し銘柄（スキップしたが上昇）</p>
+    <!-- セクション3: FN分析（見逃し銘柄） -->
+    <p class="section-title">見逃し銘柄（棄却したが上昇）</p>
     ${missedStocks.length > 0
       ? html`
           <div class="card table-wrap">
@@ -402,29 +423,37 @@ app.get("/", async (c) => {
                 <tr>
                   <th>日付</th>
                   <th>銘柄</th>
-                  <th>理由</th>
+                  <th>棄却理由</th>
                   <th>スコア</th>
                   <th>ランク</th>
                   <th>騰落率</th>
                 </tr>
               </thead>
               <tbody>
-                ${missedStocks.map(
-                  (r) => html`
+                ${missedStocks.map((r) => {
+                  const ghost = parseGhostAnalysis(r.ghostAnalysis);
+                  return html`
                     <tr>
                       <td>${dayjs(r.date).format("M/D")}</td>
                       <td>${tickerLink(r.tickerCode)}</td>
-                      <td>
-                        ${r.rejectionReason === "ai_no_go"
-                          ? html`<span class="badge" style="background:#ef444420;color:#ef4444">AI却下</span>`
-                          : html`<span class="badge" style="background:#f59e0b20;color:#f59e0b">スコア不足</span>`}
-                      </td>
+                      <td>${rejectionBadge(r.rejectionReason)}</td>
                       <td>${r.totalScore}</td>
                       <td>${rankBadge(r.rank)}</td>
-                      <td>${pnlPercent(Number(r.ghostProfitPct))}</td>
+                      <td>
+                        ${pnlPercent(Number(r.ghostProfitPct))}
+                        ${ghost ? html`<span class="ghost-toggle" onclick="toggleGhost(this)" style="cursor:pointer;margin-left:4px">💡</span>` : ""}
+                      </td>
                     </tr>
-                  `,
-                )}
+                    ${ghost ? html`
+                      <tr class="ghost-detail" style="display:none">
+                        <td colspan="6" style="background:#1e293b;padding:0.75rem;font-size:0.82rem;line-height:1.6">
+                          <p style="margin:0 0 0.5rem;color:#cbd5e1">${ghost.analysis}</p>
+                          ${ghost.recommendation ? html`<p style="margin:0;color:#94a3b8"><strong>改善提案:</strong> ${ghost.recommendation}</p>` : ""}
+                        </td>
+                      </tr>
+                    ` : ""}
+                  `;
+                })}
               </tbody>
             </table>
           </div>
