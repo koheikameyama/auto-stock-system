@@ -38,6 +38,15 @@ function rejectionBadge(reason: string | null) {
   return html`<span class="badge" style="background:${info.bg};color:${info.color}">${info.label}</span>`;
 }
 
+const recommendationLabels: Record<string, string> = {
+  adjust_ai_criteria: "AI判断基準を調整",
+  lower_threshold: "閾値を引き下げ",
+  tighten_threshold: "閾値を引き上げ",
+  add_pattern_rule: "パターンルール追加",
+  add_risk_filter: "リスクフィルター追加",
+  no_change_needed: "変更不要",
+};
+
 function parseGhostAnalysis(raw: string | null): { analysis: string; recommendation: string; misjudgmentType: string | null } | null {
   if (!raw) return null;
   try {
@@ -455,7 +464,7 @@ app.get("/", async (c) => {
                       <tr class="ghost-detail" style="display:none">
                         <td colspan="6" style="background:#1e293b;padding:0.75rem;font-size:0.82rem;line-height:1.6">
                           <p style="margin:0 0 0.5rem;color:#cbd5e1">${ghost.analysis}</p>
-                          ${ghost.recommendation ? html`<p style="margin:0;color:#94a3b8"><strong>改善提案:</strong> ${ghost.recommendation}</p>` : ""}
+                          ${ghost.recommendation ? html`<p style="margin:0;color:#94a3b8"><strong>改善提案:</strong> ${recommendationLabels[ghost.recommendation] ?? ghost.recommendation}</p>` : ""}
                         </td>
                       </tr>
                     ` : ""}
@@ -508,7 +517,7 @@ app.get("/", async (c) => {
                       <tr class="ghost-detail" style="display:none">
                         <td colspan="6" style="background:#1e293b;padding:0.75rem;font-size:0.82rem;line-height:1.6">
                           <p style="margin:0 0 0.5rem;color:#cbd5e1">${ghost.analysis}</p>
-                          ${ghost.recommendation ? html`<p style="margin:0;color:#94a3b8"><strong>改善提案:</strong> ${ghost.recommendation}</p>` : ""}
+                          ${ghost.recommendation ? html`<p style="margin:0;color:#94a3b8"><strong>改善提案:</strong> ${recommendationLabels[ghost.recommendation] ?? ghost.recommendation}</p>` : ""}
                         </td>
                       </tr>
                     ` : ""}
