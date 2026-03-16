@@ -26,10 +26,11 @@ app.get("/", async (c) => {
   const trendDays = DAILY_BACKTEST.TREND_DAYS;
   const sinceDate = dayjs().subtract(trendDays, "day").toDate();
 
-  const conditionCount = DAILY_BACKTEST.PARAMETER_CONDITIONS.length;
+  const paperTradeCount = DAILY_BACKTEST.PAPER_TRADE.TRACKING_START_DATE ? 2 : 0;
+  const conditionCount = DAILY_BACKTEST.PARAMETER_CONDITIONS.length + paperTradeCount;
 
   const [latestResults, trendData] = await Promise.all([
-    // 最新日の結果（全条件）
+    // 最新日の結果（全条件 + ペーパートレード）
     prisma.backtestDailyResult.findMany({
       orderBy: { date: "desc" },
       take: conditionCount,
