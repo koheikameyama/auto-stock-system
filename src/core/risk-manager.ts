@@ -12,7 +12,7 @@ import {
   POSITION_SIZING,
   GAP_RISK,
 } from "../lib/constants";
-import { canAddToSector } from "./sector-analyzer";
+import { canAddToSector, canAddToMacroFactor } from "./sector-analyzer";
 import { calculateDrawdownStatus } from "./drawdown-manager";
 import { fetchStockQuotesBatch } from "./market-data";
 import { checkTimeWindow } from "./time-filter";
@@ -107,6 +107,12 @@ export async function canOpenPosition(
   const sectorCheck = await canAddToSector(stockId);
   if (!sectorCheck.allowed) {
     return { allowed: false, reason: sectorCheck.reason };
+  }
+
+  // 5.5. マクロファクター集中チェック
+  const macroCheck = await canAddToMacroFactor(stockId);
+  if (!macroCheck.allowed) {
+    return { allowed: false, reason: macroCheck.reason };
   }
 
   // 6. ドローダウンチェック

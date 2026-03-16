@@ -180,11 +180,49 @@ export function getSectorGroup(tseSector: string | null): string | null {
 }
 
 // ========================================
+// マクロファクターマスタ
+// ========================================
+
+// マクロファクター → セクターグループ[] のマッピング
+// 同一マクロファクターのセクターは同一のマクロ経済変数（USD/JPY・金利等）で連動して動く
+export const MACRO_FACTOR_MASTER: Record<string, readonly string[]> = {
+  "為替連動（輸出）": ["自動車", "半導体・電子部品"],
+  金利連動: ["金融", "不動産"],
+  "内需・景気敏感": ["小売", "素材", "運輸"],
+  ディフェンシブ: ["医薬品"],
+  "IT・グロース": ["IT・サービス"],
+  エネルギー: ["エネルギー"],
+  その他: ["その他"],
+} as const;
+
+// セクターグループ → マクロファクターの逆引きマップ
+export const SECTOR_TO_MACRO_FACTOR: Record<string, string> = Object.entries(
+  MACRO_FACTOR_MASTER,
+).reduce(
+  (acc, [factor, sectors]) => {
+    for (const sector of sectors) {
+      acc[sector] = factor;
+    }
+    return acc;
+  },
+  {} as Record<string, string>,
+);
+
+/**
+ * セクターグループからマクロファクターを取得する
+ */
+export function getMacroFactor(sectorGroup: string | null): string | null {
+  if (!sectorGroup) return null;
+  return SECTOR_TO_MACRO_FACTOR[sectorGroup] ?? null;
+}
+
+// ========================================
 // セクターリスク管理
 // ========================================
 
 export const SECTOR_RISK = {
   MAX_SAME_SECTOR_POSITIONS: 1, // 同一セクター最大保有数
+  MAX_SAME_MACRO_POSITIONS: 2, // 同一マクロファクター最大保有数
   WEAK_SECTOR_THRESHOLD: -2.0, // 弱セクター判定（日経比 相対パフォーマンス%）
   NEWS_SENTIMENT_DAYS: 3, // ニュースセンチメント集約日数
 } as const;
