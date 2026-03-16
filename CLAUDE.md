@@ -81,6 +81,7 @@
 - LLM API連携を実装する前 → `llm-api.md`
 - コード全般を書く前 → `coding-standards.md`
 - Claude Code の設定を変更する前 → `claude-code-settings.md`
+- バックテスト・パラメータを変更する前 → `backtest.md`
 
 ### 仕様書の管理
 
@@ -135,3 +136,4 @@
 | [llm-api.md](.claude/rules/llm-api.md) | LLM API連携（構造化出力） |
 | [coding-standards.md](.claude/rules/coding-standards.md) | マジックナンバー、後方互換性、並列化、設計ファイル |
 | [claude-code-settings.md](.claude/rules/claude-code-settings.md) | Claude Code 設定管理（permissions はローカルファイル） |
+| [backtest.md](.claude/rules/backtest.md) | バックテスト運用（walk-forward の実行タイミング・判定基準） |
