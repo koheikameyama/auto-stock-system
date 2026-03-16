@@ -75,6 +75,15 @@ export function scoreStock(input: ScoringInput): NewLogicScore {
     }
   }
 
+  // 週足下降トレンド即死ルール: 週足SMA13を下回る銘柄はエントリー禁止
+  if (weeklySma13 != null && weeklyClose != null && weeklyClose < weeklySma13) {
+    return {
+      ...zeroResult,
+      gate: { passed: false, failedGate: "weeklyDowntrend" },
+      disqualifyReason: "weeklyDowntrend",
+    };
+  }
+
   // --- 3. SMA25上の連続日数 ---
   const daysAboveSma25 = countDaysAboveSma25(historicalData);
 

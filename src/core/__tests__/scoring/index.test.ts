@@ -103,6 +103,48 @@ describe("scoreStock", () => {
     expect(result.gate.failedGate).toBe("liquidity");
   });
 
+  it("週足下降トレンド → weeklyDowntrend 即死", () => {
+    // newest-first: 直近50日=80円、過去50日=120円 → 週足SMA13 > 直近週終値
+    const baseDate = new Date("2026-01-01");
+    const declining: OHLCVData[] = Array.from({ length: 100 }, (_, i) => {
+      const close = i < 50 ? 80 : 120;
+      const d = new Date(baseDate);
+      d.setDate(baseDate.getDate() - i);
+      return { date: d.toISOString().slice(0, 10), open: close, high: close + 5, low: close - 5, close, volume: 100000 };
+    });
+    const result = scoreStock({
+      historicalData: declining,
+      latestPrice: 80,
+      latestVolume: 100000,
+      weeklyVolatility: 3,
+      summary: makeSummary({ currentPrice: 80, sma5: 80, sma25: 80 }),
+      avgVolume25: 100000,
+    });
+    expect(result.isDisqualified).toBe(true);
+    expect(result.gate.failedGate).toBe("weeklyDowntrend");
+    expect(result.totalScore).toBe(0);
+  });
+
+  it("週足上昇トレンド → weeklyDowntrend 即死にならない", () => {
+    // newest-first: 直近50日=120円、過去50日=80円 → 週足SMA13 < 直近週終値
+    const baseDate = new Date("2026-01-01");
+    const rising: OHLCVData[] = Array.from({ length: 100 }, (_, i) => {
+      const close = i < 50 ? 120 : 80;
+      const d = new Date(baseDate);
+      d.setDate(baseDate.getDate() - i);
+      return { date: d.toISOString().slice(0, 10), open: close, high: close + 5, low: close - 5, close, volume: 100000 };
+    });
+    const result = scoreStock({
+      historicalData: rising,
+      latestPrice: 120,
+      latestVolume: 100000,
+      weeklyVolatility: 3,
+      summary: makeSummary({ currentPrice: 120, sma5: 120, sma25: 115, sma75: 110 }),
+      avgVolume25: 100000,
+    });
+    expect(result.gate.failedGate).not.toBe("weeklyDowntrend");
+  });
+
   it("各サブスコアが非負", () => {
     const result = scoreStock({
       historicalData: makeOHLCV(100),

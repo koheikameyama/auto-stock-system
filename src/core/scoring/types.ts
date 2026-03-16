@@ -9,6 +9,7 @@ export interface ScoringGateResult {
     | "volatility"
     | "earnings"
     | "dividend"
+    | "weeklyDowntrend"
     | null;
 }
 
