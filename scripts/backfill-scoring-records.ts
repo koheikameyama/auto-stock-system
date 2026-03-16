@@ -186,8 +186,23 @@ async function main(): Promise<void> {
 
   // 3. 営業日リストを生成（OHLCV データから共通日付を抽出）
   console.log("[3/4] 営業日リストを生成中...");
-  const tradingDays = extractTradingDays(allOhlcv, startDate, endDate);
-  console.log(`  営業日: ${tradingDays.length}日`);
+  const allTradingDays = extractTradingDays(allOhlcv, startDate, endDate);
+  console.log(`  営業日: ${allTradingDays.length}日`);
+
+  // 既存データがある日付をスキップ
+  const existingDates = await prisma.scoringRecord.findMany({
+    where: { date: { gte: new Date(startDate), lte: new Date(endDate) } },
+    select: { date: true },
+    distinct: ["date"],
+  });
+  const existingDateSet = new Set(
+    existingDates.map((r) => dayjs(r.date).format("YYYY-MM-DD")),
+  );
+  const tradingDays = allTradingDays.filter((d) => !existingDateSet.has(d));
+  if (existingDateSet.size > 0) {
+    console.log(`  既存データ: ${existingDateSet.size}日分スキップ`);
+  }
+  console.log(`  処理対象: ${tradingDays.length}日`);
 
   // 4. 各営業日についてスコアリング
   console.log("[4/4] スコアリング実行中...");
@@ -248,14 +263,13 @@ async function main(): Promise<void> {
         tickerCode: r.tickerCode,
         totalScore: r.totalScore,
         rank: r.rank,
-        technicalScore: r.technicalScore,
-        technicalBreakdown: r.technicalBreakdown,
-        patternScore: r.patternScore,
-        patternBreakdown: r.patternBreakdown,
-        liquidityScore: r.liquidityScore,
-        liquidityBreakdown: r.liquidityBreakdown,
-        fundamentalScore: r.fundamentalScore,
-        fundamentalBreakdown: r.fundamentalBreakdown,
+        trendQualityScore: r.trendQualityScore,
+        trendQualityBreakdown: r.trendQualityBreakdown,
+        entryTimingScore: r.entryTimingScore,
+        entryTimingBreakdown: r.entryTimingBreakdown,
+        riskQualityScore: r.riskQualityScore,
+        riskQualityBreakdown: r.riskQualityBreakdown,
+        sectorMomentumScore: r.sectorMomentumScore,
         isDisqualified: r.isDisqualified,
         disqualifyReason: r.disqualifyReason,
         aiDecision: null,
