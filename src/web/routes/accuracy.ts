@@ -160,11 +160,9 @@ app.get("/", async (c) => {
       orderBy: { date: "desc" },
       take: 30,
     }),
-    // 傾向分析: Bランク以上で購入しなかった全銘柄
-    // 注: 現行は nextDayProfitPct を select に含めていたが、翌日継続率を削除するため除外
+    // 傾向分析: Bランク以上の全銘柄（リジェクト・承認問わず）
     prisma.scoringRecord.findMany({
       where: {
-        rejectionReason: { not: null },
         totalScore: { gte: SCORING.THRESHOLDS.B_RANK },
         closingPrice: { not: null },
         date: { gte: since90 },
@@ -193,7 +191,7 @@ app.get("/", async (c) => {
   const sectorMap = new Map(stocksForTrend.map((s) => [s.tickerCode, s.jpxSectorName ?? s.sector]));
 
   // --- 傾向分析 ---
-  // スコア80点以上・購入しなかった全銘柄（closingPrice は既にフィルタ済み）
+  // Bランク以上の全銘柄（closingPrice は既にフィルタ済み）
   const analyzedRecords = highScoreTrendRecords;
   const winners = analyzedRecords.filter(
     (r) => r.ghostProfitPct != null && Number(r.ghostProfitPct) > 0,
