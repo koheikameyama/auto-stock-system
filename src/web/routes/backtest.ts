@@ -66,8 +66,8 @@ app.get("/", async (c) => {
 
   // 条件定義順にソート
   const conditionTooltips: Record<string, string> = {
-    paper_new: "現行ロジック（ATR1.0ベース損切り＋トレール1.0）で前方追跡",
-    paper_old: "旧ロジック（固定損切り＋トレール2.0）で前方追跡",
+    paper_new: "現行ロジック（ATR1.0ベース損切り＋トレール1.0）で前方追跡｜本番shouldTrade反映",
+    paper_old: "旧ロジック（固定損切り＋トレール2.0）で前方追跡｜本番shouldTrade反映",
   };
 
   const conditionOrder = DAILY_BACKTEST.PARAMETER_CONDITIONS.map((c) => c.key);

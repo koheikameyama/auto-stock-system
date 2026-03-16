@@ -377,10 +377,14 @@ export function runBacktest(
     }
 
     // 3. 新規エントリー評価
-    // crisis時は新規エントリーをスキップ（本番のshouldTrade=falseと同等）
-    if (todayRegime === "crisis") {
+    // crisis時またはshouldTrade=false日は新規エントリーをスキップ
+    const isMarketHalt = config.shouldTradeSkipDates?.has(today) ?? false;
+    if (todayRegime === "crisis" || isMarketHalt) {
       if (config.verbose) {
-        console.log(`  [${today}] VIX=${todayVix?.toFixed(1)} → crisis: 新規エントリースキップ`);
+        const reason = todayRegime === "crisis"
+          ? `VIX=${todayVix?.toFixed(1)} → crisis`
+          : "shouldTrade=false";
+        console.log(`  [${today}] ${reason}: 新規エントリースキップ`);
       }
     } else if (openPositions.length < regimeMaxPositions && cash > 0) {
       // candidateMapがある場合、当日の候補銘柄のみ評価（生存者バイアス除去）

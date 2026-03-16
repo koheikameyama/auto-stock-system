@@ -32,6 +32,8 @@ export interface BacktestConfig {
   /** タイムストップ日数オーバーライド（デフォルト: TIME_STOP.MAX_HOLDING_DAYS） */
   maxHoldingDays?: number;
   outputFile?: string;
+  /** 取引見送り日（shouldTrade=false）のセット。ペーパートレード用 */
+  shouldTradeSkipDates?: Set<string>;
   verbose: boolean;
 }
 

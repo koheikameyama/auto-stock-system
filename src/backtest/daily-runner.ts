@@ -556,6 +556,21 @@ export async function runDailyBacktest(
 
     const { DEFAULT_PARAMS, FIXED_BUDGET, PAPER_TRADE } = DAILY_BACKTEST;
 
+    // shouldTrade=false の日を取得（本番の取引見送り日を反映）
+    const haltRecords = await prisma.marketAssessment.findMany({
+      where: {
+        date: { gte: new Date(trackingStartDate), lte: new Date(endDate) },
+        shouldTrade: false,
+      },
+      select: { date: true },
+    });
+    const shouldTradeSkipDates = new Set(
+      haltRecords.map((r) => dayjs(r.date).format("YYYY-MM-DD")),
+    );
+    if (shouldTradeSkipDates.size > 0) {
+      console.log(`[paper-trade] 取引見送り日: ${shouldTradeSkipDates.size}日`);
+    }
+
     // 新ベースライン: DEFAULT_PARAMS そのまま
     const newConfig: BacktestConfig = {
       tickers: allTickers,
@@ -580,6 +595,7 @@ export async function runDailyBacktest(
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
+      shouldTradeSkipDates,
       verbose: false,
     };
 
