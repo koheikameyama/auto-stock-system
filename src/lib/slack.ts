@@ -542,6 +542,16 @@ export async function notifyScoringAccuracyReport(data: {
   recallTrend: { weekly: number | null; monthly: number | null };
   f1Trend: { weekly: number | null; monthly: number | null };
   fpPatternDist: Record<string, number>;
+  haltedDaySummary: {
+    totalDays: number;
+    nikkeiUpDays: number;
+    nikkeiStrongUpDays: number;
+    details: Array<{
+      date: string;
+      nikkeiChange: number | null;
+      sentiment: string;
+    }>;
+  };
 }): Promise<void> {
   const reasonLabel: Record<string, string> = {
     below_threshold: "閾値未達",
@@ -618,6 +628,33 @@ export async function notifyScoringAccuracyReport(data: {
     : "データなし";
   const fpPatternSection = `━━ FPパターン分布 ━━\n${fpPatternLines}`;
 
+  // 取引見送り日サマリー
+  const sentimentLabel: Record<string, string> = {
+    bullish: "強気",
+    neutral: "中立",
+    bearish: "弱気",
+    crisis: "危機",
+  };
+  let haltedSection: string;
+  if (data.haltedDaySummary.totalDays === 0) {
+    haltedSection = "━━ 取引見送り日の市場 ━━\n見送り日なし";
+  } else {
+    const detailLines = data.haltedDaySummary.details
+      .map((d) => {
+        const change =
+          d.nikkeiChange !== null
+            ? `${d.nikkeiChange >= 0 ? "+" : ""}${d.nikkeiChange.toFixed(2)}%`
+            : "N/A";
+        return `${d.date}: 日経${change}（${sentimentLabel[d.sentiment] || d.sentiment}）`;
+      })
+      .join("\n");
+    const warning =
+      data.haltedDaySummary.nikkeiStrongUpDays > 0
+        ? `\n⚠ ${data.haltedDaySummary.totalDays}日中${data.haltedDaySummary.nikkeiStrongUpDays}日は日経+1%以上 → 見送り基準の見直し検討`
+        : "";
+    haltedSection = `━━ 取引見送り日の市場 ━━\n${detailLines}${warning}`;
+  }
+
   const message = [
     "━━ カテゴリ別弱点 ━━",
     categoryLines || "データなし",
@@ -634,6 +671,8 @@ export async function notifyScoringAccuracyReport(data: {
     matrixTrend,
     "",
     fpPatternSection,
+    "",
+    haltedSection,
   ].join("\n");
 
   // Sランクの上昇率を取得

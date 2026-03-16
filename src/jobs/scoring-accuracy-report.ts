@@ -267,6 +267,38 @@ export async function main() {
     `  Precision: 週次=${precisionTrend.weekly?.toFixed(1) ?? "N/A"}% 月次=${precisionTrend.monthly?.toFixed(1) ?? "N/A"}%`,
   );
 
+  // 取引見送り日の市場サマリー
+  console.log("  取引見送り日の市場サマリー集計中...");
+  const weeklyAssessments = await prisma.marketAssessment.findMany({
+    where: {
+      date: {
+        gte: getDaysAgoForDB(SCORING_ACCURACY_REPORT.WEEKLY_LOOKBACK_DAYS),
+      },
+      shouldTrade: false,
+    },
+    select: { date: true, nikkeiChange: true, sentiment: true },
+    orderBy: { date: "asc" },
+  });
+
+  const haltedDaySummary = {
+    totalDays: weeklyAssessments.length,
+    nikkeiUpDays: weeklyAssessments.filter(
+      (a) => a.nikkeiChange !== null && Number(a.nikkeiChange) > 0,
+    ).length,
+    nikkeiStrongUpDays: weeklyAssessments.filter(
+      (a) => a.nikkeiChange !== null && Number(a.nikkeiChange) >= 1,
+    ).length,
+    details: weeklyAssessments.map((a) => ({
+      date: dayjs(a.date).format("MM/DD"),
+      nikkeiChange: a.nikkeiChange !== null ? Number(a.nikkeiChange) : null,
+      sentiment: a.sentiment,
+    })),
+  };
+
+  console.log(
+    `  見送り日: ${haltedDaySummary.totalDays}日 (日経上昇: ${haltedDaySummary.nikkeiUpDays}日, +1%以上: ${haltedDaySummary.nikkeiStrongUpDays}日)`,
+  );
+
   // FPパターン分布（週次の ghostAnalysis から集計）
   const fpPatternDist: Record<string, number> = {};
   for (const r of weeklyRaw) {
@@ -293,6 +325,7 @@ export async function main() {
     recallTrend,
     f1Trend,
     fpPatternDist,
+    haltedDaySummary,
   });
 
   console.log("=== Scoring Accuracy Report 終了 ===");
