@@ -311,10 +311,7 @@ export function nikkeiChartShell(): HtmlContent {
   return html`
     <div class="card" id="nikkei-chart-card">
       <div class="nikkei-header">
-        <div>
-          <div class="card-title">日経225</div>
-          <div class="card-value" style="color:${COLORS.textDim}">...</div>
-        </div>
+        <div class="card-title">日経225</div>
         <div class="nikkei-tabs">
           ${periods.map(
             ([key, { label }], i) =>
