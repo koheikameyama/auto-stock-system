@@ -6,7 +6,7 @@
 
 import { prisma } from "../lib/prisma";
 import { getDaysAgoForDB } from "../lib/date-utils";
-import { getSectorGroup, SECTOR_RISK } from "../lib/constants";
+import { getSectorGroup, getMacroFactor, SECTOR_RISK } from "../lib/constants";
 
 // ========================================
 // セクター集中チェック
@@ -84,6 +84,86 @@ export async function canAddToSector(
     return {
       allowed: false,
       reason: `セクター集中制限: ${sectorGroup}に既に${existing.positionCount}ポジション保有中（上限: ${SECTOR_RISK.MAX_SAME_SECTOR_POSITIONS}）`,
+    };
+  }
+
+  return { allowed: true, reason: "OK" };
+}
+
+// ========================================
+// マクロファクター集中チェック
+// ========================================
+
+export interface MacroConcentration {
+  macroFactor: string;
+  positionCount: number;
+  stockIds: string[];
+}
+
+/**
+ * 現在のオープンポジションのマクロファクター集中度を計算する
+ */
+export async function getMacroConcentration(): Promise<MacroConcentration[]> {
+  const openPositions = await prisma.tradingPosition.findMany({
+    where: { status: "open" },
+    include: { stock: { select: { id: true, jpxSectorName: true } } },
+  });
+
+  const macroMap = new Map<string, { count: number; stockIds: string[] }>();
+
+  for (const pos of openPositions) {
+    const sectorGroup = getSectorGroup(pos.stock.jpxSectorName);
+    const factor = getMacroFactor(sectorGroup);
+    if (!factor) continue;
+
+    const entry = macroMap.get(factor) ?? { count: 0, stockIds: [] };
+    entry.count++;
+    entry.stockIds.push(pos.stockId);
+    macroMap.set(factor, entry);
+  }
+
+  return Array.from(macroMap.entries()).map(([macroFactor, data]) => ({
+    macroFactor,
+    positionCount: data.count,
+    stockIds: data.stockIds,
+  }));
+}
+
+/**
+ * 新規ポジションのマクロファクター集中チェック
+ *
+ * 同一マクロファクターに既にMAX_SAME_MACRO_POSITIONS以上のポジションがある場合は不許可。
+ */
+export async function canAddToMacroFactor(
+  stockId: string,
+): Promise<{ allowed: boolean; reason: string }> {
+  const stock = await prisma.stock.findUnique({
+    where: { id: stockId },
+    select: { jpxSectorName: true, tickerCode: true },
+  });
+
+  if (!stock) {
+    return { allowed: false, reason: "銘柄が見つかりません" };
+  }
+
+  const sectorGroup = getSectorGroup(stock.jpxSectorName);
+  const macroFactor = getMacroFactor(sectorGroup);
+
+  if (!macroFactor) {
+    // マクロファクター不明の場合は許可（集中チェック不能）
+    return { allowed: true, reason: "OK" };
+  }
+
+  const concentration = await getMacroConcentration();
+  const existing = concentration.find((c) => c.macroFactor === macroFactor);
+
+  if (
+    existing &&
+    existing.positionCount >= SECTOR_RISK.MAX_SAME_MACRO_POSITIONS
+  ) {
+    return {
+      allowed: false,
+      reason: `マクロファクター集中制限: ${macroFactor}に既に${existing.positionCount}ポジション保有中（上限: ${SECTOR_RISK.MAX_SAME_MACRO_POSITIONS}）`,
     };
   }
 

@@ -11,6 +11,7 @@ import { determineMarketRegime } from "../../core/market-regime";
 import { calculateDrawdownStatus } from "../../core/drawdown-manager";
 import {
   getSectorConcentration,
+  getMacroConcentration,
   calculateSectorMomentum,
 } from "../../core/sector-analyzer";
 import { DRAWDOWN, SECTOR_RISK } from "../../lib/constants";
@@ -28,11 +29,13 @@ const app = new Hono();
 
 app.get("/", async (c) => {
   // Parallel data fetch
-  const [assessment, drawdown, sectorConcentration] = await Promise.all([
-    prisma.marketAssessment.findFirst({ orderBy: { date: "desc" } }),
-    calculateDrawdownStatus(),
-    getSectorConcentration(),
-  ]);
+  const [assessment, drawdown, sectorConcentration, macroConcentration] =
+    await Promise.all([
+      prisma.marketAssessment.findFirst({ orderBy: { date: "desc" } }),
+      calculateDrawdownStatus(),
+      getSectorConcentration(),
+      getMacroConcentration(),
+    ]);
 
   // Market regime from VIX
   const vix = assessment?.vix ? Number(assessment.vix) : null;
@@ -127,6 +130,39 @@ app.get("/", async (c) => {
                         ${sc.positionCount}
                       </td>
                       <td>${SECTOR_RISK.MAX_SAME_SECTOR_POSITIONS}</td>
+                    </tr>
+                  `,
+                )}
+              </tbody>
+            </table>
+          </div>
+        `
+      : html`<div class="card">${emptyState("オープンポジションなし")}</div>`}
+
+    <!-- Macro Factor Concentration -->
+    <p class="section-title">マクロファクター集中度</p>
+    ${macroConcentration.length > 0
+      ? html`
+          <div class="card table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>マクロファクター</th>
+                  <th>保有数</th>
+                  <th>上限</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${macroConcentration.map(
+                  (mc) => html`
+                    <tr>
+                      <td>${mc.macroFactor}</td>
+                      <td
+                        style="color:${mc.positionCount >= SECTOR_RISK.MAX_SAME_MACRO_POSITIONS ? "#ef4444" : "#e2e8f0"}"
+                      >
+                        ${mc.positionCount}
+                      </td>
+                      <td>${SECTOR_RISK.MAX_SAME_MACRO_POSITIONS}</td>
                     </tr>
                   `,
                 )}
