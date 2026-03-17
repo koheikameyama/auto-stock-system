@@ -45,7 +45,7 @@ export const DAILY_BACKTEST = {
     maxPositions: 3,
   },
 
-  /** パラメータ条件（1ベースライン + 4軸×3値 + フィルター6 + カラー2 + 複合1 = 24条件） */
+  /** パラメータ条件（1ベースライン + 4軸×3値 + フィルター6 + 保有/CD4 + カラー2 = 26条件） */
   PARAMETER_CONDITIONS: [
     // ベースライン（本番ロジック）
     { key: "baseline", label: "ベースライン" },
@@ -80,12 +80,13 @@ export const DAILY_BACKTEST = {
     { key: "rs_filter", label: "RSフィルタ", overrides: { rsFilterEnabled: true } },
     { key: "vol_off_rs", label: "ボラOFF+RS", overrides: { volatilityFilterEnabled: false, rsFilterEnabled: true } },
 
-    // タイムストップ延長（含み益時のハードキャップ変更）
-    { key: "hold_15", label: "上限15日", overrides: { maxHoldingDays: 15 } },
-    { key: "hold_20", label: "上限20日", overrides: { maxHoldingDays: 20 } },
+    // タイムストップ短縮（ベースライン=10日）
+    { key: "hold_5", label: "上限5日", overrides: { maxHoldingDays: 5 } },
+    { key: "hold_7", label: "上限7日", overrides: { maxHoldingDays: 7 } },
 
-    // 複合: RS+上限15日
-    { key: "rs_hold15", label: "RS+上限15日", overrides: { rsFilterEnabled: true, maxHoldingDays: 15 } },
+    // クールダウン日数（ベースライン=5日）
+    { key: "cooldown_3", label: "CD3日", overrides: { cooldownDays: 3 } },
+    { key: "cooldown_7", label: "CD7日", overrides: { cooldownDays: 7 } },
 
     // 指値カラー幅（ベースライン=ATR連動）
     { key: "collar_2pct", label: "カラー2%", overrides: { collarPct: 0.02 } },
