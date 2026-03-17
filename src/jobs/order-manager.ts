@@ -57,6 +57,7 @@ interface AnalysisResult {
   review: TradeReviewResult;
   newsContext: string | undefined;
   strategy: "day_trade" | "swing";
+  pendingBuyOrderId: string | null;
 }
 
 export async function main() {
@@ -196,10 +197,6 @@ export async function main() {
         const pendingBuyOrder = await prisma.tradingOrder.findFirst({
           where: { stockId: stock.id, side: "buy", status: "pending" },
         });
-        if (pendingBuyOrder) {
-          console.log(`    [${tickerCode}] pending買い注文あり、スキップ`);
-          return null;
-        }
 
         const quote = await fetchStockQuote(tickerCode);
         if (!quote) {
@@ -292,6 +289,7 @@ export async function main() {
           review,
           newsContext,
           strategy,
+          pendingBuyOrderId: pendingBuyOrder?.id ?? null,
         };
       }),
     ),
@@ -324,6 +322,7 @@ export async function main() {
   console.log(`\n  [フェーズ2] 注文作成開始（スコア順）`);
 
   let ordersCreated = 0;
+  let ordersUpdated = 0;
 
   for (const result of passed) {
     const {
@@ -335,6 +334,7 @@ export async function main() {
       entryCondition,
       review,
       newsContext,
+      pendingBuyOrderId,
     } = result;
 
     console.log(
@@ -479,25 +479,41 @@ export async function main() {
       newsContext: newsContext ?? null,
     };
 
-    // TradingOrder作成
-    await prisma.tradingOrder.create({
-      data: {
-        stockId,
-        side: "buy",
-        orderType: "limit",
-        strategy: finalCondition.strategy,
-        limitPrice: finalCondition.limitPrice,
-        takeProfitPrice: finalCondition.takeProfitPrice,
-        stopLossPrice: finalCondition.stopLossPrice,
-        quantity: finalCondition.quantity,
-        status: "pending",
-        reasoning: review.reasoning,
-        expiresAt,
-        entrySnapshot: entrySnapshot as object,
-      },
-    });
-
-    ordersCreated++;
+    // TradingOrder作成 or 既存pending注文を更新
+    if (pendingBuyOrderId) {
+      await prisma.tradingOrder.update({
+        where: { id: pendingBuyOrderId },
+        data: {
+          limitPrice: finalCondition.limitPrice,
+          takeProfitPrice: finalCondition.takeProfitPrice,
+          stopLossPrice: finalCondition.stopLossPrice,
+          quantity: finalCondition.quantity,
+          reasoning: review.reasoning,
+          expiresAt,
+          entrySnapshot: entrySnapshot as object,
+        },
+      });
+      console.log(`    → 既存pending注文を更新 (${pendingBuyOrderId})`);
+      ordersUpdated++;
+    } else {
+      await prisma.tradingOrder.create({
+        data: {
+          stockId,
+          side: "buy",
+          orderType: "limit",
+          strategy: finalCondition.strategy,
+          limitPrice: finalCondition.limitPrice,
+          takeProfitPrice: finalCondition.takeProfitPrice,
+          stopLossPrice: finalCondition.stopLossPrice,
+          quantity: finalCondition.quantity,
+          status: "pending",
+          reasoning: review.reasoning,
+          expiresAt,
+          entrySnapshot: entrySnapshot as object,
+        },
+      });
+      ordersCreated++;
+    }
     cashBalance -= requiredAmount;
 
     // Slack通知
@@ -514,23 +530,24 @@ export async function main() {
     });
   }
 
-  console.log(`\n  注文作成数: ${ordersCreated}`);
+  console.log(`\n  注文作成数: ${ordersCreated} / 更新数: ${ordersUpdated}`);
 
   // サマリー通知
+  const totalActions = ordersCreated + ordersUpdated;
   await notifySlack({
     title: `📋 注文マネージャー完了`,
     message:
-      ordersCreated > 0
-        ? `${selectedStocks.length}銘柄を分析し、${ordersCreated}件の注文を発行しました`
+      totalActions > 0
+        ? `${selectedStocks.length}銘柄を分析し、${ordersCreated}件の注文を発行、${ordersUpdated}件を更新しました`
         : `${selectedStocks.length}銘柄を分析しましたが、注文条件を満たす銘柄はありませんでした`,
-    color: ordersCreated > 0 ? "good" : "#808080",
+    color: totalActions > 0 ? "good" : "#808080",
     fields: [
       {
         title: "分析銘柄数",
         value: `${selectedStocks.length}件`,
         short: true,
       },
-      { title: "注文作成数", value: `${ordersCreated}件`, short: true },
+      { title: "新規/更新", value: `${ordersCreated}件 / ${ordersUpdated}件`, short: true },
     ],
   });
 
