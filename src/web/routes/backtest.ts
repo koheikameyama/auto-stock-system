@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { html, raw } from "hono/html";
 import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
-import { DAILY_BACKTEST } from "../../lib/constants";
+import { DAILY_BACKTEST, CAPITAL_SCENARIOS } from "../../lib/constants";
 import { layout } from "../views/layout";
 import { COLORS } from "../views/styles";
 import {
@@ -27,7 +27,37 @@ app.get("/", async (c) => {
   const sinceDate = dayjs().subtract(trendDays, "day").toDate();
 
   const paperTradeCount = DAILY_BACKTEST.PAPER_TRADE.TRACKING_START_DATE ? 2 : 0;
-  const conditionCount = DAILY_BACKTEST.PARAMETER_CONDITIONS.length + paperTradeCount;
+  const conditionCount = DAILY_BACKTEST.PARAMETER_CONDITIONS.length + CAPITAL_SCENARIOS.length + paperTradeCount;
+
+  // 軸グループ定義
+  const AXIS_GROUPS = [
+    { key: "all", label: "全体" },
+    { key: "baseline", label: "ベースライン" },
+    { key: "ts_act", label: "TS起動" },
+    { key: "score", label: "スコア" },
+    { key: "atr", label: "ATR" },
+    { key: "trail", label: "トレール" },
+    { key: "filter", label: "フィルター" },
+    { key: "hold", label: "保有日数" },
+    { key: "collar", label: "カラー" },
+    { key: "capital", label: "資金帯" },
+    { key: "paper", label: "ペーパー" },
+  ];
+
+  // conditionKey → group mapping
+  function getAxisGroup(condKey: string): string {
+    if (condKey === "baseline") return "baseline";
+    if (condKey.startsWith("ts_act")) return "ts_act";
+    if (condKey.startsWith("score")) return "score";
+    if (condKey.startsWith("atr")) return "atr";
+    if (condKey.startsWith("trail")) return "trail";
+    if (condKey.startsWith("hold_") || condKey === "rs_hold15") return "hold";
+    if (condKey.startsWith("trend_") || condKey.startsWith("pullback_") || condKey.startsWith("vol_") || condKey.startsWith("rs_")) return "filter";
+    if (condKey.startsWith("collar")) return "collar";
+    if (condKey.startsWith("capital")) return "capital";
+    if (condKey.startsWith("paper")) return "paper";
+    return "other";
+  }
 
   const [latestResults, trendData] = await Promise.all([
     // 最新日の結果（全条件 + ペーパートレード）
@@ -71,11 +101,16 @@ app.get("/", async (c) => {
   };
 
   const conditionOrder = DAILY_BACKTEST.PARAMETER_CONDITIONS.map((c) => c.key);
-  const sortedLatest = [...latestResults].sort(
-    (a, b) =>
-      conditionOrder.indexOf(a.conditionKey) -
-      conditionOrder.indexOf(b.conditionKey),
-  );
+  const capitalOrder = CAPITAL_SCENARIOS.map((s) => {
+    const label = `${(s.budget / 10000).toFixed(0)}万×${s.maxPositions}銘柄`;
+    return `capital_${label}`;
+  });
+  const fullConditionOrder = [...conditionOrder, ...capitalOrder, "paper_new", "paper_old"];
+  const sortedLatest = [...latestResults].sort((a, b) => {
+    const ai = fullConditionOrder.indexOf(a.conditionKey);
+    const bi = fullConditionOrder.indexOf(b.conditionKey);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
 
   // モーダル用データ
   const detailDataJson = JSON.stringify(
@@ -117,6 +152,7 @@ app.get("/", async (c) => {
     return {
       label: r.conditionLabel,
       key: r.conditionKey,
+      group: getAxisGroup(r.conditionKey),
       expectancy: fr?.expectancy != null ? Number(fr.expectancy) : null,
       profitFactor: Number(r.profitFactor) >= 999 ? null : Number(r.profitFactor),
       riskRewardRatio: fr?.riskRewardRatio != null ? Number(fr.riskRewardRatio) : null,
@@ -138,6 +174,10 @@ app.get("/", async (c) => {
       profitFactor: Number(r.profitFactor) >= 999 ? null : Number(r.profitFactor),
     });
   }
+  // 表示するタブを絞る（データのあるグループのみ）
+  const presentGroups = new Set(latestResults.map((r) => getAxisGroup(r.conditionKey)));
+  const activeAxisGroups = AXIS_GROUPS.filter((g) => g.key === "all" || presentGroups.has(g.key));
+
   const trendChartData = trendChartByCondition["baseline"] ?? [];
 
   const content = html`
@@ -147,6 +187,11 @@ app.get("/", async (c) => {
     </p>
     ${sortedLatest.length > 0
       ? html`
+          <div id="axis-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+            ${activeAxisGroups.map((g) => html`
+              <button class="chart-tab${g.key === "all" ? " active" : ""}" data-axis="${g.key}" onclick="switchAxisTab('${g.key}')">${g.label}</button>
+            `)}
+          </div>
           <div class="card table-wrap">
             <table>
               <thead>
@@ -162,7 +207,7 @@ app.get("/", async (c) => {
               <tbody>
                 ${sortedLatest.map(
                   (r) => html`
-                    <tr>
+                    <tr data-group="${getAxisGroup(r.conditionKey)}">
                       <td style="font-weight:${r.conditionKey === "baseline" ? "700" : "400"}">
                         ${conditionTooltips[r.conditionKey]
                           ? tt(r.conditionLabel, conditionTooltips[r.conditionKey])
@@ -552,6 +597,44 @@ app.get("/", async (c) => {
         container.innerHTML = svg;
       }
 
+      // --- 軸タブフィルタ ---
+      var currentAxisGroup = 'all';
+
+      function getAxisGroupClient(k) {
+        if (k === 'baseline') return 'baseline';
+        if (k.indexOf('ts_act') === 0) return 'ts_act';
+        if (k.indexOf('score') === 0) return 'score';
+        if (k.indexOf('atr') === 0) return 'atr';
+        if (k.indexOf('trail') === 0) return 'trail';
+        if (k.indexOf('hold_') === 0 || k === 'rs_hold15') return 'hold';
+        if (k.indexOf('trend_') === 0 || k.indexOf('pullback_') === 0 || k.indexOf('vol_') === 0 || k.indexOf('rs_') === 0) return 'filter';
+        if (k.indexOf('collar') === 0) return 'collar';
+        if (k.indexOf('capital') === 0) return 'capital';
+        if (k.indexOf('paper') === 0) return 'paper';
+        return 'other';
+      }
+
+      function switchAxisTab(group) {
+        currentAxisGroup = group;
+        var tabs = document.querySelectorAll('#axis-tabs .chart-tab');
+        tabs.forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-axis') === group); });
+
+        // テーブル行フィルタ
+        var rows = document.querySelectorAll('tbody tr[data-group]');
+        rows.forEach(function(r) {
+          r.style.display = (group === 'all' || r.getAttribute('data-group') === group) ? '' : 'none';
+        });
+
+        // チャート再描画
+        var activeCompTab = document.querySelector('#comp-tabs .chart-tab.active');
+        var compMetric = activeCompTab ? activeCompTab.getAttribute('data-tab') : 'expectancy';
+        drawCompChart(compMetric);
+
+        var activeTrendTab = document.querySelector('#trend-tabs .chart-tab.active');
+        var trendMetric = activeTrendTab ? activeTrendTab.getAttribute('data-tab') : 'expectancy';
+        drawTrendChart(trendMetric);
+      }
+
       // --- 条件比較チャート ---
       var compData = ${raw(JSON.stringify(comparisonData))};
       var compMetrics = {
@@ -564,7 +647,8 @@ app.get("/", async (c) => {
         var el = document.getElementById('comparison-chart');
         if (!el || compData.length < 2) return;
         var m = compMetrics[metricKey];
-        var data = compData;
+        var data = currentAxisGroup === 'all' ? compData : compData.filter(function(d) { return d.group === currentAxisGroup; });
+        if (data.length === 0) { el.innerHTML = '<p style="color:#64748b;font-size:13px;text-align:center;padding:16px">該当条件なし</p>'; return; }
 
         var vals = data.map(function(d) { return d[metricKey]; }).filter(function(v) { return v != null; });
         if (vals.length === 0) { el.innerHTML = ''; return; }
@@ -647,8 +731,9 @@ app.get("/", async (c) => {
         var legendEl = document.getElementById('trend-legend');
         if (!el) return;
 
-        var condKeys = Object.keys(trendByCondition);
-        if (condKeys.length === 0) { el.innerHTML = ''; if (legendEl) legendEl.innerHTML = ''; return; }
+        var allCondKeys = Object.keys(trendByCondition);
+        var condKeys = currentAxisGroup === 'all' ? allCondKeys : allCondKeys.filter(function(k) { return getAxisGroupClient(k) === currentAxisGroup; });
+        if (condKeys.length === 0) { el.innerHTML = '<p style="color:#64748b;font-size:13px;text-align:center;padding:16px">該当条件なし</p>'; if (legendEl) legendEl.innerHTML = ''; return; }
 
         // 日付軸はベースラインから（最も多いデータ数の条件を使用）
         var refKey = condKeys.reduce(function(a, b) { return (trendByCondition[a] || []).length >= (trendByCondition[b] || []).length ? a : b; });
@@ -690,13 +775,13 @@ app.get("/", async (c) => {
 
         // 各条件の線（ベースラインは最後に描画して前面に）
         var sortedKeys = condKeys.filter(function(k) { return k !== 'baseline'; });
-        sortedKeys.push('baseline');
+        if (condKeys.indexOf('baseline') !== -1) sortedKeys.push('baseline');
 
         sortedKeys.forEach(function(k, ci) {
           var data = trendByCondition[k] || [];
           if (data.length < 2) return;
           var isBaseline = k === 'baseline';
-          var colorIdx = condKeys.indexOf(k);
+          var colorIdx = allCondKeys.indexOf(k);
           var color = TREND_COLORS[colorIdx % TREND_COLORS.length];
 
           var pts = [];
@@ -724,7 +809,7 @@ app.get("/", async (c) => {
         if (legendEl) {
           var legend = '';
           condKeys.forEach(function(k, i) {
-            var color = TREND_COLORS[i % TREND_COLORS.length];
+            var color = TREND_COLORS[allCondKeys.indexOf(k) % TREND_COLORS.length];
             var isBaseline = k === 'baseline';
             legend += '<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:' + (isBaseline ? '${COLORS.text}' : '${COLORS.textDim}') + ';font-weight:' + (isBaseline ? '700' : '400') + '">';
             legend += '<span style="display:inline-block;width:12px;height:' + (isBaseline ? '3' : '2') + 'px;background:' + color + ';border-radius:1px;opacity:' + (isBaseline ? '1' : '0.6') + '"></span>';
