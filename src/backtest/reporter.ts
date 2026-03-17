@@ -47,6 +47,7 @@ export function printBacktestReport(result: BacktestResult): void {
     console.log(`  シャープレシオ: ${metrics.sharpeRatio}`);
   }
   console.log(`  平均保有日数: ${metrics.avgHoldingDays}日`);
+  console.log(`  注文数: ${metrics.ordersPlaced} (約定: ${metrics.ordersFilled}, 約定率: ${metrics.fillRate}%)`);
 
   const sign = metrics.totalPnl >= 0 ? "+" : "";
   console.log(`  累計損益: ${sign}¥${metrics.totalPnl.toLocaleString()} (${sign}${metrics.totalReturnPct}%)`);
@@ -126,13 +127,14 @@ export function printSensitivityReport(results: SensitivityResult[]): void {
   for (const [param, items] of groups) {
     console.log("");
     console.log(`--- ${param} ---`);
-    console.log("  値       勝率     PF      取引数  DD      リターン");
+    console.log("  値       勝率     PF      取引数  DD      リターン  約定率");
     for (const item of items) {
       const m = item.metrics;
       const pf = m.profitFactor === Infinity ? "∞" : String(m.profitFactor);
       const ret = `${m.totalReturnPct >= 0 ? "+" : ""}${m.totalReturnPct}%`;
+      const fr = `${m.fillRate}%`;
       console.log(
-        `  ${String(item.value).padEnd(8)} ${String(m.winRate + "%").padStart(6)}  ${pf.padStart(6)}  ${String(m.totalTrades).padStart(5)}  -${String(m.maxDrawdown + "%").padStart(5)}  ${ret}`,
+        `  ${String(item.value).padEnd(8)} ${String(m.winRate + "%").padStart(6)}  ${pf.padStart(6)}  ${String(m.totalTrades).padStart(5)}  -${String(m.maxDrawdown + "%").padStart(5)}  ${ret.padStart(8)}  ${fr.padStart(6)}`,
       );
     }
   }

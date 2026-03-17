@@ -13,6 +13,8 @@ export function calculateMetrics(
   trades: SimulatedPosition[],
   equityCurve: DailyEquity[],
   initialBudget: number,
+  ordersPlaced?: number,
+  ordersFilled?: number,
 ): PerformanceMetrics {
   const closedTrades = trades.filter(
     (t) =>
@@ -118,6 +120,11 @@ export function calculateMetrics(
     costImpactPct: round2(costImpactPct),
     expectancy: round2(expectancy),
     riskRewardRatio: round2(riskRewardRatio),
+    ordersPlaced: ordersPlaced ?? 0,
+    ordersFilled: ordersFilled ?? 0,
+    fillRate: ordersPlaced && ordersPlaced > 0
+      ? round2((ordersFilled ?? 0) / ordersPlaced * 100)
+      : 0,
   };
 }
 

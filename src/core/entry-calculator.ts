@@ -42,6 +42,7 @@ export function calculateEntryCondition(
   availableBudget: number,
   maxPositionPct: number,
   historicalData?: Array<{ open: number; close: number }>,
+  collarPct?: number,
 ): EntryCondition {
   // 1. 指値: サポートライン or BB下限の近い方（現在価格に近い方を採用）
   const bbLower = summary.bollingerBands.lower;
@@ -60,8 +61,9 @@ export function calculateEntryCondition(
   } else if (bbLower) {
     limitPrice = bbLower;
   }
-  // 現在価格から最大3%以内に制限
-  limitPrice = Math.max(limitPrice, currentPrice * 0.97);
+  // 現在価格から最大カラー幅以内に制限（デフォルト3%）
+  const collar = collarPct ?? 0.03;
+  limitPrice = Math.max(limitPrice, currentPrice * (1 - collar));
   limitPrice = Math.round(limitPrice);
 
   // 2. 利確参考値: ATR×5.0（実際の利確はトレーリングストップが担う、TPは安全弁）

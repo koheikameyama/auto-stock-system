@@ -44,6 +44,7 @@ const { values } = parseArgs({
     "vol-filter": { type: "boolean", default: false },
     "rs-filter": { type: "boolean", default: false },
     "max-holding-days": { type: "string" },
+    "collar-pct": { type: "string" },
     sensitivity: { type: "boolean", default: false },
     output: { type: "string" },
     verbose: { type: "boolean", default: false },
@@ -76,6 +77,7 @@ function printHelp(): void {
   --no-costs              取引コストモデルを無効化
   --price-limits          値幅制限シミュレーションを有効化
   --no-gap-risk           ギャップリスク考慮を無効化
+  --collar-pct <n>        指値カラー幅（0.01〜0.05）  デフォルト: 0.03
   --override-tp-sl        TP/SLを固定比率で上書き（感度分析用、デフォルトは本番ロジック）
   --sensitivity           パラメータ感度分析を実行
   --output <path>         JSON結果を出力
@@ -124,6 +126,9 @@ async function main(): Promise<void> {
     rsFilterEnabled: values["rs-filter"] ?? false,
     maxHoldingDays: values["max-holding-days"]
       ? Number(values["max-holding-days"])
+      : undefined,
+    collarPct: values["collar-pct"]
+      ? Number(values["collar-pct"])
       : undefined,
     trailMultiplier: values["trail-multiplier"]
       ? Number(values["trail-multiplier"])

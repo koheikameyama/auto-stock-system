@@ -31,6 +31,8 @@ export interface BacktestConfig {
   rsFilterEnabled: boolean;
   /** タイムストップ日数オーバーライド（デフォルト: TIME_STOP.MAX_HOLDING_DAYS） */
   maxHoldingDays?: number;
+  /** 指値カラー幅（現在価格からの最大乖離率）。デフォルト: 0.03 (3%) */
+  collarPct?: number;
   outputFile?: string;
   /** 取引見送り日（shouldTrade=false）のセット。ペーパートレード用 */
   shouldTradeSkipDates?: Set<string>;
@@ -117,6 +119,10 @@ export interface PerformanceMetrics {
   costImpactPct: number;
   expectancy: number;
   riskRewardRatio: number;
+  // 約定率
+  ordersPlaced: number;
+  ordersFilled: number;
+  fillRate: number;
 }
 
 export interface RankMetrics {

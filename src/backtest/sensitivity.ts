@@ -16,6 +16,7 @@ const SENSITIVITY_PARAMS: Record<string, number[]> = {
   atrMultiplier: [0.5, 0.8, 1.0, 1.2, 1.5],
   trailingActivationMultiplier: [1.0, 1.2, 1.5, 2.0, 2.5],
   trailMultiplier: [0.5, 0.8, 1.0, 1.2, 1.5],
+  collarPct: [0.01, 0.02, 0.03, 0.04, 0.05],
 };
 
 // TP/SL関連パラメータ（変化時に overrideTpSl=true を自動セット）
@@ -28,6 +29,7 @@ const PARAM_LABELS: Record<string, string> = {
   atrMultiplier: "ATR倍率",
   trailingActivationMultiplier: "TS起動ATR倍率",
   trailMultiplier: "トレール幅ATR倍率",
+  collarPct: "指値カラー幅",
 };
 
 export function runSensitivityAnalysis(

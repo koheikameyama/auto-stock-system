@@ -44,6 +44,8 @@ export function runBacktest(
   // ストップアウト後のクールダウン: ticker → 最終決済日のdayIdx
   const lastExitDayIdx = new Map<string, number>();
   let cash = config.initialBudget;
+  let ordersPlaced = 0;
+  let ordersFilled = 0;
 
   // 全銘柄の営業日をマージしてソート（重複排除）
   const allDatesSet = new Set<string>();
@@ -93,6 +95,7 @@ export function runBacktest(
           const hasExisting = openPositions.some((p) => p.ticker === order.ticker);
           if (!hasExisting) {
             filledOrders.push({ ...order, fillPrice });
+            ordersFilled++;
           }
         }
       }
@@ -424,6 +427,7 @@ export function runBacktest(
           entryAtr: candidate.entryAtr,
           regime: todayRegime,
         });
+        ordersPlaced++;
       }
     }
 
@@ -452,7 +456,7 @@ export function runBacktest(
     allTrades.push(pos);
   }
 
-  const metrics = calculateMetrics(allTrades, equityCurve, config.initialBudget);
+  const metrics = calculateMetrics(allTrades, equityCurve, config.initialBudget, ordersPlaced, ordersFilled);
 
   return {
     config,
@@ -641,6 +645,7 @@ function evaluateTickers(
       budgetForSizing,
       maxPositionPct,
       config.gapRiskEnabled ? newestFirst : undefined,
+      config.collarPct,
     );
 
     if (entry.quantity <= 0) continue;
