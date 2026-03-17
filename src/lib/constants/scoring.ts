@@ -170,11 +170,11 @@ export const COLLAR = {
   /** ATR% → カラー幅変換の係数 */
   ATR_MULTIPLIER: 1.0,
   /** カラー幅の下限（%） */
-  MIN_PCT: 0.01,
+  MIN_PCT: 0.05,
   /** カラー幅の上限（%） */
   MAX_PCT: 0.05,
   /** ATR取得不可時のフォールバック（%） */
-  FALLBACK_PCT: 0.03,
+  FALLBACK_PCT: 0.05,
 } as const;
 
 /** リスクベースのポジションサイジング */
