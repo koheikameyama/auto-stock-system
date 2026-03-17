@@ -102,7 +102,7 @@ model MarketAssessment {
   nikkeiVi        Decimal? @db.Decimal(8, 2)
   usdjpy          Decimal? @db.Decimal(8, 4)
   cmeFuturesPrice Decimal? @db.Decimal(10, 2)
-  sentiment       String // bullish / neutral / bearish / crisis
+  sentiment       String // bullish / neutral / cautious / bearish / crisis
   shouldTrade     Boolean // 今日取引すべきか
   reasoning       String  @db.Text // 判断理由
 

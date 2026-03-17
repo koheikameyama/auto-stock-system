@@ -18,6 +18,7 @@ export const COLORS = {
   bullish: "#22c55e",
   bearish: "#ef4444",
   neutral: "#94a3b8",
+  cautious: "#f59e0b",
   crisis: "#dc2626",
   navBg: "#0b1120",
 } as const;
@@ -107,6 +108,7 @@ export const CSS = `
   .badge-bullish { background: rgba(34,197,94,0.15); color: ${COLORS.bullish}; }
   .badge-bearish { background: rgba(239,68,68,0.15); color: ${COLORS.bearish}; }
   .badge-neutral { background: rgba(148,163,184,0.15); color: ${COLORS.neutral}; }
+  .badge-cautious { background: rgba(245,158,11,0.15); color: ${COLORS.cautious}; }
   .badge-crisis { background: rgba(220,38,38,0.15); color: ${COLORS.crisis}; }
   .badge-day_trade { background: rgba(59,130,246,0.15); color: ${COLORS.accent}; }
   .badge-swing { background: rgba(168,85,247,0.15); color: #a855f7; }
