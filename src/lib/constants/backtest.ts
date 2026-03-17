@@ -87,7 +87,7 @@ export const DAILY_BACKTEST = {
     // 複合: RS+上限15日
     { key: "rs_hold15", label: "RS+上限15日", overrides: { rsFilterEnabled: true, maxHoldingDays: 15 } },
 
-    // 指値カラー幅（ベースライン=3%）
+    // 指値カラー幅（ベースライン=ATR連動）
     { key: "collar_2pct", label: "カラー2%", overrides: { collarPct: 0.02 } },
     { key: "collar_5pct", label: "カラー5%", overrides: { collarPct: 0.05 } },
   ] satisfies ParameterCondition[],

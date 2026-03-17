@@ -544,7 +544,7 @@ export async function runDailyBacktest(
 
     const sign = result.metrics.totalReturnPct >= 0 ? "+" : "";
     console.log(
-      `[daily-backtest] ${condition.label}: 勝率${result.metrics.winRate}% PF${result.metrics.profitFactor} ${sign}${result.metrics.totalReturnPct}%`,
+      `[daily-backtest] ${condition.label}: 勝率${result.metrics.winRate}% PF${result.metrics.profitFactor} ${sign}${result.metrics.totalReturnPct}% 約定率${result.metrics.fillRate}% (${result.metrics.ordersFilled}/${result.metrics.ordersPlaced})`,
     );
   }
 
