@@ -589,6 +589,20 @@ ${sectorText || "  特になし"}`;
     }
   }
 
+  // レジーム制限で候補が不足した場合、Bランク上位を補充（最低パイプライン保証）
+  if (filtered.length < SCORING.MIN_CANDIDATES_FOR_AI) {
+    const filteredSet = new Set(filtered.map((c) => c.tickerCode));
+    const bRankBackfill = qualified
+      .filter((c) => c.score.rank === "B" && !filteredSet.has(c.tickerCode))
+      .slice(0, SCORING.MIN_CANDIDATES_FOR_AI - filtered.length);
+    if (bRankBackfill.length > 0) {
+      filtered = [...filtered, ...bRankBackfill];
+      console.log(
+        `  レジーム緩和: 候補不足のためBランク上位${bRankBackfill.length}銘柄を補充（→ ${filtered.length}銘柄）`,
+      );
+    }
+  }
+
   // 精度追跡: filteredに入らなかったスコア60+の銘柄
   const filteredTickerSet = new Set(filtered.map((c) => c.tickerCode));
   const accuracyTrackingCandidates = qualified.filter(
