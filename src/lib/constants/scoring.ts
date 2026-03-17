@@ -165,6 +165,18 @@ export const STOP_LOSS = {
   SUPPORT_BUFFER_ATR: 0.3,
 } as const;
 
+/** 指値カラー幅（ATR連動） */
+export const COLLAR = {
+  /** ATR% → カラー幅変換の係数 */
+  ATR_MULTIPLIER: 1.0,
+  /** カラー幅の下限（%） */
+  MIN_PCT: 0.01,
+  /** カラー幅の上限（%） */
+  MAX_PCT: 0.05,
+  /** ATR取得不可時のフォールバック（%） */
+  FALLBACK_PCT: 0.03,
+} as const;
+
 /** リスクベースのポジションサイジング */
 export const POSITION_SIZING = {
   /** 1トレードあたりリスク: 総資金の2% */

@@ -12,7 +12,7 @@ import {
   calculatePositionSize,
   estimateGapRisk,
 } from "./risk-manager";
-import { STOP_LOSS, POSITION_DEFAULTS } from "../lib/constants";
+import { STOP_LOSS, POSITION_DEFAULTS, COLLAR } from "../lib/constants";
 
 export interface EntryCondition {
   limitPrice: number;
@@ -61,8 +61,19 @@ export function calculateEntryCondition(
   } else if (bbLower) {
     limitPrice = bbLower;
   }
-  // 現在価格から最大カラー幅以内に制限（デフォルト3%）
-  const collar = collarPct ?? 0.03;
+  // 現在価格から最大カラー幅以内に制限（ATR連動 or 固定値）
+  let collar: number;
+  if (collarPct != null) {
+    collar = collarPct;
+  } else if (summary.atr14 != null && currentPrice > 0) {
+    const atrPct = summary.atr14 / currentPrice;
+    collar = Math.max(
+      COLLAR.MIN_PCT,
+      Math.min(atrPct * COLLAR.ATR_MULTIPLIER, COLLAR.MAX_PCT),
+    );
+  } else {
+    collar = COLLAR.FALLBACK_PCT;
+  }
   limitPrice = Math.max(limitPrice, currentPrice * (1 - collar));
   limitPrice = Math.round(limitPrice);
 

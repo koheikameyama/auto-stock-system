@@ -117,7 +117,6 @@ export const DAILY_BACKTEST = {
     strategy: "swing" as const,
     overrideTpSl: true,       // ATRベースSL（ATR×1.0）— WF検証でOOS PF 1.74
     cooldownDays: 5,          // ストップアウト後の同一銘柄再エントリー禁止日数
-    collarPct: 0.03,          // 指値カラー幅（現在価格からの最大乖離率）
   },
 
   /** ボラティリティ＆RSフィルターの閾値 */
