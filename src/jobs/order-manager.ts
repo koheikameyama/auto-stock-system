@@ -1,5 +1,5 @@
 /**
- * 注文マネージャー（9:20 JST / 平日）
+ * 注文マネージャー（9:50 JST / 平日）
  *
  * 「ロジックが主役、AIが最終審判」フロー:
  * 1. 今日のMarketAssessmentを確認（shouldTrade = true のみ）
@@ -37,6 +37,7 @@ import type {
 } from "../core/ai-decision";
 import { canOpenPosition, validateStopLoss } from "../core/risk-manager";
 import { getCashBalance } from "../core/position-manager";
+import { analyzeOpeningSession } from "../core/opening-session";
 import { notifyOrderPlaced, notifyRiskAlert, notifySlack } from "../lib/slack";
 import { getSectorGroup } from "../lib/constants";
 import type { EntrySnapshot } from "../types/snapshots";
@@ -105,14 +106,15 @@ export async function main() {
     return;
   }
 
-  // 1.5. 当日選定外のpending買い注文をキャンセル
+  // 1.5. 当日選定外のpending買い注文をキャンセル（swing注文は expiry まで維持）
   const selectedTickerCodes = new Set(selectedStocks.map((s) => s.tickerCode));
   const pendingBuyOrders = await prisma.tradingOrder.findMany({
     where: { side: "buy", status: "pending" },
     include: { stock: true },
   });
   const staleOrders = pendingBuyOrders.filter(
-    (o) => !selectedTickerCodes.has(o.stock.tickerCode),
+    (o) =>
+      !selectedTickerCodes.has(o.stock.tickerCode) && o.strategy !== "swing",
   );
   if (staleOrders.length > 0) {
     await prisma.tradingOrder.updateMany({
@@ -256,6 +258,15 @@ export async function main() {
             ? catalysts.map((c) => `[${c.type}] ${c.summary}`).join("\n")
             : undefined;
 
+        // 寄り付きセッション分析
+        const openingAnalysis = analyzeOpeningSession(
+          quote,
+          techSummary.volumeAnalysis.avgVolume20 ?? 0,
+        );
+        if (openingAnalysis.summary) {
+          console.log(`    [${tickerCode}] 寄り付き: ${openingAnalysis.summary.replace(/\n/g, " / ")}`);
+        }
+
         // AIレビュー
         const scoreFormatted = formatScoreForAI(score, techSummary);
         const review = await reviewTrade(
@@ -266,6 +277,7 @@ export async function main() {
             sector: getSectorGroup(stock.sector) ?? stock.sector ?? "不明",
             scoreFormatted,
             newsContext,
+            openingContext: openingAnalysis.summary ?? undefined,
           },
           entryCondition,
           assessment,

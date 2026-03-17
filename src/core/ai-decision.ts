@@ -61,6 +61,7 @@ export interface TradeReviewInput {
   sector: string;
   scoreFormatted: string;
   newsContext?: string;
+  openingContext?: string;
 }
 
 export interface PositionInput {
@@ -286,6 +287,10 @@ ${stock.scoreFormatted}
 - 理由: ${assessment.reasoning}
 
 このトレードを承認しますか？`;
+
+  if (stock.openingContext) {
+    userPrompt += `\n\n【寄り付きセッション分析】\n${stock.openingContext}`;
+  }
 
   if (stock.newsContext) {
     userPrompt += `\n\n【関連ニュース】\n${stock.newsContext}`;
