@@ -307,12 +307,127 @@ export async function main() {
     ),
   );
 
-  const passed = analysisResults.filter(
+  let passed = analysisResults.filter(
     (r): r is AnalysisResult => r !== null,
   );
 
   console.log(
     `  [フェーズ1] 分析完了: ${selectedStocks.length}銘柄中 ${passed.length}銘柄が条件通過`,
+  );
+
+  // =========================================
+  // フェーズ1.7: 統合優先順位付け（既存pending + 新規候補をスコア順で余力配分）
+  // =========================================
+  console.log(`\n  [フェーズ1.7] 統合優先順位付け...`);
+  const totalOrderBudget = await getCashBalance();
+
+  // Phase 1.5 で stale キャンセル後の残存 pending buy 注文を取得
+  const remainingPendingBuys = await prisma.tradingOrder.findMany({
+    where: { side: "buy", status: "pending" },
+    include: { stock: true },
+  });
+
+  interface BudgetCandidate {
+    type: "existing" | "new";
+    tickerCode: string;
+    score: number;
+    requiredAmount: number;
+    orderId?: string;
+  }
+
+  const budgetCandidates: BudgetCandidate[] = [];
+
+  // 既存 pending を追加
+  for (const order of remainingPendingBuys) {
+    const snapshot = order.entrySnapshot as Record<string, unknown> | null;
+    const scoreObj = snapshot?.score as Record<string, unknown> | undefined;
+    const score = (scoreObj?.totalScore as number) ?? 0;
+    budgetCandidates.push({
+      type: "existing",
+      tickerCode: order.stock.tickerCode,
+      score,
+      requiredAmount: Number(order.limitPrice) * order.quantity,
+      orderId: order.id,
+    });
+  }
+
+  // 新規 passed を追加（既存 pending と同じ銘柄は除外 — Phase 2 で update するため）
+  const existingPendingTickers = new Set(
+    remainingPendingBuys.map((o) => o.stock.tickerCode),
+  );
+  for (const result of passed) {
+    if (existingPendingTickers.has(result.tickerCode)) continue;
+    budgetCandidates.push({
+      type: "new",
+      tickerCode: result.tickerCode,
+      score: result.score.totalScore,
+      requiredAmount:
+        result.entryCondition.limitPrice * result.entryCondition.quantity,
+    });
+  }
+
+  // スコア順ソート
+  budgetCandidates.sort((a, b) => b.score - a.score);
+
+  // 予算配分
+  let budgetUsed = 0;
+  const keepOrderIds = new Set<string>();
+  const keepNewTickers = new Set<string>();
+  const cancelOrderIds: string[] = [];
+  const cancelledInfo: Array<{ tickerCode: string; score: number }> = [];
+
+  for (const c of budgetCandidates) {
+    if (budgetUsed + c.requiredAmount <= totalOrderBudget) {
+      budgetUsed += c.requiredAmount;
+      if (c.type === "existing") keepOrderIds.add(c.orderId!);
+      else keepNewTickers.add(c.tickerCode);
+    } else {
+      if (c.type === "existing") {
+        cancelOrderIds.push(c.orderId!);
+        cancelledInfo.push({ tickerCode: c.tickerCode, score: c.score });
+      }
+      // new は passed から除外される（keepNewTickers に入らない）
+    }
+  }
+
+  // 余力超過の既存 pending をキャンセル
+  if (cancelOrderIds.length > 0) {
+    await prisma.tradingOrder.updateMany({
+      where: { id: { in: cancelOrderIds } },
+      data: { status: "cancelled" },
+    });
+    for (const info of cancelledInfo) {
+      console.log(
+        `  [${info.tickerCode}] 余力超過のためpending注文キャンセル（スコア: ${info.score}点）`,
+      );
+    }
+    await notifySlack({
+      title: `余力超過: ${cancelOrderIds.length}件のpending注文をキャンセル`,
+      message: cancelledInfo
+        .map((i) => `- ${i.tickerCode}（${i.score}点）`)
+        .join("\n"),
+      color: "warning",
+    });
+  }
+
+  // passed を余力内の新規 + 既存pendingと同銘柄のみに絞る
+  passed = passed.filter(
+    (r) =>
+      existingPendingTickers.has(r.tickerCode) ||
+      keepNewTickers.has(r.tickerCode),
+  );
+
+  // Phase 2 の cashBalance は既存 pending 予約分を差し引いて開始
+  const existingReserved = remainingPendingBuys
+    .filter((o) => keepOrderIds.has(o.id))
+    .reduce((sum, o) => sum + Number(o.limitPrice) * o.quantity, 0);
+  cashBalance = totalOrderBudget - existingReserved;
+
+  console.log(
+    `  統合結果: 総予算=¥${totalOrderBudget.toLocaleString()}, 既存pending予約=¥${existingReserved.toLocaleString()}, 新規注文用残高=¥${cashBalance.toLocaleString()}`,
+  );
+  console.log(
+    `  既存pending維持: ${keepOrderIds.size}件, 余力超過キャンセル: ${cancelOrderIds.length}件, 新規候補: ${passed.filter((r) => !existingPendingTickers.has(r.tickerCode)).length}件`,
   );
 
   // =========================================
