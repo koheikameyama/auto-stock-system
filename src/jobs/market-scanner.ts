@@ -28,7 +28,6 @@ import {
   MARKET_INDEX,
   SECTOR_RISK,
   STRATEGY_SWITCHING,
-  CAUTIOUS_MODE,
   THESIS_INVALIDATION,
   getSectorGroup,
 } from "../lib/constants";
@@ -809,13 +808,8 @@ ${sectorText || "  特になし"}`;
       `  → AIレビュー: ${reviews.length}銘柄中 ${goStocks.length}銘柄承認`,
     );
 
-    // cautiousモード: 新規注文をMAX_NEW_POSITIONSに制限
-    if (assessment!.sentiment === "cautious" && goStocks.length > CAUTIOUS_MODE.MAX_NEW_POSITIONS) {
-      console.log(
-        `  → cautiousモード: 新規注文を${CAUTIOUS_MODE.MAX_NEW_POSITIONS}件に制限（${goStocks.length} → ${CAUTIOUS_MODE.MAX_NEW_POSITIONS}）`,
-      );
-      goStocks = goStocks.slice(0, CAUTIOUS_MODE.MAX_NEW_POSITIONS);
-    }
+    // cautiousモード: TS引き締め（TRAILING_TIGHTEN_MULTIPLIER）で対応
+    // 銘柄数の制限は機会損失になるため廃止（リスクはポジションサイズとストップで管理）
 
     // 6. MarketAssessment + ScoringRecord に結果を保存
     console.log("[5/5] 結果保存中...");
