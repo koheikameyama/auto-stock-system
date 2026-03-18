@@ -107,45 +107,23 @@ export async function main() {
     return;
   }
 
-  // 1.5. 当日選定外のpending買い注文をキャンセル（swing注文は expiry まで維持、ただしAI no_goは除く）
+  // 1.5. 選定外のpending買い注文をキャンセル（EOD失敗時のフォールバック）
   const selectedTickerCodes = new Set(selectedStocks.map((s) => s.tickerCode));
-  const pendingBuyOrders = await prisma.tradingOrder.findMany({
-    where: { side: "buy", status: "pending" },
+  const staleOrders = await prisma.tradingOrder.findMany({
+    where: {
+      side: "buy",
+      status: "pending",
+      stock: { tickerCode: { notIn: [...selectedTickerCodes] } },
+    },
     include: { stock: true },
   });
-
-  // market-scannerでAI no_goになったswing注文もキャンセル対象にする
-  const pendingSwingTickers = pendingBuyOrders
-    .filter((o) => o.strategy === "swing" && !selectedTickerCodes.has(o.stock.tickerCode))
-    .map((o) => o.stock.tickerCode);
-  const noGoTickers = new Set<string>();
-  if (pendingSwingTickers.length > 0) {
-    const noGoRecords = await prisma.scoringRecord.findMany({
-      where: {
-        date: getTodayForDB(),
-        tickerCode: { in: pendingSwingTickers },
-        aiDecision: "no_go",
-      },
-      select: { tickerCode: true },
-    });
-    for (const r of noGoRecords) noGoTickers.add(r.tickerCode);
-  }
-
-  const staleOrders = pendingBuyOrders.filter(
-    (o) =>
-      !selectedTickerCodes.has(o.stock.tickerCode) &&
-      (o.strategy !== "swing" || noGoTickers.has(o.stock.tickerCode)),
-  );
   if (staleOrders.length > 0) {
     await prisma.tradingOrder.updateMany({
       where: { id: { in: staleOrders.map((o) => o.id) } },
       data: { status: "cancelled" },
     });
     for (const o of staleOrders) {
-      const reason = noGoTickers.has(o.stock.tickerCode) ? "AI no_goのため" : "当日選定外のため";
-      console.log(
-        `  [${o.stock.tickerCode}] ${reason}pending注文キャンセル (order: ${o.id})`,
-      );
+      console.log(`  [${o.stock.tickerCode}] 選定外のためpending注文キャンセル`);
     }
     console.log(`  選定外pending注文キャンセル: ${staleOrders.length}件`);
   }
@@ -342,7 +320,7 @@ export async function main() {
   console.log(`\n  [フェーズ1.7] 統合優先順位付け...`);
   const totalOrderBudget = await getCashBalance();
 
-  // Phase 1.5 で stale キャンセル後の残存 pending buy 注文を取得
+  // 残存 pending buy 注文を取得（EODで全キャンセル済みのため通常0件）
   const remainingPendingBuys = await prisma.tradingOrder.findMany({
     where: { side: "buy", status: "pending" },
     include: { stock: true },

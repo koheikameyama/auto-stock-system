@@ -82,16 +82,6 @@ export const WEEKLY_REVIEW = {
   LOOKBACK_DAYS: 7,
 } as const;
 
-// テーシス無効化チェック（pending swing注文）
-export const THESIS_INVALIDATION = {
-  /** SMA25乖離率の無効化閾値（%） */
-  DEVIATION_RATE_25_THRESHOLD: -3,
-  /** AI連続NO-GOでキャンセルする日数 */
-  CONSECUTIVE_NOGO_DAYS: 2,
-  /** 同時実行数 */
-  CONCURRENCY: 3,
-} as const;
-
 // タイムストップ
 export const TIME_STOP = {
   MAX_HOLDING_DAYS: 10,          // 含み損/横ばい時の強制退場日数
