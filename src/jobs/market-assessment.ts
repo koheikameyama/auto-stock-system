@@ -356,3 +356,15 @@ ${sectorText || "  特になし"}`;
     assessment,
   };
 }
+
+const isDirectRun = process.argv[1]?.includes("market-assessment");
+if (isDirectRun) {
+  main()
+    .catch((error) => {
+      console.error("Market Assessment エラー:", error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

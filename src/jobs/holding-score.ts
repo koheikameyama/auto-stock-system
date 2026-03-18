@@ -376,3 +376,15 @@ function getRankEmoji(rank: HoldingRank): string {
       return "🔴";
   }
 }
+
+const isDirectRun = process.argv[1]?.includes("holding-score");
+if (isDirectRun) {
+  main()
+    .catch((error) => {
+      console.error("Holding Score エラー:", error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

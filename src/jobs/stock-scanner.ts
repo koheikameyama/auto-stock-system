@@ -626,3 +626,15 @@ export async function main(context?: MarketAssessmentContext) {
 
   console.log("=== Stock Scanner 終了 ===");
 }
+
+const isDirectRun = process.argv[1]?.includes("stock-scanner");
+if (isDirectRun) {
+  main()
+    .catch((error) => {
+      console.error("Stock Scanner エラー:", error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
