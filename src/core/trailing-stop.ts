@@ -28,6 +28,8 @@ export interface TrailingStopResult {
   effectiveStopLoss: number;
   effectiveTakeProfit: number | null;
   reason: string;
+  beActivationPrice: number;
+  tsActivationPrice: number;
 }
 
 /**
@@ -61,14 +63,14 @@ export function calculateTrailingStop(
     ? entryPrice + entryAtr * activationMultiplier
     : entryPrice * (1 + TRAILING_STOP.ACTIVATION_PCT[strategy]);
 
-  // 2. 未発動チェック
-  if (maxHighDuringHold < activationPrice) {
-    // 2.5. ブレイクイーブンストップ（トレーリング発動前の建値撤退）
-    const beMultiplier = BREAK_EVEN_STOP.ACTIVATION_ATR_MULTIPLIER[strategy];
-    const beActivationPrice = entryAtr
-      ? entryPrice + entryAtr * beMultiplier
-      : entryPrice * (1 + BREAK_EVEN_STOP.ACTIVATION_PCT[strategy]);
+  // 2. ブレイクイーブン発動価格を算出
+  const beMultiplier = BREAK_EVEN_STOP.ACTIVATION_ATR_MULTIPLIER[strategy];
+  const beActivationPrice = entryAtr
+    ? entryPrice + entryAtr * beMultiplier
+    : entryPrice * (1 + BREAK_EVEN_STOP.ACTIVATION_PCT[strategy]);
 
+  // 3. 未発動チェック
+  if (maxHighDuringHold < activationPrice) {
     if (maxHighDuringHold >= beActivationPrice) {
       const breakEvenStop = Math.max(entryPrice, originalStopLoss);
       return {
@@ -77,6 +79,8 @@ export function calculateTrailingStop(
         effectiveStopLoss: breakEvenStop,
         effectiveTakeProfit: originalTakeProfit,
         reason: `ブレイクイーブン発動（最高値¥${Math.round(maxHighDuringHold)} >= BE発動¥${Math.round(beActivationPrice)}、SL→¥${Math.round(breakEvenStop)}）`,
+        beActivationPrice,
+        tsActivationPrice: activationPrice,
       };
     }
 
@@ -86,6 +90,8 @@ export function calculateTrailingStop(
       effectiveStopLoss: originalStopLoss,
       effectiveTakeProfit: originalTakeProfit,
       reason: `未発動（最高値¥${Math.round(maxHighDuringHold)} < BE発動¥${Math.round(beActivationPrice)} < TS発動¥${Math.round(activationPrice)}）`,
+      beActivationPrice,
+      tsActivationPrice: activationPrice,
     };
   }
 
@@ -107,12 +113,14 @@ export function calculateTrailingStop(
   }
   newTrailingStop = Math.max(newTrailingStop, originalStopLoss, entryPrice);
 
-  // 5. 発動後: 固定TPを無効化し上値を追う
+  // 6. 発動後: 固定TPを無効化し上値を追う
   return {
     isActivated: true,
     trailingStopPrice: newTrailingStop,
     effectiveStopLoss: newTrailingStop,
     effectiveTakeProfit: null,
     reason: `トレーリング発動（最高値¥${Math.round(maxHighDuringHold)} → ストップ¥${newTrailingStop}）`,
+    beActivationPrice,
+    tsActivationPrice: activationPrice,
   };
 }

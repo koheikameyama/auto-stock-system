@@ -93,20 +93,26 @@ app.get("/", async (c) => {
                         const effectiveSL = tsResult.effectiveStopLoss;
                         let statusLabel: string;
                         let statusColor: string;
+                        let activationInfo = "";
                         if (tsResult.isActivated) {
                           statusLabel = `TS ¥${formatYen(effectiveSL)}`;
                           statusColor = "#3b82f6";
                         } else if (effectiveSL >= entryPrice) {
                           statusLabel = `BE ¥${formatYen(effectiveSL)}`;
                           statusColor = "#22c55e";
+                          activationInfo = `TS ¥${formatYen(tsResult.tsActivationPrice)}`;
                         } else {
                           statusLabel = `SL ¥${formatYen(effectiveSL)}`;
                           statusColor = "#94a3b8";
+                          activationInfo = `BE ¥${formatYen(tsResult.beActivationPrice)} / TS ¥${formatYen(tsResult.tsActivationPrice)}`;
                         }
 
                         return html`
                           <td>¥${formatYen(effectiveSL)}</td>
-                          <td><span class="badge" style="background:${statusColor}20;color:${statusColor}">${statusLabel}</span></td>
+                          <td>
+                            <span class="badge" style="background:${statusColor}20;color:${statusColor}">${statusLabel}</span>
+                            ${activationInfo ? html`<div style="font-size:0.7rem;color:#94a3b8;margin-top:2px">${activationInfo}</div>` : ""}
+                          </td>
                         `;
                       })()}
                     </tr>
