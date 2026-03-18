@@ -73,6 +73,7 @@ import type {
   SectorMomentum,
   NewsSectorSentiment,
 } from "../core/sector-analyzer";
+import { main as runHoldingScore } from "./holding-score";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -106,6 +107,13 @@ function buildMarketFields(marketData: Awaited<ReturnType<typeof fetchMarketData
 export async function main() {
   console.log("=== Market Scanner 開始 ===");
   let isShadowMode = false;
+
+  // 0. 保有継続スコアリング（オープンポジションのTS引き締め判定）
+  try {
+    await runHoldingScore();
+  } catch (error) {
+    console.error("保有スコアリングエラー（スキャン続行）:", error);
+  }
 
   // 1. 市場指標データ取得
   console.log("[1/5] 市場指標データ取得中...");

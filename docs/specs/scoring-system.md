@@ -588,5 +588,5 @@ model HoldingScoreRecord {
 |----------|------|
 | `src/core/scoring/holding.ts` | `scoreHolding()` メイン関数 |
 | `src/core/scoring/intermediates.ts` | 中間計算ヘルパー（`scoreStock()`と共有） |
-| `src/jobs/holding-score.ts` | 日次バッチジョブ |
+| `src/jobs/holding-score.ts` | 保有スコアリングジョブ（market-scannerから呼び出し） |
 | `src/lib/constants/scoring.ts` | `HOLDING_SCORE` 定数 |
