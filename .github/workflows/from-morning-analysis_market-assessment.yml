@@ -1,8 +1,6 @@
-name: "[← morning-analysis] Market Scanner"
+name: "[← morning-analysis] Market Assessment"
 
 on:
-  # schedule:
-  #   - cron: "30 23 * * 0-4" # 08:30 JST (平日) ※現在はcron-job.orgで実行
   workflow_dispatch:
     inputs:
       skip_market_day_check:
@@ -11,7 +9,7 @@ on:
         default: false
 
 concurrency:
-  group: market-scanner
+  group: market-assessment
   cancel-in-progress: false
 
 env:
@@ -54,11 +52,11 @@ jobs:
             echo "should_run=$CHECK" >> "$GITHUB_OUTPUT"
           fi
 
-  market-scanner:
+  market-assessment:
     needs: check-market-day
     if: needs.check-market-day.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -67,10 +65,10 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
-      - run: npm run scan
+      - run: npm run assess
 
   notify-success:
-    needs: market-scanner
+    needs: market-assessment
     if: success()
     runs-on: ubuntu-latest
     steps:
@@ -78,13 +76,13 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "Market Scanner 完了"
-          SLACK_MESSAGE: "市場スキャン・テーシスチェックが正常に完了しました"
+          SLACK_TITLE: "Market Assessment 完了"
+          SLACK_MESSAGE: "市場評価が正常に完了しました"
           SLACK_COLOR: good
           SLACK_FOOTER: "Stock Buddy"
 
   notify-failure:
-    needs: market-scanner
+    needs: market-assessment
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
@@ -92,9 +90,9 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "Market Scanner 失敗"
+          SLACK_TITLE: "Market Assessment 失敗"
           SLACK_MESSAGE: |
-            市場スキャンまたはテーシスチェックが失敗しました。
+            市場評価が失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
           SLACK_FOOTER: "Stock Buddy"

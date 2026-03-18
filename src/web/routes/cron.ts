@@ -20,7 +20,9 @@ import { main as runMiddayReassessment } from "../../jobs/midday-reassessment";
 import { main as runEod } from "../../jobs/end-of-day";
 import { main as runDailyBacktest } from "../../jobs/daily-backtest";
 import { main as runDelistingSync } from "../../jobs/jpx-delisting-sync";
-import { main as runMarketScanner } from "../../jobs/market-scanner";
+import { main as runMarketAssessment } from "../../jobs/market-assessment";
+import { main as runHoldingScore } from "../../jobs/holding-score";
+import { main as runStockScanner } from "../../jobs/stock-scanner";
 import { main as runScoringAccuracy } from "../../jobs/scoring-accuracy";
 import { main as runDefensiveExitFollowup } from "../../jobs/defensive-exit-followup";
 import { main as runUnfilledOrderFollowup } from "../../jobs/unfilled-order-followup";
@@ -44,7 +46,9 @@ const JOBS: Record<string, JobDef> = {
   "midday-reassessment": { fn: runMiddayReassessment, requiresMarketDay: true },
   "end-of-day": { fn: runEod, requiresMarketDay: true },
   "daily-backtest": { fn: runDailyBacktest, requiresMarketDay: true },
-  "market-scanner": { fn: runMarketScanner, requiresMarketDay: true },
+  "market-assessment": { fn: async () => { await runMarketAssessment(); }, requiresMarketDay: true },
+  "holding-score": { fn: runHoldingScore, requiresMarketDay: true },
+  "stock-scanner": { fn: runStockScanner, requiresMarketDay: true },
   "scoring-accuracy": { fn: runScoringAccuracy, requiresMarketDay: true },
   "defensive-exit-followup": { fn: runDefensiveExitFollowup, requiresMarketDay: true },
   "unfilled-order-followup": { fn: runUnfilledOrderFollowup, requiresMarketDay: true },

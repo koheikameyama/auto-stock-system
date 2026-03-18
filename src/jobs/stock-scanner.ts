@@ -1,17 +1,9 @@
 /**
- * 市場スキャナー（8:30 JST / 平日）
+ * 銘柄スキャンジョブ
  *
- * 「ロジックが主役、AIが最終審判」フロー:
- * 1. 市場指標データ取得
- * 2. AI市場評価 → shouldTrade判定
- * 3. shouldTrade = false → Slack通知して終了
- * 4. shouldTrade = true → 銘柄選定
- *    a. 対象銘柄のヒストリカルデータ取得
- *    b. テクニカル分析
- *    c. 4カテゴリスコアリング（0-100）→ 上位10-20銘柄に絞り込み
- *    d. AIレビュー（Go/No-Go）
- *    e. MarketAssessment に結果を保存
- *    f. Slackに候補銘柄通知
+ * テクニカル分析 → スコアリング → AIレビュー → 結果保存。
+ * market-scanner オーケストレーターからコンテキスト付きで呼ばれるほか、
+ * 単独実行時は MarketAssessment DB から復元して動作する。
  */
 
 import { prisma } from "../lib/prisma";
@@ -25,14 +17,11 @@ import {
   SCORING_ACCURACY,
   UNIT_SHARES,
   TRADING_DEFAULTS,
-  MARKET_INDEX,
   SECTOR_RISK,
-  STRATEGY_SWITCHING,
   getSectorGroup,
 } from "../lib/constants";
 import { SECTOR_MOMENTUM_SCORING } from "../lib/constants/scoring";
 import {
-  fetchMarketData,
   fetchHistoricalData,
 } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
@@ -43,21 +32,18 @@ import {
   getContrarianHistoryBatch,
   calculateContrarianBonus,
 } from "../core/contrarian-analyzer";
-import { assessMarket, reviewStocks } from "../core/ai-decision";
-import type { MarketDataInput, StockReviewCandidateInput } from "../core/ai-decision";
+import { reviewStocks } from "../core/ai-decision";
+import type { StockReviewCandidateInput } from "../core/ai-decision";
 import {
-  notifyMarketAssessment,
   notifyStockCandidates,
-  notifyRiskAlert,
 } from "../lib/slack";
 import pLimit from "p-limit";
 import {
   determineMarketRegime,
   determinePreMarketRegime,
   calculateCmeDivergence,
-  determineTradingStrategy,
 } from "../core/market-regime";
-import type { MarketRegime, StrategyDecision } from "../core/market-regime";
+import type { MarketRegime } from "../core/market-regime";
 import { calculateDrawdownStatus } from "../core/drawdown-manager";
 import type { DrawdownStatus } from "../core/drawdown-manager";
 import { getEffectiveCapital } from "../core/position-manager";
@@ -65,11 +51,7 @@ import {
   calculateSectorMomentum,
   getNewsSectorSentiment,
 } from "../core/sector-analyzer";
-import type {
-  SectorMomentum,
-  NewsSectorSentiment,
-} from "../core/sector-analyzer";
-import { main as runHoldingScore } from "./holding-score";
+import type { MarketAssessmentContext } from "./market-assessment";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -84,141 +66,37 @@ interface ScoredCandidate {
   newsContext?: string;
 }
 
-/** MarketAssessment保存用の市場指標フィールドを構築する */
-function buildMarketFields(marketData: Awaited<ReturnType<typeof fetchMarketData>>) {
-  return {
-    nikkeiPrice: marketData.nikkei!.price,
-    nikkeiChange: marketData.nikkei!.changePercent,
-    sp500Change: marketData.sp500?.changePercent,
-    nasdaqChange: marketData.nasdaq?.changePercent,
-    dowChange: marketData.dow?.changePercent,
-    soxChange: marketData.sox?.changePercent,
-    vix: marketData.vix?.price,
-    nikkeiVi: null as null,
-    usdjpy: marketData.usdjpy?.price,
-    cmeFuturesPrice: marketData.cmeFutures?.price,
-  };
-}
-
-export async function main() {
-  console.log("=== Market Scanner 開始 ===");
-  let isShadowMode = false;
-
-  // 1. 市場指標データ取得
-  console.log("[1/5] 市場指標データ取得中...");
-  const marketData = await fetchMarketData();
-
-  if (!marketData.nikkei) {
-    console.error("市場データの取得に失敗しました");
-    await notifyRiskAlert({
-      type: "データ取得エラー",
-      message: "日経平均データの取得に失敗しました。手動確認してください。",
-    });
-    throw new Error("市場データの取得に失敗しました（nikkei が null）");
-  }
-
-  if (!marketData.vix) {
-    console.error("VIXの取得に失敗しました");
-    await notifyRiskAlert({
-      type: "データ取得エラー",
-      message: "VIXが取得できませんでした。手動確認してください。",
-    });
-    throw new Error("市場データの取得に失敗しました（vix が null）");
-  }
-
-  // 米国市場オーバーナイトデータログ
-  const usLog = [
-    marketData.nasdaq ? `NASDAQ ${marketData.nasdaq.changePercent >= 0 ? "+" : ""}${marketData.nasdaq.changePercent.toFixed(2)}%` : null,
-    marketData.dow ? `ダウ ${marketData.dow.changePercent >= 0 ? "+" : ""}${marketData.dow.changePercent.toFixed(2)}%` : null,
-    marketData.sox ? `SOX ${marketData.sox.changePercent >= 0 ? "+" : ""}${marketData.sox.changePercent.toFixed(2)}%` : null,
-  ].filter(Boolean);
-  if (usLog.length > 0) {
-    console.log(`  米国市場（前日）: ${usLog.join(", ")}`);
-  }
-
-  // 1.5. ニュース分析データ取得
-  console.log("[1.5/5] ニュース分析データ取得中...");
-  const newsAnalysis = await prisma.newsAnalysis.findUnique({
-    where: { date: getTodayForDB() },
+/** 単独実行時: MarketAssessment DB から stock-scanner 用コンテキストを復元 */
+async function restoreContextFromDB(): Promise<MarketAssessmentContext> {
+  const today = getTodayForDB();
+  const record = await prisma.marketAssessment.findUnique({
+    where: { date: today },
   });
 
-  let newsSummary: string | undefined;
-  if (newsAnalysis) {
-    const sectorText = (
-      newsAnalysis.sectorImpacts as Array<{
-        sector: string;
-        impact: string;
-        summary: string;
-      }>
-    )
-      .map((s) => `  - ${s.sector}: ${s.impact} — ${s.summary}`)
-      .join("\n");
-
-    newsSummary = `【ニュース分析】
-- 地政学リスクレベル: ${newsAnalysis.geopoliticalRiskLevel}/5
-- ${newsAnalysis.geopoliticalSummary}
-- 市場インパクト: ${newsAnalysis.marketImpact}
-- ${newsAnalysis.marketImpactSummary}
-- 主要イベント: ${newsAnalysis.keyEvents}
-【セクター別影響】
-${sectorText || "  特になし"}`;
-
-    console.log(
-      `  ニュース分析あり（地政学リスク: ${newsAnalysis.geopoliticalRiskLevel}/5, 市場: ${newsAnalysis.marketImpact}）`,
-    );
-  } else {
-    console.log("  ニュース分析なし（news-collector未実行）");
+  if (!record) {
+    throw new Error("MarketAssessment が見つかりません。先に market-assessment を実行してください。");
   }
 
-  // 1.7. CME先物ナイトセッション乖離率チェック（機械的 — レジーム判定の前に実行）
+  // VIX からレジームを再構築
+  const vix = record.vix ? Number(record.vix) : 20;
+  let regime: MarketRegime = determineMarketRegime(vix);
+
+  // CME乖離率を再計算してレジーム引き上げ
   let cmeDivergencePct: number | null = null;
-  if (marketData.cmeFutures && marketData.usdjpy && marketData.nikkei.previousClose > 0) {
+  if (record.cmeFuturesPrice && record.usdjpy && record.nikkeiPrice && record.nikkeiChange) {
+    const nikkeiPrice = Number(record.nikkeiPrice);
+    const nikkeiChange = Number(record.nikkeiChange);
+    const previousClose = nikkeiPrice / (1 + nikkeiChange / 100);
     cmeDivergencePct = calculateCmeDivergence(
-      marketData.cmeFutures.price,
-      marketData.usdjpy.price,
-      marketData.nikkei.previousClose,
+      Number(record.cmeFuturesPrice),
+      Number(record.usdjpy),
+      previousClose,
     );
-    console.log(`[1.7/5] CME先物乖離率: ${cmeDivergencePct.toFixed(2)}%`);
 
-    const preMarket = determinePreMarketRegime(cmeDivergencePct);
-    if (preMarket.minLevel === "crisis") {
-      console.log(`  → ${preMarket.reason}`);
-      await notifyRiskAlert({
-        type: "CME先物乖離率キルスイッチ",
-        message: preMarket.reason!,
-      });
-      const assessmentData = {
-        ...buildMarketFields(marketData),
-        sentiment: "crisis" as const,
-        shouldTrade: false,
-        reasoning: `[CME先物乖離率キルスイッチ] ${preMarket.reason}`,
-        selectedStocks: [],
-        tradingStrategy: "day_trade",
-      };
-      await prisma.marketAssessment.upsert({
-        where: { date: getTodayForDB() },
-        update: assessmentData,
-        create: { date: getTodayForDB(), ...assessmentData },
-      });
-      isShadowMode = true;
-    } else if (preMarket.minLevel) {
-      console.log(`  → ${preMarket.reason}（レジーム下限を${preMarket.minLevel}に引き上げ）`);
-    }
-  } else {
-    console.log("[1.7/5] CME先物乖離率: データ不足のためスキップ");
-  }
-
-  // 1.8. VIXレジーム判定（機械的 — AI判断の前に実行）
-  console.log("[1.8/5] VIXレジーム判定...");
-  let regime: MarketRegime = determineMarketRegime(marketData.vix.price);
-
-  // CME乖離率によるレジーム引き上げ
-  if (cmeDivergencePct != null) {
     const preMarket = determinePreMarketRegime(cmeDivergencePct);
     if (preMarket.minLevel && !regime.shouldHaltTrading) {
       const levelOrder: Record<string, number> = { normal: 0, elevated: 1, high: 2, crisis: 3 };
       if (levelOrder[preMarket.minLevel] > levelOrder[regime.level]) {
-        console.log(`  → CME乖離率によりレジームを ${regime.level} → ${preMarket.minLevel} に引き上げ`);
         if (preMarket.minLevel === "crisis") {
           regime = { ...regime, level: "crisis", maxPositions: 0, minRank: null, shouldHaltTrading: true, reason: `${regime.reason} + ${preMarket.reason}` };
         } else if (preMarket.minLevel === "elevated" && regime.level === "normal") {
@@ -228,185 +106,56 @@ ${sectorText || "  特になし"}`;
     }
   }
 
-  console.log(`  → レジーム: ${regime.level}（${regime.reason}）`);
-
-  // 1.8.1. 戦略決定（市場環境ベース — 全銘柄共通）
-  const strategyDecision: StrategyDecision = determineTradingStrategy(
-    marketData.vix.price,
-    cmeDivergencePct,
-  );
-  console.log(`[1.8.1/5] 戦略決定: ${strategyDecision.strategy}（${strategyDecision.reason}）`);
-
-  // VIX ≥ 30: 既存スイングポジションの戦略をday_tradeに切替
-  if (marketData.vix.price >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
-    const updated = await prisma.tradingPosition.updateMany({
-      where: { status: "open", strategy: "swing" },
-      data: { strategy: "day_trade" },
-    });
-    if (updated.count > 0) {
-      console.log(`  → VIX ${marketData.vix.price.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: ${updated.count}件のスイングポジションをday_tradeに切替`);
-    }
-  }
-
-  if (regime.shouldHaltTrading && !isShadowMode) {
-    console.log("レジームにより取引停止。MarketAssessment を保存してシャドウスコアリングへ");
-    await notifyRiskAlert({
-      type: "VIXレジーム停止",
-      message: regime.reason,
-    });
-    const assessmentData = {
-      ...buildMarketFields(marketData),
-      sentiment: "crisis" as const,
-      shouldTrade: false,
-      reasoning: `[VIXレジーム自動停止] ${regime.reason}`,
-      selectedStocks: [],
-      tradingStrategy: strategyDecision.strategy,
-    };
-    await prisma.marketAssessment.upsert({
-      where: { date: getTodayForDB() },
-      update: assessmentData,
-      create: { date: getTodayForDB(), ...assessmentData },
-    });
-    isShadowMode = true;
-  }
-
-  // 1.8.5. 日経平均キルスイッチ（機械的 — VIXレジームとは独立）
-  if (
-    !isShadowMode &&
-    marketData.nikkei.changePercent <= MARKET_INDEX.NIKKEI_CRISIS_THRESHOLD
-  ) {
-    const reason = `日経平均 ${marketData.nikkei.changePercent.toFixed(2)}% ≤ ${MARKET_INDEX.NIKKEI_CRISIS_THRESHOLD}%: 急落キルスイッチ発動。全取引停止`;
-    console.log(`[1.8.5/5] ${reason}`);
-    await notifyRiskAlert({
-      type: "日経平均キルスイッチ",
-      message: reason,
-    });
-    const assessmentData = {
-      ...buildMarketFields(marketData),
-      sentiment: "crisis" as const,
-      shouldTrade: false,
-      reasoning: `[日経平均キルスイッチ] ${reason}`,
-      selectedStocks: [],
-      tradingStrategy: strategyDecision.strategy,
-    };
-    await prisma.marketAssessment.upsert({
-      where: { date: getTodayForDB() },
-      update: assessmentData,
-      create: { date: getTodayForDB(), ...assessmentData },
-    });
-    isShadowMode = true;
-  }
-
-  // 1.9. ドローダウンチェック（機械的 — AI判断の前に実行）
-  console.log("[1.9/5] ドローダウンチェック...");
+  // drawdown 再計算
   const drawdown = await calculateDrawdownStatus();
-  console.log(
-    `  → 週次損益: ¥${drawdown.weeklyPnl.toLocaleString()}, 月次損益: ¥${drawdown.monthlyPnl.toLocaleString()}, 連敗: ${drawdown.consecutiveLosses}`,
-  );
 
-  if (drawdown.shouldHaltTrading) {
-    console.log(`ドローダウンにより取引停止: ${drawdown.reason}`);
-    await notifyRiskAlert({
-      type: "ドローダウン停止",
-      message: drawdown.reason,
-    });
-    // ドローダウンは自分の成績の問題であり市場環境とは無関係
-    // sentimentはAI市場評価を維持し、shouldTrade: falseのみで新規注文を停止する
-    const latestAssessment = await prisma.marketAssessment.findFirst({
-      orderBy: { createdAt: "desc" },
-      select: { sentiment: true },
-    });
-    const drawdownSentiment = (latestAssessment?.sentiment ?? "neutral") as
-      | "bullish"
-      | "neutral"
-      | "cautious"
-      | "bearish"
-      | "crisis";
-    console.log(
-      `  → ドローダウン停止時のsentiment: ${drawdownSentiment}（AI市場評価を維持）`,
-    );
-    const drawdownAssessmentData = {
-      ...buildMarketFields(marketData),
-      sentiment: drawdownSentiment,
-      shouldTrade: false,
-      reasoning: `[ドローダウン自動停止] ${drawdown.reason}（sentiment=${drawdownSentiment}はAI市場評価を維持）`,
-      selectedStocks: [],
-      tradingStrategy: strategyDecision.strategy,
-    };
-    await prisma.marketAssessment.upsert({
-      where: { date: getTodayForDB() },
-      update: drawdownAssessmentData,
-      create: { date: getTodayForDB(), ...drawdownAssessmentData },
-    });
-    isShadowMode = true;
+  // newsSummary 再取得
+  const newsAnalysis = await prisma.newsAnalysis.findUnique({
+    where: { date: today },
+  });
+  let newsSummary: string | undefined;
+  if (newsAnalysis) {
+    const sectorText = (
+      newsAnalysis.sectorImpacts as Array<{ sector: string; impact: string; summary: string }>
+    )
+      .map((s) => `  - ${s.sector}: ${s.impact} — ${s.summary}`)
+      .join("\n");
+    newsSummary = `【ニュース分析】
+- 地政学リスクレベル: ${newsAnalysis.geopoliticalRiskLevel}/5
+- ${newsAnalysis.geopoliticalSummary}
+- 市場インパクト: ${newsAnalysis.marketImpact}
+- ${newsAnalysis.marketImpactSummary}
+- 主要イベント: ${newsAnalysis.keyEvents}
+【セクター別影響】
+${sectorText || "  特になし"}`;
   }
 
-  // 1.95. 保有継続スコアリング（レジーム判定後に実行 → レジーム対応TS引き締め）
-  try {
-    await runHoldingScore(regime);
-  } catch (error) {
-    console.error("保有スコアリングエラー（スキャン続行）:", error);
-  }
+  return {
+    regime,
+    isShadowMode: !record.shouldTrade,
+    marketData: null as unknown as MarketAssessmentContext["marketData"], // 単独実行時は不使用
+    newsSummary,
+    drawdown,
+    strategyDecision: { strategy: (record.tradingStrategy ?? "swing") as "day_trade" | "swing", reason: "DB復元" },
+    cmeDivergencePct,
+    assessment: {
+      shouldTrade: record.shouldTrade,
+      sentiment: record.sentiment as "bullish" | "neutral" | "cautious" | "bearish" | "crisis",
+      reasoning: record.reasoning,
+    },
+  };
+}
 
-  // 2. AI市場評価（VIX/ドローダウンでshadow modeの場合はスキップ）
-  let assessment: Awaited<ReturnType<typeof assessMarket>> | null = null;
+export async function main(context?: MarketAssessmentContext) {
+  console.log("=== Stock Scanner 開始 ===");
 
-  if (!isShadowMode) {
-    console.log("[2/5] AI市場評価中...");
-    const marketInput: MarketDataInput = {
-      nikkeiPrice: marketData.nikkei.price,
-      nikkeiChange: marketData.nikkei.changePercent,
-      sp500Change: marketData.sp500?.changePercent ?? 0,
-      nasdaqChange: marketData.nasdaq?.changePercent ?? 0,
-      dowChange: marketData.dow?.changePercent ?? 0,
-      soxChange: marketData.sox?.changePercent ?? 0,
-      vix: marketData.vix.price,
-      usdJpy: marketData.usdjpy?.price ?? 0,
-      cmeFuturesPrice: marketData.cmeFutures?.price ?? 0,
-      cmeFuturesChange: marketData.cmeFutures?.changePercent ?? 0,
-      newsSummary,
-    };
+  // コンテキストがなければDBから復元
+  const ctx = context ?? await restoreContextFromDB();
+  const { regime, isShadowMode, drawdown, strategyDecision } = ctx;
 
-    assessment = await assessMarket(marketInput);
-    console.log(
-      `  → shouldTrade: ${assessment.shouldTrade}, sentiment: ${assessment.sentiment}`,
-    );
-
-    // Slack通知
-    await notifyMarketAssessment({
-      shouldTrade: assessment.shouldTrade,
-      sentiment: assessment.sentiment,
-      reasoning: assessment.reasoning,
-      nikkeiChange: marketData.nikkei.changePercent,
-      vix: marketData.vix.price,
-    });
-
-    // 3. shouldTrade = false → 保存してシャドウスコアリングへ
-    if (!assessment.shouldTrade) {
-      console.log("取引見送り。MarketAssessment を保存してシャドウスコアリングへ");
-      const noTradeData = {
-        ...buildMarketFields(marketData),
-        sentiment: assessment.sentiment,
-        shouldTrade: false,
-        reasoning: assessment.reasoning,
-        selectedStocks: [],
-        tradingStrategy: strategyDecision.strategy,
-      };
-      await prisma.marketAssessment.upsert({
-        where: { date: getTodayForDB() },
-        update: noTradeData,
-        create: { date: getTodayForDB(), ...noTradeData },
-      });
-      isShadowMode = true;
-    }
-  } else {
-    console.log("[2/5] AI市場評価: スキップ（シャドウモード）");
-  }
-
-  // 4. テクニカル分析 + スコアリング
   // shadow modeの場合、スコアリング失敗がhalt判定に影響しないようtry-catchで囲む
   try {
-  console.log("[3/5] テクニカル分析 + スコアリング中...");
+  console.log("[1/3] テクニカル分析 + スコアリング中...");
 
   // 利用可能資金から購入可能な上限株価を計算
   const config = await prisma.tradingConfig.findFirst({
@@ -445,7 +194,7 @@ ${sectorText || "  特になし"}`;
     pendingSwingForScan.map((o) => o.stock.tickerCode),
   );
 
-  // スクリーニング条件に合う銘柄を取得（資金で買えない銘柄・非アクティブ・制限銘柄はDB段階で除外）
+  // スクリーニング条件に合う銘柄を取得
   const candidates = await prisma.stock.findMany({
     where: {
       isDelisted: false,
@@ -478,13 +227,12 @@ ${sectorText || "  特になし"}`;
 
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 
-  // セクターモメンタムを事前計算（スコアリングで使用）
-  const nikkeiWeekChange = marketData.nikkei.changePercent;
+  // セクターモメンタムを事前計算
+  const nikkeiWeekChange = ctx.marketData?.nikkei?.changePercent ?? 0;
   const sectorMomentum = await calculateSectorMomentum(nikkeiWeekChange);
   const sectorMomentumMap = new Map(
     sectorMomentum.map((s) => [s.sectorGroup, s]),
   );
-  // sectorMomentum 配列はAI審判コンテキスト（.find()）で引き続き使用
 
   // テクニカル分析 + スコアリング（並列、バッチ制御）
   const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
@@ -504,10 +252,8 @@ ${sectorText || "  特になし"}`;
             )
               return null;
 
-            // テクニカル分析
             const summary = analyzeTechnicals(historical);
 
-            // セクター相対強度を取得
             const sectorGroup = getSectorGroup(stock.jpxSectorName);
             const sectorInfo = sectorGroup ? sectorMomentumMap.get(sectorGroup) : null;
             const sectorRelativeStrength =
@@ -515,7 +261,6 @@ ${sectorText || "  特になし"}`;
                 ? sectorInfo.relativeStrength
                 : null;
 
-            // スコアリング（4カテゴリ: トレンド品質+エントリータイミング+リスク品質+セクターモメンタム）
             const score = scoreStock({
               historicalData: historical,
               latestPrice: Number(stock.latestPrice),
@@ -557,7 +302,7 @@ ${sectorText || "  特になし"}`;
   console.log(`  テクニカル分析完了: ${scoredCandidates.length}銘柄`);
 
   // 逆行ボーナス適用
-  console.log("[3.5/5] 逆行ボーナス適用中...");
+  console.log("[1.5/3] 逆行ボーナス適用中...");
   const allTickerCodes = scoredCandidates.map((c) => c.tickerCode);
   const contrarianHistoryMap = await getContrarianHistoryBatch(allTickerCodes);
 
@@ -621,7 +366,7 @@ ${sectorText || "  特になし"}`;
     }
   }
 
-  // レジーム制限で候補が不足した場合、Bランク上位を補充（最低パイプライン保証）
+  // レジーム制限で候補が不足した場合、Bランク上位を補充
   if (filtered.length < SCORING.MIN_CANDIDATES_FOR_AI) {
     const filteredSet = new Set(filtered.map((c) => c.tickerCode));
     const bRankBackfill = qualified
@@ -635,7 +380,7 @@ ${sectorText || "  特になし"}`;
     }
   }
 
-  // swing銘柄をAI審査に強制追加（ランクに関係なく）
+  // swing銘柄をAI審査に強制追加
   if (swingTickerSet.size > 0) {
     const filteredSwingSet = new Set(filtered.map((c) => c.tickerCode));
     const missingSwing = scoredCandidates.filter(
@@ -647,7 +392,7 @@ ${sectorText || "  特になし"}`;
     }
   }
 
-  // 精度追跡: filteredに入らなかったスコア60+の銘柄
+  // 精度追跡
   const filteredTickerSet = new Set(filtered.map((c) => c.tickerCode));
   const accuracyTrackingCandidates = qualified.filter(
     (c) =>
@@ -669,6 +414,9 @@ ${sectorText || "  特になし"}`;
   );
 
   // 銘柄別ニュースコンテキストを添付
+  const newsAnalysis = await prisma.newsAnalysis.findUnique({
+    where: { date: getTodayForDB() },
+  });
   const stockCatalysts = newsAnalysis?.stockCatalysts as
     | Array<{ tickerCode: string; type: string; summary: string }>
     | undefined;
@@ -725,11 +473,10 @@ ${sectorText || "  特になし"}`;
   });
 
   if (isShadowMode) {
-    // === シャドウモード: AIレビューをスキップし、全候補をmarket_haltedで記録 ===
-    console.log("[4/5] AIレビュー: スキップ（シャドウモード）");
-    console.log("[5/5] シャドウスコアリング結果保存中...");
+    // === シャドウモード ===
+    console.log("[2/3] AIレビュー: スキップ（シャドウモード）");
+    console.log("[3/3] シャドウスコアリング結果保存中...");
 
-    // filtered + accuracyTrackingCandidates を全てmarket_haltedで記録
     const shadowCandidates = [
       ...filtered,
       ...accuracyTrackingCandidates,
@@ -743,7 +490,6 @@ ${sectorText || "  特になし"}`;
     }));
 
     if (shadowRecords.length > 0) {
-      // 再実行時のデータ矛盾を防ぐため、同日の既存レコードを削除してから保存
       await prisma.scoringRecord.deleteMany({ where: { date: today } });
       await prisma.scoringRecord.createMany({
         data: shadowRecords,
@@ -753,9 +499,8 @@ ${sectorText || "  特になし"}`;
       console.log("  シャドウ対象銘柄なし");
     }
   } else {
-    // === 通常モード: AIレビュー + 結果保存 ===
-    console.log("[4/5] AIレビュー中...");
-    // AI審判コンテキスト用（フィルタとしては使わない）
+    // === 通常モード ===
+    console.log("[2/3] AIレビュー中...");
     const newsSentiment = await getNewsSectorSentiment();
 
     const reviewCandidates: StockReviewCandidateInput[] = filtered.map((c) => {
@@ -799,17 +544,14 @@ ${sectorText || "  特になし"}`;
       };
     });
 
-    const reviews = await reviewStocks(assessment!, reviewCandidates, strategyDecision.strategy);
-    let goStocks = reviews.filter((r) => r.decision === "go");
+    const reviews = await reviewStocks(ctx.assessment!, reviewCandidates, strategyDecision.strategy);
+    const goStocks = reviews.filter((r) => r.decision === "go");
     console.log(
       `  → AIレビュー: ${reviews.length}銘柄中 ${goStocks.length}銘柄承認`,
     );
 
-    // cautiousモード: TS引き締め（TRAILING_TIGHTEN_MULTIPLIER）で対応
-    // 銘柄数の制限は機会損失になるため廃止（リスクはポジションサイズとストップで管理）
-
-    // 6. MarketAssessment + ScoringRecord に結果を保存
-    console.log("[5/5] 結果保存中...");
+    // MarketAssessment + ScoringRecord に結果を保存
+    console.log("[3/3] 結果保存中...");
     const selectedStocksData = goStocks.map((g) => {
       const scored = filtered.find((c) => c.tickerCode === g.tickerCode);
       return {
@@ -822,23 +564,15 @@ ${sectorText || "  特になし"}`;
       };
     });
 
-    const tradeAssessmentData = {
-      ...buildMarketFields(marketData),
-      sentiment: assessment!.sentiment,
-      shouldTrade: true,
-      reasoning: assessment!.reasoning,
-      selectedStocks: JSON.parse(JSON.stringify(selectedStocksData)),
-      tradingStrategy: strategyDecision.strategy,
-    };
-    await prisma.marketAssessment.upsert({
+    await prisma.marketAssessment.update({
       where: { date: today },
-      update: tradeAssessmentData,
-      create: { date: today, ...tradeAssessmentData },
+      data: {
+        selectedStocks: JSON.parse(JSON.stringify(selectedStocksData)),
+      },
     });
 
-    // ScoringRecord 保存（候補 + Ghost追跡）
+    // ScoringRecord 保存
     const scoringRecords = [
-      // AIレビュー対象（S/A/Bランク）
       ...filtered.map((c) => {
         const review = reviews.find((r) => r.tickerCode === c.tickerCode);
         return {
@@ -849,7 +583,6 @@ ${sectorText || "  特になし"}`;
           newsContext: c.newsContext ?? null,
         };
       }),
-      // 精度追跡候補（スコア60+だがAI審査に送られなかった）
       ...accuracyTrackingCandidates.map((c) => ({
         ...buildScoringFields(c),
         aiDecision: null,
@@ -859,7 +592,6 @@ ${sectorText || "  特になし"}`;
     ];
 
     if (scoringRecords.length > 0) {
-      // 再実行時のデータ矛盾を防ぐため、同日の既存レコードを削除してから保存
       await prisma.scoringRecord.deleteMany({ where: { date: today } });
       await prisma.scoringRecord.createMany({
         data: scoringRecords,
@@ -892,15 +624,5 @@ ${sectorText || "  特になし"}`;
     }
   }
 
-  console.log("=== Market Scanner 終了 ===");
-}
-
-const isDirectRun = process.argv[1]?.includes("market-scanner");
-if (isDirectRun) {
-  main()
-    .catch((error) => {
-      console.error("Market Scanner エラー:", error);
-      process.exit(1);
-    })
-    .finally(() => prisma.$disconnect());
+  console.log("=== Stock Scanner 終了 ===");
 }

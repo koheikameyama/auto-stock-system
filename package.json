@@ -10,7 +10,9 @@
   "scripts": {
     "start": "tsx src/worker.ts",
     "news": "tsx src/jobs/news-collector.ts",
-    "scan": "tsx src/jobs/market-scanner.ts",
+    "assess": "tsx src/jobs/market-assessment.ts",
+    "holding-score": "tsx src/jobs/holding-score.ts",
+    "stock-scan": "tsx src/jobs/stock-scanner.ts",
     "order": "tsx src/jobs/order-manager.ts",
     "monitor": "tsx src/jobs/position-monitor.ts",
     "eod": "tsx src/jobs/end-of-day.ts",
