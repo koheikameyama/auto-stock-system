@@ -111,12 +111,28 @@ export async function expireOrders(): Promise<number> {
 }
 
 /**
- * 未約定の注文を取得する
+ * 未約定の注文を取得する（スコア降順）
+ *
+ * 高スコア銘柄を優先的に約定させるため、entrySnapshotのtotalScoreで降順ソートする。
+ * 複数の指値が同時に刺さった場合、資金が尽きるまで高スコア順に約定させる。
  */
 export async function getPendingOrders() {
-  return prisma.tradingOrder.findMany({
+  const orders = await prisma.tradingOrder.findMany({
     where: { status: "pending" },
     include: { stock: true },
-    orderBy: { createdAt: "asc" },
+  });
+
+  return orders.sort((a, b) => {
+    const scoreA =
+      (a.entrySnapshot as Record<string, unknown> | null)?.score != null
+        ? ((a.entrySnapshot as Record<string, Record<string, unknown>>).score
+            .totalScore as number)
+        : 0;
+    const scoreB =
+      (b.entrySnapshot as Record<string, unknown> | null)?.score != null
+        ? ((b.entrySnapshot as Record<string, Record<string, unknown>>).score
+            .totalScore as number)
+        : 0;
+    return scoreB - scoreA;
   });
 }

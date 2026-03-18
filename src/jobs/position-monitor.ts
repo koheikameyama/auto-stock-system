@@ -35,6 +35,7 @@ import {
   closePosition,
   getOpenPositions,
   getUnrealizedPnl,
+  getCashBalance,
 } from "../core/position-manager";
 import { checkPositionExit } from "../core/exit-checker";
 import type { ExitReason } from "../core/exit-checker";
@@ -92,6 +93,9 @@ export async function main() {
   const pendingOrders = await getPendingOrders();
   console.log(`  未約定注文: ${pendingOrders.length}件`);
 
+  // 残高チェック用（スコア順に約定させ、資金が尽きたらスキップ）
+  let cashBalance = await getCashBalance();
+
   for (const order of pendingOrders) {
     if (!(await isSystemActive())) {
       console.log("  → システム停止中のため終了");
@@ -120,7 +124,7 @@ export async function main() {
 
     if (filledPrice !== null) {
 
-      // 買い注文: 時間帯チェック
+      // 買い注文: 時間帯チェック + 残高チェック
       if (order.side === "buy") {
         const timeCheck = checkTimeWindow(
           order.strategy as "day_trade" | "swing",
@@ -141,6 +145,15 @@ export async function main() {
               data: { status: "cancelled" },
             });
           }
+          continue;
+        }
+
+        // 残高チェック: 資金不足ならスキップ（pendingのまま残す）
+        const requiredAmount = filledPrice * order.quantity;
+        if (cashBalance < requiredAmount) {
+          console.log(
+            `  → ${order.stock.tickerCode}: 残高不足でスキップ（必要: ¥${requiredAmount.toLocaleString()}, 残高: ¥${Math.floor(cashBalance).toLocaleString()}）`,
+          );
           continue;
         }
       }
@@ -215,6 +228,9 @@ export async function main() {
           where: { id: order.id },
           data: { positionId: position.id },
         });
+
+        // 残高を減算（同サイクル内の後続注文に反映）
+        cashBalance -= filledPrice * order.quantity;
 
         await notifyOrderFilled({
           tickerCode: order.stock.tickerCode,
