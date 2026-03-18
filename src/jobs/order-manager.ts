@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "../lib/prisma";
+import { flushLangfuse } from "../lib/langfuse";
 import { getTodayForDB } from "../lib/date-utils";
 import {
   TRADING_SCHEDULE,
@@ -707,5 +708,8 @@ if (isDirectRun) {
       console.error("Order Manager エラー:", error);
       process.exit(1);
     })
-    .finally(() => prisma.$disconnect());
+    .finally(async () => {
+      await flushLangfuse();
+      await prisma.$disconnect();
+    });
 }

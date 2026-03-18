@@ -1,13 +1,18 @@
 /**
- * Langfuse トレーシング設定
+ * Langfuse トレーシング設定（OpenTelemetry ベース）
  *
- * OpenAI API呼び出しの自動トレーシングを提供する。
+ * @langfuse/openai v5 は OpenTelemetry を使用してトレーシングを行う。
+ * LangfuseSpanProcessor を設定することで、input/output を含む全トレースデータが
+ * Langfuse に送信される。
+ *
  * 環境変数が未設定の場合は通常のOpenAIクライアントにフォールバックする。
  */
 
 import OpenAI from "openai";
 import { observeOpenAI } from "@langfuse/openai";
-import { Langfuse } from "langfuse";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { setLangfuseTracerProvider } from "@langfuse/tracing";
 
 // SDKは LANGFUSE_BASEURL を読むが、環境変数は LANGFUSE_BASE_URL で統一
 if (process.env.LANGFUSE_BASE_URL && !process.env.LANGFUSE_BASEURL) {
@@ -19,6 +24,21 @@ export function isLangfuseEnabled(): boolean {
   return !!(
     process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY
   );
+}
+
+// OTEL TracerProvider + LangfuseSpanProcessor を初期化
+let spanProcessor: LangfuseSpanProcessor | null = null;
+
+if (isLangfuseEnabled()) {
+  try {
+    spanProcessor = new LangfuseSpanProcessor();
+    const provider = new NodeTracerProvider({
+      spanProcessors: [spanProcessor],
+    });
+    setLangfuseTracerProvider(provider);
+  } catch (error) {
+    console.error("[langfuse] TracerProvider 初期化エラー:", error);
+  }
 }
 
 /** observeOpenAI に渡すトレース設定 */
@@ -69,12 +89,11 @@ export function getTracedOpenAIClient(config: TraceConfig): OpenAI {
  * 短命プロセス（バッチジョブのCLI直接実行）の終了前に呼ぶ
  */
 export async function flushLangfuse(): Promise<void> {
-  if (!isLangfuseEnabled()) return;
+  if (!spanProcessor) return;
 
   try {
-    const langfuse = new Langfuse();
-    await langfuse.flushAsync();
-    await langfuse.shutdownAsync();
+    await spanProcessor.forceFlush();
+    await spanProcessor.shutdown();
   } catch (error) {
     console.error("[langfuse] flush エラー:", error);
   }
