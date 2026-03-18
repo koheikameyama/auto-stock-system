@@ -3,6 +3,7 @@
  */
 
 import type { TradingStrategy } from "../core/market-regime";
+import type { ScoringRank } from "../core/scoring";
 
 export interface BacktestConfig {
   tickers: string[];
@@ -25,10 +26,12 @@ export interface BacktestConfig {
   trailMultiplier?: number;
   /** トレンドプレフィルター: Price > SMA25 && SMA25 > SMA75 を要求 */
   trendFilterEnabled: boolean;
-  /** プルバックエントリー: RSI < 60 OR SMA25乖離 <= 2% */
+  /** プルバックエントリー: RSI < 60 AND SMA25乖離 <= 2% */
   pullbackFilterEnabled: boolean;
   /** ボラティリティフィルター: ATR% > MIN_ATR_PCT の銘柄のみ */
   volatilityFilterEnabled: boolean;
+  /** ボラティリティフィルター閾値（ATR%）。未指定時は DAILY_BACKTEST.UNIVERSE_FILTER.MIN_ATR_PCT */
+  minAtrPct?: number;
   /** RSフィルター: RS > MIN_RS_SCORE の銘柄のみ */
   rsFilterEnabled: boolean;
   /** タイムストップ日数オーバーライド（デフォルト: TIME_STOP.MAX_HOLDING_DAYS） */
@@ -72,7 +75,7 @@ export interface SimulatedPosition {
   takeProfitPrice: number;
   stopLossPrice: number;
   quantity: number;
-  rank: "S" | "A" | "B" | "C" | "D";
+  rank: ScoringRank;
   score: number;
   scoreBreakdown: ScoreBreakdown | null;
   regime: RegimeLevel | null;
