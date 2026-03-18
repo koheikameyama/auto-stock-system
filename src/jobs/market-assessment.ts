@@ -322,21 +322,22 @@ ${sectorText || "  特になし"}`;
       vix: marketData.vix.price,
     });
 
+    const assessmentData = {
+      ...buildMarketFields(marketData),
+      sentiment: assessment.sentiment,
+      shouldTrade: assessment.shouldTrade,
+      reasoning: assessment.reasoning,
+      selectedStocks: [],
+      tradingStrategy: strategyDecision.strategy,
+    };
+    await prisma.marketAssessment.upsert({
+      where: { date: getTodayForDB() },
+      update: assessmentData,
+      create: { date: getTodayForDB(), ...assessmentData },
+    });
+
     if (!assessment.shouldTrade) {
-      console.log("取引見送り。MarketAssessment を保存してシャドウスコアリングへ");
-      const noTradeData = {
-        ...buildMarketFields(marketData),
-        sentiment: assessment.sentiment,
-        shouldTrade: false,
-        reasoning: assessment.reasoning,
-        selectedStocks: [],
-        tradingStrategy: strategyDecision.strategy,
-      };
-      await prisma.marketAssessment.upsert({
-        where: { date: getTodayForDB() },
-        update: noTradeData,
-        create: { date: getTodayForDB(), ...noTradeData },
-      });
+      console.log("取引見送り → シャドウスコアリングへ");
       isShadowMode = true;
     }
   } else {
