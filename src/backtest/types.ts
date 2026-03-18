@@ -2,6 +2,8 @@
  * バックテスト型定義
  */
 
+import type { TradingStrategy } from "../core/market-regime";
+
 export interface BacktestConfig {
   tickers: string[];
   startDate: string; // YYYY-MM-DD
@@ -14,7 +16,7 @@ export interface BacktestConfig {
   atrMultiplier: number;
   trailingActivationMultiplier: number;
   maxPrice: number;
-  strategy: "day_trade" | "swing";
+  strategy: TradingStrategy;
   costModelEnabled: boolean;
   priceLimitEnabled: boolean;
   gapRiskEnabled: boolean;

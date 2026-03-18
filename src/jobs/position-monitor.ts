@@ -47,6 +47,7 @@ import {
 import { fetchCorporateEvents } from "../core/market-data";
 import { notifyOrderFilled, notifyRiskAlert } from "../lib/slack";
 import type { ExitSnapshot } from "../types/snapshots";
+import type { TradingStrategy } from "../core/market-regime";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -127,7 +128,7 @@ export async function main() {
       // 買い注文: 時間帯チェック + 残高チェック
       if (order.side === "buy") {
         const timeCheck = checkTimeWindow(
-          order.strategy as "day_trade" | "swing",
+          order.strategy as TradingStrategy,
         );
         if (!timeCheck.canTrade) {
           if (timeCheck.isOpeningVolatility) {
@@ -184,7 +185,7 @@ export async function main() {
         // 買い約定 → ポジションをオープン
         // 時間帯リスクフラグを判定
         const timeCheck = checkTimeWindow(
-          order.strategy as "day_trade" | "swing",
+          order.strategy as TradingStrategy,
         );
 
         // 注文レコードから利確/損切り価格を取得
@@ -385,7 +386,7 @@ export async function main() {
         currentTrailingStop: position.trailingStopPrice
           ? Number(position.trailingStopPrice)
           : null,
-        strategy: position.strategy as "day_trade" | "swing",
+        strategy: position.strategy as TradingStrategy,
         holdingBusinessDays,
         trailMultiplierOverride: trailOverride,
       },

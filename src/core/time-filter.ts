@@ -7,6 +7,7 @@
  */
 
 import { TIME_WINDOW } from "../lib/constants";
+import type { TradingStrategy } from "./market-regime";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -27,7 +28,7 @@ export interface TimeWindowCheck {
  * @param now - 判定時刻（デフォルト: 現在のJST）
  */
 export function checkTimeWindow(
-  strategy: "day_trade" | "swing",
+  strategy: TradingStrategy,
   now?: dayjs.Dayjs,
 ): TimeWindowCheck {
   const jstNow = now ?? dayjs().tz("Asia/Tokyo");

@@ -42,6 +42,7 @@ import { analyzeOpeningSession } from "../core/opening-session";
 import { notifyOrderPlaced, notifyRiskAlert, notifySlack } from "../lib/slack";
 import { getSectorGroup } from "../lib/constants";
 import type { EntrySnapshot } from "../types/snapshots";
+import type { TradingStrategy } from "../core/market-regime";
 import dayjs from "dayjs";
 import pLimit from "p-limit";
 
@@ -58,7 +59,7 @@ interface AnalysisResult {
   entryCondition: EntryCondition;
   review: TradeReviewResult;
   newsContext: string | undefined;
-  strategy: "day_trade" | "swing";
+  strategy: TradingStrategy;
   pendingBuyOrderId: string | null;
 }
 
@@ -227,7 +228,7 @@ export async function main() {
           summary: techSummary,
         });
 
-        const strategy = selected.strategy as "day_trade" | "swing";
+        const strategy = selected.strategy as TradingStrategy;
 
         const budgetForSizing = isWeekendRisk
           ? cashBalance * WEEKEND_RISK.POSITION_SIZE_MULTIPLIER

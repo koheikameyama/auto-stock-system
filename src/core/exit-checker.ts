@@ -13,6 +13,7 @@
 
 import { calculateTrailingStop } from "./trailing-stop";
 import { TIME_STOP } from "../lib/constants";
+import type { TradingStrategy } from "./market-regime";
 
 export interface PositionForExit {
   entryPrice: number;
@@ -21,7 +22,7 @@ export interface PositionForExit {
   entryAtr: number | null;
   maxHighDuringHold: number;
   currentTrailingStop: number | null;
-  strategy: "day_trade" | "swing";
+  strategy: TradingStrategy;
   holdingBusinessDays: number;
   activationMultiplierOverride?: number;
   trailMultiplierOverride?: number;

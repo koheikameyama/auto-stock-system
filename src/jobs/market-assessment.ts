@@ -18,7 +18,7 @@ import {
   calculateCmeDivergence,
   determineTradingStrategy,
 } from "../core/market-regime";
-import type { MarketRegime, StrategyDecision } from "../core/market-regime";
+import type { MarketRegime, StrategyDecision, Sentiment } from "../core/market-regime";
 import { calculateDrawdownStatus } from "../core/drawdown-manager";
 import type { DrawdownStatus } from "../core/drawdown-manager";
 
@@ -31,7 +31,7 @@ export interface MarketAssessmentContext {
   drawdown: DrawdownStatus;
   strategyDecision: StrategyDecision;
   cmeDivergencePct: number | null;
-  assessment: { shouldTrade: boolean; sentiment: "bullish" | "neutral" | "cautious" | "bearish" | "crisis"; reasoning: string } | null;
+  assessment: { shouldTrade: boolean; sentiment: Sentiment; reasoning: string } | null;
 }
 
 /** MarketAssessment保存用の市場指標フィールドを構築する */

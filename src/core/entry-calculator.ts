@@ -13,6 +13,7 @@ import {
   estimateGapRisk,
 } from "./risk-manager";
 import { STOP_LOSS, POSITION_DEFAULTS, COLLAR } from "../lib/constants";
+import type { TradingStrategy } from "./market-regime";
 
 export interface EntryCondition {
   limitPrice: number;
@@ -20,7 +21,7 @@ export interface EntryCondition {
   stopLossPrice: number;
   quantity: number;
   riskRewardRatio: number;
-  strategy: "day_trade" | "swing";
+  strategy: TradingStrategy;
 }
 
 /**
@@ -38,7 +39,7 @@ export function calculateEntryCondition(
   currentPrice: number,
   summary: TechnicalSummary,
   score: NewLogicScore,
-  strategy: "day_trade" | "swing",
+  strategy: TradingStrategy,
   availableBudget: number,
   maxPositionPct: number,
   historicalData?: Array<{ open: number; close: number }>,

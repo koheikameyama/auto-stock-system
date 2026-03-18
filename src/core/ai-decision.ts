@@ -11,6 +11,7 @@
 
 import { getTracedOpenAIClient } from "../lib/openai";
 import { OPENAI_CONFIG } from "../lib/constants";
+import type { Sentiment, TradingStrategy } from "./market-regime";
 import {
   MARKET_ASSESSMENT_SYSTEM_PROMPT,
   MARKET_ASSESSMENT_SCHEMA,
@@ -68,7 +69,7 @@ export interface PositionInput {
   tickerCode: string;
   quantity: number;
   averagePrice: number;
-  strategy: "day_trade" | "swing";
+  strategy: TradingStrategy;
 }
 
 // ========================================
@@ -77,14 +78,14 @@ export interface PositionInput {
 
 export interface MarketAssessmentResult {
   shouldTrade: boolean;
-  sentiment: "bullish" | "neutral" | "cautious" | "bearish" | "crisis";
+  sentiment: Sentiment;
   reasoning: string;
 }
 
 export interface StockReviewResult {
   tickerCode: string;
   decision: "go" | "no_go";
-  strategy: "day_trade" | "swing";
+  strategy: TradingStrategy;
   reasoning: string;
   riskFlags: string[];
 }
@@ -165,7 +166,7 @@ export async function assessMarket(
 export async function reviewStocks(
   assessment: MarketAssessmentResult,
   candidates: StockReviewCandidateInput[],
-  strategy: "day_trade" | "swing",
+  strategy: TradingStrategy,
 ): Promise<StockReviewResult[]> {
   const openai = getTracedOpenAIClient({
     generationName: "review-stocks",
@@ -240,7 +241,7 @@ export async function reviewTrade(
     stopLossPrice: number;
     quantity: number;
     riskRewardRatio: number;
-    strategy: "day_trade" | "swing";
+    strategy: TradingStrategy;
   },
   assessment: MarketAssessmentResult,
 ): Promise<TradeReviewResult> {
@@ -333,7 +334,7 @@ export interface MiddayReassessmentInput {
 }
 
 export interface MiddayReassessmentResult {
-  sentiment: "bullish" | "neutral" | "cautious" | "bearish" | "crisis";
+  sentiment: Sentiment;
   reasoning: string;
 }
 

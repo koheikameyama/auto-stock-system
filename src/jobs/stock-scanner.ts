@@ -43,7 +43,7 @@ import {
   determinePreMarketRegime,
   calculateCmeDivergence,
 } from "../core/market-regime";
-import type { MarketRegime } from "../core/market-regime";
+import type { MarketRegime, Sentiment, TradingStrategy } from "../core/market-regime";
 import { calculateDrawdownStatus } from "../core/drawdown-manager";
 import type { DrawdownStatus } from "../core/drawdown-manager";
 import { getEffectiveCapital } from "../core/position-manager";
@@ -136,11 +136,11 @@ ${sectorText || "  特になし"}`;
     marketData: null as unknown as MarketAssessmentContext["marketData"], // 単独実行時は不使用
     newsSummary,
     drawdown,
-    strategyDecision: { strategy: (record.tradingStrategy ?? "swing") as "day_trade" | "swing", reason: "DB復元" },
+    strategyDecision: { strategy: (record.tradingStrategy ?? "swing") as TradingStrategy, reason: "DB復元" },
     cmeDivergencePct,
     assessment: {
       shouldTrade: record.shouldTrade,
-      sentiment: record.sentiment as "bullish" | "neutral" | "cautious" | "bearish" | "crisis",
+      sentiment: record.sentiment as Sentiment,
       reasoning: record.reasoning,
     },
   };

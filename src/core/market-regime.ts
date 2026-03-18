@@ -12,6 +12,8 @@ import { VIX_THRESHOLDS, MARKET_REGIME, CME_NIGHT_DIVERGENCE, STRATEGY_SWITCHING
 
 export type RegimeLevel = "normal" | "elevated" | "high" | "crisis";
 
+export type Sentiment = "bullish" | "neutral" | "cautious" | "bearish" | "crisis";
+
 export interface MarketRegime {
   level: RegimeLevel;
   vix: number;

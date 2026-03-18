@@ -17,6 +17,7 @@ import {
   emptyState,
   tt,
 } from "../views/components";
+import type { TradingStrategy } from "../../core/market-regime";
 const app = new Hono();
 
 app.get("/", async (c) => {
@@ -87,7 +88,7 @@ app.get("/", async (c) => {
                           originalStopLoss: sl,
                           originalTakeProfit: tp,
                           entryAtr,
-                          strategy: p.strategy as "day_trade" | "swing",
+                          strategy: p.strategy as TradingStrategy,
                         });
 
                         const effectiveSL = tsResult.effectiveStopLoss;

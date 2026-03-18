@@ -9,6 +9,7 @@
  */
 
 import { TRAILING_STOP, BREAK_EVEN_STOP } from "../lib/constants";
+import type { TradingStrategy } from "./market-regime";
 
 export interface TrailingStopInput {
   entryPrice: number;
@@ -17,7 +18,7 @@ export interface TrailingStopInput {
   originalStopLoss: number;
   originalTakeProfit: number;
   entryAtr: number | null;
-  strategy: "day_trade" | "swing";
+  strategy: TradingStrategy;
   activationMultiplierOverride?: number;
   trailMultiplierOverride?: number;
 }
