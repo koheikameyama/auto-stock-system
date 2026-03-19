@@ -12,7 +12,7 @@
 import dayjs from "dayjs";
 
 import { prisma } from "../lib/prisma";
-import { TRADING_DEFAULTS, YAHOO_FINANCE, STOCK_FETCH, TECHNICAL_MIN_DATA, JOB_CONCURRENCY } from "../lib/constants";
+import { TRADING_DEFAULTS, YAHOO_FINANCE, STOCK_FETCH, TECHNICAL_MIN_DATA } from "../lib/constants";
 import { fetchStockQuotesBatch, fetchHistoricalDataBatch, fetchCorporateEvents } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
 import { sleep } from "../lib/retry-utils";
@@ -48,9 +48,12 @@ export async function main() {
   const quoteMap = new Map<string, Awaited<ReturnType<typeof fetchStockQuotesBatch>> extends Map<string, infer V> ? V : never>();
   let quotesFailed = 0;
 
+  const totalBatches = Math.ceil(allStocks.length / YAHOO_FINANCE.BATCH_SIZE);
   for (let i = 0; i < allStocks.length; i += YAHOO_FINANCE.BATCH_SIZE) {
+    const batchNum = Math.floor(i / YAHOO_FINANCE.BATCH_SIZE) + 1;
     const batch = allStocks.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
     const tickers = batch.map((s) => s.tickerCode);
+    console.log(`  バッチ ${batchNum}/${totalBatches}（${tickers.length}件）`);
     const batchResult = await fetchStockQuotesBatch(tickers);
     for (const [key, value] of batchResult) {
       quoteMap.set(key, value);
@@ -60,17 +63,25 @@ export async function main() {
     }
   }
 
-  // クォート失敗銘柄の fetchFailCount を更新
-  for (const stock of allStocks) {
-    const quote = quoteMap.get(stock.tickerCode);
-    if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
-      quotesFailed++;
-      await prisma.stock.update({
-        where: { id: stock.id },
-        data: {
-          fetchFailCount: stock.fetchFailCount + 1,
-          isDelisted: stock.fetchFailCount + 1 >= STOCK_FETCH.FAIL_THRESHOLD,
-        },
+  // クォート失敗銘柄の fetchFailCount を一括更新
+  const failedStocks = allStocks.filter((s) => {
+    const q = quoteMap.get(s.tickerCode);
+    return !q || !Number.isFinite(q.price) || q.price <= 0;
+  });
+  quotesFailed = failedStocks.length;
+
+  if (failedStocks.length > 0) {
+    await prisma.stock.updateMany({
+      where: { id: { in: failedStocks.map((s) => s.id) } },
+      data: { fetchFailCount: { increment: 1 } },
+    });
+    const delistIds = failedStocks
+      .filter((s) => s.fetchFailCount + 1 >= STOCK_FETCH.FAIL_THRESHOLD)
+      .map((s) => s.id);
+    if (delistIds.length > 0) {
+      await prisma.stock.updateMany({
+        where: { id: { in: delistIds } },
+        data: { isDelisted: true },
       });
     }
   }
@@ -93,66 +104,90 @@ export async function main() {
   console.log(`  ヒストリカル取得: ${historicalMap.size}/${validTickers.length}銘柄`);
 
   // StockDailyBar にバルク保存
+  console.log("  [2a] StockDailyBar upsert（最新5日分）...");
+  const allUpserts = [];
+  const allOlderBars: { tickerCode: string; date: Date; open: number; high: number; low: number; close: number; volume: bigint }[] = [];
   let barsSaved = 0;
+
   for (const stock of validStocks) {
     const bars = historicalMap.get(stock.tickerCode);
     if (!bars || bars.length === 0) continue;
 
     // 最新5日分はupsert（株式分割等でデータが修正される場合）
     const recentBars = bars.slice(0, 5); // newest-first なので先頭5個が最新
-    const olderBars = bars.slice(5);
-
     for (const bar of recentBars) {
-      await prisma.stockDailyBar.upsert({
-        where: {
-          tickerCode_date: {
+      allUpserts.push(
+        prisma.stockDailyBar.upsert({
+          where: {
+            tickerCode_date: {
+              tickerCode: stock.tickerCode,
+              date: new Date(bar.date + "T00:00:00Z"),
+            },
+          },
+          update: {
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+            volume: BigInt(Math.round(bar.volume)),
+          },
+          create: {
             tickerCode: stock.tickerCode,
             date: new Date(bar.date + "T00:00:00Z"),
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+            volume: BigInt(Math.round(bar.volume)),
           },
-        },
-        update: {
-          open: bar.open,
-          high: bar.high,
-          low: bar.low,
-          close: bar.close,
-          volume: BigInt(Math.round(bar.volume)),
-        },
-        create: {
-          tickerCode: stock.tickerCode,
-          date: new Date(bar.date + "T00:00:00Z"),
-          open: bar.open,
-          high: bar.high,
-          low: bar.low,
-          close: bar.close,
-          volume: BigInt(Math.round(bar.volume)),
-        },
-      });
+        }),
+      );
     }
 
-    // 古いバーは新規のみ追加（skipDuplicates）
-    if (olderBars.length > 0) {
-      await prisma.stockDailyBar.createMany({
-        data: olderBars.map((bar) => ({
-          tickerCode: stock.tickerCode,
-          date: new Date(bar.date + "T00:00:00Z"),
-          open: bar.open,
-          high: bar.high,
-          low: bar.low,
-          close: bar.close,
-          volume: BigInt(Math.round(bar.volume)),
-        })),
-        skipDuplicates: true,
+    // 古いバーは一括で収集
+    const olderBars = bars.slice(5);
+    for (const bar of olderBars) {
+      allOlderBars.push({
+        tickerCode: stock.tickerCode,
+        date: new Date(bar.date + "T00:00:00Z"),
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+        volume: BigInt(Math.round(bar.volume)),
       });
     }
 
     barsSaved += bars.length;
   }
 
+  // upsert を50件ずつトランザクション実行
+  const UPSERT_BATCH = 50;
+  for (let i = 0; i < allUpserts.length; i += UPSERT_BATCH) {
+    await prisma.$transaction(allUpserts.slice(i, i + UPSERT_BATCH));
+    if ((i + UPSERT_BATCH) % 500 === 0 || i + UPSERT_BATCH >= allUpserts.length) {
+      console.log(`    upsert: ${Math.min(i + UPSERT_BATCH, allUpserts.length)}/${allUpserts.length}件`);
+    }
+  }
+
+  // 古いバーは一括 createMany（skipDuplicates）
+  if (allOlderBars.length > 0) {
+    console.log(`  [2b] olderBars一括保存: ${allOlderBars.length}件...`);
+    const CREATE_BATCH = 1000;
+    for (let i = 0; i < allOlderBars.length; i += CREATE_BATCH) {
+      await prisma.stockDailyBar.createMany({
+        data: allOlderBars.slice(i, i + CREATE_BATCH),
+        skipDuplicates: true,
+      });
+    }
+  }
+
   console.log(`  StockDailyBar保存完了: 約${barsSaved}バー`);
 
-  // Stock テーブルの ATR/volatility/weekChange を更新
-  let stockUpdated = 0;
-  for (const stock of validStocks) {
+  // Stock テーブルの ATR/volatility/weekChange を一括更新
+  console.log("  [2c] Stock テーブル更新中...");
+  const now = new Date();
+  const stockUpdateOps = validStocks.map((stock) => {
     const quote = quoteMap.get(stock.tickerCode)!;
     const historical = historicalMap.get(stock.tickerCode);
 
@@ -175,7 +210,7 @@ export async function main() {
       }
     }
 
-    await prisma.stock.update({
+    return prisma.stock.update({
       where: { id: stock.id },
       data: {
         latestPrice: quote.price,
@@ -184,8 +219,8 @@ export async function main() {
         weekChangeRate: clampDecimal8(weekChange),
         volatility: clampDecimal8(volatility),
         atr14,
-        latestPriceDate: new Date(),
-        priceUpdatedAt: new Date(),
+        latestPriceDate: now,
+        priceUpdatedAt: now,
         fetchFailCount: 0,
         per: clampDecimal8(quote.per),
         pbr: clampDecimal8(quote.pbr),
@@ -194,30 +229,37 @@ export async function main() {
         isProfitable: quote.eps != null ? quote.eps > 0 : null,
       },
     });
-    stockUpdated++;
-  }
+  });
 
-  console.log(`  Stock更新: ${stockUpdated}件`);
+  const STOCK_BATCH = 50;
+  for (let i = 0; i < stockUpdateOps.length; i += STOCK_BATCH) {
+    await prisma.$transaction(stockUpdateOps.slice(i, i + STOCK_BATCH));
+    if ((i + STOCK_BATCH) % 500 === 0 || i + STOCK_BATCH >= stockUpdateOps.length) {
+      console.log(`    Stock更新: ${Math.min(i + STOCK_BATCH, stockUpdateOps.length)}/${stockUpdateOps.length}件`);
+    }
+  }
 
   // ================================================================
   // [3/4] コーポレートイベント更新
   // ================================================================
   console.log("[3/4] コーポレートイベント更新中...");
-  const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
-  let eventsUpdated = 0;
+  const eventLimit = pLimit(10);
+  const eventNow = new Date();
+  const needsUpdateStocks = allStocks.filter((stock) =>
+    !stock.nextEarningsDate ||
+    stock.nextEarningsDate < eventNow ||
+    !stock.exDividendDate ||
+    stock.exDividendDate < eventNow,
+  );
+  console.log(`  更新対象: ${needsUpdateStocks.length}/${allStocks.length}件`);
+
+  // API取得結果を収集
+  const eventResults: { id: string; data: Record<string, unknown> }[] = [];
+  let eventProcessed = 0;
 
   await Promise.all(
-    allStocks.map((stock) =>
-      limit(async () => {
-        const now = new Date();
-        const needsUpdate =
-          !stock.nextEarningsDate ||
-          stock.nextEarningsDate < now ||
-          !stock.exDividendDate ||
-          stock.exDividendDate < now;
-
-        if (!needsUpdate) return;
-
+    needsUpdateStocks.map((stock) =>
+      eventLimit(async () => {
         try {
           const events = await fetchCorporateEvents(stock.tickerCode);
           const updateData: Record<string, unknown> = {};
@@ -226,20 +268,33 @@ export async function main() {
           if (events.dividendPerShare !== null) updateData.dividendPerShare = events.dividendPerShare;
 
           if (Object.keys(updateData).length > 0) {
-            await prisma.stock.update({
-              where: { id: stock.id },
-              data: updateData,
-            });
-            eventsUpdated++;
+            eventResults.push({ id: stock.id, data: updateData });
           }
         } catch {
           // fetchCorporateEvents 内部でエラーログ済み
+        }
+
+        eventProcessed++;
+        if (eventProcessed % 100 === 0 || eventProcessed === needsUpdateStocks.length) {
+          console.log(`    取得中: ${eventProcessed}/${needsUpdateStocks.length}件`);
         }
       }),
     ),
   );
 
-  console.log(`  イベント更新: ${eventsUpdated}件`);
+  // DB更新をバッチ実行
+  if (eventResults.length > 0) {
+    const EVENT_BATCH = 50;
+    for (let i = 0; i < eventResults.length; i += EVENT_BATCH) {
+      await prisma.$transaction(
+        eventResults.slice(i, i + EVENT_BATCH).map((r) =>
+          prisma.stock.update({ where: { id: r.id }, data: r.data }),
+        ),
+      );
+    }
+  }
+
+  console.log(`  イベント更新: ${eventResults.length}件`);
 
   // ================================================================
   // [3.5] 古いOHLCVデータのprune
