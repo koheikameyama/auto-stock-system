@@ -54,7 +54,7 @@ jobs:
     needs: check-market-day
     if: needs.check-market-day.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
