@@ -196,6 +196,9 @@ export async function main() {
             jpxSectorName: entry.sectorName33 || null,
             jpxLastSyncDate: today,
             isActive: true,
+            // JPX一覧に存在する = 上場中。fetchFail起因の誤廃止をリセット
+            isDelisted: false,
+            fetchFailCount: 0,
           },
         });
       }),

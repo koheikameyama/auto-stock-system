@@ -202,13 +202,14 @@ export async function main(context?: MarketAssessmentContext) {
     pendingSwingForScan.map((o) => o.stock.tickerCode),
   );
 
-  // スクリーニング条件に合う銘柄を取得（既存ポジション銘柄は除外）
+  // スクリーニング条件に合う銘柄を取得（既存ポジション・廃止予定銘柄は除外）
   const candidates = await prisma.stock.findMany({
     where: {
       isDelisted: false,
       isActive: true,
       isRestricted: false,
       tradingHaltFlag: false,
+      delistingDate: null,
       latestPrice: {
         not: null,
         gte: SCREENING.MIN_PRICE,

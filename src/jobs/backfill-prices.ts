@@ -30,14 +30,8 @@ function clampDecimal8(value: number | null | undefined): number | null {
 export async function main() {
   console.log("=== Backfill Prices 開始 ===");
 
-  // アクティブ銘柄 + fetchFail起因で誤って廃止扱いになった銘柄（delistingDateがnull）
   const allStocks = await prisma.stock.findMany({
-    where: {
-      OR: [
-        { isDelisted: false, isActive: true },
-        { isDelisted: true, delistingDate: null },
-      ],
-    },
+    where: { isDelisted: false, isActive: true },
   });
 
   if (allStocks.length === 0) {
@@ -45,8 +39,7 @@ export async function main() {
     return;
   }
 
-  const recoveryTargets = allStocks.filter((s) => s.isDelisted);
-  console.log(`  対象銘柄: ${allStocks.length}件${recoveryTargets.length > 0 ? `（復帰候補: ${recoveryTargets.length}件）` : ""}`);
+  console.log(`  対象銘柄: ${allStocks.length}件`);
 
   // ================================================================
   // [1/4] クォート更新（バッチ取得）
@@ -67,8 +60,7 @@ export async function main() {
     }
   }
 
-  // クォート失敗銘柄の fetchFailCount を更新 / 成功した復帰候補を復帰
-  let recoveredCount = 0;
+  // クォート失敗銘柄の fetchFailCount を更新
   for (const stock of allStocks) {
     const quote = quoteMap.get(stock.tickerCode);
     if (!quote || !Number.isFinite(quote.price) || quote.price <= 0) {
@@ -80,20 +72,10 @@ export async function main() {
           isDelisted: stock.fetchFailCount + 1 >= STOCK_FETCH.FAIL_THRESHOLD,
         },
       });
-    } else if (stock.isDelisted && stock.delistingDate === null) {
-      // fetchFail起因で誤って廃止扱いだった銘柄を復帰
-      await prisma.stock.update({
-        where: { id: stock.id },
-        data: { isDelisted: false, isActive: true, fetchFailCount: 0 },
-      });
-      recoveredCount++;
     }
   }
 
   console.log(`  クォート取得: ${quoteMap.size}件, 失敗: ${quotesFailed}件`);
-  if (recoveredCount > 0) {
-    console.log(`  復帰: ${recoveredCount}件（fetchFail起因の誤廃止から回復）`);
-  }
 
   // クォート成功銘柄のみを対象にする
   const validStocks = allStocks.filter((s) => {
