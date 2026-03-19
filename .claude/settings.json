@@ -4,7 +4,9 @@
       "mcp__linear-server__get_issue",
       "Bash(npx vitest run:*)",
       "Bash(npx eslint:*)",
-      "Bash(node -c:*)"
+      "Bash(node -c:*)",
+      "Bash(gh api:*)",
+      "Bash(git fetch:*)"
     ]
   },
   "hooks": {
