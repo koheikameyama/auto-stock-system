@@ -333,3 +333,12 @@ export const WEEKEND_RISK = {
   TRAILING_TIGHTEN_THRESHOLD: 3,     // 非営業日N日以上でトレーリングストップ引き締め
   TRAILING_TIGHTEN_MULTIPLIER: 0.7,  // ATR倍率を70%に縮小（例: 2.0 → 1.4）
 } as const;
+
+// ========================================
+// 上場廃止リスク管理
+// ========================================
+
+export const DELISTING_RISK = {
+  TS_TIGHTEN_MULTIPLIER: 0.5,       // 廃止予定銘柄のATR倍率を50%に引き締め
+  FORCE_CLOSE_DAYS_BEFORE: 5,       // 廃止日の5営業日前で強制クローズ
+} as const;
