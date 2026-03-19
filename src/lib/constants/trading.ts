@@ -327,8 +327,8 @@ export const SCREENING = {
 // ========================================
 
 export const WEEKEND_RISK = {
-  SIZE_REDUCTION_THRESHOLD: 2,       // 非営業日N日以上でポジションサイズ縮小
-  POSITION_SIZE_MULTIPLIER: 0.5,     // ポジションサイズ50%
+  SIZE_REDUCTION_THRESHOLD: 3,       // 非営業日N日以上でポジションサイズ縮小（3連休以上で発動）
+  POSITION_SIZE_MULTIPLIER: 0.7,     // ポジションサイズ70%（30%縮小）
 
   TRAILING_TIGHTEN_THRESHOLD: 3,     // 非営業日N日以上でトレーリングストップ引き締め
   TRAILING_TIGHTEN_MULTIPLIER: 0.7,  // ATR倍率を70%に縮小（例: 2.0 → 1.4）

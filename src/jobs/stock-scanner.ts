@@ -17,7 +17,9 @@ import {
   TRADING_DEFAULTS,
   SECTOR_RISK,
   getSectorGroup,
+  WEEKEND_RISK,
 } from "../lib/constants";
+import { countNonTradingDaysAhead } from "../lib/market-calendar";
 import { SECTOR_MOMENTUM_SCORING } from "../lib/constants/scoring";
 import {
   readHistoricalFromDB,
@@ -163,20 +165,33 @@ export async function main(context?: MarketAssessmentContext) {
 
   const openPositions = await prisma.tradingPosition.findMany({
     where: { status: "open" },
+    select: { stockId: true, entryPrice: true, quantity: true },
   });
   const investedAmount = openPositions.reduce(
     (sum, pos) => sum + Number(pos.entryPrice) * pos.quantity,
     0,
   );
+  const openPositionStockIds = openPositions.map((p) => p.stockId);
   const cashBalance = effectiveCap - investedAmount;
+
+  // 週末・連休リスクによる予算縮小を反映
+  const nonTradingDays = countNonTradingDaysAhead();
+  const isWeekendRisk = nonTradingDays >= WEEKEND_RISK.SIZE_REDUCTION_THRESHOLD;
+  const effectiveCash = isWeekendRisk
+    ? cashBalance * WEEKEND_RISK.POSITION_SIZE_MULTIPLIER
+    : cashBalance;
+
   const maxPositionAmount = effectiveCap * (maxPositionPct / 100);
   const maxAffordablePrice = Math.floor(
-    Math.min(cashBalance, maxPositionAmount) / UNIT_SHARES,
+    Math.min(effectiveCash, maxPositionAmount) / UNIT_SHARES,
   );
 
   console.log(
-    `  資金状況: 実質資金=${effectiveCap}円, 投資中=${investedAmount}円, 残高=${cashBalance}円 → 上限株価=${maxAffordablePrice}円`,
+    `  資金状況: 実質資金=${effectiveCap}円, 投資中=${investedAmount}円, 残高=${cashBalance}円${isWeekendRisk ? ` → 週末リスク適用(×${WEEKEND_RISK.POSITION_SIZE_MULTIPLIER}): ${effectiveCash}円` : ""} → 上限株価=${maxAffordablePrice}円`,
   );
+  if (openPositionStockIds.length > 0) {
+    console.log(`  既存ポジション除外: ${openPositionStockIds.length}銘柄`);
+  }
 
   // pending swing銘柄のticker取得（強制スキャン用）
   const pendingSwingForScan = await prisma.tradingOrder.findMany({
@@ -187,7 +202,7 @@ export async function main(context?: MarketAssessmentContext) {
     pendingSwingForScan.map((o) => o.stock.tickerCode),
   );
 
-  // スクリーニング条件に合う銘柄を取得
+  // スクリーニング条件に合う銘柄を取得（既存ポジション銘柄は除外）
   const candidates = await prisma.stock.findMany({
     where: {
       isDelisted: false,
@@ -200,6 +215,9 @@ export async function main(context?: MarketAssessmentContext) {
         lte: maxAffordablePrice,
       },
       latestVolume: { not: null, gte: SCREENING.MIN_DAILY_VOLUME },
+      ...(openPositionStockIds.length > 0
+        ? { id: { notIn: openPositionStockIds } }
+        : {}),
     },
   });
 
