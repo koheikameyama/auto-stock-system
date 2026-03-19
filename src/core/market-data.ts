@@ -15,6 +15,7 @@ import {
   providerFetchQuote,
   providerFetchQuotesBatch,
   providerFetchHistorical,
+  providerFetchHistoricalBatch,
   providerFetchMarket,
   providerFetchEvents,
 } from "../lib/market-data-provider";
@@ -207,6 +208,77 @@ export async function fetchHistoricalData(
     );
     return null;
   }
+}
+
+const DOWNLOAD_BATCH_SIZE = 200;
+
+/**
+ * 複数銘柄のヒストリカルデータをバッチ一括取得
+ * yf.download で一括DLし、fetchHistoricalData と同じ後処理を適用する。
+ * バッチ失敗時は fetchHistoricalData で個別フォールバック。
+ */
+export async function fetchHistoricalDataBatch(
+  tickerCodes: string[],
+): Promise<Map<string, OHLCVBar[]>> {
+  const results = new Map<string, OHLCVBar[]>();
+  const start = dayjs().subtract(YAHOO_FINANCE.HISTORICAL_DAYS, "day").format("YYYY-MM-DD");
+  const end = dayjs().add(1, "day").format("YYYY-MM-DD");
+
+  for (let i = 0; i < tickerCodes.length; i += DOWNLOAD_BATCH_SIZE) {
+    const batchTickers = tickerCodes.slice(i, i + DOWNLOAD_BATCH_SIZE);
+    const batchSymbols = batchTickers.map(normalizeTickerCode);
+    const batchIndex = Math.floor(i / DOWNLOAD_BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(tickerCodes.length / DOWNLOAD_BATCH_SIZE);
+    const batchStart = Date.now();
+
+    try {
+      const batchResult = await providerFetchHistoricalBatch(batchSymbols, start, end);
+
+      for (let j = 0; j < batchTickers.length; j++) {
+        const ticker = batchTickers[j];
+        const symbol = batchSymbols[j];
+        const bars = batchResult[symbol];
+        if (!bars || bars.length === 0) continue;
+
+        const validBars = bars.filter(
+          (bar) => bar.open != null && bar.high != null && bar.low != null && bar.close != null && bar.close > 0,
+        );
+
+        if (validBars.length < DATA_QUALITY.MIN_VALID_BARS) continue;
+
+        const cleaned = removeAnomalies(
+          validBars.map((bar) => ({
+            date: bar.date,
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+            volume: bar.volume ?? 0,
+          })),
+        );
+
+        cleaned.sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf());
+        results.set(ticker, cleaned);
+      }
+
+      const elapsed = ((Date.now() - batchStart) / 1000).toFixed(1);
+      console.log(
+        `  [DL ${batchIndex}/${totalBatches}] ${Math.min(i + DOWNLOAD_BATCH_SIZE, tickerCodes.length)}/${tickerCodes.length}銘柄取得完了（${elapsed}s）`,
+      );
+    } catch (error) {
+      console.error(`  [DL ${batchIndex}/${totalBatches}] バッチ取得失敗、個別フォールバック:`, error);
+      for (const ticker of batchTickers) {
+        try {
+          const data = await fetchHistoricalData(ticker);
+          if (data) results.set(ticker, data);
+        } catch {
+          // fetchHistoricalData 内部でエラーログ済み
+        }
+      }
+    }
+  }
+
+  return results;
 }
 
 /**

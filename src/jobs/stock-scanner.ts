@@ -10,8 +10,6 @@ import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
 import {
   SCREENING,
-  YAHOO_FINANCE,
-  JOB_CONCURRENCY,
   TECHNICAL_MIN_DATA,
   SCORING,
   SCORING_ACCURACY,
@@ -22,7 +20,7 @@ import {
 } from "../lib/constants";
 import { SECTOR_MOMENTUM_SCORING } from "../lib/constants/scoring";
 import {
-  fetchHistoricalData,
+  fetchHistoricalDataBatch,
 } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
 import type { TechnicalSummary } from "../core/technical-analysis";
@@ -37,7 +35,6 @@ import type { StockReviewCandidateInput } from "../core/ai-decision";
 import {
   notifyStockCandidates,
 } from "../lib/slack";
-import pLimit from "p-limit";
 import {
   determineMarketRegime,
   determinePreMarketRegime,
@@ -45,17 +42,12 @@ import {
 } from "../core/market-regime";
 import type { MarketRegime, Sentiment, TradingStrategy } from "../core/market-regime";
 import { calculateDrawdownStatus } from "../core/drawdown-manager";
-import type { DrawdownStatus } from "../core/drawdown-manager";
 import { getEffectiveCapital } from "../core/position-manager";
 import {
   calculateSectorMomentum,
   getNewsSectorSentiment,
 } from "../core/sector-analyzer";
 import type { MarketAssessmentContext } from "./market-assessment";
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** スコアリング済み候補 */
 interface ScoredCandidate {
@@ -234,78 +226,47 @@ export async function main(context?: MarketAssessmentContext) {
     sectorMomentum.map((s) => [s.sectorGroup, s]),
   );
 
-  // テクニカル分析 + スコアリング（並列、バッチ制御）
-  const limit = pLimit(JOB_CONCURRENCY.MARKET_SCANNER);
+  // テクニカル分析 + スコアリング（バッチ一括取得）
   const scoredCandidates: ScoredCandidate[] = [];
 
-  const totalBatches = Math.ceil(candidates.length / YAHOO_FINANCE.BATCH_SIZE);
-  for (let i = 0; i < candidates.length; i += YAHOO_FINANCE.BATCH_SIZE) {
-    const batchIndex = Math.floor(i / YAHOO_FINANCE.BATCH_SIZE) + 1;
-    const batch = candidates.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
-    const batchStart = Date.now();
+  const allTickerCodes = candidates.map((c) => c.tickerCode);
+  const historicalMap = await fetchHistoricalDataBatch(allTickerCodes);
 
-    const batchResults = await Promise.all(
-      batch.map((stock) =>
-        limit(async () => {
-          try {
-            const historical = await fetchHistoricalData(stock.tickerCode);
-            if (
-              !historical ||
-              historical.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS
-            )
-              return null;
+  for (const stock of candidates) {
+    try {
+      const historical = historicalMap.get(stock.tickerCode);
+      if (!historical || historical.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS)
+        continue;
 
-            const summary = analyzeTechnicals(historical);
+      const summary = analyzeTechnicals(historical);
 
-            const sectorGroup = getSectorGroup(stock.jpxSectorName);
-            const sectorInfo = sectorGroup ? sectorMomentumMap.get(sectorGroup) : null;
-            const sectorRelativeStrength =
-              sectorInfo && sectorInfo.stockCount >= SECTOR_MOMENTUM_SCORING.MIN_SECTOR_STOCK_COUNT
-                ? sectorInfo.relativeStrength
-                : null;
+      const sectorGroup = getSectorGroup(stock.jpxSectorName);
+      const sectorInfo = sectorGroup ? sectorMomentumMap.get(sectorGroup) : null;
+      const sectorRelativeStrength =
+        sectorInfo && sectorInfo.stockCount >= SECTOR_MOMENTUM_SCORING.MIN_SECTOR_STOCK_COUNT
+          ? sectorInfo.relativeStrength
+          : null;
 
-            const score = scoreStock({
-              historicalData: historical,
-              latestPrice: Number(stock.latestPrice),
-              latestVolume: Number(stock.latestVolume),
-              weeklyVolatility: stock.volatility ? Number(stock.volatility) : null,
-              nextEarningsDate: stock.nextEarningsDate,
-              exDividendDate: stock.exDividendDate,
-              avgVolume25: summary.volumeAnalysis.avgVolume20,
-              summary,
-              sectorRelativeStrength,
-            });
+      const score = scoreStock({
+        historicalData: historical,
+        latestPrice: Number(stock.latestPrice),
+        latestVolume: Number(stock.latestVolume),
+        weeklyVolatility: stock.volatility ? Number(stock.volatility) : null,
+        nextEarningsDate: stock.nextEarningsDate,
+        exDividendDate: stock.exDividendDate,
+        avgVolume25: summary.volumeAnalysis.avgVolume20,
+        summary,
+        sectorRelativeStrength,
+      });
 
-            return {
-              tickerCode: stock.tickerCode,
-              name: stock.name,
-              summary,
-              score,
-            } as ScoredCandidate;
-          } catch (error) {
-            console.error(
-              `  テクニカル分析エラー: ${stock.tickerCode}`,
-              error,
-            );
-            return null;
-          }
-        }),
-      ),
-    );
-
-    const batchOk = batchResults.filter((r) => r !== null).length;
-    const batchElapsed = ((Date.now() - batchStart) / 1000).toFixed(1);
-    const done = Math.min(i + YAHOO_FINANCE.BATCH_SIZE, candidates.length);
-    console.log(
-      `  [${batchIndex}/${totalBatches}] ${done}/${candidates.length}銘柄完了（${batchOk}/${batch.length}成功, ${batchElapsed}s）`,
-    );
-
-    scoredCandidates.push(
-      ...batchResults.filter((r): r is ScoredCandidate => r !== null),
-    );
-
-    if (i + YAHOO_FINANCE.BATCH_SIZE < candidates.length) {
-      await sleep(YAHOO_FINANCE.RATE_LIMIT_DELAY_MS);
+      scoredCandidates.push({
+        tickerCode: stock.tickerCode,
+        name: stock.name,
+        summary,
+        score,
+      });
+    } catch (error) {
+      console.error(`  テクニカル分析エラー: ${stock.tickerCode}`, error);
     }
   }
 
@@ -313,8 +274,8 @@ export async function main(context?: MarketAssessmentContext) {
 
   // 逆行ボーナス適用
   console.log("[1.5/3] 逆行ボーナス適用中...");
-  const allTickerCodes = scoredCandidates.map((c) => c.tickerCode);
-  const contrarianHistoryMap = await getContrarianHistoryBatch(allTickerCodes);
+  const scoredTickerCodes = scoredCandidates.map((c) => c.tickerCode);
+  const contrarianHistoryMap = await getContrarianHistoryBatch(scoredTickerCodes);
 
   const contrarianBonusMap = new Map<string, { bonus: number; wins: number }>();
   for (const [ticker, history] of contrarianHistoryMap) {
