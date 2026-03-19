@@ -65,12 +65,13 @@ export const DEFENSIVE_MODE = {
 } as const;
 
 // cautiousモード（市場環境が徐々に悪化している場合のリスク制限）
-// neutral → bearish の中間段階。新規注文数を制限し、TSを引き締めるが既存ポジションは通常監視
+// neutral → bearish の中間段階。新規エントリーを禁止し、TSを引き締めるが既存ポジションは通常監視
+// cautious日にエントリー → 翌日bearish悪化 → 即損切りのパターンを防止
 export const CAUTIOUS_MODE = {
   // トレーリングストップ引き締め倍率（通常のswing trail幅に乗算）
   TRAILING_TIGHTEN_MULTIPLIER: 0.8,
-  // 新規注文の最大件数（既存pending注文の更新は含まない）
-  MAX_NEW_ORDERS: 2,
+  // 新規注文の最大件数（0=禁止。既存pending注文の更新は含まない）
+  MAX_NEW_ORDERS: 0,
 } as const;
 
 // 昼休み再評価
