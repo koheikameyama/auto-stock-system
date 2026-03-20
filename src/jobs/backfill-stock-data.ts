@@ -15,15 +15,10 @@ import { YAHOO_FINANCE, STOCK_FETCH, TECHNICAL_MIN_DATA } from "../lib/constants
 import { fetchStockQuotesBatch, fetchHistoricalDataBatch } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
 import { sleep } from "../lib/retry-utils";
+import { clampDecimal, incrementFailAndMarkDelisted } from "../lib/decimal-utils";
 
 /** OHLCV保持日数（これより古いバーをpruneする） */
 const OHLCV_RETENTION_DAYS = 250;
-
-// Decimal(8,2) の範囲に収める（最大 ±999,999.99、NaN/Infinityはnull）
-function clampDecimal8(value: number | null | undefined): number | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return Math.max(-999_999.99, Math.min(999_999.99, value));
-}
 
 export async function main() {
   console.log("=== Backfill Stock Data 開始 ===");
@@ -61,7 +56,7 @@ export async function main() {
     }
   }
 
-  // クォート失敗銘柄の fetchFailCount を一括更新
+  // クォート失敗銘柄の fetchFailCount を一括更新 & 廃止判定
   const failedStocks = allStocks.filter((s) => {
     const q = quoteMap.get(s.tickerCode);
     return !q || !Number.isFinite(q.price) || q.price <= 0;
@@ -69,19 +64,11 @@ export async function main() {
   quotesFailed = failedStocks.length;
 
   if (failedStocks.length > 0) {
-    await prisma.stock.updateMany({
-      where: { id: { in: failedStocks.map((s) => s.id) } },
-      data: { fetchFailCount: { increment: 1 } },
-    });
-    const delistIds = failedStocks
-      .filter((s) => s.fetchFailCount + 1 >= STOCK_FETCH.FAIL_THRESHOLD)
-      .map((s) => s.id);
-    if (delistIds.length > 0) {
-      await prisma.stock.updateMany({
-        where: { id: { in: delistIds } },
-        data: { isDelisted: true },
-      });
-    }
+    const currentCounts = new Map(failedStocks.map((s) => [s.id, s.fetchFailCount]));
+    await incrementFailAndMarkDelisted(
+      failedStocks.map((s) => s.id),
+      currentCounts,
+    );
   }
 
   console.log(`  クォート取得: ${quoteMap.size}件, 失敗: ${quotesFailed}件`);
@@ -213,15 +200,15 @@ export async function main() {
       data: {
         latestPrice: quote.price,
         latestVolume: BigInt(quote.volume),
-        dailyChangeRate: clampDecimal8(quote.changePercent),
-        weekChangeRate: clampDecimal8(weekChange),
-        volatility: clampDecimal8(volatility),
+        dailyChangeRate: clampDecimal(quote.changePercent, "8,2"),
+        weekChangeRate: clampDecimal(weekChange, "8,2"),
+        volatility: clampDecimal(volatility, "8,2"),
         atr14,
         latestPriceDate: now,
         priceUpdatedAt: now,
         fetchFailCount: 0,
-        per: clampDecimal8(quote.per),
-        pbr: clampDecimal8(quote.pbr),
+        per: clampDecimal(quote.per, "8,2"),
+        pbr: clampDecimal(quote.pbr, "8,2"),
         eps: quote.eps != null && Number.isFinite(quote.eps) ? quote.eps : null,
         marketCap: quote.marketCap != null && Number.isFinite(quote.marketCap) ? quote.marketCap : null,
         isProfitable: quote.eps != null ? quote.eps > 0 : null,

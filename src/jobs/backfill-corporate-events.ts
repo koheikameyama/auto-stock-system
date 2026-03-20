@@ -2,10 +2,13 @@
  * 株価データバックフィル — コーポレートイベント更新
  *
  * 各銘柄の決算発表日・配当権利落ち日・配当額を更新
+ * 異常値（Decimalオーバーフロー）検知時は fetchFailCount を積み上げ、
+ * 閾値超過で上場廃止扱いにする。
  */
 
 import { prisma } from "../lib/prisma";
 import { fetchCorporateEvents } from "../core/market-data";
+import { isDecimalOverflow, incrementFailAndMarkDelisted } from "../lib/decimal-utils";
 import pLimit from "p-limit";
 
 export async function main() {
@@ -29,6 +32,7 @@ export async function main() {
 
   // API取得結果を収集
   const eventResults: { id: string; data: Record<string, unknown> }[] = [];
+  const anomalyStockIds: string[] = []; // 異常値を返した銘柄
   let eventProcessed = 0;
 
   await Promise.all(
@@ -36,13 +40,23 @@ export async function main() {
       eventLimit(async () => {
         try {
           const events = await fetchCorporateEvents(stock.tickerCode);
-          const updateData: Record<string, unknown> = {};
-          if (events.nextEarningsDate !== null) updateData.nextEarningsDate = events.nextEarningsDate;
-          if (events.exDividendDate !== null) updateData.exDividendDate = events.exDividendDate;
-          if (events.dividendPerShare !== null) updateData.dividendPerShare = events.dividendPerShare;
 
-          if (Object.keys(updateData).length > 0) {
-            eventResults.push({ id: stock.id, data: updateData });
+          // dividendPerShare の異常値チェック（Decimal(10,2) オーバーフロー）
+          if (isDecimalOverflow(events.dividendPerShare, "10,2")) {
+            console.warn(
+              `  ⚠ 異常値検知: ${stock.tickerCode} dividendPerShare=${events.dividendPerShare}`,
+            );
+            anomalyStockIds.push(stock.id);
+            // 異常値の銘柄はDB更新をスキップ
+          } else {
+            const updateData: Record<string, unknown> = {};
+            if (events.nextEarningsDate !== null) updateData.nextEarningsDate = events.nextEarningsDate;
+            if (events.exDividendDate !== null) updateData.exDividendDate = events.exDividendDate;
+            if (events.dividendPerShare !== null) updateData.dividendPerShare = events.dividendPerShare;
+
+            if (Object.keys(updateData).length > 0) {
+              eventResults.push({ id: stock.id, data: updateData });
+            }
           }
         } catch {
           // fetchCorporateEvents 内部でエラーログ済み
@@ -66,6 +80,16 @@ export async function main() {
         ),
       );
     }
+  }
+
+  // 異常値銘柄の fetchFailCount インクリメント & 廃止判定
+  if (anomalyStockIds.length > 0) {
+    const anomalyStocks = needsUpdateStocks.filter((s) => anomalyStockIds.includes(s.id));
+    const currentCounts = new Map(anomalyStocks.map((s) => [s.id, s.fetchFailCount]));
+    const delistedCount = await incrementFailAndMarkDelisted(anomalyStockIds, currentCounts);
+    console.log(
+      `  異常値検知: ${anomalyStockIds.length}件（うち廃止扱い: ${delistedCount}件）`,
+    );
   }
 
   console.log(`  イベント更新: ${eventResults.length}件`);
