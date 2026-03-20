@@ -1,0 +1,11 @@
+[build]
+watchPatterns = [
+  "src/**",
+  "prisma/**",
+  "yfinance-service/**",
+  "scripts/start.sh",
+  "package.json",
+  "package-lock.json",
+  "tsconfig.json",
+  "Dockerfile",
+]
