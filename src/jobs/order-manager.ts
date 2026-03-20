@@ -1,5 +1,5 @@
 /**
- * 注文マネージャー（9:50 JST / 平日）
+ * 注文マネージャー（9:30 JST / 平日）
  *
  * 「ロジックが主役、AIが最終審判」フロー:
  * 1. 今日のMarketAssessmentを確認（shouldTrade = true のみ）
