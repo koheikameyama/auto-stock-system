@@ -138,17 +138,9 @@ export const TIME_WINDOW = {
 // ========================================
 
 export const YAHOO_FINANCE = {
-  HISTORICAL_PERIOD: "10mo", // テクニカル分析用データ期間（週足SMA26に200日必要）
   HISTORICAL_DAYS: 200, // データポイント数（週足トレンド分析対応）
   BATCH_SIZE: 50, // バッチクォート取得サイズ（1リクエストで複数銘柄）
-  HISTORICAL_BATCH_SIZE: 10, // ヒストリカルデータ取得の並列数
   RATE_LIMIT_DELAY_MS: 2000, // レート制限用ディレイ
-  RETRY_MAX_ATTEMPTS: 3, // リトライ最大回数
-  RETRY_BASE_DELAY_MS: 3000, // リトライ初回待機（指数バックオフ: 3s,6s,12s）
-  // スロットルキュー設定（429回避）
-  THROTTLE_CONCURRENCY: 1, // 同時実行数（1 = 直列実行）
-  THROTTLE_MIN_DELAY_MS: 1000, // リクエスト間最小ディレイ（ms）
-  THROTTLE_MAX_DELAY_MS: 2000, // リクエスト間最大ディレイ（ms）
 } as const;
 
 // ========================================
