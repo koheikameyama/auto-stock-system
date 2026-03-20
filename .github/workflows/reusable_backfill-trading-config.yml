@@ -1,6 +1,7 @@
 name: "[Reusable] Backfill Trading Config"
 
 on:
+  workflow_dispatch:
   workflow_call:
     secrets:
       DATABASE_URL:

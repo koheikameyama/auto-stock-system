@@ -1,6 +1,7 @@
 name: "[Reusable] Backfill Corporate Events"
 
 on:
+  workflow_dispatch:
   workflow_call:
     secrets:
       DATABASE_URL:
