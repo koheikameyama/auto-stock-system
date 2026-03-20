@@ -161,9 +161,9 @@ export function determineTradingStrategy(
  */
 export function calculateCmeDivergence(
   cmeFuturesPrice: number,
-  usdjpy: number,
+  _usdjpy: number,
   nikkeiPreviousClose: number,
 ): number {
-  const cmeFuturesJpy = cmeFuturesPrice * usdjpy;
-  return ((cmeFuturesJpy / nikkeiPreviousClose) - 1) * 100;
+  // NKD=F は円建てなので USD/JPY 換算は不要
+  return ((cmeFuturesPrice / nikkeiPreviousClose) - 1) * 100;
 }
