@@ -289,9 +289,7 @@ export async function getHoldings(): Promise<BrokerHolding[]> {
  * 買余力取得
  */
 export async function getBuyingPower(): Promise<number | null> {
-  const mode = await getEffectiveBrokerMode();
-  if (mode === "simulation") return null;
-
+  // 照会系APIのため brokerMode チェックは行わない（読み取り専用）
   const client = getTachibanaClient();
   if (!client.isLoggedIn()) return null;
 

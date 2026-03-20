@@ -7,6 +7,7 @@
 import { prisma } from "../lib/prisma";
 import type { TradingConfig, TradingPosition } from "@prisma/client";
 import { calculateTradeCosts } from "./trading-costs";
+import { getBuyingPower } from "./broker-orders";
 
 /**
  * 全クローズ済みポジションの確定損益を合計する
@@ -21,8 +22,23 @@ export async function computeRealizedPnl(): Promise<number> {
 
 /**
  * 実質資金 = 入金額 + 累計確定損益（ポジション履歴から計算）
+ *
+ * TACHIBANA_ENV=production の場合はブローカーAPIから買余力を取得し、
+ * 投資中金額を加算して実質資金を算出する。取得値はDBにも同期する。
+ * API失敗時はDBフォールバック。
  */
 export async function getEffectiveCapital(config?: TradingConfig | null): Promise<number> {
+  if (process.env.TACHIBANA_ENV === "production") {
+    const apiBuyingPower = await getBuyingPower();
+    if (apiBuyingPower != null) {
+      const investedAmount = await getInvestedAmount();
+      const effectiveCapital = apiBuyingPower + investedAmount;
+      await syncTotalBudget(effectiveCapital);
+      return effectiveCapital;
+    }
+    // API失敗時はDBフォールバック
+  }
+
   const cfg = config ?? await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
   if (!cfg) throw new Error("TradingConfig が設定されていません");
   const realizedPnl = await computeRealizedPnl();
@@ -161,9 +177,16 @@ export async function getTotalPortfolioValue(
 /**
  * 現金残高を取得する
  *
- * 実質資金（入金額 + 確定損益）からオープンポジションの取得コスト合計を差し引く。
+ * TACHIBANA_ENV=production: ブローカーAPIの買余力（現物買付可能額）を直接返す。
+ * それ以外: 実質資金からオープンポジションの取得コスト合計を差し引く。
  */
 export async function getCashBalance(): Promise<number> {
+  if (process.env.TACHIBANA_ENV === "production") {
+    const apiBuyingPower = await getBuyingPower();
+    if (apiBuyingPower != null) return apiBuyingPower;
+    // API失敗時はDBフォールバック
+  }
+
   const [effectiveCapital, openPositions] = await Promise.all([
     getEffectiveCapital(),
     prisma.tradingPosition.findMany({ where: { status: "open" } }),
@@ -174,4 +197,31 @@ export async function getCashBalance(): Promise<number> {
   }, 0);
 
   return effectiveCapital - investedAmount;
+}
+
+// ========================================
+// 内部ヘルパー
+// ========================================
+
+/** オープンポジションの投資中金額を計算 */
+async function getInvestedAmount(): Promise<number> {
+  const openPositions = await prisma.tradingPosition.findMany({ where: { status: "open" } });
+  return openPositions.reduce((sum, pos) => sum + Number(pos.entryPrice) * pos.quantity, 0);
+}
+
+/** ブローカーから取得した実質資金をDBに同期 */
+async function syncTotalBudget(effectiveCapital: number): Promise<void> {
+  try {
+    const realizedPnl = await computeRealizedPnl();
+    const totalBudget = effectiveCapital - realizedPnl;
+    const config = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+    if (config) {
+      await prisma.tradingConfig.update({
+        where: { id: config.id },
+        data: { totalBudget },
+      });
+    }
+  } catch (err) {
+    console.warn("[position-manager] totalBudget同期失敗:", err);
+  }
 }
