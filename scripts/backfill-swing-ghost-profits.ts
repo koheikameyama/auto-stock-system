@@ -241,7 +241,7 @@ async function main(): Promise<void> {
       const valuesList = batch
         .map(
           (u) =>
-            `('${u.id}', ${u.ghost5DayProfitPct ?? "NULL"}, ${u.ghost10DayProfitPct ?? "NULL"})`,
+            `('${u.id}', ${u.ghost5DayProfitPct != null ? `${u.ghost5DayProfitPct}::numeric` : "NULL::numeric"}, ${u.ghost10DayProfitPct != null ? `${u.ghost10DayProfitPct}::numeric` : "NULL::numeric"})`,
         )
         .join(",\n");
 
