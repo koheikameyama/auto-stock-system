@@ -93,9 +93,9 @@ async function restoreContextFromDB(): Promise<MarketAssessmentContext> {
       const levelOrder: Record<string, number> = { normal: 0, elevated: 1, high: 2, crisis: 3 };
       if (levelOrder[preMarket.minLevel] > levelOrder[regime.level]) {
         if (preMarket.minLevel === "crisis") {
-          regime = { ...regime, level: "crisis", maxPositions: 0, minRank: null, shouldHaltTrading: true, reason: `${regime.reason} + ${preMarket.reason}` };
+          regime = { ...regime, level: "crisis", maxPositions: 0, minScore: null, shouldHaltTrading: true, reason: `${regime.reason} + ${preMarket.reason}` };
         } else if (preMarket.minLevel === "elevated" && regime.level === "normal") {
-          regime = { ...regime, level: "elevated", maxPositions: 2, minRank: "A", reason: `${regime.reason} + ${preMarket.reason}` };
+          regime = { ...regime, level: "elevated", maxPositions: 2, minScore: 60, reason: `${regime.reason} + ${preMarket.reason}` };
         }
       }
     }
@@ -347,41 +347,16 @@ export async function main(context?: MarketAssessmentContext) {
   const disqualified = scoredCandidates.filter((c) => c.score.isDisqualified);
   const qualified = scoredCandidates.filter((c) => !c.score.isDisqualified);
 
-  // フィルタリング: Sランク（不足時はAランクも追加）
-  let filtered = qualified.filter(
-    (c) => c.score.rank === "S",
-  );
-  if (filtered.length < SCORING.MIN_CANDIDATES_FOR_AI) {
-    const aRankCandidates = qualified.filter(
-      (c) => c.score.rank === "A",
-    );
-    filtered = [...filtered, ...aRankCandidates];
-  }
-  filtered = filtered.slice(0, SCORING.MAX_CANDIDATES_FOR_AI);
+  // スコア上位からAI審査候補を選出
+  let filtered = qualified.slice(0, SCORING.MAX_CANDIDATES_FOR_AI);
 
-  // レジームによるランク制限
-  if (regime.minRank) {
-    const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2 };
-    const minRankOrder = rankOrder[regime.minRank];
+  // レジームによるスコア制限
+  if (regime.minScore != null) {
     const beforeCount = filtered.length;
-    filtered = filtered.filter((c) => rankOrder[c.score.rank] <= minRankOrder);
+    filtered = filtered.filter((c) => c.score.totalScore >= regime.minScore!);
     if (filtered.length < beforeCount) {
       console.log(
-        `  レジーム制限: ${regime.minRank}ランク以上に絞り込み（${beforeCount} → ${filtered.length}銘柄）`,
-      );
-    }
-  }
-
-  // レジーム制限で候補が不足した場合、Aランク上位を補充
-  if (filtered.length < SCORING.MIN_CANDIDATES_FOR_AI) {
-    const filteredSet = new Set(filtered.map((c) => c.tickerCode));
-    const aRankBackfill = qualified
-      .filter((c) => c.score.rank === "A" && !filteredSet.has(c.tickerCode))
-      .slice(0, SCORING.MIN_CANDIDATES_FOR_AI - filtered.length);
-    if (aRankBackfill.length > 0) {
-      filtered = [...filtered, ...aRankBackfill];
-      console.log(
-        `  レジーム緩和: 候補不足のためAランク上位${aRankBackfill.length}銘柄を補充（→ ${filtered.length}銘柄）`,
+        `  レジーム制限: スコア${regime.minScore}点以上に絞り込み（${beforeCount} → ${filtered.length}銘柄）`,
       );
     }
   }

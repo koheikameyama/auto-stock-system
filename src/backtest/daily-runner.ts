@@ -81,7 +81,7 @@ interface CandidateMapResult {
  * 生存者バイアスを除去する。
  */
 async function buildCandidateMap(): Promise<CandidateMapResult> {
-  const { TARGET_RANKS, FALLBACK_RANKS } = DAILY_BACKTEST.TICKER_SELECTION;
+  const scoreThreshold = DAILY_BACKTEST.DEFAULT_PARAMS.scoreThreshold;
 
   // ScoringRecordの最古日を取得 → 動的なバックテスト期間
   const oldest = await prisma.scoringRecord.findFirst({
@@ -124,42 +124,30 @@ async function buildCandidateMap(): Promise<CandidateMapResult> {
 
   const startDate = dayjs(oldest.date).format("YYYY-MM-DD");
 
-  // 全期間のS/Aランク ScoringRecord を一括取得
+  // scoreThreshold以上の ScoringRecord を一括取得
   const records = await prisma.scoringRecord.findMany({
     where: {
       date: { gte: oldest.date },
-      rank: { in: [...TARGET_RANKS, ...FALLBACK_RANKS] },
+      totalScore: { gte: scoreThreshold },
       isDisqualified: false,
     },
-    select: { date: true, tickerCode: true, rank: true },
+    select: { date: true, tickerCode: true },
     orderBy: { date: "asc" },
   });
 
-  // Map<dateString, tickerCode[]> を構築（TARGET_RANKS優先、不足時FALLBACK_RANKS追加）
-  const dateTargetMap = new Map<string, Set<string>>();
-  const dateFallbackMap = new Map<string, Set<string>>();
+  // Map<dateString, tickerCode[]> を構築
+  const candidateMap = new Map<string, string[]>();
+  const allTickerSet = new Set<string>();
+  const dateTickerMap = new Map<string, Set<string>>();
 
   for (const r of records) {
     const dateStr = dayjs(r.date).format("YYYY-MM-DD");
-    if ((TARGET_RANKS as readonly string[]).includes(r.rank)) {
-      if (!dateTargetMap.has(dateStr)) dateTargetMap.set(dateStr, new Set());
-      dateTargetMap.get(dateStr)!.add(r.tickerCode);
-    }
-    if (!dateFallbackMap.has(dateStr)) dateFallbackMap.set(dateStr, new Set());
-    dateFallbackMap.get(dateStr)!.add(r.tickerCode);
+    if (!dateTickerMap.has(dateStr)) dateTickerMap.set(dateStr, new Set());
+    dateTickerMap.get(dateStr)!.add(r.tickerCode);
   }
 
-  // TARGET_RANKSの候補が少ない日はFALLBACK_RANKSで補完
-  const candidateMap = new Map<string, string[]>();
-  const allTickerSet = new Set<string>();
-  const { MIN_TICKERS } = DAILY_BACKTEST.TICKER_SELECTION;
-
-  for (const dateStr of dateFallbackMap.keys()) {
-    const targetTickers = dateTargetMap.get(dateStr);
-    const tickers =
-      targetTickers && targetTickers.size >= MIN_TICKERS
-        ? [...targetTickers]
-        : [...(dateFallbackMap.get(dateStr) ?? [])];
+  for (const [dateStr, tickerSet] of dateTickerMap) {
+    const tickers = [...tickerSet];
     candidateMap.set(dateStr, tickers);
     for (const t of tickers) allTickerSet.add(t);
   }
@@ -310,9 +298,6 @@ async function runOnTheFlyMode(
   }
 
   // 4. オンザフライでcandidateMap構築
-  const { TARGET_RANKS, FALLBACK_RANKS, MIN_TICKERS } =
-    DAILY_BACKTEST.TICKER_SELECTION;
-
   const scoringStart = Date.now();
   const { candidateMap, allTickers } = buildCandidateMapOnTheFly(
     allData,
@@ -320,9 +305,7 @@ async function runOnTheFlyMode(
     stocks,
     startDate,
     endDate,
-    TARGET_RANKS,
-    FALLBACK_RANKS,
-    MIN_TICKERS,
+    DAILY_BACKTEST.DEFAULT_PARAMS.scoreThreshold,
     nikkei225Ohlcv ? [...nikkei225Ohlcv] : undefined,
   );
   console.log(

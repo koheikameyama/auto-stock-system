@@ -104,7 +104,7 @@ async function main() {
     });
   }
 
-  // 4. candidateMap構築（B/Cランクも含める）
+  // 4. candidateMap構築（全候補対象: scoreThreshold=0）
   console.log("[analyze] candidateMap構築中...");
   const { candidateMap, allTickers } = buildCandidateMapOnTheFly(
     allData,
@@ -115,9 +115,7 @@ async function main() {
     })),
     startDate,
     endDate,
-    ["S", "A", "B"],
-    ["S", "A", "B"],
-    1,
+    0,
     nikkei225Ohlcv ? [...nikkei225Ohlcv] : undefined,
   );
 

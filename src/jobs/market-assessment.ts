@@ -170,9 +170,9 @@ ${sectorText || "  特になし"}`;
       if (levelOrder[preMarket.minLevel] > levelOrder[regime.level]) {
         console.log(`  → CME乖離率によりレジームを ${regime.level} → ${preMarket.minLevel} に引き上げ`);
         if (preMarket.minLevel === "crisis") {
-          regime = { ...regime, level: "crisis", maxPositions: 0, minRank: null, shouldHaltTrading: true, reason: `${regime.reason} + ${preMarket.reason}` };
+          regime = { ...regime, level: "crisis", maxPositions: 0, minScore: null, shouldHaltTrading: true, reason: `${regime.reason} + ${preMarket.reason}` };
         } else if (preMarket.minLevel === "elevated" && regime.level === "normal") {
-          regime = { ...regime, level: "elevated", maxPositions: 2, minRank: "A", reason: `${regime.reason} + ${preMarket.reason}` };
+          regime = { ...regime, level: "elevated", maxPositions: 2, minScore: 60, reason: `${regime.reason} + ${preMarket.reason}` };
         }
       }
     }

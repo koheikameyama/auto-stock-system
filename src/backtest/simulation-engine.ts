@@ -408,7 +408,7 @@ export function runBacktest(
     } else if (openPositions.length < effectiveMaxPositions && cash > 0) {
       // candidateMapがある場合、当日の候補銘柄のみ評価（生存者バイアス除去）
       const todayCandidates = candidateMap?.get(today);
-      const minRank = regime?.minRank ?? null;
+      const minScore = regime?.minScore ?? null;
       const candidates = evaluateTickers(
         config,
         allData,
@@ -418,7 +418,7 @@ export function runBacktest(
         todayCandidates,
         lastExitDayIdx,
         dayIdx,
-        minRank,
+        minScore,
         sectorMap,
       );
 
@@ -533,7 +533,7 @@ function evaluateTickers(
   candidateTickers?: string[],
   lastExitDayIdxMap?: Map<string, number>,
   currentDayIdx?: number,
-  minRank?: "S" | "A" | "B" | null,
+  minScore?: number | null,
   _sectorMap?: Map<string, string>,
 ): EntryCandidate[] {
   const candidates: EntryCandidate[] = [];
@@ -645,11 +645,8 @@ function evaluateTickers(
     if (score.isDisqualified) continue;
     if (score.totalScore < config.scoreThreshold) continue;
 
-    // レジームによるランク制限（本番 market-scanner.ts と同等）
-    if (minRank) {
-      const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2 };
-      if ((rankOrder[score.rank] ?? 4) > rankOrder[minRank]) continue;
-    }
+    // レジームによるスコア制限（本番 stock-scanner.ts と同等）
+    if (minScore != null && score.totalScore < minScore) continue;
 
     // 週末リスク: 金曜/連休前はポジションサイズを縮小
     const simDate = new Date(today + "T00:00:00+09:00");

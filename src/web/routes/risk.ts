@@ -67,7 +67,7 @@ app.get("/", async (c) => {
               </span>
             </div>
             ${detailRow("最大ポジション数", `${regime.maxPositions}`)}
-            ${detailRow("最低ランク", regime.minRank ?? "-")}
+            ${detailRow("最低スコア", regime.minScore != null ? `${regime.minScore}点` : "-")}
           `
         : emptyState("VIXデータなし")}
     </div>

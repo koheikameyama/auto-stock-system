@@ -86,8 +86,8 @@ export const NIKKEI_TREND_FILTER = {
   SMA_PERIOD: 25,
   /** SMA下でのmaxPositions */
   MAX_POSITIONS_BELOW_SMA: 1,
-  /** SMA下でのminRank（Sランクのみ） */
-  MIN_RANK_BELOW_SMA: "S" as const,
+  /** SMA下でのminScore（旧Sランク相当: 75点以上） */
+  MIN_SCORE_BELOW_SMA: 75,
 } as const;
 
 // 米国市場オーバーナイト指標
@@ -270,22 +270,22 @@ export const MARKET_REGIME = {
   CRISIS: {
     // VIX > 30
     maxPositions: 0, // 取引停止
-    minRank: null as null, // N/A
+    minScore: null as null, // N/A
   },
   HIGH: {
     // VIX 25-30
     maxPositions: 1,
-    minRank: "S" as const, // Sランクのみ
+    minScore: 75, // 旧Sランク相当
   },
   ELEVATED: {
     // VIX 20-25
     maxPositions: 2,
-    minRank: "A" as const, // S/Aランク
+    minScore: 60, // 旧Aランク相当
   },
   NORMAL: {
     // VIX < 20
     maxPositions: 3, // 制限なし（TradingConfig準拠）
-    minRank: "B" as const, // S/A/Bランク（通常通り）
+    minScore: 0, // 制限なし
   },
 } as const;
 

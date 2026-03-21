@@ -345,18 +345,13 @@ async function fetchSharedData(
   }
 
   // 4. candidateMap 構築
-  const { TARGET_RANKS, FALLBACK_RANKS, MIN_TICKERS } =
-    DAILY_BACKTEST.TICKER_SELECTION;
-
   const { candidateMap } = buildCandidateMapOnTheFly(
     allData,
     fundamentalsMap,
     stocks,
     startDate,
     endDate,
-    TARGET_RANKS,
-    FALLBACK_RANKS,
-    MIN_TICKERS,
+    DAILY_BACKTEST.DEFAULT_PARAMS.scoreThreshold,
     nikkei225Ohlcv ? [...nikkei225Ohlcv] : undefined,
   );
 

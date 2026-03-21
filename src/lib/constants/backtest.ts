@@ -109,14 +109,6 @@ export const DAILY_BACKTEST = {
   /** ScoringRecord蓄積がこの月数未満ならフォールバックモードを使用 */
   MIN_SCORING_RECORD_MONTHS: 3,
 
-  /** ScoringRecordからのティッカー選定 */
-  TICKER_SELECTION: {
-    LOOKBACK_DAYS: 30,
-    MIN_TICKERS: 5,
-    TARGET_RANKS: ["S"],
-    FALLBACK_RANKS: ["S", "A"],
-  },
-
   /** デフォルトシミュレーションパラメータ */
   DEFAULT_PARAMS: {
     scoreThreshold: 65,       // WF OOS PF 1.85（TS3.5+CD3との組み合わせで堅牢）

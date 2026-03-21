@@ -226,7 +226,7 @@ export function extractTradingDays(
  * メモリ内でcandidateMapを構築（オンザフライモード）
  *
  * 全営業日について全銘柄をスコアリングし、
- * S/Aランクの銘柄リストを日付別に返す。
+ * scoreThreshold以上の銘柄リストを日付別に返す。
  */
 export function buildCandidateMapOnTheFly(
   allOhlcv: Map<string, OHLCVData[]>,
@@ -234,9 +234,7 @@ export function buildCandidateMapOnTheFly(
   stocks: { tickerCode: string; jpxSectorName: string | null }[],
   startDate: string,
   endDate: string,
-  targetRanks: readonly string[],
-  fallbackRanks: readonly string[],
-  minTickers: number,
+  scoreThreshold: number,
   nikkei225Ohlcv?: OHLCVData[],
 ): { candidateMap: Map<string, string[]>; allTickers: string[] } {
   const tradingDays = extractTradingDays(allOhlcv, startDate, endDate);
@@ -257,26 +255,10 @@ export function buildCandidateMapOnTheFly(
       nikkei225Ohlcv,
     );
 
-    // TARGET_RANKS（S）で候補を収集
-    const targetTickers = dayRecords
-      .filter(
-        (r) =>
-          !r.isDisqualified &&
-          (targetRanks as readonly string[]).includes(r.rank),
-      )
+    // scoreThreshold以上かつ失格でない銘柄を候補に
+    const tickers = dayRecords
+      .filter((r) => !r.isDisqualified && r.totalScore >= scoreThreshold)
       .map((r) => r.tickerCode);
-
-    // 不足時はFALLBACK_RANKS（S/A）で補完
-    const tickers =
-      targetTickers.length >= minTickers
-        ? targetTickers
-        : dayRecords
-            .filter(
-              (r) =>
-                !r.isDisqualified &&
-                (fallbackRanks as readonly string[]).includes(r.rank),
-            )
-            .map((r) => r.tickerCode);
 
     if (tickers.length > 0) {
       candidateMap.set(targetDate, tickers);

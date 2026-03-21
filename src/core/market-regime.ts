@@ -1,5 +1,3 @@
-import type { ScoringRank } from "./scoring/types";
-
 /**
  * マーケットレジーム判定モジュール
  *
@@ -21,7 +19,7 @@ export interface MarketRegime {
   level: RegimeLevel;
   vix: number;
   maxPositions: number;
-  minRank: ScoringRank | null; // nullは取引停止
+  minScore: number | null; // nullは取引停止
   shouldHaltTrading: boolean;
   reason: string;
 }
@@ -40,7 +38,7 @@ export function determineMarketRegime(vix: number): MarketRegime {
       level: "crisis",
       vix,
       maxPositions: MARKET_REGIME.CRISIS.maxPositions,
-      minRank: MARKET_REGIME.CRISIS.minRank,
+      minScore: MARKET_REGIME.CRISIS.minScore,
       shouldHaltTrading: true,
       reason: `VIX ${vix.toFixed(1)} > ${VIX_THRESHOLDS.HIGH}: 市場パニック状態。全取引停止`,
     };
@@ -51,7 +49,7 @@ export function determineMarketRegime(vix: number): MarketRegime {
       level: "high",
       vix,
       maxPositions: MARKET_REGIME.HIGH.maxPositions,
-      minRank: MARKET_REGIME.HIGH.minRank,
+      minScore: MARKET_REGIME.HIGH.minScore,
       shouldHaltTrading: false,
       reason: `VIX ${vix.toFixed(1)} > ${VIX_THRESHOLDS.ELEVATED}: 高ボラティリティ。最大${MARKET_REGIME.HIGH.maxPositions}ポジション、Sランクのみ`,
     };
@@ -62,7 +60,7 @@ export function determineMarketRegime(vix: number): MarketRegime {
       level: "elevated",
       vix,
       maxPositions: MARKET_REGIME.ELEVATED.maxPositions,
-      minRank: MARKET_REGIME.ELEVATED.minRank,
+      minScore: MARKET_REGIME.ELEVATED.minScore,
       shouldHaltTrading: false,
       reason: `VIX ${vix.toFixed(1)} > ${VIX_THRESHOLDS.NORMAL}: やや不安定。最大${MARKET_REGIME.ELEVATED.maxPositions}ポジション、S/Aランク`,
     };
@@ -72,7 +70,7 @@ export function determineMarketRegime(vix: number): MarketRegime {
     level: "normal",
     vix,
     maxPositions: MARKET_REGIME.NORMAL.maxPositions,
-    minRank: MARKET_REGIME.NORMAL.minRank,
+    minScore: MARKET_REGIME.NORMAL.minScore,
     shouldHaltTrading: false,
     reason: `VIX ${vix.toFixed(1)}: 通常レジーム`,
   };
@@ -118,7 +116,7 @@ export interface NikkeiTrendResult {
   nikkeiClose: number;
   sma25: number | null;
   maxPositions: number;
-  minRank: ScoringRank | null;
+  minScore: number | null;
   reason: string;
 }
 
@@ -131,7 +129,7 @@ export interface NikkeiTrendResult {
  * @param nikkeiData oldest-first の日経225 OHLCV配列（当日以前にスライス済み）
  */
 export function determineNikkeiTrend(nikkeiData: OHLCVData[]): NikkeiTrendResult {
-  const { SMA_PERIOD, MAX_POSITIONS_BELOW_SMA, MIN_RANK_BELOW_SMA } = NIKKEI_TREND_FILTER;
+  const { SMA_PERIOD, MAX_POSITIONS_BELOW_SMA, MIN_SCORE_BELOW_SMA } = NIKKEI_TREND_FILTER;
 
   if (nikkeiData.length < SMA_PERIOD) {
     return {
@@ -139,7 +137,7 @@ export function determineNikkeiTrend(nikkeiData: OHLCVData[]): NikkeiTrendResult
       nikkeiClose: nikkeiData.length > 0 ? nikkeiData[nikkeiData.length - 1].close : 0,
       sma25: null,
       maxPositions: Infinity,
-      minRank: null,
+      minScore: null,
       reason: `日経225データ不足（${nikkeiData.length}/${SMA_PERIOD}日） → フィルターなし`,
     };
   }
@@ -155,7 +153,7 @@ export function determineNikkeiTrend(nikkeiData: OHLCVData[]): NikkeiTrendResult
       nikkeiClose: latest.close,
       sma25: Math.round(sma),
       maxPositions: Infinity,
-      minRank: null,
+      minScore: null,
       reason: `日経225 ${latest.close.toFixed(0)} ≥ SMA${SMA_PERIOD} ${sma.toFixed(0)}: 上昇トレンド`,
     };
   }
@@ -165,7 +163,7 @@ export function determineNikkeiTrend(nikkeiData: OHLCVData[]): NikkeiTrendResult
     nikkeiClose: latest.close,
     sma25: Math.round(sma),
     maxPositions: MAX_POSITIONS_BELOW_SMA,
-    minRank: MIN_RANK_BELOW_SMA,
+    minScore: MIN_SCORE_BELOW_SMA,
     reason: `日経225 ${latest.close.toFixed(0)} < SMA${SMA_PERIOD} ${sma.toFixed(0)}: 下落トレンド → 最大${MAX_POSITIONS_BELOW_SMA}ポジション`,
   };
 }

@@ -200,8 +200,6 @@ async function main() {
   console.log(`データ: ${allData.size}銘柄, VIX ${vixData.size}件\n`);
 
   // 3. candidateMap事前構築（12マップ）
-  const { TARGET_RANKS, FALLBACK_RANKS, MIN_TICKERS } = DAILY_BACKTEST.TICKER_SELECTION;
-
   type CandidateMapEntry = {
     candidateMap: Map<string, string[]>;
     allTickers: string[];
@@ -216,7 +214,7 @@ async function main() {
     ]) {
       const result = buildCandidateMapOnTheFly(
         allData, fundamentalsMap, stocks, period.start, period.end,
-        TARGET_RANKS, FALLBACK_RANKS, MIN_TICKERS,
+        DAILY_BACKTEST.DEFAULT_PARAMS.scoreThreshold,
         nikkei225Ohlcv ? [...nikkei225Ohlcv] : undefined,
       );
       candidateMaps.set(period.key, result);
