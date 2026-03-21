@@ -52,14 +52,14 @@ export const DAILY_BACKTEST = {
     // ベースライン（本番ロジック）
     { key: "baseline", label: "ベースライン" },
 
-    // TS起動ATR倍率（ベースライン=3.0）
+    // TS起動ATR倍率（ベースライン=3.5）
     { key: "ts_act_2.0", label: "TS起動2.0", param: "trailingActivationMultiplier", value: 2.0 },
     { key: "ts_act_2.5", label: "TS起動2.5", param: "trailingActivationMultiplier", value: 2.5 },
-    { key: "ts_act_3.5", label: "TS起動3.5", param: "trailingActivationMultiplier", value: 3.5 },
+    { key: "ts_act_3.0", label: "TS起動3.0", param: "trailingActivationMultiplier", value: 3.0 },
 
-    // スコア閾値（ベースライン=75）
-    { key: "score_65", label: "スコア65", param: "scoreThreshold", value: 65 },
+    // スコア閾値（ベースライン=65）
     { key: "score_70", label: "スコア70", param: "scoreThreshold", value: 70 },
+    { key: "score_75", label: "スコア75", param: "scoreThreshold", value: 75 },
     { key: "score_80", label: "スコア80", param: "scoreThreshold", value: 80 },
 
     // ATR倍率（損切幅、ベースライン=1.0）— overrideTpSl=true 必須（SL計算に影響）
@@ -89,8 +89,8 @@ export const DAILY_BACKTEST = {
     { key: "hold_5", label: "上限5日", overrides: { maxHoldingDays: 5 } },
     { key: "hold_7", label: "上限7日", overrides: { maxHoldingDays: 7 } },
 
-    // クールダウン日数（ベースライン=5日）
-    { key: "cooldown_3", label: "CD3日", overrides: { cooldownDays: 3 } },
+    // クールダウン日数（ベースライン=3日）
+    { key: "cooldown_5", label: "CD5日", overrides: { cooldownDays: 5 } },
     { key: "cooldown_7", label: "CD7日", overrides: { cooldownDays: 7 } },
 
     // 指値カラー幅（ベースライン=ATR連動）
@@ -98,14 +98,9 @@ export const DAILY_BACKTEST = {
     { key: "collar_5pct", label: "カラー5%", overrides: { collarPct: 0.05 } },
 
     // 有望パラメータ組み合わせ
-    { key: "combo_ts3.5_trail1.2", label: "TS3.5+トレール1.2", overrides: { trailingActivationMultiplier: 3.5, trailMultiplier: 1.2 } },
-    { key: "combo_ts2.5_trail1.2", label: "TS2.5+トレール1.2", overrides: { trailingActivationMultiplier: 2.5, trailMultiplier: 1.2 } },
-    { key: "combo_ts3.5_hold5", label: "TS3.5+上限5日", overrides: { trailingActivationMultiplier: 3.5, maxHoldingDays: 5 } },
     { key: "combo_trail1.2_hold5", label: "トレール1.2+上限5日", overrides: { trailMultiplier: 1.2, maxHoldingDays: 5 } },
-    { key: "combo_ts3.5_trail1.2_hold5", label: "TS3.5+トレール1.2+上限5日", overrides: { trailingActivationMultiplier: 3.5, trailMultiplier: 1.2, maxHoldingDays: 5 } },
-    { key: "combo_ts2.5_trail1.2_hold7", label: "TS2.5+トレール1.2+上限7日", overrides: { trailingActivationMultiplier: 2.5, trailMultiplier: 1.2, maxHoldingDays: 7 } },
-    { key: "combo_score65_collar2", label: "スコア65+カラー2%", overrides: { scoreThreshold: 65, collarPct: 0.02 } },
-    { key: "combo_full", label: "全部盛り", overrides: { trailingActivationMultiplier: 3.5, trailMultiplier: 1.2, maxHoldingDays: 5, scoreThreshold: 65, collarPct: 0.02 } },
+    { key: "combo_trail2.0_cd5", label: "トレール2.0+CD5日", overrides: { trailMultiplier: 2.0, cooldownDays: 5 } },
+    { key: "combo_trail2.0_score75", label: "トレール2.0+スコア75", overrides: { trailMultiplier: 2.0, scoreThreshold: 75 } },
   ] satisfies ParameterCondition[],
 
   /** シミュレーション期間（ローリング） */
@@ -124,15 +119,15 @@ export const DAILY_BACKTEST = {
 
   /** デフォルトシミュレーションパラメータ */
   DEFAULT_PARAMS: {
-    scoreThreshold: 75,
+    scoreThreshold: 65,       // WF OOS PF 1.85（TS3.5+CD3との組み合わせで堅牢）
     takeProfitRatio: 1.50,    // overrideTpSl=true 時のみ使用
     stopLossRatio: 0.98,      // overrideTpSl=true 時のみ使用
     atrMultiplier: 1.0,       // overrideTpSl=true 時のみ使用
-    trailingActivationMultiplier: 2.5,  // TS発動閾値（ATR×N上昇で発動）— BE=1.5との連携でPF改善
+    trailingActivationMultiplier: 3.5,  // TS発動閾値（ATR×N上昇で発動）— WF OOS PF 1.85
     trailMultiplier: 1.5,               // トレール幅（最高値 - ATR×N、発動時ATR×1.0の含み益確保）
     strategy: "swing" as const,
     overrideTpSl: true,       // ATRベースSL（ATR×1.0）— WF検証でOOS PF 1.68
-    cooldownDays: 5,          // ストップアウト後の同一銘柄再エントリー禁止日数
+    cooldownDays: 3,          // ストップアウト後の同一銘柄再エントリー禁止日数 — WF OOS PF 1.85
   },
 
   /** ボラティリティ＆RSフィルターの閾値 */
@@ -187,8 +182,9 @@ export const DAILY_BACKTEST = {
     },
     /** 旧ベースラインのパラメータ（変更前の DEFAULT_PARAMS との差分） */
     OLD_BASELINE: {
-      trailingActivationMultiplier: 3.0,
-      trailMultiplier: 1.0,
+      trailingActivationMultiplier: 2.5,
+      scoreThreshold: 75,
+      cooldownDays: 5,
     },
   },
 } as const;
