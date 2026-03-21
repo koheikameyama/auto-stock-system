@@ -59,7 +59,7 @@ export async function runCapitalSimulation(): Promise<CapitalSimulationResult> {
   );
 
   // 1. データ取得（1回のみ）
-  const { allData, vixData, candidateMap, sectorMap, dataFetchTimeMs } =
+  const { allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv, dataFetchTimeMs } =
     await fetchSharedData(startDate, endDate);
 
   // 2. 各シナリオでシミュレーション
@@ -94,6 +94,7 @@ export async function runCapitalSimulation(): Promise<CapitalSimulationResult> {
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
+      nikkeiTrendFilterEnabled: false,
       verbose: false,
     };
 
@@ -106,6 +107,7 @@ export async function runCapitalSimulation(): Promise<CapitalSimulationResult> {
       vixData,
       candidateMap,
       sectorMap,
+      nikkei225Ohlcv,
     );
     const utilization = calculateCapitalUtilization(result.equityCurve);
     const executionTimeMs = Date.now() - condStart;
@@ -262,6 +264,7 @@ async function fetchSharedData(
   vixData: Map<string, number>;
   candidateMap: Map<string, string[]>;
   sectorMap: Map<string, string>;
+  nikkei225Ohlcv?: OHLCVData[];
   dataFetchTimeMs: number;
 }> {
   // 1. アクティブ銘柄取得
@@ -363,5 +366,5 @@ async function fetchSharedData(
     sectorMap.set(s.tickerCode, getSectorGroup(s.jpxSectorName) ?? "その他");
   }
 
-  return { allData, vixData, candidateMap, sectorMap, dataFetchTimeMs };
+  return { allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv: nikkei225Ohlcv ? [...nikkei225Ohlcv] : undefined, dataFetchTimeMs };
 }

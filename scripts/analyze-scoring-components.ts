@@ -155,11 +155,12 @@ async function main() {
     pullbackFilterEnabled: false,
     volatilityFilterEnabled: true,
     rsFilterEnabled: false,
+    nikkeiTrendFilterEnabled: false,
     verbose: false,
   };
 
   console.log("[analyze] シミュレーション実行中...");
-  const result = runBacktest(config, allData, vixData, candidateMap, sectorMap);
+  const result = runBacktest(config, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
 
   // 6. 結果表示
   printBacktestReport(result);

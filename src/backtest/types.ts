@@ -34,6 +34,8 @@ export interface BacktestConfig {
   minAtrPct?: number;
   /** RSフィルター: RS > MIN_RS_SCORE の銘柄のみ */
   rsFilterEnabled: boolean;
+  /** 日経225トレンドフィルター: Nikkei < SMA(25) で新規エントリー制限 */
+  nikkeiTrendFilterEnabled: boolean;
   /** タイムストップ日数オーバーライド（デフォルト: TIME_STOP.MAX_HOLDING_DAYS） */
   maxHoldingDays?: number;
   /** 指値カラー幅（現在価格からの最大乖離率）。デフォルト: 0.03 (3%) */

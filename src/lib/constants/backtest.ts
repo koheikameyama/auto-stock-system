@@ -77,6 +77,9 @@ export const DAILY_BACKTEST = {
     { key: "pullback_on", label: "+プルバック", overrides: { pullbackFilterEnabled: true } },
     { key: "trend_off_pb", label: "トレンドOFF+PB", overrides: { trendFilterEnabled: false, pullbackFilterEnabled: true } },
 
+    // 日経225トレンドフィルター（ベースライン=OFF）
+    { key: "nikkei_trend_on", label: "+日経トレンド", overrides: { nikkeiTrendFilterEnabled: true } },
+
     // ボラティリティフィルター（ベースライン=1.5%、スコアリングゲートと一致）
     { key: "vol_off", label: "ボラOFF", overrides: { volatilityFilterEnabled: false } },
     { key: "vol_2pct", label: "ボラ2%", overrides: { minAtrPct: 2.0 } },

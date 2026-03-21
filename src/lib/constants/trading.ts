@@ -80,6 +80,16 @@ export const VIX_THRESHOLDS = {
   NORMAL: 20, // Elevated: 20-25（最大2ポジション、S/Aランク）
 } as const;
 
+// 日経225トレンドフィルター（SMAベース）
+export const NIKKEI_TREND_FILTER = {
+  /** SMA期間（25日 ≈ 5週間） */
+  SMA_PERIOD: 25,
+  /** SMA下でのmaxPositions */
+  MAX_POSITIONS_BELOW_SMA: 1,
+  /** SMA下でのminRank（Sランクのみ） */
+  MIN_RANK_BELOW_SMA: "S" as const,
+} as const;
+
 // 米国市場オーバーナイト指標
 // 前日の米国市場終値を翌朝の日本株判断に使用する
 export const US_OVERNIGHT = {

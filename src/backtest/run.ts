@@ -44,6 +44,7 @@ const { values } = parseArgs({
     "pullback-filter": { type: "boolean", default: false },
     "vol-filter": { type: "boolean", default: false },
     "rs-filter": { type: "boolean", default: false },
+    "nikkei-trend-filter": { type: "boolean", default: false },
     "max-holding-days": { type: "string" },
     "collar-pct": { type: "string" },
     sensitivity: { type: "boolean", default: false },
@@ -127,6 +128,7 @@ async function main(): Promise<void> {
     pullbackFilterEnabled: values["pullback-filter"] ?? false,
     volatilityFilterEnabled: values["vol-filter"] ?? false,
     rsFilterEnabled: values["rs-filter"] ?? false,
+    nikkeiTrendFilterEnabled: values["nikkei-trend-filter"] ?? false,
     maxHoldingDays: values["max-holding-days"]
       ? Number(values["max-holding-days"])
       : undefined,
@@ -144,13 +146,16 @@ async function main(): Promise<void> {
   const startTime = Date.now();
 
   // 1. データ取得（VIXを並行取得）
-  const [allData, vixData] = await Promise.all([
-    fetchMultipleBacktestData(tickers, config.startDate, config.endDate),
+  const [allDataWithNikkei, vixData] = await Promise.all([
+    fetchMultipleBacktestData([...tickers, "^N225"], config.startDate, config.endDate),
     fetchVixData(config.startDate, config.endDate).catch((err) => {
       console.warn("[backtest] VIXデータ取得失敗（crisis halt なし）:", err);
       return new Map<string, number>();
     }),
   ]);
+  const nikkei225Ohlcv = allDataWithNikkei.get("^N225");
+  allDataWithNikkei.delete("^N225");
+  const allData = allDataWithNikkei;
 
   if (allData.size === 0) {
     console.error("エラー: データを取得できませんでした");
@@ -159,7 +164,7 @@ async function main(): Promise<void> {
 
   // 2. バックテスト実行
   console.log("[backtest] シミュレーション実行中...");
-  const result = runBacktest(config, allData, vixData);
+  const result = runBacktest(config, allData, vixData, undefined, undefined, nikkei225Ohlcv);
 
   // 3. 結果表示
   printBacktestReport(result);
@@ -173,7 +178,7 @@ async function main(): Promise<void> {
   let sensitivityResults = null;
   if (values.sensitivity) {
     console.log("[backtest] パラメータ感度分析...");
-    sensitivityResults = runSensitivityAnalysis(config, allData, vixData);
+    sensitivityResults = runSensitivityAnalysis(config, allData, vixData, nikkei225Ohlcv);
     printSensitivityReport(sensitivityResults);
   }
 

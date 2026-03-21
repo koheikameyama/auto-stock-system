@@ -36,6 +36,7 @@ export function runSensitivityAnalysis(
   baseConfig: BacktestConfig,
   allData: Map<string, OHLCVData[]>,
   vixData?: Map<string, number>,
+  nikkeiData?: OHLCVData[],
 ): SensitivityResult[] {
   const results: SensitivityResult[] = [];
   const totalRuns = Object.values(SENSITIVITY_PARAMS).reduce((s, v) => s + v.length, 0);
@@ -50,7 +51,7 @@ export function runSensitivityAnalysis(
       // TP/SL系パラメータは overrideTpSl=true で上書きモード有効化
       const overrideTpSl = TP_SL_PARAMS.has(param) ? true : baseConfig.overrideTpSl;
       const config = { ...baseConfig, [param]: value, overrideTpSl, verbose: false };
-      const result = runBacktest(config, allData, vixData);
+      const result = runBacktest(config, allData, vixData, undefined, undefined, nikkeiData);
 
       results.push({
         parameter: label,

@@ -14,7 +14,7 @@ import { TECHNICAL_MIN_DATA, DEFENSIVE_MODE, DAILY_BACKTEST, WEEKEND_RISK, TRAIL
 import { countNonTradingDaysAhead } from "../lib/market-calendar";
 import { checkPositionExit } from "../core/exit-checker";
 import { checkBuyLimitFill } from "../core/order-executor";
-import { determineMarketRegime } from "../core/market-regime";
+import { determineMarketRegime, determineNikkeiTrend } from "../core/market-regime";
 import { calculateCommission, calculateTax } from "../core/trading-costs";
 import { getLimitDownPrice } from "../lib/constants/price-limits";
 import { calculateMetrics } from "./metrics";
@@ -38,6 +38,7 @@ export function runBacktest(
   vixData?: Map<string, number>,
   candidateMap?: Map<string, string[]> | null,
   sectorMap?: Map<string, string>,
+  nikkeiData?: OHLCVData[],
 ): BacktestResult {
   const openPositions: SimulatedPosition[] = [];
   const closedTrades: SimulatedPosition[] = [];
@@ -76,6 +77,19 @@ export function runBacktest(
     const regime = todayVix != null ? determineMarketRegime(todayVix) : null;
     const regimeMaxPositions = regime ? regime.maxPositions : config.maxPositions;
 
+    // 0.5. 日経225トレンドフィルター（VIXレジームと併用、より制限的な方を採用）
+    let effectiveMaxPositions = regimeMaxPositions;
+    if (config.nikkeiTrendFilterEnabled && nikkeiData && nikkeiData.length > 0) {
+      const nikkeiSlice = nikkeiData.filter(d => d.date <= today);
+      const nikkeiTrend = determineNikkeiTrend(nikkeiSlice);
+      if (!nikkeiTrend.isUptrend) {
+        effectiveMaxPositions = Math.min(effectiveMaxPositions, nikkeiTrend.maxPositions);
+        if (config.verbose) {
+          console.log(`  [${today}] ${nikkeiTrend.reason}`);
+        }
+      }
+    }
+
     // 1. ペンディング注文のフィル判定（前日に出した注文）
     const filledOrders: FilledOrder[] = [];
     const remainingOrders: PendingOrder[] = [];
@@ -92,7 +106,7 @@ export function runBacktest(
       // 本番 order-executor.ts の checkBuyLimitFill を直接呼出
       const fillPrice = checkBuyLimitFill(order.limitPrice, todayBar.low, todayBar.open);
       if (fillPrice !== null) {
-        if (openPositions.length < regimeMaxPositions && cash >= fillPrice * order.quantity) {
+        if (openPositions.length < effectiveMaxPositions && cash >= fillPrice * order.quantity) {
           const hasExisting = openPositions.some((p) => p.ticker === order.ticker);
           if (!hasExisting) {
             filledOrders.push({ ...order, fillPrice });
@@ -391,7 +405,7 @@ export function runBacktest(
           : "shouldTrade=false";
         console.log(`  [${today}] ${reason}: 新規エントリースキップ`);
       }
-    } else if (openPositions.length < regimeMaxPositions && cash > 0) {
+    } else if (openPositions.length < effectiveMaxPositions && cash > 0) {
       // candidateMapがある場合、当日の候補銘柄のみ評価（生存者バイアス除去）
       const todayCandidates = candidateMap?.get(today);
       const minRank = regime?.minRank ?? null;
@@ -410,7 +424,7 @@ export function runBacktest(
 
       // スコア上位から注文を作成
       for (const candidate of candidates) {
-        if (openPositions.length + pendingOrders.length >= regimeMaxPositions) break;
+        if (openPositions.length + pendingOrders.length >= effectiveMaxPositions) break;
         if (cash < candidate.entry.limitPrice * candidate.entry.quantity) break;
 
         const hasDuplicate =

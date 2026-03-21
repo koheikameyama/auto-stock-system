@@ -219,6 +219,7 @@ async function runOnTheFlyMode(
   allData: Map<string, import("../core/technical-analysis").OHLCVData[]>;
   vixData: Map<string, number>;
   sectorMap: Map<string, string>;
+  nikkei225Ohlcv?: import("../core/technical-analysis").OHLCVData[];
   startDate: string;
   endDate: string;
   dataFetchTimeMs: number;
@@ -340,6 +341,7 @@ async function runOnTheFlyMode(
     allData,
     vixData,
     sectorMap,
+    nikkei225Ohlcv: nikkei225Ohlcv ? [...nikkei225Ohlcv] : undefined,
     startDate,
     endDate,
     dataFetchTimeMs,
@@ -355,6 +357,7 @@ async function runScoringRecordMode(): Promise<{
   allData: Map<string, import("../core/technical-analysis").OHLCVData[]>;
   vixData: Map<string, number>;
   sectorMap: Map<string, string>;
+  nikkei225Ohlcv?: import("../core/technical-analysis").OHLCVData[];
   startDate: string;
   endDate: string;
   dataFetchTimeMs: number;
@@ -368,14 +371,18 @@ async function runScoringRecordMode(): Promise<{
   const endDate = dayjs().format("YYYY-MM-DD");
 
   const fetchStart = Date.now();
-  const [allData, vixData] = await Promise.all([
-    fetchMultipleBacktestData(allTickers, startDate, endDate, DAILY_BACKTEST.ON_THE_FLY.LOOKBACK_CALENDAR_DAYS),
+  const [allDataWithNikkei, vixData] = await Promise.all([
+    fetchMultipleBacktestData([...allTickers, "^N225"], startDate, endDate, DAILY_BACKTEST.ON_THE_FLY.LOOKBACK_CALENDAR_DAYS),
     fetchVixData(startDate, endDate).catch((err: unknown) => {
       console.warn("[daily-backtest] VIXデータ取得失敗（レジーム集計なし）:", err);
       return new Map<string, number>();
     }),
   ]);
   const dataFetchTimeMs = Date.now() - fetchStart;
+
+  const nikkei225Ohlcv = allDataWithNikkei.get("^N225");
+  allDataWithNikkei.delete("^N225");
+  const allData = allDataWithNikkei;
 
   if (allData.size === 0) {
     throw new Error("ヒストリカルデータを取得できませんでした");
@@ -401,6 +408,7 @@ async function runScoringRecordMode(): Promise<{
     allData,
     vixData,
     sectorMap,
+    nikkei225Ohlcv: nikkei225Ohlcv ? [...nikkei225Ohlcv] : undefined,
     startDate,
     endDate,
     dataFetchTimeMs,
@@ -467,6 +475,7 @@ export async function runDailyBacktest(
     allData,
     vixData,
     sectorMap,
+    nikkei225Ohlcv,
     startDate,
     endDate,
     dataFetchTimeMs,
@@ -510,6 +519,7 @@ export async function runDailyBacktest(
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
+      nikkeiTrendFilterEnabled: false,
       verbose: false,
     };
 
@@ -530,7 +540,7 @@ export async function runDailyBacktest(
     }
 
     console.log(`[daily-backtest] ${condition.label} シミュレーション中...`);
-    const result = runBacktest(config, allData, vixData, candidateMap, sectorMap);
+    const result = runBacktest(config, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
 
     conditionResults.push({
       condition,
@@ -578,11 +588,12 @@ export async function runDailyBacktest(
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
+      nikkeiTrendFilterEnabled: false,
       verbose: false,
     };
 
     console.log(`[daily-backtest] 資金帯 ${label} シミュレーション中...`);
-    const result = runBacktest(config, allData, vixData, candidateMap, sectorMap);
+    const result = runBacktest(config, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
 
     conditionResults.push({
       condition: { key: `capital_${label}`, label: `資金${label}` },
@@ -650,6 +661,7 @@ export async function runDailyBacktest(
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
+      nikkeiTrendFilterEnabled: false,
       shouldTradeSkipDates,
       verbose: false,
     };
@@ -662,8 +674,8 @@ export async function runDailyBacktest(
     };
 
     const ptStart = Date.now();
-    const newResult = runBacktest(newConfig, allData, vixData, candidateMap, sectorMap);
-    const oldResult = runBacktest(oldConfig, allData, vixData, candidateMap, sectorMap);
+    const newResult = runBacktest(newConfig, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
+    const oldResult = runBacktest(oldConfig, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
     const ptMs = Date.now() - ptStart;
 
     // 経過営業日数: allData 内の取引日をカウント

@@ -163,10 +163,11 @@ async function main() {
     pullbackFilterEnabled: false,
     volatilityFilterEnabled: true,
     rsFilterEnabled: false,
+    nikkeiTrendFilterEnabled: false,
     verbose: false,
   };
 
-  const result = runBacktest(config, allData, vixData, candidateMap, sectorMap);
+  const result = runBacktest(config, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
   const trades = result.trades.filter(t => t.exitReason !== "still_open");
 
   // 出口理由の分布
@@ -305,7 +306,7 @@ async function main() {
         (condConfig as unknown as Record<string, unknown>)[key] = val;
       }
     }
-    const condResult = runBacktest(condConfig, allData, vixData, candidateMap, sectorMap);
+    const condResult = runBacktest(condConfig, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
     const m = condResult.metrics;
     const sign2 = m.totalReturnPct >= 0 ? "+" : "";
     console.log(
@@ -354,7 +355,7 @@ async function main() {
   ];
   for (const combo of comboTests) {
     const comboConfig: BacktestConfig = { ...config, ...(combo.overrides as Partial<BacktestConfig>) };
-    const comboResult = runBacktest(comboConfig, allData, vixData, candidateMap, sectorMap);
+    const comboResult = runBacktest(comboConfig, allData, vixData, candidateMap, sectorMap, nikkei225Ohlcv);
     const m = comboResult.metrics;
     const sign2 = m.totalReturnPct >= 0 ? "+" : "";
     console.log(

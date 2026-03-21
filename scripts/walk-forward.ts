@@ -252,6 +252,7 @@ async function main() {
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
+      nikkeiTrendFilterEnabled: false,
       verbose: false,
     };
   }
@@ -340,8 +341,8 @@ async function main() {
       const isConfig = applyCondition(buildBaseConfig(w.isStart, w.isEnd, isCm.allTickers), condition);
       const oosConfig = applyCondition(buildBaseConfig(w.oosStart, w.oosEnd, oosCm.allTickers), condition);
 
-      const isResult = runBacktest(isConfig, allData, vixData, isCm.candidateMap, sectorMap);
-      const oosResult = runBacktest(oosConfig, allData, vixData, oosCm.candidateMap, sectorMap);
+      const isResult = runBacktest(isConfig, allData, vixData, isCm.candidateMap, sectorMap, nikkei225Ohlcv);
+      const oosResult = runBacktest(oosConfig, allData, vixData, oosCm.candidateMap, sectorMap, nikkei225Ohlcv);
 
       windowResults.push({
         window: w,

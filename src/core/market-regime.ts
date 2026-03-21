@@ -10,7 +10,8 @@ import type { ScoringRank } from "./scoring/types";
  * VIXをプライマリ指標として使用する（日経VIとの相関が高く、実用上問題なし）。
  */
 
-import { VIX_THRESHOLDS, MARKET_REGIME, CME_NIGHT_DIVERGENCE, STRATEGY_SWITCHING } from "../lib/constants";
+import { VIX_THRESHOLDS, MARKET_REGIME, CME_NIGHT_DIVERGENCE, STRATEGY_SWITCHING, NIKKEI_TREND_FILTER } from "../lib/constants";
+import type { OHLCVData } from "./technical-analysis";
 
 export type RegimeLevel = "normal" | "elevated" | "high" | "crisis";
 
@@ -106,6 +107,67 @@ export function determinePreMarketRegime(cmeDivergencePct: number): {
   }
 
   return { minLevel: null, reason: null };
+}
+
+// ========================================
+// 日経225トレンドフィルター
+// ========================================
+
+export interface NikkeiTrendResult {
+  isUptrend: boolean;
+  nikkeiClose: number;
+  sma25: number | null;
+  maxPositions: number;
+  minRank: ScoringRank | null;
+  reason: string;
+}
+
+/**
+ * 日経225のSMA(25)ベーストレンド判定
+ *
+ * 日経225終値 < SMA(25) の場合、新規エントリーを制限する。
+ * VIXレジームと併用し、より制限的な方を採用する。
+ *
+ * @param nikkeiData oldest-first の日経225 OHLCV配列（当日以前にスライス済み）
+ */
+export function determineNikkeiTrend(nikkeiData: OHLCVData[]): NikkeiTrendResult {
+  const { SMA_PERIOD, MAX_POSITIONS_BELOW_SMA, MIN_RANK_BELOW_SMA } = NIKKEI_TREND_FILTER;
+
+  if (nikkeiData.length < SMA_PERIOD) {
+    return {
+      isUptrend: true,
+      nikkeiClose: nikkeiData.length > 0 ? nikkeiData[nikkeiData.length - 1].close : 0,
+      sma25: null,
+      maxPositions: Infinity,
+      minRank: null,
+      reason: `日経225データ不足（${nikkeiData.length}/${SMA_PERIOD}日） → フィルターなし`,
+    };
+  }
+
+  const latest = nikkeiData[nikkeiData.length - 1];
+  const smaSlice = nikkeiData.slice(-SMA_PERIOD);
+  const sma = smaSlice.reduce((sum, bar) => sum + bar.close, 0) / SMA_PERIOD;
+  const isUptrend = latest.close >= sma;
+
+  if (isUptrend) {
+    return {
+      isUptrend: true,
+      nikkeiClose: latest.close,
+      sma25: Math.round(sma),
+      maxPositions: Infinity,
+      minRank: null,
+      reason: `日経225 ${latest.close.toFixed(0)} ≥ SMA${SMA_PERIOD} ${sma.toFixed(0)}: 上昇トレンド`,
+    };
+  }
+
+  return {
+    isUptrend: false,
+    nikkeiClose: latest.close,
+    sma25: Math.round(sma),
+    maxPositions: MAX_POSITIONS_BELOW_SMA,
+    minRank: MIN_RANK_BELOW_SMA,
+    reason: `日経225 ${latest.close.toFixed(0)} < SMA${SMA_PERIOD} ${sma.toFixed(0)}: 下落トレンド → 最大${MAX_POSITIONS_BELOW_SMA}ポジション`,
+  };
 }
 
 export type TradingStrategy = "day_trade" | "swing";
