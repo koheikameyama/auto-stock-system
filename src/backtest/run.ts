@@ -44,7 +44,7 @@ const { values } = parseArgs({
     "pullback-filter": { type: "boolean", default: false },
     "vol-filter": { type: "boolean", default: false },
     "rs-filter": { type: "boolean", default: false },
-    "nikkei-trend-filter": { type: "boolean", default: false },
+    "nikkei-trend-filter": { type: "boolean", default: true },
     "max-holding-days": { type: "string" },
     "collar-pct": { type: "string" },
     sensitivity: { type: "boolean", default: false },

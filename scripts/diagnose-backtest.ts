@@ -163,7 +163,7 @@ async function main() {
     pullbackFilterEnabled: false,
     volatilityFilterEnabled: true,
     rsFilterEnabled: false,
-    nikkeiTrendFilterEnabled: false,
+    nikkeiTrendFilterEnabled: true,
     verbose: false,
   };
 

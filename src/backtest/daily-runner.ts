@@ -519,7 +519,7 @@ export async function runDailyBacktest(
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
-      nikkeiTrendFilterEnabled: false,
+      nikkeiTrendFilterEnabled: true,
       verbose: false,
     };
 
@@ -588,7 +588,7 @@ export async function runDailyBacktest(
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
-      nikkeiTrendFilterEnabled: false,
+      nikkeiTrendFilterEnabled: true,
       verbose: false,
     };
 
@@ -661,7 +661,7 @@ export async function runDailyBacktest(
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
-      nikkeiTrendFilterEnabled: false,
+      nikkeiTrendFilterEnabled: true,
       shouldTradeSkipDates,
       verbose: false,
     };

@@ -94,7 +94,7 @@ export async function runCapitalSimulation(): Promise<CapitalSimulationResult> {
       pullbackFilterEnabled: false,
       volatilityFilterEnabled: true,
       rsFilterEnabled: false,
-      nikkeiTrendFilterEnabled: false,
+      nikkeiTrendFilterEnabled: true,
       verbose: false,
     };
 
