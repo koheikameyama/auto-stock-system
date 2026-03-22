@@ -25,13 +25,20 @@ export function calculateCommission(tradeValue: number): number {
       if ("commission" in tier) {
         return tier.commission;
       }
-      return Math.round(tradeValue * tier.rate);
+      const calculated = Math.round(tradeValue * tier.rate);
+      return tier.maxCommission
+        ? Math.min(calculated, tier.maxCommission)
+        : calculated;
     }
   }
   // フォールバック（到達しないはず）
-  const lastTier = TRADING_COSTS.COMMISSION_TIERS[TRADING_COSTS.COMMISSION_TIERS.length - 1];
+  const lastTier =
+    TRADING_COSTS.COMMISSION_TIERS[TRADING_COSTS.COMMISSION_TIERS.length - 1];
   if ("rate" in lastTier) {
-    return Math.round(tradeValue * lastTier.rate);
+    const calculated = Math.round(tradeValue * lastTier.rate);
+    return lastTier.maxCommission
+      ? Math.min(calculated, lastTier.maxCommission)
+      : calculated;
   }
   return 0;
 }
