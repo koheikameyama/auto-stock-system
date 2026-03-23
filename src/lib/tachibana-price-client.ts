@@ -28,6 +28,10 @@ interface PriceData {
   pChange: string;
   pChangePercent: string;
   sTargetIssueCode: string;
+  pAskPrice?: string;
+  pBidPrice?: string;
+  pAskSize?: string;
+  pBidSize?: string;
   [key: string]: unknown;
 }
 
@@ -99,6 +103,11 @@ function parsePriceData(data: PriceData, symbol: string): YfQuoteResult {
   const price = toNumber(data.pCurrentPrice);
   const previousClose = toNumber(data.pPreviousClose);
 
+  const askPrice = data.pAskPrice ? toNumber(data.pAskPrice) : undefined;
+  const bidPrice = data.pBidPrice ? toNumber(data.pBidPrice) : undefined;
+  const askSize = data.pAskSize ? toNumber(data.pAskSize) : undefined;
+  const bidSize = data.pBidSize ? toNumber(data.pBidSize) : undefined;
+
   return {
     tickerCode: ticker,
     price,
@@ -114,6 +123,11 @@ function parsePriceData(data: PriceData, symbol: string): YfQuoteResult {
     pbr: null,
     eps: null,
     marketCap: null,
+    // 板情報（0は「取得なし」として除外）
+    ...(askPrice && askPrice > 0 ? { askPrice } : {}),
+    ...(bidPrice && bidPrice > 0 ? { bidPrice } : {}),
+    ...(askSize && askSize > 0 ? { askSize } : {}),
+    ...(bidSize && bidSize > 0 ? { bidSize } : {}),
   };
 }
 

@@ -22,6 +22,7 @@ import {
   JOB_CONCURRENCY,
   DEFENSIVE_MODE,
   WEEKEND_RISK,
+  SPREAD_FILTER,
 } from "../lib/constants";
 import { countNonTradingDaysAhead } from "../lib/market-calendar";
 import { fetchStockQuote, fetchHistoricalData } from "../core/market-data";
@@ -207,6 +208,15 @@ export async function main() {
           return null;
         }
 
+        // スプレッドフィルタ: 板情報が取得できている場合のみチェック
+        if (quote.askPrice && quote.bidPrice && quote.askPrice > 0) {
+          const spreadPct = ((quote.askPrice - quote.bidPrice) / quote.askPrice) * 100;
+          if (spreadPct > SPREAD_FILTER.MAX_SPREAD_PCT) {
+            console.log(`    [${tickerCode}] スプレッド過大 (${spreadPct.toFixed(2)}%) → スキップ`);
+            return null;
+          }
+        }
+
         // テクニカル分析 + スコアリング
         const historical = await fetchHistoricalData(tickerCode);
         if (
@@ -243,6 +253,8 @@ export async function main() {
           budgetForSizing,
           maxPositionPct,
           historical,
+          undefined,
+          quote.askPrice,
         );
 
         if (entryCondition.quantity === 0) {

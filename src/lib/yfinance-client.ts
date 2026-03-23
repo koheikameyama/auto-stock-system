@@ -31,6 +31,11 @@ export interface YfQuoteResult {
   pbr: number | null;
   eps: number | null;
   marketCap: number | null;
+  // 板情報（立花証券APIのみ。yfinanceでは未取得のためoptional）
+  askPrice?: number;
+  bidPrice?: number;
+  askSize?: number;
+  bidSize?: number;
 }
 
 export interface YfOHLCVBar {

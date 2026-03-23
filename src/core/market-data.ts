@@ -40,6 +40,11 @@ export interface StockQuote {
   pbr: number | null;       // priceToBook
   eps: number | null;       // epsTrailingTwelveMonths
   marketCap: number | null; // 時価総額（円）
+  // 板情報（立花証券APIのみ。yfinanceでは未取得のためoptional）
+  askPrice?: number;
+  bidPrice?: number;
+  askSize?: number;
+  bidSize?: number;
 }
 
 export interface OHLCVBar {

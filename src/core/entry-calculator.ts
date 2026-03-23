@@ -44,6 +44,7 @@ export function calculateEntryCondition(
   maxPositionPct: number,
   historicalData?: Array<{ open: number; close: number }>,
   collarPct?: number,
+  askPrice?: number,
 ): EntryCondition {
   // 1. 指値: サポートライン or BB下限の近い方（現在価格に近い方を採用）
   const bbLower = summary.bollingerBands.lower;
@@ -76,6 +77,10 @@ export function calculateEntryCondition(
     collar = COLLAR.FALLBACK_PCT;
   }
   limitPrice = Math.max(limitPrice, currentPrice * (1 - collar));
+  // Ask価格が取得できている場合、limitPriceをask以下に制限（ask超えの指値は不要）
+  if (askPrice && askPrice > 0 && limitPrice > askPrice) {
+    limitPrice = askPrice;
+  }
   limitPrice = Math.round(limitPrice);
 
   // 2. 利確参考値: ATR×5.0（実際の利確はトレーリングストップが担う、TPは安全弁）
