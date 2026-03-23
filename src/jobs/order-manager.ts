@@ -253,13 +253,18 @@ export async function main() {
           budgetForSizing,
           maxPositionPct,
           historical,
-          undefined,
-          quote.askPrice,
         );
 
         if (entryCondition.quantity === 0) {
           console.log(`    [${tickerCode}] 予算不足でスキップ`);
           return null;
+        }
+
+        // askSizeによる数量キャップ: 板を動かさないために最良売気配の数量以内に制限
+        let adjustedEntryCondition = entryCondition;
+        if (quote.askSize && quote.askSize > 0 && entryCondition.quantity > quote.askSize) {
+          console.log(`    [${tickerCode}] 数量を板に合わせて制限 ${entryCondition.quantity} → ${quote.askSize}株`);
+          adjustedEntryCondition = { ...entryCondition, quantity: quote.askSize };
         }
 
         // 銘柄別ニュースコンテキスト
@@ -292,7 +297,7 @@ export async function main() {
             newsContext,
             openingContext: openingAnalysis.summary ?? undefined,
           },
-          entryCondition,
+          adjustedEntryCondition,
           assessment,
         );
 
@@ -310,7 +315,7 @@ export async function main() {
           quote,
           techSummary,
           score,
-          entryCondition,
+          entryCondition: adjustedEntryCondition,
           review,
           newsContext,
           strategy,
