@@ -49,6 +49,20 @@ const recommendationLabels: Record<string, string> = {
   no_change_needed: "変更不要",
 };
 
+const misjudgmentLabels: Record<string, string> = {
+  // FP
+  score_inflated: "スコア過大評価",
+  ai_overconfident: "AI楽観",
+  market_shift: "市場変化",
+  acceptable_loss: "許容範囲",
+  // FN
+  threshold_too_strict: "閾値が厳しすぎた",
+  ai_overcautious: "AIが慎重すぎた",
+  pattern_not_recognized: "パターン見落とし",
+  market_context_changed: "市場環境変化",
+  acceptable_miss: "見送り妥当",
+};
+
 function parseGhostAnalysis(raw: string | null): { analysis: string; recommendation: string; misjudgmentType: string | null } | null {
   if (!raw) return null;
   try {
@@ -708,7 +722,7 @@ app.get("/", async (c) => {
                       </td>
                       <td>
                         ${ghost?.misjudgmentType
-                          ? html`<span class="badge" style="background:#ef444420;color:#ef4444">${ghost.misjudgmentType}</span>`
+                          ? html`<span class="badge" style="background:#ef444420;color:#ef4444">${misjudgmentLabels[ghost.misjudgmentType] || ghost.misjudgmentType}</span>`
                           : html`<span style="color:#64748b">-</span>`}
                       </td>
                     </tr>

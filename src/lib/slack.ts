@@ -473,12 +473,26 @@ export async function notifyScoringAccuracy(data: {
     market_halted: "取引見送り",
   };
 
+  const misjudgmentLabel: Record<string, string> = {
+    // FP
+    score_inflated: "スコア過大評価",
+    ai_overconfident: "AI楽観",
+    market_shift: "市場変化",
+    acceptable_loss: "許容範囲",
+    // FN
+    threshold_too_strict: "閾値が厳しすぎた",
+    ai_overcautious: "AIが慎重すぎた",
+    pattern_not_recognized: "パターン見落とし",
+    market_context_changed: "市場環境変化",
+    acceptable_miss: "見送り妥当",
+  };
+
   // FP注目銘柄
   const fpLines =
     data.fpList
       .map(
         (m, i) =>
-          `${i + 1}. ${m.tickerCode} [${m.score}点] ${m.profitPct.toFixed(2)}%${m.misjudgmentType ? ` → ${m.misjudgmentType}` : ""}`,
+          `${i + 1}. ${m.tickerCode} [${m.score}点] ${m.profitPct.toFixed(2)}%${m.misjudgmentType ? ` → ${misjudgmentLabel[m.misjudgmentType] || m.misjudgmentType}` : ""}`,
       )
       .join("\n") || "なし";
 
@@ -487,7 +501,7 @@ export async function notifyScoringAccuracy(data: {
     data.fnList
       .map(
         (m, i) =>
-          `${i + 1}. ${m.tickerCode} [${m.score}点] +${m.profitPct.toFixed(2)}% (${reasonLabel[m.rejectionReason] || m.rejectionReason})${m.misjudgmentType ? ` → ${m.misjudgmentType}` : ""}`,
+          `${i + 1}. ${m.tickerCode} [${m.score}点] +${m.profitPct.toFixed(2)}% (${reasonLabel[m.rejectionReason] || m.rejectionReason})${m.misjudgmentType ? ` → ${misjudgmentLabel[m.misjudgmentType] || m.misjudgmentType}` : ""}`,
       )
       .join("\n") || "なし";
 
