@@ -175,7 +175,7 @@ export const DAILY_BACKTEST = {
     /** 旧ベースラインのパラメータ（変更前の DEFAULT_PARAMS との差分） */
     OLD_BASELINE: {
       trailingActivationMultiplier: 2.5,
-      scoreThreshold: 75,
+      scoreThreshold: 65,
       cooldownDays: 5,
     },
   },
