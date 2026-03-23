@@ -15,6 +15,7 @@ import { prisma } from "../../lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getDaysAgoForDB } from "../../lib/date-utils";
 import { SCORING, SCORING_VALIDITY, SECTOR_MOMENTUM_SCORING } from "../../lib/constants";
+import { getScoreRank } from "../../core/scoring";
 import { layout } from "../views/layout";
 import {
   pnlPercent,
@@ -161,8 +162,6 @@ app.get("/", async (c) => {
   ]);
 
   // --- セクション1: スコア帯別パフォーマンス（概要） ---
-  const getScoreBand = (score: number): string =>
-    score >= 75 ? "75+" : score >= 60 ? "60-74" : "<60";
 
   interface BandOverview {
     band: string;
@@ -174,20 +173,20 @@ app.get("/", async (c) => {
   }
 
   const bandBuckets: Record<string, { count: number; wins: number; pnlSum: number }> = {
-    "75+": { count: 0, wins: 0, pnlSum: 0 },
-    "60-74": { count: 0, wins: 0, pnlSum: 0 },
-    "<60": { count: 0, wins: 0, pnlSum: 0 },
+    S: { count: 0, wins: 0, pnlSum: 0 },
+    A: { count: 0, wins: 0, pnlSum: 0 },
+    B: { count: 0, wins: 0, pnlSum: 0 },
   };
 
   for (const r of allScoredRecords) {
-    const band = getScoreBand(r.totalScore);
+    const band = getScoreRank(r.totalScore);
     const pnl = Number(r.ghostProfitPct);
     bandBuckets[band].count++;
     bandBuckets[band].pnlSum += pnl;
     if (pnl > 0) bandBuckets[band].wins++;
   }
 
-  const scoreBandPerfsOverview: BandOverview[] = ["75+", "60-74", "<60"].map((band) => {
+  const scoreBandPerfsOverview: BandOverview[] = ["S", "A", "B"].map((band) => {
     const b = bandBuckets[band];
     return {
       band,
@@ -199,9 +198,9 @@ app.get("/", async (c) => {
     };
   });
 
-  // 序列チェック: 期待値が 75+ > 60-74 > <60 か
+  // 序列チェック: 期待値が S > A > B か
   const inversions: string[] = [];
-  const bandOrder = ["75+", "60-74", "<60"];
+  const bandOrder = ["S", "A", "B"];
   for (let i = 0; i < bandOrder.length - 1; i++) {
     const higher = scoreBandPerfsOverview[i];
     const lower = scoreBandPerfsOverview[i + 1];
@@ -398,7 +397,7 @@ app.get("/", async (c) => {
             ${scoreBandPerfsOverview.map((bp) => {
               const lowSample = bp.count < 10;
               const dimStyle = lowSample ? "opacity:0.5" : "";
-              const bandColor = bp.band === "75+" ? "#f59e0b" : bp.band === "60-74" ? "#3b82f6" : "#22c55e";
+              const bandColor = bp.band === "S" ? "#f59e0b" : bp.band === "A" ? "#3b82f6" : "#22c55e";
               return html`
                 <div style="text-align:center;padding:0.75rem 0.25rem;${dimStyle}">
                   <p style="margin:0 0 0.5rem"><span class="badge" style="background:${bandColor}20;color:${bandColor}">${bp.band}</span></p>
@@ -427,7 +426,7 @@ app.get("/", async (c) => {
               </div>`
             : html`<div class="card" style="background:#22c55e10;border:1px solid #22c55e30;padding:0.75rem">
                 <p style="font-size:0.82rem;color:#22c55e;margin:0;font-weight:600">
-                  序列正常: 75+ > 60-74 > &lt;60
+                  序列正常: S &gt; A &gt; B
                 </p>
               </div>`}
 

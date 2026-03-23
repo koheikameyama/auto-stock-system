@@ -27,7 +27,7 @@ import {
 } from "../core/market-data";
 import { analyzeTechnicals } from "../core/technical-analysis";
 import type { TechnicalSummary } from "../core/technical-analysis";
-import { scoreStock, formatScoreForAI } from "../core/scoring";
+import { scoreStock, formatScoreForAI, getScoreRank } from "../core/scoring";
 import type { NewLogicScore } from "../core/scoring";
 import {
   getContrarianHistoryBatch,
@@ -385,14 +385,12 @@ export async function main(context?: MarketAssessmentContext) {
   );
 
   // スコア分布ログ
-  const scoreDist = { high: 0, mid: 0, low: 0 };
+  const scoreDist = { S: 0, A: 0, B: 0 };
   for (const c of qualified) {
-    if (c.score.totalScore >= 75) scoreDist.high++;
-    else if (c.score.totalScore >= 60) scoreDist.mid++;
-    else scoreDist.low++;
+    scoreDist[getScoreRank(c.score.totalScore)]++;
   }
   console.log(
-    `  スコア分布: 75+=${scoreDist.high} 60-74=${scoreDist.mid} <60=${scoreDist.low}`,
+    `  スコア分布: S=${scoreDist.S} A=${scoreDist.A} B=${scoreDist.B}`,
   );
 
   // 銘柄別ニュースコンテキストを添付

@@ -24,6 +24,7 @@ import {
   holdingRankBadge,
 } from "../views/components";
 import { SCORING, SECTOR_MOMENTUM_SCORING } from "../../lib/constants/scoring";
+import { getScoreRank } from "../../core/scoring";
 import { COLORS } from "../views/styles";
 import { isMarketDay } from "../../lib/market-calendar";
 import { determineMarketRegime } from "../../core/market-regime";
@@ -136,18 +137,16 @@ app.get("/", async (c) => {
   const scoringNameMap = new Map(scoringStocks.map((s) => [s.tickerCode, s.name]));
 
   // Score band distribution
-  const getScoreBand = (score: number): string =>
-    score >= 75 ? "75+" : score >= 60 ? "60-74" : "<60";
-  const bandCounts: Record<string, number> = { "75+": 0, "60-74": 0, "<60": 0 };
+  const bandCounts: Record<string, number> = { S: 0, A: 0, B: 0 };
   let disqualifiedCount = 0;
   for (const r of todayScoring) {
-    bandCounts[getScoreBand(r.totalScore)] = (bandCounts[getScoreBand(r.totalScore)] ?? 0) + 1;
+    bandCounts[getScoreRank(r.totalScore)] = (bandCounts[getScoreRank(r.totalScore)] ?? 0) + 1;
     if (r.isDisqualified) disqualifiedCount++;
   }
 
-  const prevBandCounts: Record<string, number> = { "75+": 0, "60-74": 0, "<60": 0 };
+  const prevBandCounts: Record<string, number> = { S: 0, A: 0, B: 0 };
   for (const r of prevScoring) {
-    prevBandCounts[getScoreBand(r.totalScore)] = (prevBandCounts[getScoreBand(r.totalScore)] ?? 0) + 1;
+    prevBandCounts[getScoreRank(r.totalScore)] = (prevBandCounts[getScoreRank(r.totalScore)] ?? 0) + 1;
   }
 
   // Category averages (non-disqualified only)
@@ -303,11 +302,11 @@ app.get("/", async (c) => {
           <div class="card">
             <div class="card-title">スコア帯分布</div>
             <div style="display:flex;justify-content:space-around;text-align:center;margin:8px 0">
-              ${(["75+", "60-74", "<60"] as const).map((band) => {
+              ${(["S", "A", "B"] as const).map((band) => {
                 const colorMap: Record<string, string> = {
-                  "75+": "#f59e0b",
-                  "60-74": "#3b82f6",
-                  "<60": "#22c55e",
+                  S: "#f59e0b",
+                  A: "#3b82f6",
+                  B: "#22c55e",
                 };
                 const color = colorMap[band] ?? "#94a3b8";
                 const count = bandCounts[band] ?? 0;
@@ -330,9 +329,9 @@ app.get("/", async (c) => {
                   即死棄却: ${disqualifiedCount}件
                 </div>`
               : html``}
-            ${bandCounts["75+"] === 0
+            ${bandCounts["S"] === 0
               ? html`<div style="margin-top:8px;padding:8px 12px;background:${COLORS.bg};border-radius:8px;border-left:3px solid ${COLORS.warning};font-size:12px;color:${COLORS.warning}">
-                  75点以上該当なし — ボトルネック: ${bottleneck.name}（達成率${bottleneck.pct.toFixed(0)}%）
+                  Sランク該当なし — ボトルネック: ${bottleneck.name}（達成率${bottleneck.pct.toFixed(0)}%）
                 </div>`
               : html``}
           </div>

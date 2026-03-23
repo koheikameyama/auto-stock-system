@@ -7,14 +7,14 @@ import { scoreSectorMomentum } from "./sector-momentum";
 import { computeScoringIntermediates } from "./intermediates";
 import type { ScoringInput, NewLogicScore } from "./types";
 
-export type { ScoringInput, NewLogicScore, ScoringGateResult } from "./types";
+export type { ScoringInput, NewLogicScore, ScoringGateResult, ScoringRank } from "./types";
 export type {
   HoldingScore,
   HoldingRank,
   HoldingGateResult,
   HoldingAlert,
 } from "./types";
-export { getHoldingRank } from "./types";
+export { getScoreRank, getHoldingRank } from "./types";
 export { scoreHolding } from "./holding";
 
 /**

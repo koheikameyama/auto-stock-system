@@ -100,7 +100,21 @@ export interface HoldingAlert {
   message: string;
 }
 
-import { HOLDING_SCORE } from "../../lib/constants/scoring";
+import { HOLDING_SCORE, SCORING } from "../../lib/constants/scoring";
+
+/** エントリースコアのランク (S/A/B) */
+export type ScoringRank = "S" | "A" | "B";
+
+/** ランク判定（エントリースコア用）
+ * 閾値は SCORING.RANKS で一元管理されているため、
+ * 閾値を変えてもこの関数やラベル ("S"/"A"/"B") は変更不要。
+ */
+export function getScoreRank(score: number): ScoringRank {
+  const { S, A } = SCORING.RANKS;
+  if (score >= S) return "S";
+  if (score >= A) return "A";
+  return "B";
+}
 
 /** ランク判定（保有継続スコア用） */
 export function getHoldingRank(score: number): HoldingRank {

@@ -76,6 +76,13 @@ export const SCORING = {
     VOLUME_CV_PERIOD: 25,
   },
 
+  /** エントリースコアのランク閾値 (S/A/B) */
+  RANKS: {
+    S: 75,
+    A: 60,
+    // < A = B
+  },
+
   MAX_CANDIDATES_FOR_AI: 20,
   MIN_CANDIDATES_FOR_AI: 5,
 } as const;

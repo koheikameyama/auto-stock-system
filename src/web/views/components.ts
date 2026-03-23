@@ -6,6 +6,7 @@ import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { COLORS } from "./styles";
 import { CHART_PADDING, CHART_LABEL_THRESHOLD, NIKKEI_CHART_PERIODS } from "../../lib/constants";
+import { getScoreRank } from "../../core/scoring";
 
 type HtmlContent = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -105,7 +106,8 @@ export function orderStatusBadge(status: string): HtmlContent {
 
 /** スコアバッジ（数値で表示、スコア帯で色分け） */
 export function scoreBadge(score: number): HtmlContent {
-  const color = score >= 75 ? "#f59e0b" : score >= 60 ? "#3b82f6" : "#22c55e";
+  const rank = getScoreRank(score);
+  const color = rank === "S" ? "#f59e0b" : rank === "A" ? "#3b82f6" : "#22c55e";
   return html`<span class="badge" style="background:${color}20;color:${color}"
     >${score}</span
   >`;

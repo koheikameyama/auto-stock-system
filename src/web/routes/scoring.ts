@@ -19,6 +19,7 @@ import {
   tickerLink,
   emptyState,
 } from "../views/components";
+import { getScoreRank } from "../../core/scoring";
 
 const app = new Hono();
 
@@ -122,10 +123,10 @@ app.get("/", async (c) => {
   const nameMap = new Map(stocks.map((s) => [s.tickerCode, s.name]));
 
   // サマリー集計
-  const bandCounts: Record<string, number> = { "75+": 0, "60-74": 0, "<60": 0 };
+  const bandCounts: Record<string, number> = { S: 0, A: 0, B: 0 };
   let disqualifiedCount = 0;
   for (const r of records) {
-    const band = r.totalScore >= 75 ? "75+" : r.totalScore >= 60 ? "60-74" : "<60";
+    const band = getScoreRank(r.totalScore);
     bandCounts[band] = (bandCounts[band] ?? 0) + 1;
     if (r.isDisqualified) disqualifiedCount++;
   }
@@ -151,9 +152,9 @@ app.get("/", async (c) => {
       <div>
         <div style="color:#94a3b8;font-size:0.75rem">スコア帯分布</div>
         <div style="font-size:0.85rem;font-weight:600">
-          <span style="color:#f59e0b">75+:${bandCounts["75+"] ?? 0}</span>
-          <span style="color:#3b82f6;margin-left:4px">60-74:${bandCounts["60-74"] ?? 0}</span>
-          <span style="color:#22c55e;margin-left:4px">&lt;60:${bandCounts["<60"] ?? 0}</span>
+          <span style="color:#f59e0b">S:${bandCounts["S"] ?? 0}</span>
+          <span style="color:#3b82f6;margin-left:4px">A:${bandCounts["A"] ?? 0}</span>
+          <span style="color:#22c55e;margin-left:4px">B:${bandCounts["B"] ?? 0}</span>
         </div>
       </div>
       <div>

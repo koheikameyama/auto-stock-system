@@ -11,6 +11,7 @@ import type { Stock } from "@prisma/client";
 import type { TechnicalSummary, OHLCVData } from "../../core/technical-analysis";
 import type { PatternsResponse } from "../../lib/candlestick-patterns";
 import { tt, scoreBar } from "./components";
+import { getScoreRank } from "../../core/scoring";
 
 type HtmlContent = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -384,8 +385,8 @@ function scoringSection(
   scoring: ModalAnalysis["scoring"],
 ): HtmlContent {
   if (!scoring) return html``;
-  const rc =
-    scoring.totalScore >= 75 ? "#f59e0b" : scoring.totalScore >= 60 ? "#3b82f6" : "#22c55e";
+  const rank = getScoreRank(scoring.totalScore);
+  const rc = rank === "S" ? "#f59e0b" : rank === "A" ? "#3b82f6" : "#22c55e";
 
   return html`<div class="modal-section">スコアリング</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">

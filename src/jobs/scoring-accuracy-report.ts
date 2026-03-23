@@ -18,6 +18,7 @@ import { prisma } from "../lib/prisma";
 import { getDaysAgoForDB } from "../lib/date-utils";
 import { SCORING as SCORING_V2, SCORING_ACCURACY_REPORT } from "../lib/constants";
 import { SECTOR_MOMENTUM_SCORING } from "../lib/constants/scoring";
+import { getScoreRank } from "../core/scoring";
 import { notifyScoringAccuracyReport } from "../lib/slack";
 import dayjs from "dayjs";
 
@@ -87,9 +88,9 @@ function analyzeCategoryWeakness(missedStocks: ScoringRecordRow[]) {
 /** スコア帯別実績集計 */
 function analyzeScoreBandAccuracy(rows: ScoringRecordRow[]) {
   const bands = [
-    { label: "75+", filter: (s: number) => s >= 75 },
-    { label: "60-74", filter: (s: number) => s >= 60 && s < 75 },
-    { label: "<60", filter: (s: number) => s < 60 },
+    { label: "S", filter: (s: number) => getScoreRank(s) === "S" },
+    { label: "A", filter: (s: number) => getScoreRank(s) === "A" },
+    { label: "B", filter: (s: number) => getScoreRank(s) === "B" },
   ];
   return bands.map(({ label, filter }) => {
     const group = rows.filter((r) => filter(r.totalScore));

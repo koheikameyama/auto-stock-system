@@ -25,6 +25,7 @@ import {
   FP_ANALYSIS_SYSTEM_PROMPT,
   FP_ANALYSIS_SCHEMA,
 } from "../prompts/scoring-accuracy";
+import { getScoreRank } from "../core/scoring";
 import { notifyScoringAccuracy, notifyContrarianWinners } from "../lib/slack";
 import {
   isNoTradeDay,
@@ -337,11 +338,9 @@ export async function main() {
   const fpAnalysisMap = new Map(fpResults.map((a) => [a.tickerCode, a.result]));
 
   // スコア帯別精度
-  const getScoreBand = (score: number): string =>
-    score >= 75 ? "75+" : score >= 60 ? "60-74" : "<60";
   const byScoreBand: Record<string, { tp: number; fp: number; fn: number; tn: number; precision: number | null }> = {};
   for (const r of allRecordsWithPnl) {
-    const band = getScoreBand(r.totalScore);
+    const band = getScoreRank(r.totalScore);
     if (!byScoreBand[band]) {
       byScoreBand[band] = { tp: 0, fp: 0, fn: 0, tn: 0, precision: null };
     }
@@ -502,7 +501,7 @@ export async function main() {
     });
     const aiGoCount = allTodayRecords.filter((r) => r.aiDecision === "go").length;
     const bandCounts = allTodayRecords.reduce(
-      (acc, r) => { const band = getScoreBand(r.totalScore); acc[band] = (acc[band] || 0) + 1; return acc; },
+      (acc, r) => { const band = getScoreRank(r.totalScore); acc[band] = (acc[band] || 0) + 1; return acc; },
       {} as Record<string, number>,
     );
 
