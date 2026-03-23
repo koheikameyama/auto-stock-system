@@ -16,6 +16,7 @@ env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   MARKET_DATA_PROVIDER: yahoo
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
 
 jobs:
   check-market-day:

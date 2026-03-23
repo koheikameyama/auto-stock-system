@@ -17,6 +17,8 @@ runs:
     - name: Start sidecar
       shell: bash
       working-directory: yfinance-service
+      env:
+        YFINANCE_PROXY: ${{ env.YFINANCE_PROXY }}
       run: |
         uvicorn main:app --port 8000 &
         # Wait for the server to start

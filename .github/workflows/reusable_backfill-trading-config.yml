@@ -8,9 +8,12 @@ on:
         required: true
       SLACK_WEBHOOK_URL:
         required: true
+      YFINANCE_PROXY:
+        required: false
 
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
 
 jobs:
   run:

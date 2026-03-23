@@ -17,6 +17,7 @@ env:
   LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
   LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
 
 jobs:
   weekly-review:

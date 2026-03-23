@@ -8,11 +8,14 @@ on:
         required: true
       SLACK_WEBHOOK_URL:
         required: true
+      YFINANCE_PROXY:
+        required: false
 
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   MARKET_DATA_PROVIDER: yahoo
   YAHOO_THROTTLE_CONCURRENCY: "3"
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
 
 jobs:
   run:

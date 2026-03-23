@@ -12,6 +12,7 @@ concurrency:
 
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
 
 jobs:
   data-cleanup:

@@ -39,6 +39,7 @@ env:
   TACHIBANA_PASSWORD: ${{ secrets.TACHIBANA_PASSWORD }}
   TACHIBANA_SECOND_PASSWORD: ${{ secrets.TACHIBANA_SECOND_PASSWORD }}
   TACHIBANA_ENV: ${{ secrets.TACHIBANA_ENV }}
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
 
 jobs:
   check-market-day:

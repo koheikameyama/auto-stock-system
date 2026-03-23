@@ -11,6 +11,9 @@ concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
+
 jobs:
   lint:
     runs-on: ubuntu-latest
