@@ -11,11 +11,12 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
 import holiday_jp from "@holiday-jp/holiday_jp";
+import { TIMEZONE } from "./constants";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const JST = "Asia/Tokyo";
+const JST = TIMEZONE;
 
 /**
  * 指定日が東証の営業日かどうかを判定

@@ -6,7 +6,7 @@
  * - 全戦略: 9:00-9:30の寄付き直後はリスクフラグを付与（ブロックはしない）
  */
 
-import { TIME_WINDOW } from "../lib/constants";
+import { TIME_WINDOW, TIMEZONE } from "../lib/constants";
 import type { TradingStrategy } from "./market-regime";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -31,7 +31,7 @@ export function checkTimeWindow(
   strategy: TradingStrategy,
   now?: dayjs.Dayjs,
 ): TimeWindowCheck {
-  const jstNow = now ?? dayjs().tz("Asia/Tokyo");
+  const jstNow = now ?? dayjs().tz(TIMEZONE);
   const hour = jstNow.hour();
   const minute = jstNow.minute();
   const timeMinutes = hour * 60 + minute;

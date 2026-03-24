@@ -16,6 +16,7 @@ import { tachibanaFetchQuotesBatch } from "../lib/tachibana-price-client";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
 import { getEffectiveBrokerMode } from "../core/broker-orders";
+import { TIMEZONE } from "../lib/constants";
 import type { QuoteData } from "../core/breakout/breakout-scanner";
 
 dayjs.extend(utc);
@@ -34,7 +35,7 @@ export async function main(): Promise<void> {
   }
 
   // 日付変更検出 → スキャナーリセット
-  const today = dayjs().tz("Asia/Tokyo").format("YYYY-MM-DD");
+  const today = dayjs().tz(TIMEZONE).format("YYYY-MM-DD");
   if (lastScanDate && lastScanDate !== today) {
     scanner = null;
   }
@@ -61,7 +62,7 @@ export async function main(): Promise<void> {
   const holdingTickers = new Set(openPositions.map((p) => p.stock.tickerCode));
 
   // 2. 本日のエントリー済み件数を取得
-  const todayStart = dayjs().tz("Asia/Tokyo").startOf("day").toDate();
+  const todayStart = dayjs().tz(TIMEZONE).startOf("day").toDate();
   const dailyEntryCount = await prisma.tradingOrder.count({
     where: {
       side: "buy",
@@ -89,7 +90,7 @@ export async function main(): Promise<void> {
   }
 
   // 5. スキャン実行
-  const now = dayjs().tz("Asia/Tokyo").toDate();
+  const now = dayjs().tz(TIMEZONE).toDate();
   const triggers = scanner.scan(quotes, now, dailyEntryCount, holdingTickers);
 
   if (triggers.length === 0) {

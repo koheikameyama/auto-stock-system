@@ -10,19 +10,20 @@ import {
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import { TIMEZONE } from "../constants";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
 describe("jstDateAsUTC", () => {
   it("JST日付をUTC 00:00のDateオブジェクトとして返す", () => {
-    const d = dayjs.tz("2026-03-20 10:30", "Asia/Tokyo");
+    const d = dayjs.tz("2026-03-20 10:30", TIMEZONE);
     const result = jstDateAsUTC(d);
     expect(result.toISOString()).toBe("2026-03-20T00:00:00.000Z");
   });
 
   it("JST 1月1日を正しく変換", () => {
-    const d = dayjs.tz("2026-01-01 00:00", "Asia/Tokyo");
+    const d = dayjs.tz("2026-01-01 00:00", TIMEZONE);
     const result = jstDateAsUTC(d);
     expect(result.toISOString()).toBe("2026-01-01T00:00:00.000Z");
   });

@@ -13,6 +13,7 @@ import { cronAuthMiddleware } from "../middleware/cron-auth";
 import { jobState } from "./dashboard";
 import { isMarketDay } from "../../lib/market-calendar";
 import { prisma } from "../../lib/prisma";
+import { TIMEZONE } from "../../lib/constants";
 
 
 import { main as runMiddayReassessment } from "../../jobs/midday-reassessment";
@@ -55,7 +56,7 @@ const JOBS: Record<string, JobDef> = {
 };
 
 function nowJST(): string {
-  return dayjs().tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm:ss");
+  return dayjs().tz(TIMEZONE).format("YYYY-MM-DD HH:mm:ss");
 }
 
 for (const [key, def] of Object.entries(JOBS)) {

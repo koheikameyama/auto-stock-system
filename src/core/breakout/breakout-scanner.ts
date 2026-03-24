@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { BREAKOUT } from "../../lib/constants/breakout";
+import { TIMEZONE } from "../../lib/constants";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -47,7 +48,7 @@ export class BreakoutScanner {
     dailyEntryCount: number,
     holdingTickers: Set<string>,
   ): BreakoutTrigger[] {
-    const jst = dayjs(now).tz("Asia/Tokyo");
+    const jst = dayjs(now).tz(TIMEZONE);
     const hour = jst.hour();
     const minute = jst.minute();
     const nowMs = now.getTime();

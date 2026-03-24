@@ -23,6 +23,7 @@ import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
 import { notifySlack, notifyBrokerError } from "./lib/slack";
 import { isMarketDay } from "./lib/market-calendar";
+import { TIMEZONE } from "./lib/constants";
 import { cronControl } from "./lib/cron-control";
 import { getTachibanaClient, resetTachibanaClient } from "./core/broker-client";
 import { getEffectiveBrokerMode } from "./core/broker-orders";
@@ -113,7 +114,7 @@ async function runJob(
 }
 
 function nowJST(): string {
-  return dayjs().tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm:ss");
+  return dayjs().tz(TIMEZONE).format("YYYY-MM-DD HH:mm:ss");
 }
 
 // スケジュール定義（全て JST）
@@ -144,7 +145,7 @@ for (const s of schedules) {
   const task = cron.schedule(
     s.cron,
     () => runJob(s.name, s.job, s.requiresMarketDay),
-    { timezone: "Asia/Tokyo" },
+    { timezone: TIMEZONE },
   );
   cronTasks.push(task);
   console.log(`  スケジュール登録: ${s.name} → ${s.cron} (JST)`);
@@ -175,7 +176,7 @@ prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } }).then((config)
 // 日次リセット: 休場日スキップログをクリア
 cron.schedule("0 0 * * *", () => {
   holidaySkipLogged.clear();
-}, { timezone: "Asia/Tokyo" });
+}, { timezone: TIMEZONE });
 
 // HTTP サーバー起動（ダッシュボード）
 const port = parseInt(process.env.PORT || "3000", 10);

@@ -1,7 +1,7 @@
 import dayjs from "dayjs"
 import utc from "dayjs/plugin/utc"
 import timezone from "dayjs/plugin/timezone"
-import { CME_TRADING_HOURS, FUTURES_DIVERGENCE } from "./constants"
+import { CME_TRADING_HOURS, FUTURES_DIVERGENCE, TIMEZONE } from "./constants"
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
@@ -23,7 +23,7 @@ export type DivergenceSignal =
  * - 週末休場: 土曜06:00 ～ 月曜07:00
  */
 export function getCMEStatus(now?: Date): CMEStatus {
-  const jst = dayjs(now).tz("Asia/Tokyo")
+  const jst = dayjs(now).tz(TIMEZONE)
   const day = jst.day() // 0=日, 1=月, ..., 6=土
   const hour = jst.hour()
 

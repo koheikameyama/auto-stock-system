@@ -17,6 +17,7 @@ import {
   WEEKEND_RISK,
   TRAILING_STOP,
   SCORING,
+  TIMEZONE,
 } from "../lib/constants";
 import { validateStopLoss } from "../core/risk-manager";
 import { fetchStockQuote } from "../core/market-data";
@@ -329,8 +330,8 @@ export async function main() {
       : quote.low;
 
     // 保有営業日数を算出
-    const entryDate = dayjs(position.createdAt).tz("Asia/Tokyo");
-    const now = dayjs().tz("Asia/Tokyo");
+    const entryDate = dayjs(position.createdAt).tz(TIMEZONE);
+    const now = dayjs().tz(TIMEZONE);
     let holdingBusinessDays = 0;
     let d = entryDate.add(1, "day");
     while (d.isBefore(now, "day") || d.isSame(now, "day")) {
@@ -545,7 +546,7 @@ export async function main() {
   // 3.2. 決算前強制決済（nextEarningsDate が5日以内のポジションをクローズ）
   console.log("[2.2/3] 決算前強制決済チェック...");
   const remainingForEarnings = await getOpenPositions();
-  const todayJst = dayjs().tz("Asia/Tokyo").startOf("day");
+  const todayJst = dayjs().tz(TIMEZONE).startOf("day");
   let earningsCloseCount = 0;
 
   for (const position of remainingForEarnings) {
@@ -876,7 +877,7 @@ function extractAtrFromSnapshot(snapshot: unknown): number | null {
 async function applyCorporateEventAdjustments(
   positions: Awaited<ReturnType<typeof getOpenPositions>>,
 ) {
-  const todayStr = dayjs().tz("Asia/Tokyo").format("YYYY-MM-DD");
+  const todayStr = dayjs().tz(TIMEZONE).format("YYYY-MM-DD");
 
   for (const pos of positions) {
     const stock = pos.stock;

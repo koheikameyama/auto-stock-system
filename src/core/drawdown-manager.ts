@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { DRAWDOWN } from "../lib/constants";
+import { DRAWDOWN, TIMEZONE } from "../lib/constants";
 import { getEffectiveCapital } from "./position-manager";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
@@ -69,7 +69,7 @@ export async function calculateDrawdownStatus(): Promise<DrawdownStatus> {
     : effectiveCap;
 
   // 週次P&L: 今週月曜日以降
-  const nowJST = dayjs().tz("Asia/Tokyo");
+  const nowJST = dayjs().tz(TIMEZONE);
   const mondayJST = nowJST.startOf("week").add(1, "day"); // dayjs week starts on Sunday
   const mondayUTC = new Date(
     Date.UTC(mondayJST.year(), mondayJST.month(), mondayJST.date()),
