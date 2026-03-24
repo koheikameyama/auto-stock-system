@@ -202,7 +202,7 @@ describe("executeEntry", () => {
     expect(mockPrisma.tradingOrder.create).toHaveBeenCalledOnce();
     const createCall = mockPrisma.tradingOrder.create.mock.calls[0][0];
     expect(createCall.data.side).toBe("buy");
-    expect(createCall.data.strategy).toBe("swing");
+    expect(createCall.data.strategy).toBe("breakout");
     expect(createCall.data.status).toBe("pending");
     expect(createCall.data.limitPrice).toBe(1000);
     expect(createCall.data.quantity).toBeGreaterThan(0);
