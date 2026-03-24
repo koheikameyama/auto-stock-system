@@ -1,4 +1,10 @@
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import { BREAKOUT } from "../../lib/constants/breakout";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 import { calculateVolumeSurgeRatio } from "./volume-surge";
 import type {
   WatchlistEntry,
@@ -41,8 +47,9 @@ export class BreakoutScanner {
     dailyEntryCount: number,
     holdingTickers: Set<string>,
   ): BreakoutTrigger[] {
-    const hour = now.getHours();
-    const minute = now.getMinutes();
+    const jst = dayjs(now).tz("Asia/Tokyo");
+    const hour = jst.hour();
+    const minute = jst.minute();
     const nowMs = now.getTime();
 
     // Guard: 9:05 より前はスキャンしない
