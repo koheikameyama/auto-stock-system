@@ -8,6 +8,7 @@ import { basicAuth } from "hono/basic-auth";
 import dashboardRoute from "./routes/dashboard";
 import positionsRoute from "./routes/positions";
 import ordersRoute from "./routes/orders";
+import watchlistRoute from "./routes/watchlist";
 import historyRoute from "./routes/history";
 import riskRoute from "./routes/risk";
 import backtestRoute from "./routes/backtest";
@@ -128,6 +129,7 @@ app.get("/icon-512.svg", (c) => {
 app.route("/", dashboardRoute);
 app.route("/positions", positionsRoute);
 app.route("/orders", ordersRoute);
+app.route("/watchlist", watchlistRoute);
 app.route("/history", historyRoute);
 app.route("/risk", riskRoute);
 app.route("/backtest", backtestRoute);
