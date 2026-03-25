@@ -121,9 +121,6 @@ describe("executeEntry", () => {
       id: "config-1",
       isActive: true,
       totalBudget: 500_000,
-      maxPositions: 5,
-      maxPositionPct: 30,
-      maxDailyLossPct: 3,
     });
     mockPrisma.tradingPosition.findMany.mockResolvedValue([]);
     mockGetCashBalance.mockResolvedValue(1_000_000);

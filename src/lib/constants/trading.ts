@@ -12,7 +12,7 @@ export const UNIT_SHARES = 100;
 export const TRADING_DEFAULTS = {
   TOTAL_BUDGET: 500_000, // 50万円
   MAX_POSITIONS: 3, // 最大同時保有数
-  MAX_POSITION_PCT: 50, // 1銘柄あたり最大比率(%) - 2〜3ポジション分散
+  MAX_POSITION_PCT: 100, // リスクベースサイジングに委ねる（RISK_PER_TRADE_PCT + MAX_LOSS_PCT で制御）
   MAX_DAILY_LOSS_PCT: 3, // 日次最大損失率(%)
 } as const;
 

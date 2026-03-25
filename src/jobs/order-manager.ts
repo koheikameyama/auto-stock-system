@@ -23,6 +23,7 @@ import {
   DEFENSIVE_MODE,
   WEEKEND_RISK,
   SPREAD_FILTER,
+  TRADING_DEFAULTS,
 } from "../lib/constants";
 import { countNonTradingDaysAhead } from "../lib/market-calendar";
 import { fetchStockQuote, fetchHistoricalData } from "../core/market-data";
@@ -152,11 +153,7 @@ export async function main() {
     reasoning: todayAssessment.reasoning,
   };
 
-  // TradingConfig から maxPositionPct を取得
-  const config = await prisma.tradingConfig.findFirst({
-    orderBy: { createdAt: "desc" },
-  });
-  const maxPositionPct = config ? Number(config.maxPositionPct) : 30;
+  const maxPositionPct = TRADING_DEFAULTS.MAX_POSITION_PCT;
 
   // ニュース分析データ取得
   const newsAnalysis = await prisma.newsAnalysis.findUnique({

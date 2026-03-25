@@ -17,9 +17,6 @@ export async function main() {
       data: {
         totalBudget: TRADING_DEFAULTS.TOTAL_BUDGET,
         realizedPnl: 0,
-        maxPositions: TRADING_DEFAULTS.MAX_POSITIONS,
-        maxPositionPct: TRADING_DEFAULTS.MAX_POSITION_PCT,
-        maxDailyLossPct: TRADING_DEFAULTS.MAX_DAILY_LOSS_PCT,
         isActive: true,
       },
     });
@@ -27,17 +24,7 @@ export async function main() {
       `  TradingConfig作成: 予算¥${TRADING_DEFAULTS.TOTAL_BUDGET.toLocaleString()}`,
     );
   } else {
-    await prisma.tradingConfig.update({
-      where: { id: config.id },
-      data: {
-        maxPositions: TRADING_DEFAULTS.MAX_POSITIONS,
-        maxPositionPct: TRADING_DEFAULTS.MAX_POSITION_PCT,
-        maxDailyLossPct: TRADING_DEFAULTS.MAX_DAILY_LOSS_PCT,
-      },
-    });
-    console.log(
-      `  TradingConfig更新: 最大保有数=${TRADING_DEFAULTS.MAX_POSITIONS}, 最大比率=${TRADING_DEFAULTS.MAX_POSITION_PCT}%`,
-    );
+    console.log(`  TradingConfig既存: id=${config.id}`);
   }
 
   console.log("=== Backfill Trading Config 終了 ===");

@@ -11,6 +11,7 @@ import {
   STOP_LOSS,
   POSITION_SIZING,
   GAP_RISK,
+  TRADING_DEFAULTS,
 } from "../lib/constants";
 import { canAddToSector, canAddToMacroFactor } from "./sector-analyzer";
 import { calculateDrawdownStatus } from "./drawdown-manager";
@@ -60,8 +61,8 @@ export async function canOpenPosition(
   }
 
   const effectiveCap = prefetch?.effectiveCapital ?? await getEffectiveCapital(config);
-  const maxPositions = config.maxPositions;
-  const maxPositionPct = Number(config.maxPositionPct);
+  const maxPositions = TRADING_DEFAULTS.MAX_POSITIONS;
+  const maxPositionPct = TRADING_DEFAULTS.MAX_POSITION_PCT;
   const requiredAmount = price * quantity;
 
   const openPositions = prefetch?.openPositions ?? await prisma.tradingPosition.findMany({
@@ -174,7 +175,7 @@ export async function checkDailyLossLimit(
   }
 
   const effectiveCap = prefetch?.effectiveCapital ?? await getEffectiveCapital(config);
-  const maxDailyLossPct = Number(config.maxDailyLossPct);
+  const maxDailyLossPct = TRADING_DEFAULTS.MAX_DAILY_LOSS_PCT;
   const maxDailyLoss = effectiveCap * (maxDailyLossPct / 100);
 
   const todayPnl = await getDailyPnl(undefined, { includeUnrealized: true });

@@ -177,9 +177,7 @@ export async function main(context?: MarketAssessmentContext) {
   const effectiveCap = config
     ? await getEffectiveCapital(config)
     : TRADING_DEFAULTS.TOTAL_BUDGET;
-  const maxPositionPct = config
-    ? Number(config.maxPositionPct)
-    : TRADING_DEFAULTS.MAX_POSITION_PCT;
+  const maxPositionPct = TRADING_DEFAULTS.MAX_POSITION_PCT;
 
   const openPositions = await prisma.tradingPosition.findMany({
     where: { status: "open" },
