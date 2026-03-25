@@ -173,6 +173,14 @@ export class BreakoutScanner {
     return this.state;
   }
 
+  /**
+   * 再トリガーを許可するために triggeredToday から銘柄を削除する
+   * （一時的な理由で却下された場合に使用）
+   */
+  removeFromTriggeredToday(ticker: string): void {
+    this.state.triggeredToday.delete(ticker);
+  }
+
   // ----------------------------------------------------------------
   // Private helpers
   // ----------------------------------------------------------------

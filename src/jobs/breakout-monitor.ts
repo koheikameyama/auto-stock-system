@@ -121,7 +121,14 @@ export async function main(): Promise<void> {
         `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
       );
       try {
-        await executeEntry(trigger, brokerMode);
+        const result = await executeEntry(trigger, brokerMode);
+        // 一時的な理由で却下 → 再トリガーを許可
+        if (!result.success && result.retryable && scanner) {
+          scanner.removeFromTriggeredToday(trigger.ticker);
+          console.log(
+            `[breakout-monitor] ${trigger.ticker} 再トリガー許可（理由: ${result.reason}）`,
+          );
+        }
       } catch (err) {
         console.error(
           `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,

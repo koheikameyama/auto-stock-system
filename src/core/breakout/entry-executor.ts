@@ -25,6 +25,8 @@ export interface ExecutionResult {
   success: boolean;
   orderId?: string;
   reason?: string;
+  /** true の場合、同じ銘柄の再トリガーを許可する（一時的な理由での却下） */
+  retryable?: boolean;
 }
 
 /**
@@ -59,14 +61,14 @@ export async function executeEntry(
       ? "今日のMarketAssessmentがありません"
       : "今日は取引見送り（shouldTrade=false）";
     console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
-    return { success: false, reason };
+    return { success: false, reason, retryable: false };
   }
 
   // 2. 銘柄マスタ確認
   if (!stock) {
     const reason = `銘柄マスタに存在しません: ${ticker}`;
     console.log(`[entry-executor] ${reason}`);
-    return { success: false, reason };
+    return { success: false, reason, retryable: false };
   }
 
   // 3. SL価格 = currentPrice - ATR × 1.0（最大3%に制限）
@@ -89,7 +91,7 @@ export async function executeEntry(
   if (riskPerShare <= 0) {
     const reason = `SLがエントリー価格以上のため数量計算不可（SL: ¥${stopLossPrice}, entry: ¥${currentPrice}）`;
     console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
-    return { success: false, reason };
+    return { success: false, reason, retryable: false };
   }
 
   const rawQuantity = Math.floor(riskAmount / riskPerShare);
@@ -98,7 +100,7 @@ export async function executeEntry(
   if (quantity === 0) {
     const reason = `予算不足でポジションサイズが0（余力: ¥${cashBalance.toLocaleString()}, 必要リスク額: ¥${riskAmount.toLocaleString()}）`;
     console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
-    return { success: false, reason };
+    return { success: false, reason, retryable: true };
   }
 
   // 残高チェック
@@ -106,7 +108,7 @@ export async function executeEntry(
   if (cashBalance < requiredAmount) {
     const reason = `残高不足（必要: ¥${requiredAmount.toLocaleString()}, 残高: ¥${cashBalance.toLocaleString()}）`;
     console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
-    return { success: false, reason };
+    return { success: false, reason, retryable: true };
   }
 
   // 5. canOpenPosition でセクター集中・ドローダウン・ポジション数を確認（プリフェッチデータを渡す）
@@ -117,7 +119,7 @@ export async function executeEntry(
   });
   if (!riskCheck.allowed) {
     console.log(`[entry-executor] ${ticker} リスクチェック不可: ${riskCheck.reason}`);
-    return { success: false, reason: riskCheck.reason };
+    return { success: false, reason: riskCheck.reason, retryable: riskCheck.retryable ?? false };
   }
 
   // 利確参考値: ATR × 5.0（トレーリングストップが実際の利確を担う）

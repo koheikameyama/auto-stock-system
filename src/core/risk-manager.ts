@@ -46,17 +46,17 @@ export async function canOpenPosition(
   quantity: number,
   price: number,
   prefetch?: RiskCheckPrefetch,
-): Promise<{ allowed: boolean; reason: string }> {
+): Promise<{ allowed: boolean; reason: string; retryable?: boolean }> {
   const config = prefetch?.config ?? await prisma.tradingConfig.findFirst({
     orderBy: { createdAt: "desc" },
   });
 
   if (!config) {
-    return { allowed: false, reason: "TradingConfig が設定されていません" };
+    return { allowed: false, reason: "TradingConfig が設定されていません", retryable: false };
   }
 
   if (!config.isActive) {
-    return { allowed: false, reason: "取引が無効化されています" };
+    return { allowed: false, reason: "取引が無効化されています", retryable: false };
   }
 
   const effectiveCap = prefetch?.effectiveCapital ?? await getEffectiveCapital(config);
@@ -75,6 +75,7 @@ export async function canOpenPosition(
     return {
       allowed: false,
       reason: `最大同時保有数（${maxPositions}）に達しています（現在: ${openPositionCount}）`,
+      retryable: true,
     };
   }
 
@@ -89,6 +90,7 @@ export async function canOpenPosition(
     return {
       allowed: false,
       reason: `現金残高不足（残高: ${cashBalance.toFixed(0)}円、必要額: ${requiredAmount.toFixed(0)}円）`,
+      retryable: true,
     };
   }
 
@@ -104,6 +106,7 @@ export async function canOpenPosition(
     return {
       allowed: false,
       reason: `1銘柄あたりの投資比率上限（${maxPositionPct}%）を超えます（${positionPct.toFixed(1)}%）`,
+      retryable: true,
     };
   }
 
@@ -113,19 +116,20 @@ export async function canOpenPosition(
     return {
       allowed: false,
       reason: "日次損失制限に達しています。本日の新規取引は停止中です",
+      retryable: false,
     };
   }
 
   // 5. セクター集中チェック
   const sectorCheck = await canAddToSector(stockId, { openPositions });
   if (!sectorCheck.allowed) {
-    return { allowed: false, reason: sectorCheck.reason };
+    return { allowed: false, reason: sectorCheck.reason, retryable: true };
   }
 
   // 5.5. マクロファクター集中チェック
   const macroCheck = await canAddToMacroFactor(stockId, { openPositions });
   if (!macroCheck.allowed) {
-    return { allowed: false, reason: macroCheck.reason };
+    return { allowed: false, reason: macroCheck.reason, retryable: true };
   }
 
   // 6. ドローダウンチェック
@@ -134,6 +138,7 @@ export async function canOpenPosition(
     return {
       allowed: false,
       reason: `ドローダウン停止: ${drawdown.reason}`,
+      retryable: false,
     };
   }
 
@@ -143,6 +148,7 @@ export async function canOpenPosition(
       return {
         allowed: false,
         reason: `クールダウン中: 最大${drawdown.maxPositionsOverride}ポジションに制限（${drawdown.reason}）`,
+        retryable: true,
       };
     }
   }
