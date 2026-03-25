@@ -318,7 +318,96 @@ export function nikkeiChartShell(): HtmlContent {
   `;
 }
 
-/** スコアバー */
+/**
+ * エクイティカーブ SVG（バックテスト用）
+ * totalEquity の推移を折れ線で表示する。
+ */
+export function equityCurveChart(
+  equityCurve: { date: string; totalEquity: number }[],
+  width = 600,
+  height = 180,
+): HtmlContent {
+  if (equityCurve.length < 2) return emptyState("データ不足");
+
+  const padding = {
+    top: CHART_PADDING.TOP,
+    right: CHART_PADDING.RIGHT,
+    bottom: 30,
+    left: CHART_PADDING.LEFT + 10,
+  };
+  const w = width - padding.left - padding.right;
+  const h = height - padding.top - padding.bottom;
+
+  const values = equityCurve.map((d) => d.totalEquity);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV - minV || 1;
+
+  const points = equityCurve.map((d, i) => {
+    const x = padding.left + (i / (equityCurve.length - 1)) * w;
+    const y = padding.top + h - ((d.totalEquity - minV) / range) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const lastVal = values[values.length - 1];
+  const firstVal = values[0];
+  const color = lastVal >= firstVal ? COLORS.profit : COLORS.loss;
+
+  // 月次ラベル（最大8件）
+  const monthLabels: { x: number; label: string }[] = [];
+  let lastMonth = "";
+  equityCurve.forEach((d, i) => {
+    const month = d.date.substring(0, 7); // YYYY-MM
+    if (month !== lastMonth) {
+      const x = padding.left + (i / (equityCurve.length - 1)) * w;
+      monthLabels.push({ x, label: d.date.substring(5, 7) + "月" });
+      lastMonth = month;
+    }
+  });
+  // 最大8ラベルに間引く
+  const step = Math.ceil(monthLabels.length / 8);
+  const visibleLabels = monthLabels.filter((_, i) => i % step === 0);
+
+  return html`<svg
+    viewBox="0 0 ${width} ${height}"
+    style="width:100%;max-width:${width}px"
+  >
+    <!-- Y軸ラベル -->
+    <text
+      x="${padding.left - 4}"
+      y="${padding.top + 4}"
+      text-anchor="end"
+      fill="${COLORS.textDim}"
+      font-size="9"
+    >¥${formatYen(maxV)}</text>
+    <text
+      x="${padding.left - 4}"
+      y="${padding.top + h + 4}"
+      text-anchor="end"
+      fill="${COLORS.textDim}"
+      font-size="9"
+    >¥${formatYen(minV)}</text>
+    <!-- ライン -->
+    <polyline
+      fill="none"
+      stroke="${color}"
+      stroke-width="2"
+      points="${points.join(" ")}"
+    />
+    <!-- X軸ラベル（月次） -->
+    ${visibleLabels.map(
+      (lb) =>
+        html`<text
+          x="${lb.x}"
+          y="${height - 4}"
+          text-anchor="middle"
+          fill="${COLORS.textDim}"
+          font-size="8"
+        >${lb.label}</text>`,
+    )}
+  </svg>`;
+}
+
 /** SVG 折れ線チャート（累積PnL） */
 export function sparklineChart(
   data: { label: string; value: number }[],
