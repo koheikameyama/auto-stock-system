@@ -92,22 +92,22 @@ export async function main() {
   });
   await forceClosePositions(dayTradePositions, "EOD強制決済");
 
-  // 1b. VIX高騰時のスイングポジション強制決済（オーバーナイトリスク回避）
-  // VIX 25-30: 新規エントリーのみデイトレ化、既存スイングはSLに委ねて保持
-  // VIX ≥ 30: 既存スイングも強制決済（ギャップダウンでSLが機能しないリスク）
+  // 1b. VIX高騰時のブレイクアウトポジション強制決済（オーバーナイトリスク回避）
+  // VIX 25-30: 新規エントリーのみデイトレ化、既存ブレイクアウトはSLに委ねて保持
+  // VIX ≥ 30: 既存ブレイクアウトも強制決済（ギャップダウンでSLが機能しないリスク）
   const todayVix = todayAssessmentForStrategy?.vix != null
     ? Number(todayAssessmentForStrategy.vix)
     : null;
 
   if (todayVix != null && todayVix >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
-    console.log(`[1b/5] VIX ${todayVix.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: スイングポジション強制決済...`);
-    const swingPositions = await prisma.tradingPosition.findMany({
-      where: { status: "open", strategy: "swing" },
+    console.log(`[1b/5] VIX ${todayVix.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: ブレイクアウトポジション強制決済...`);
+    const breakoutPositions = await prisma.tradingPosition.findMany({
+      where: { status: "open", strategy: "breakout" },
       include: { stock: true },
     });
-    if (swingPositions.length > 0) {
-      console.log(`  ${swingPositions.length}件のスイングポジションを決済`);
-      await forceClosePositions(swingPositions, "VIX高騰オーバーナイトリスク回避");
+    if (breakoutPositions.length > 0) {
+      console.log(`  ${breakoutPositions.length}件のブレイクアウトポジションを決済`);
+      await forceClosePositions(breakoutPositions, "VIX高騰オーバーナイトリスク回避");
     } else {
       console.log("  対象なし");
     }
