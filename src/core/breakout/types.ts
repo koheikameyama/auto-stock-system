@@ -38,6 +38,36 @@ export interface ScannerState {
   lastColdScanTime: Map<string, number>;
 }
 
+/** ウォッチリスト構築のフィルター統計 */
+export interface WatchlistFilterStats {
+  /** DB全銘柄数 */
+  totalStocks: number;
+  /** OHLCVデータ取得済み銘柄数 */
+  historicalLoaded: number;
+  /** データ不足でスキップ */
+  skipInsufficientData: number;
+  /** ゲート落ち */
+  skipGate: number;
+  /** 週足下降トレンドで除外 */
+  skipWeeklyTrend: number;
+  /** high20欠損 */
+  skipHigh20: number;
+  /** ATR欠損 */
+  skipAtr: number;
+  /** 出来高欠損 */
+  skipAvgVolume: number;
+  /** 処理エラー */
+  skipError: number;
+  /** 通過銘柄数 */
+  passed: number;
+}
+
+/** ウォッチリスト構築結果 */
+export interface WatchlistBuildResult {
+  entries: WatchlistEntry[];
+  stats: WatchlistFilterStats;
+}
+
 /** ブレイクアウトトリガーイベント */
 export interface BreakoutTrigger {
   /** ティッカーシンボル */

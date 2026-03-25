@@ -120,14 +120,14 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("1234")]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["1234", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries } = await buildWatchlist();
 
-    expect(result.length).toBe(1);
-    expect(result[0].ticker).toBe("1234");
-    expect(result[0].latestClose).toBeGreaterThan(0);
-    expect(result[0].atr14).toBeGreaterThan(0);
-    expect(result[0].avgVolume25).toBeGreaterThan(0);
-    expect(result[0].high20).toBeGreaterThan(0);
+    expect(entries.length).toBe(1);
+    expect(entries[0].ticker).toBe("1234");
+    expect(entries[0].latestClose).toBeGreaterThan(0);
+    expect(entries[0].atr14).toBeGreaterThan(0);
+    expect(entries[0].avgVolume25).toBeGreaterThan(0);
+    expect(entries[0].high20).toBeGreaterThan(0);
   });
 
   it("high20 は直近20日の日足 high の最大値", async () => {
@@ -144,11 +144,11 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("1234")]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["1234", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries } = await buildWatchlist();
 
-    expect(result.length).toBe(1);
+    expect(entries.length).toBe(1);
     // high20 = 直近20本（i=0..19）の high の最大値 = 2000
-    expect(result[0].high20).toBe(2000);
+    expect(entries[0].high20).toBe(2000);
   });
 
   it("avgVolume25 は直近25日の出来高の平均", async () => {
@@ -160,10 +160,10 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("1234")]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["1234", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries } = await buildWatchlist();
 
-    expect(result.length).toBe(1);
-    expect(result[0].avgVolume25).toBeCloseTo(200_000);
+    expect(entries.length).toBe(1);
+    expect(entries[0].avgVolume25).toBeCloseTo(200_000);
   });
 
   it("株価が MAX_PRICE (5000) を超えるとゲート失敗で除外される", async () => {
@@ -171,9 +171,10 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("9999", { latestPrice: 6000 })]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["9999", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries, stats } = await buildWatchlist();
 
-    expect(result.length).toBe(0);
+    expect(entries.length).toBe(0);
+    expect(stats.skipGate).toBe(1);
   });
 
   it("avgVolume25 が MIN_AVG_VOLUME_25 (50_000) を下回ると流動性ゲート失敗で除外される", async () => {
@@ -181,9 +182,10 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("2222", { latestVolume: 10_000 })]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["2222", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries, stats } = await buildWatchlist();
 
-    expect(result.length).toBe(0);
+    expect(entries.length).toBe(0);
+    expect(stats.skipGate).toBe(1);
   });
 
   it("週足下降トレンドの銘柄（weeklyClose < weeklySma13）はゲート通過でも除外される", async () => {
@@ -201,10 +203,11 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("3333", { latestPrice: 500 })]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["3333", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries, stats } = await buildWatchlist();
 
     // weeklyClose (≈500) < weeklySma13 (高値寄り) → 除外
-    expect(result.length).toBe(0);
+    expect(entries.length).toBe(0);
+    expect(stats.skipWeeklyTrend).toBe(1);
   });
 
   it("ゲート通過 + 週足SMA13以上 → ウォッチリストに入る", async () => {
@@ -222,10 +225,10 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("4444", { latestPrice: 1405 })]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["4444", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries } = await buildWatchlist();
 
-    expect(result.length).toBe(1);
-    expect(result[0].ticker).toBe("4444");
+    expect(entries.length).toBe(1);
+    expect(entries[0].ticker).toBe("4444");
   });
 
   it("ゲート通過 + 週足SMA13未満 → 除外される", async () => {
@@ -242,9 +245,9 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("5555", { latestPrice: 400 })]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["5555", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries } = await buildWatchlist();
 
-    expect(result.length).toBe(0);
+    expect(entries.length).toBe(0);
   });
 
   it("ヒストリカルデータが不足している銘柄は除外される", async () => {
@@ -253,18 +256,20 @@ describe("buildWatchlist", () => {
     mockStockFindMany.mockResolvedValue([makeStock("6666")]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["6666", bars]]));
 
-    const result = await buildWatchlist();
+    const { entries, stats } = await buildWatchlist();
 
-    expect(result.length).toBe(0);
+    expect(entries.length).toBe(0);
+    expect(stats.skipInsufficientData).toBe(1);
   });
 
   it("銘柄がゼロ件のとき空配列を返す", async () => {
     mockStockFindMany.mockResolvedValue([]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map());
 
-    const result = await buildWatchlist();
+    const { entries, stats } = await buildWatchlist();
 
-    expect(result).toEqual([]);
+    expect(entries).toEqual([]);
+    expect(stats.totalStocks).toBe(0);
   });
 
   it("複数銘柄のうちゲートを通過したものだけが返される", async () => {
@@ -282,9 +287,11 @@ describe("buildWatchlist", () => {
       ]),
     );
 
-    const result = await buildWatchlist();
+    const { entries, stats } = await buildWatchlist();
 
-    expect(result.length).toBe(1);
-    expect(result[0].ticker).toBe("7777");
+    expect(entries.length).toBe(1);
+    expect(entries[0].ticker).toBe("7777");
+    expect(stats.skipGate).toBe(1);
+    expect(stats.passed).toBe(1);
   });
 });

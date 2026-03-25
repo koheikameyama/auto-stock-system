@@ -22,12 +22,17 @@ export async function main(): Promise<void> {
   console.log("=== Watchlist Builder 開始 ===");
 
   try {
-    currentWatchlist = await buildWatchlist();
+    const { entries, stats } = await buildWatchlist();
+    currentWatchlist = entries;
     console.log(`ウォッチリスト構築完了: ${currentWatchlist.length}銘柄`);
 
     await notifySlack({
       title: "ウォッチリスト構築完了",
-      message: `ブレイクアウト監視対象: ${currentWatchlist.length}銘柄`,
+      message:
+        `ブレイクアウト監視対象: *${stats.passed}銘柄*\n` +
+        `対象: ${stats.totalStocks} → OHLCV: ${stats.historicalLoaded}\n` +
+        `データ不足: -${stats.skipInsufficientData} / ゲート落ち: -${stats.skipGate}\n` +
+        `週足下降: -${stats.skipWeeklyTrend} / その他: -${stats.skipHigh20 + stats.skipAtr + stats.skipAvgVolume + stats.skipError}`,
       color: "good",
     });
   } catch (err) {

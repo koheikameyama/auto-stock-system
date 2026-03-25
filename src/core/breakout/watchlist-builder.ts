@@ -19,7 +19,7 @@ import { analyzeTechnicals } from "../technical-analysis";
 import { checkGates } from "../scoring/gates";
 import { computeScoringIntermediates } from "../scoring/intermediates";
 import { BREAKOUT } from "../../lib/constants/breakout";
-import type { WatchlistEntry } from "./types";
+import type { WatchlistEntry, WatchlistBuildResult } from "./types";
 
 /**
  * 直近 N 営業日の日足 high の最大値を計算する
@@ -48,7 +48,7 @@ function computeAvgVolume(data: { volume: number }[], days: number): number | nu
  *
  * 基本フィルター（ゲート）と週足下降トレンドチェックを通過した銘柄を返す。
  */
-export async function buildWatchlist(): Promise<WatchlistEntry[]> {
+export async function buildWatchlist(): Promise<WatchlistBuildResult> {
   // 1. DB全銘柄取得（廃止・制限なし）
   const stocks = await prisma.stock.findMany({
     where: {
@@ -67,20 +67,48 @@ export async function buildWatchlist(): Promise<WatchlistEntry[]> {
     },
   });
 
-  if (stocks.length === 0) return [];
+  console.log(`[watchlist-builder] DB銘柄数: ${stocks.length}`);
+  if (stocks.length === 0) {
+    return {
+      entries: [],
+      stats: {
+        totalStocks: 0,
+        historicalLoaded: 0,
+        skipInsufficientData: 0,
+        skipGate: 0,
+        skipWeeklyTrend: 0,
+        skipHigh20: 0,
+        skipAtr: 0,
+        skipAvgVolume: 0,
+        skipError: 0,
+        passed: 0,
+      },
+    };
+  }
 
   const allTickerCodes = stocks.map((s) => s.tickerCode);
 
   // 2. OHLCVデータを一括取得（DBから）
   const historicalMap = await readHistoricalFromDB(allTickerCodes);
+  console.log(`[watchlist-builder] OHLCVデータ取得済: ${historicalMap.size}銘柄`);
 
   const today = new Date();
   const entries: WatchlistEntry[] = [];
+
+  // フィルター別カウンター
+  let skipInsufficientData = 0;
+  let skipGate = 0;
+  let skipWeeklyTrend = 0;
+  let skipHigh20 = 0;
+  let skipAtr = 0;
+  let skipAvgVolume = 0;
+  let skipError = 0;
 
   for (const stock of stocks) {
     try {
       const historical = historicalMap.get(stock.tickerCode);
       if (!historical || historical.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) {
+        skipInsufficientData++;
         continue;
       }
 
@@ -107,25 +135,38 @@ export async function buildWatchlist(): Promise<WatchlistEntry[]> {
         today,
       });
 
-      if (!gate.passed) continue;
+      if (!gate.passed) {
+        skipGate++;
+        continue;
+      }
 
       // 5. 週足下降トレンドチェック（checkGates には含まれていないため個別チェック）
       const intermediates = computeScoringIntermediates(historical);
       const { weeklyClose, weeklySma13 } = intermediates;
 
       if (weeklySma13 != null && weeklyClose != null && weeklyClose < weeklySma13) {
+        skipWeeklyTrend++;
         continue;
       }
 
       // 6. high20 = 直近 HIGH_LOOKBACK_DAYS 日の high の最大値
       const high20 = computeHigh(historical, BREAKOUT.PRICE.HIGH_LOOKBACK_DAYS);
-      if (high20 == null) continue;
+      if (high20 == null) {
+        skipHigh20++;
+        continue;
+      }
 
       // atr14 が null の場合はスキップ
-      if (summary.atr14 == null) continue;
+      if (summary.atr14 == null) {
+        skipAtr++;
+        continue;
+      }
 
       // avgVolume25 が null の場合はスキップ
-      if (avgVolume25 == null) continue;
+      if (avgVolume25 == null) {
+        skipAvgVolume++;
+        continue;
+      }
 
       entries.push({
         ticker: stock.tickerCode,
@@ -135,9 +176,31 @@ export async function buildWatchlist(): Promise<WatchlistEntry[]> {
         latestClose: summary.currentPrice,
       });
     } catch (error) {
+      skipError++;
       console.error(`[watchlist-builder] 処理エラー: ${stock.tickerCode}`, error);
     }
   }
 
-  return entries;
+  const stats = {
+    totalStocks: stocks.length,
+    historicalLoaded: historicalMap.size,
+    skipInsufficientData,
+    skipGate,
+    skipWeeklyTrend,
+    skipHigh20,
+    skipAtr,
+    skipAvgVolume,
+    skipError,
+    passed: entries.length,
+  };
+
+  console.log(
+    `[watchlist-builder] フィルター結果: ` +
+      `データ不足=${skipInsufficientData}, ゲート落ち=${skipGate}, ` +
+      `週足下降=${skipWeeklyTrend}, high20欠損=${skipHigh20}, ` +
+      `ATR欠損=${skipAtr}, 出来高欠損=${skipAvgVolume}, エラー=${skipError} ` +
+      `→ 通過=${entries.length}銘柄`
+  );
+
+  return { entries, stats };
 }
