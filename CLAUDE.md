@@ -62,19 +62,13 @@
 - **エントリー**: 出来高サージ（2倍以上）+ 20日高値ブレイクで自動エントリー（breakout戦略）
 - **ルールベース**: 損切りはATRベースで機械的に実行、利確はトレーリングストップに委ねて利益を伸ばす
 
-#### エントリー戦略の運用状況（2026-03-25〜）
+#### 運用戦略
 
-**現在はbreakout戦略のみで運用中。** 以前のスコアリング+AIレビュー方式は無効化済み。
+**breakout戦略のみで運用中。** スコアリング系コードは削除済み（git履歴で復元可能）。
 
-| 戦略 | 状態 | 備考 |
-|------|------|------|
-| **breakout**（出来高ブレイクアウト） | **稼働中** | watchlist-builder + breakout-monitor + entry-executor |
-| scoring + order-manager | 無効化 | コード・ワークフローはコメントアウトで保持 |
-| holding-score | 無効化 | スコアリング前提のため停止 |
-| daily-backtest | 無効化 | スコアリング候補前提のため停止 |
-| scoring-accuracy / report | 無効化 | スコアリング精度分析のため停止 |
-
-> breakoutの実績検証後、並列運用を検討する可能性あり。
+- **エントリー**: watchlist-builder + breakout-monitor + entry-executor
+- **バックテスト**: `npm run backtest:breakout`（日足データでシミュレーション）
+- **パラメータ検証**: `npm run walk-forward:breakout`（6ヶ月IS / 3ヶ月OOS × 6ウィンドウ）
 
 #### 実装ガイドライン
 
@@ -125,9 +119,8 @@
 | [settings.md](docs/specs/settings.md) | 設定・認証 |
 | [batch-processing.md](docs/specs/batch-processing.md) | バッチ処理 |
 | [trading-architecture.md](docs/specs/trading-architecture.md) | トレーディングアーキテクチャ改善（ロジック主導+AI最終審判） |
-| [scoring-system.md](docs/specs/scoring-system.md) | スコアリングシステム（3カテゴリ100点満点・即死ルール・DB保存） |
 | [admin.md](docs/specs/admin.md) | 管理画面 |
-| [backtest.md](docs/specs/backtest.md) | バックテスト（ロジック層シミュレーション・感度分析） |
+| [backtest-breakout.md](docs/specs/backtest-breakout.md) | ブレイクアウトバックテスト（日足シミュレーション・walk-forward検証） |
 | [broker-api-migration.md](docs/specs/broker-api-migration.md) | 立花証券API移行ガイド（シミュレーション → リアル取引） |
 
 詳細は `.claude/rules/` 配下を参照してください。

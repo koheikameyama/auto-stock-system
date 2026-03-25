@@ -18,15 +18,9 @@ import { TIMEZONE } from "../../lib/constants";
 
 import { main as runMiddayReassessment } from "../../jobs/midday-reassessment";
 import { main as runEod } from "../../jobs/end-of-day";
-// [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
-// import { main as runDailyBacktest } from "../../jobs/daily-backtest";
 import { main as runDelistingSync } from "../../jobs/jpx-delisting-sync";
 import { main as runMarketAssessment } from "../../jobs/market-assessment";
-// [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
-// import { main as runHoldingScore } from "../../jobs/holding-score";
 import { main as runWatchlistBuilder } from "../../jobs/watchlist-builder";
-// [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
-// import { main as runScoringAccuracy } from "../../jobs/scoring-accuracy";
 import { main as runDefensiveExitFollowup } from "../../jobs/defensive-exit-followup";
 import { main as runUnfilledOrderFollowup } from "../../jobs/unfilled-order-followup";
 import { main as runDataCleanup } from "../../jobs/data-cleanup";
@@ -47,14 +41,8 @@ interface JobDef {
 const JOBS: Record<string, JobDef> = {
   "midday-reassessment": { fn: runMiddayReassessment, requiresMarketDay: true },
   "end-of-day": { fn: runEod, requiresMarketDay: true },
-  // [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
-  // "daily-backtest": { fn: runDailyBacktest, requiresMarketDay: true },
   "market-assessment": { fn: async () => { await runMarketAssessment(); }, requiresMarketDay: true },
-  // [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
-  // "holding-score": { fn: runHoldingScore, requiresMarketDay: true },
   "watchlist-builder": { fn: runWatchlistBuilder, requiresMarketDay: true },
-  // [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
-  // "scoring-accuracy": { fn: runScoringAccuracy, requiresMarketDay: true },
   "defensive-exit-followup": { fn: runDefensiveExitFollowup, requiresMarketDay: true },
   "unfilled-order-followup": { fn: runUnfilledOrderFollowup, requiresMarketDay: true },
   "jpx-delisting-sync": { fn: runDelistingSync, requiresMarketDay: false },

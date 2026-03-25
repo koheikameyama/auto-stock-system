@@ -119,10 +119,9 @@ function nowJST(): string {
 
 // スケジュール定義（全て JST）
 // ※ position-monitor のみ Worker cron で実行
-// ※ バッチジョブ（order-manager, midday-reassessment, end-of-day,
-//   daily-backtest, jpx-delisting-sync）は cron-job.org → /api/cron/* に移行
-// ※ news-collector, market-scanner, scoring-accuracy, weekly-review は
-//   GitHub Actions cron に移行済み（KOH-296）
+// ※ バッチジョブ（midday-reassessment, end-of-day,
+//   jpx-delisting-sync）は cron-job.org → /api/cron/* に移行
+// ※ news-collector, weekly-review は GitHub Actions cron に移行済み
 const schedules = [
   // 9:00-11:30, 12:30-15:30 毎分 ポジション監視（平日・市場時間）
   { cron: "0-59 9 * * 1-5", job: runMonitor, name: "position-monitor", requiresMarketDay: true },
