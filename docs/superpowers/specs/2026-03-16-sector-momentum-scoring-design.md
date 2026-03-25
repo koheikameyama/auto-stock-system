@@ -76,6 +76,7 @@
 ### セクター不明時の扱い
 
 `getSectorGroup()` が `null` を返す場合（`jpxSectorName` が null またはマッピング不明）：
+
 - `sectorRelativeStrength` を `null` として渡す
 - スコアは **2点**（市場並み）をデフォルトとする
 - 理由: 0点にするとセクター不明だけでペナルティになり不公平。市場中立の2点が妥当

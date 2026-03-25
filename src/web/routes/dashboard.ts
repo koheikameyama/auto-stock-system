@@ -26,6 +26,7 @@ import {
 import { SCORING, SECTOR_MOMENTUM_SCORING } from "../../lib/constants/scoring";
 import { getScoreRank } from "../../core/scoring";
 import { COLORS } from "../views/styles";
+import { SCORING_UI_ENABLED } from "../../lib/constants/web";
 import { isMarketDay } from "../../lib/market-calendar";
 import { determineMarketRegime } from "../../core/market-regime";
 import { calculateDrawdownStatus } from "../../core/drawdown-manager";
@@ -69,110 +70,119 @@ app.get("/", async (c) => {
     calculateDrawdownStatus(),
   ]);
 
-  // --- Holding scores for open positions ---
-  const positionIds = openPositions.map((p) => p.id);
-  const holdingScoreRecords =
-    positionIds.length > 0
-      ? await prisma.holdingScoreRecord.findMany({
-          where: { positionId: { in: positionIds } },
-          orderBy: { date: "desc" },
-          distinct: ["positionId"],
-          select: { positionId: true, totalScore: true, holdingRank: true },
-        })
-      : [];
-  const holdingScoreMap = new Map(
-    holdingScoreRecords.map((r) => [r.positionId, r]),
-  );
-
-  // --- Scoring summary data ---
-  const latestScoringDate = await prisma.scoringRecord.findFirst({
-    orderBy: { date: "desc" },
-    select: { date: true },
-  });
-
-  const scoringDate = latestScoringDate?.date ?? null;
+  // --- Holding scores & Scoring summary (disabled when SCORING_UI_ENABLED=false) ---
+  let holdingScoreMap = new Map<string, { positionId: string; totalScore: number; holdingRank: string }>();
   let todayScoring: Awaited<ReturnType<typeof prisma.scoringRecord.findMany>> = [];
-  let prevScoring: Pick<
-    Awaited<ReturnType<typeof prisma.scoringRecord.findMany>>[number],
-    "totalScore" | "trendQualityScore" | "entryTimingScore" | "riskQualityScore" | "sectorMomentumScore" | "isDisqualified"
-  >[] = [];
+  let scoringDate: Date | null = null;
+  const bandCounts: Record<string, number> = { S: 0, A: 0, B: 0 };
+  let disqualifiedCount = 0;
+  const prevBandCounts: Record<string, number> = { S: 0, A: 0, B: 0 };
+  let categoryPcts: { name: string; avg: number; max: number; pct: number }[] = [];
+  let bottleneck: (typeof categoryPcts)[number] | undefined;
+  let scoreDiff = 0;
+  let hasPrev = false;
+  let scoringNameMap = new Map<string, string>();
 
-  if (scoringDate) {
-    const prevDate = await prisma.scoringRecord.findFirst({
-      where: { date: { lt: scoringDate } },
+  if (SCORING_UI_ENABLED) {
+    const positionIds = openPositions.map((p) => p.id);
+    const holdingScoreRecords =
+      positionIds.length > 0
+        ? await prisma.holdingScoreRecord.findMany({
+            where: { positionId: { in: positionIds } },
+            orderBy: { date: "desc" },
+            distinct: ["positionId"],
+            select: { positionId: true, totalScore: true, holdingRank: true },
+          })
+        : [];
+    holdingScoreMap = new Map(
+      holdingScoreRecords.map((r) => [r.positionId, r]),
+    );
+
+    const latestScoringDate = await prisma.scoringRecord.findFirst({
       orderBy: { date: "desc" },
       select: { date: true },
     });
 
-    [todayScoring, prevScoring] = await Promise.all([
-      prisma.scoringRecord.findMany({
-        where: { date: scoringDate },
-        orderBy: { totalScore: "desc" },
-      }),
-      prevDate
-        ? prisma.scoringRecord.findMany({
-            where: { date: prevDate.date },
-            select: {
-              totalScore: true,
-              trendQualityScore: true,
-              entryTimingScore: true,
-              riskQualityScore: true,
-              sectorMomentumScore: true,
-              isDisqualified: true,
-            },
+    scoringDate = latestScoringDate?.date ?? null;
+    let prevScoring: Pick<
+      Awaited<ReturnType<typeof prisma.scoringRecord.findMany>>[number],
+      "totalScore" | "trendQualityScore" | "entryTimingScore" | "riskQualityScore" | "sectorMomentumScore" | "isDisqualified"
+    >[] = [];
+
+    if (scoringDate) {
+      const prevDate = await prisma.scoringRecord.findFirst({
+        where: { date: { lt: scoringDate } },
+        orderBy: { date: "desc" },
+        select: { date: true },
+      });
+
+      [todayScoring, prevScoring] = await Promise.all([
+        prisma.scoringRecord.findMany({
+          where: { date: scoringDate },
+          orderBy: { totalScore: "desc" },
+        }),
+        prevDate
+          ? prisma.scoringRecord.findMany({
+              where: { date: prevDate.date },
+              select: {
+                totalScore: true,
+                trendQualityScore: true,
+                entryTimingScore: true,
+                riskQualityScore: true,
+                sectorMomentumScore: true,
+                isDisqualified: true,
+              },
+            })
+          : Promise.resolve([]),
+      ]);
+    }
+
+    // Stock names for top tickers (avoid N+1)
+    const topTickers = todayScoring.slice(0, 5).map((r) => r.tickerCode);
+    const scoringStocks =
+      topTickers.length > 0
+        ? await prisma.stock.findMany({
+            where: { tickerCode: { in: topTickers } },
+            select: { tickerCode: true, name: true },
           })
-        : Promise.resolve([]),
-    ]);
+        : [];
+    scoringNameMap = new Map(scoringStocks.map((s) => [s.tickerCode, s.name]));
+
+    // Score band distribution
+    for (const r of todayScoring) {
+      bandCounts[getScoreRank(r.totalScore)] = (bandCounts[getScoreRank(r.totalScore)] ?? 0) + 1;
+      if (r.isDisqualified) disqualifiedCount++;
+    }
+
+    for (const r of prevScoring) {
+      prevBandCounts[getScoreRank(r.totalScore)] = (prevBandCounts[getScoreRank(r.totalScore)] ?? 0) + 1;
+    }
+
+    // Category averages (non-disqualified only)
+    const activeRecords = todayScoring.filter((r) => !r.isDisqualified);
+    const n = activeRecords.length || 1;
+    const avgTrend = activeRecords.reduce((s, r) => s + r.trendQualityScore, 0) / n;
+    const avgEntry = activeRecords.reduce((s, r) => s + r.entryTimingScore, 0) / n;
+    const avgRisk = activeRecords.reduce((s, r) => s + r.riskQualityScore, 0) / n;
+    const avgSector = activeRecords.reduce((s, r) => s + r.sectorMomentumScore, 0) / n;
+
+    categoryPcts = [
+      { name: "トレンド品質", avg: avgTrend, max: SCORING.CATEGORY_MAX.TREND_QUALITY },
+      { name: "エントリータイミング", avg: avgEntry, max: SCORING.CATEGORY_MAX.ENTRY_TIMING },
+      { name: "リスク品質", avg: avgRisk, max: SCORING.CATEGORY_MAX.RISK_QUALITY },
+      { name: "セクターボーナス", avg: avgSector, max: SECTOR_MOMENTUM_SCORING.BONUS_MAX },
+    ].map((c) => ({ ...c, pct: c.max > 0 ? (c.avg / c.max) * 100 : 0 }));
+    categoryPcts.sort((a, b) => a.pct - b.pct);
+    bottleneck = categoryPcts[0];
+
+    // Previous day comparison
+    const prevActive = prevScoring.filter((r) => !r.isDisqualified);
+    const pn = prevActive.length || 1;
+    const todayAvgScore = activeRecords.reduce((s, r) => s + r.totalScore, 0) / n;
+    const prevAvgScore = prevActive.reduce((s, r) => s + r.totalScore, 0) / pn;
+    scoreDiff = todayAvgScore - prevAvgScore;
+    hasPrev = prevScoring.length > 0;
   }
-
-  // Stock names for top tickers (avoid N+1)
-  const topTickers = todayScoring.slice(0, 5).map((r) => r.tickerCode);
-  const scoringStocks =
-    topTickers.length > 0
-      ? await prisma.stock.findMany({
-          where: { tickerCode: { in: topTickers } },
-          select: { tickerCode: true, name: true },
-        })
-      : [];
-  const scoringNameMap = new Map(scoringStocks.map((s) => [s.tickerCode, s.name]));
-
-  // Score band distribution
-  const bandCounts: Record<string, number> = { S: 0, A: 0, B: 0 };
-  let disqualifiedCount = 0;
-  for (const r of todayScoring) {
-    bandCounts[getScoreRank(r.totalScore)] = (bandCounts[getScoreRank(r.totalScore)] ?? 0) + 1;
-    if (r.isDisqualified) disqualifiedCount++;
-  }
-
-  const prevBandCounts: Record<string, number> = { S: 0, A: 0, B: 0 };
-  for (const r of prevScoring) {
-    prevBandCounts[getScoreRank(r.totalScore)] = (prevBandCounts[getScoreRank(r.totalScore)] ?? 0) + 1;
-  }
-
-  // Category averages (non-disqualified only)
-  const activeRecords = todayScoring.filter((r) => !r.isDisqualified);
-  const n = activeRecords.length || 1;
-  const avgTrend = activeRecords.reduce((s, r) => s + r.trendQualityScore, 0) / n;
-  const avgEntry = activeRecords.reduce((s, r) => s + r.entryTimingScore, 0) / n;
-  const avgRisk = activeRecords.reduce((s, r) => s + r.riskQualityScore, 0) / n;
-  const avgSector = activeRecords.reduce((s, r) => s + r.sectorMomentumScore, 0) / n;
-
-  const categoryPcts = [
-    { name: "トレンド品質", avg: avgTrend, max: SCORING.CATEGORY_MAX.TREND_QUALITY },
-    { name: "エントリータイミング", avg: avgEntry, max: SCORING.CATEGORY_MAX.ENTRY_TIMING },
-    { name: "リスク品質", avg: avgRisk, max: SCORING.CATEGORY_MAX.RISK_QUALITY },
-    { name: "セクターボーナス", avg: avgSector, max: SECTOR_MOMENTUM_SCORING.BONUS_MAX },
-  ].map((c) => ({ ...c, pct: c.max > 0 ? (c.avg / c.max) * 100 : 0 }));
-  categoryPcts.sort((a, b) => a.pct - b.pct);
-  const bottleneck = categoryPcts[0];
-
-  // Previous day comparison
-  const prevActive = prevScoring.filter((r) => !r.isDisqualified);
-  const pn = prevActive.length || 1;
-  const todayAvgScore = activeRecords.reduce((s, r) => s + r.totalScore, 0) / n;
-  const prevAvgScore = prevActive.reduce((s, r) => s + r.totalScore, 0) / pn;
-  const scoreDiff = todayAvgScore - prevAvgScore;
-  const hasPrev = prevScoring.length > 0;
 
   const totalBudget = config ? Number(config.totalBudget) : 0;
   const [effectiveCap, realizedPnl] = config
@@ -288,8 +298,8 @@ app.get("/", async (c) => {
         : emptyState("市場評価データなし")}
     </div>
 
-    <!-- Scoring Summary -->
-    ${todayScoring.length > 0
+    <!-- Scoring Summary (hidden when SCORING_UI_ENABLED=false) -->
+    ${SCORING_UI_ENABLED && todayScoring.length > 0 && bottleneck
       ? html`
           <p class="section-title">
             スコアリングサマリー
@@ -401,7 +411,7 @@ app.get("/", async (c) => {
                   <th>数量</th>
                   <th>${tt("現在価格", "Yahoo Financeからのリアルタイム価格")}</th>
                   <th>${tt("含み損益", "（現在価格 − 建値）× 数量")}</th>
-                  <th>${tt("保有スコア", "トレンド品質+リスク品質の日次評価（67点満点）")}</th>
+                  ${SCORING_UI_ENABLED ? html`<th>${tt("保有スコア", "トレンド品質+リスク品質の日次評価（67点満点）")}</th>` : html``}
                 </tr>
               </thead>
               <tbody>
@@ -418,12 +428,12 @@ app.get("/", async (c) => {
                       <td>${p.quantity}</td>
                       <td data-quote-price><span class="quote-loading">...</span></td>
                       <td data-quote-pnl><span class="quote-loading">...</span></td>
-                      <td>${(() => {
+                      ${SCORING_UI_ENABLED ? html`<td>${(() => {
                         const hs = holdingScoreMap.get(p.id);
                         return hs
                           ? holdingRankBadge(hs.holdingRank, hs.totalScore)
                           : html`<span style="color:${COLORS.textDim};font-size:11px">-</span>`;
-                      })()}</td>
+                      })()}</td>` : html``}
                     </tr>
                   `;
                   },

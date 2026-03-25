@@ -31,6 +31,9 @@ export const NIKKEI_CHART_PERIODS: Record<string, { interval: string; label: str
   "3mo": { interval: "1d", label: "3月" },
 };
 
+// スコアリングUI表示フラグ（breakout一本化に伴い無効化）
+export const SCORING_UI_ENABLED = false;
+
 // ルートのルックバック日数
 export const ROUTE_LOOKBACK_DAYS = {
   POSITIONS_CLOSED: 7,

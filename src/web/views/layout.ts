@@ -5,6 +5,7 @@
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { CSS } from "./styles";
+import { SCORING_UI_ENABLED } from "../../lib/constants/web";
 
 type HtmlContent = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -108,7 +109,7 @@ export function layout(
         <div id="stock-modal"></div>
 
         <nav class="bottom-nav">
-          ${NAV_ITEMS.map(
+          ${NAV_ITEMS.filter((item) => SCORING_UI_ENABLED || (item.path !== "/scoring" && item.path !== "/accuracy")).map(
             (item) => html`
               <a
                 href="${item.path}"
