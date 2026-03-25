@@ -528,3 +528,18 @@ model StockDailyBar {
   @@unique([tickerCode, date])
   @@index([tickerCode, date(sort: Desc)])
 }
+
+// ブレイクアウトウォッチリスト（日次スナップショット）
+model BreakoutWatchlistEntry {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  tickerCode  String
+  avgVolume25 Float
+  high20      Float
+  atr14       Float
+  latestClose Float
+  createdAt   DateTime @default(now())
+
+  @@unique([date, tickerCode])
+  @@index([date(sort: Desc)])
+}

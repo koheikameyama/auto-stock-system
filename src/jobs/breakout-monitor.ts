@@ -29,8 +29,8 @@ let lastScanDate: string | null = null;
  * ブレイクアウトモニターのメイン処理（1分間隔で呼ばれる）
  */
 export async function main(): Promise<void> {
-  const watchlist = getWatchlist();
-  if (watchlist.length === 0) {
+  const watchlist = await getWatchlist();
+  if (!watchlist.length) {
     return;
   }
 

@@ -2,21 +2,71 @@
  * ウォッチリストビルダージョブ（8:00 JST / 平日）
  *
  * 朝8:00に実行し、場中のブレイクアウトスキャナーが監視する候補銘柄リストを構築する。
- * 結果はモジュールスコープ変数に保存し、breakout-monitorジョブから参照される。
+ * 結果はDBに永続化し、breakout-monitorジョブ・Web UIから参照される。
  */
 
 import { buildWatchlist } from "../core/breakout/watchlist-builder";
 import { notifySlack } from "../lib/slack";
 import { prisma } from "../lib/prisma";
+import { getTodayForDB } from "../lib/date-utils";
+import { BREAKOUT } from "../lib/constants/breakout";
 import type { WatchlistEntry } from "../core/breakout/types";
 
-let currentWatchlist: WatchlistEntry[] = [];
+// インメモリキャッシュ（breakout-monitorの毎分DB読み込みを抑制）
+let cachedWatchlist: WatchlistEntry[] | null = null;
+let cacheExpiry = 0;
 
 /**
- * 現在のウォッチリストを取得する
+ * 現在のウォッチリストを取得する（DB読み込み + インメモリキャッシュ）
  */
-export function getWatchlist(): WatchlistEntry[] {
-  return currentWatchlist;
+export async function getWatchlist(): Promise<WatchlistEntry[]> {
+  const now = Date.now();
+  if (cachedWatchlist !== null && now < cacheExpiry) {
+    return cachedWatchlist;
+  }
+
+  const today = getTodayForDB();
+  const rows = await prisma.breakoutWatchlistEntry.findMany({
+    where: { date: today },
+  });
+
+  const entries: WatchlistEntry[] = rows.map((r) => ({
+    ticker: r.tickerCode,
+    avgVolume25: r.avgVolume25,
+    high20: r.high20,
+    atr14: r.atr14,
+    latestClose: r.latestClose,
+  }));
+
+  cachedWatchlist = entries;
+  cacheExpiry = now + BREAKOUT.WATCHLIST_CACHE_TTL_MS;
+  return entries;
+}
+
+/**
+ * ウォッチリストをDBに保存する（日次スナップショット: delete+createMany）
+ */
+async function saveWatchlistToDB(entries: WatchlistEntry[]): Promise<void> {
+  const today = getTodayForDB();
+
+  await prisma.breakoutWatchlistEntry.deleteMany({ where: { date: today } });
+
+  if (entries.length > 0) {
+    await prisma.breakoutWatchlistEntry.createMany({
+      data: entries.map((e) => ({
+        date: today,
+        tickerCode: e.ticker,
+        avgVolume25: e.avgVolume25,
+        high20: e.high20,
+        atr14: e.atr14,
+        latestClose: e.latestClose,
+      })),
+    });
+  }
+
+  // キャッシュを即時更新
+  cachedWatchlist = entries;
+  cacheExpiry = Date.now() + BREAKOUT.WATCHLIST_CACHE_TTL_MS;
 }
 
 export async function main(): Promise<void> {
@@ -24,8 +74,8 @@ export async function main(): Promise<void> {
 
   try {
     const { entries, stats } = await buildWatchlist();
-    currentWatchlist = entries;
-    console.log(`ウォッチリスト構築完了: ${currentWatchlist.length}銘柄`);
+    await saveWatchlistToDB(entries);
+    console.log(`ウォッチリスト構築完了: ${entries.length}銘柄`);
 
     await notifySlack({
       title: "ウォッチリスト構築完了",

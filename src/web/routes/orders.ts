@@ -20,7 +20,7 @@ import { getWatchlist } from "../../jobs/watchlist-builder";
 const app = new Hono();
 
 app.get("/", async (c) => {
-  const watchlist = getWatchlist();
+  const watchlist = await getWatchlist();
 
   const tickers = watchlist.map((w) => w.ticker);
   const [watchlistStocks, pendingOrders, recentOrders] = await Promise.all([

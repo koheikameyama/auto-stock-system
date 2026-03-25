@@ -85,6 +85,12 @@ export async function runDataCleanup(): Promise<DataCleanupResult> {
   });
   deletedCounts.unfilledOrderFollowUp = unfilledResult.count;
 
+  // BreakoutWatchlistEntry (7日)
+  const watchlistResult = await prisma.breakoutWatchlistEntry.deleteMany({
+    where: { date: { lt: getDaysAgoForDB(DATA_RETENTION.BREAKOUT_WATCHLIST_ENTRY_DAYS) } },
+  });
+  deletedCounts.breakoutWatchlistEntry = watchlistResult.count;
+
   const totalDeleted = Object.values(deletedCounts).reduce((a, b) => a + b, 0);
 
   // ログ出力

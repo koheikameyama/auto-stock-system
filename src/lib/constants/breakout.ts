@@ -53,4 +53,7 @@ export const BREAKOUT = {
 
   /** 1営業日の取引分数（前場150分 + 後場180分） */
   TRADING_MINUTES_PER_DAY: 330,
+
+  /** ウォッチリストDBキャッシュの有効期間（ms） */
+  WATCHLIST_CACHE_TTL_MS: 5 * 60 * 1000,
 } as const;
