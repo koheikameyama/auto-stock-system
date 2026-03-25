@@ -15,7 +15,7 @@ on:
         options:
           - all
           - assess
-          - holding
+          # - holding  # [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
           - watchlist
           # - scan  # [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
       skip_market_day_check:
@@ -91,26 +91,27 @@ jobs:
         uses: ./.github/actions/start-yfinance
       - run: npm run assess
 
-  holding-score:
-    needs: [check-market-day, market-assessment]
-    if: |
-      always() &&
-      needs.check-market-day.outputs.should_run == 'true' &&
-      needs.market-assessment.result != 'failure' &&
-      (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'holding')
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: ".tool-versions"
-          cache: "npm"
-      - run: npm ci
-      - run: npx prisma generate
-      - name: Start yfinance sidecar
-        uses: ./.github/actions/start-yfinance
-      - run: npm run holding-score
+  # [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
+  # holding-score:
+  #   needs: [check-market-day, market-assessment]
+  #   if: |
+  #     always() &&
+  #     needs.check-market-day.outputs.should_run == 'true' &&
+  #     needs.market-assessment.result != 'failure' &&
+  #     (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'holding')
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 10
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: actions/setup-node@v5
+  #       with:
+  #         node-version-file: ".tool-versions"
+  #         cache: "npm"
+  #     - run: npm ci
+  #     - run: npx prisma generate
+  #     - name: Start yfinance sidecar
+  #       uses: ./.github/actions/start-yfinance
+  #     - run: npm run holding-score
 
   watchlist-builder:
     needs: [check-market-day, market-assessment]
@@ -154,7 +155,7 @@ jobs:
   #     - run: npm run stock-scan
 
   notify-failure:
-    needs: [market-assessment, holding-score, watchlist-builder]
+    needs: [market-assessment, watchlist-builder]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
