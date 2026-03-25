@@ -124,9 +124,9 @@ export const TRADING_SCHEDULE = {
   MARKET_OPEN: { hour: 9, minute: 0 },
   MORNING_CLOSE: { hour: 11, minute: 30 },
   AFTERNOON_OPEN: { hour: 12, minute: 30 },
-  MARKET_CLOSE: { hour: 15, minute: 0 },
-  // デイトレの強制決済時刻（14:50）
-  DAY_TRADE_FORCE_EXIT: { hour: 14, minute: 50 },
+  MARKET_CLOSE: { hour: 15, minute: 30 },
+  // デイトレの強制決済時刻（15:20 — クロージングオークション15:25前に決済）
+  DAY_TRADE_FORCE_EXIT: { hour: 15, minute: 20 },
 } as const;
 
 // ========================================

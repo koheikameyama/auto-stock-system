@@ -7,6 +7,7 @@ const MORNING_END_H = 11,
 const AFTERNOON_START_H = 12,
   AFTERNOON_START_M = 30;
 const MORNING_MINUTES = 150;
+const AFTERNOON_MINUTES = 180;
 
 /**
  * 市場開場（9:00 JST）からの経過取引分数を計算
@@ -14,12 +15,12 @@ const MORNING_MINUTES = 150;
  *
  * 前場: 9:00-11:30 (150分)
  * 昼休み: 11:30-12:30
- * 後場: 12:30-15:00 (150分)
- * 合計: 300分
+ * 後場: 12:30-15:30 (180分)
+ * 合計: 330分
  *
  * @param hour - 時刻（0-23）
  * @param minute - 分（0-59）
- * @returns 経過取引分数（0-300）
+ * @returns 経過取引分数（0-330）
  */
 export function getElapsedTradingMinutes(hour: number, minute: number): number {
   const t = hour * 60 + minute;
@@ -30,7 +31,7 @@ export function getElapsedTradingMinutes(hour: number, minute: number): number {
   if (t < morningStart) return 0;
   if (t <= morningEnd) return t - morningStart;
   if (t < afternoonStart) return MORNING_MINUTES;
-  return MORNING_MINUTES + Math.min(t - afternoonStart, MORNING_MINUTES);
+  return MORNING_MINUTES + Math.min(t - afternoonStart, AFTERNOON_MINUTES);
 }
 
 /**

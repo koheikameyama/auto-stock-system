@@ -92,27 +92,44 @@ export async function main() {
   });
   await forceClosePositions(dayTradePositions, "EOD強制決済");
 
-  // 1b. VIX高騰時のスイングポジション強制決済（オーバーナイトリスク回避）
-  // VIX 25-30: 新規エントリーのみデイトレ化、既存スイングはSLに委ねて保持
-  // VIX ≥ 30: 既存スイングも強制決済（ギャップダウンでSLが機能しないリスク）
+  // 1b. VIX高騰時のswing/breakoutポジション強制決済（オーバーナイトリスク回避）
+  // VIX 25-30: 新規エントリーのみデイトレ化、既存ポジションはSLに委ねて保持
+  // VIX ≥ 30: 既存swing/breakoutも強制決済（ギャップダウンでSLが機能しないリスク）
   const todayVix = todayAssessmentForStrategy?.vix != null
     ? Number(todayAssessmentForStrategy.vix)
     : null;
 
   if (todayVix != null && todayVix >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
-    console.log(`[1b/5] VIX ${todayVix.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: スイングポジション強制決済...`);
-    const swingPositions = await prisma.tradingPosition.findMany({
-      where: { status: "open", strategy: "swing" },
+    console.log(`[1b/5] VIX ${todayVix.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: swing/breakoutポジション強制決済...`);
+    const overnightPositions = await prisma.tradingPosition.findMany({
+      where: { status: "open", strategy: { in: ["swing", "breakout"] } },
       include: { stock: true },
     });
-    if (swingPositions.length > 0) {
-      console.log(`  ${swingPositions.length}件のスイングポジションを決済`);
-      await forceClosePositions(swingPositions, "VIX高騰オーバーナイトリスク回避");
+    if (overnightPositions.length > 0) {
+      console.log(`  ${overnightPositions.length}件のswing/breakoutポジションを決済`);
+      await forceClosePositions(overnightPositions, "VIX高騰オーバーナイトリスク回避");
     } else {
       console.log("  対象なし");
     }
   } else {
-    console.log(`[1b/5] VIX ${todayVix?.toFixed(1) ?? "N/A"}: スイングポジション保持`);
+    console.log(`[1b/5] VIX ${todayVix?.toFixed(1) ?? "N/A"}: swing/breakoutポジション保持`);
+  }
+
+  // 1c. cautious/bearish/crisis時のbreakoutポジション強制決済
+  // swingはday_tradeに変換済みで1aで決済されるが、breakoutはstrategyを変えないためここで決済
+  const todaySentiment = todayAssessmentForStrategy?.sentiment as string | null;
+  if (todaySentiment && ["cautious", "bearish", "crisis"].includes(todaySentiment)) {
+    console.log(`[1c/5] センチメント「${todaySentiment}」: breakoutポジション強制決済...`);
+    const breakoutPositions = await prisma.tradingPosition.findMany({
+      where: { status: "open", strategy: "breakout" },
+      include: { stock: true },
+    });
+    if (breakoutPositions.length > 0) {
+      console.log(`  ${breakoutPositions.length}件のbreakoutポジションを決済`);
+      await forceClosePositions(breakoutPositions, `${todaySentiment}環境オーバーナイトリスク回避`);
+    } else {
+      console.log("  対象なし");
+    }
   }
 
   // 2. 期限切れ注文のキャンセル

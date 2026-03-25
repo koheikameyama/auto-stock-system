@@ -177,12 +177,13 @@ ${sectorText || "  特になし"}`;
       console.log(`  → cautious: 戦略をday_tradeに切替`);
 
       // 既存swingポジションをday_tradeに変換
+      // breakoutはstrategyを変えず、EODで強制決済
       const converted = await prisma.tradingPosition.updateMany({
         where: { status: "open", strategy: "swing" },
         data: { strategy: "day_trade" },
       });
       if (converted.count > 0) {
-        console.log(`  → cautious: ${converted.count}件のスイングポジションをday_tradeに切替`);
+        console.log(`  → cautious: ${converted.count}件のswingポジションをday_tradeに切替`);
       }
     }
   } else {
@@ -223,19 +224,19 @@ ${sectorText || "  特になし"}`;
       cancelReason =
         "昼休み時点で未約定のデイトレ注文（エントリー窓逸失）";
     } else if (
-      order.strategy === "swing" &&
+      (order.strategy === "swing" || order.strategy === "breakout") &&
       DEFENSIVE_MODE.ENABLED_SENTIMENTS.includes(effectiveSentiment)
     ) {
-      // bearish/crisis環境ではスイング新規買いもキャンセル
+      // bearish/crisis環境ではswing/breakout新規買いもキャンセル
       shouldCancel = true;
-      cancelReason = `${effectiveSentiment}環境でのスイング買い注文キャンセル`;
+      cancelReason = `${effectiveSentiment}環境での${order.strategy}買い注文キャンセル`;
     } else if (
-      order.strategy === "swing" &&
+      (order.strategy === "swing" || order.strategy === "breakout") &&
       effectiveSentiment === "cautious"
     ) {
-      // cautious環境: swing注文はday_tradeパラメータと不整合のためキャンセル
+      // cautious環境: swing/breakout注文はday_tradeパラメータと不整合のためキャンセル
       shouldCancel = true;
-      cancelReason = "cautious環境でのスイング買い注文キャンセル（day_trade切替のため）";
+      cancelReason = `cautious環境での${order.strategy}買い注文キャンセル（day_trade切替のため）`;
     }
 
     if (shouldCancel) {

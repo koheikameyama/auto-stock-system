@@ -187,14 +187,15 @@ ${sectorText || "  特になし"}`;
   );
   console.log(`[1.8.1/2] 戦略決定: ${strategyDecision.strategy}（${strategyDecision.reason}）`);
 
-  // VIX ≥ 30: 既存スイングポジションの戦略をday_tradeに切替
+  // VIX ≥ 30: 既存swingポジションの戦略をday_tradeに切替
+  // breakoutはstrategyを変えず、EODで強制決済（TSパラメータ・戦略情報を保持）
   if (marketData.vix.price >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
     const updated = await prisma.tradingPosition.updateMany({
       where: { status: "open", strategy: "swing" },
       data: { strategy: "day_trade" },
     });
     if (updated.count > 0) {
-      console.log(`  → VIX ${marketData.vix.price.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: ${updated.count}件のスイングポジションをday_tradeに切替`);
+      console.log(`  → VIX ${marketData.vix.price.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: ${updated.count}件のswingポジションをday_tradeに切替`);
     }
   }
 
@@ -332,12 +333,13 @@ ${sectorText || "  特になし"}`;
       console.log(`  → cautious: 戦略を${originalStrategy} → day_tradeに切替`);
 
       // 既存swingポジションをday_tradeに変換（VIX≥30パターンと同じ）
+      // breakoutはstrategyを変えず、EODで強制決済
       const updated = await prisma.tradingPosition.updateMany({
         where: { status: "open", strategy: "swing" },
         data: { strategy: "day_trade" },
       });
       if (updated.count > 0) {
-        console.log(`  → cautious: ${updated.count}件のスイングポジションをday_tradeに切替`);
+        console.log(`  → cautious: ${updated.count}件のswingポジションをday_tradeに切替`);
       }
     }
 

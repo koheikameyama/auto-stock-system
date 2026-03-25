@@ -51,6 +51,6 @@ export const BREAKOUT = {
     MAX_DAILY_ENTRIES: 3,
   },
 
-  /** 1営業日の取引分数 */
-  TRADING_MINUTES_PER_DAY: 300,
+  /** 1営業日の取引分数（前場150分 + 後場180分） */
+  TRADING_MINUTES_PER_DAY: 330,
 } as const;

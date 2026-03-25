@@ -379,9 +379,9 @@ export async function main() {
       );
     }
 
-    // スイングポジションのみ連休前引き締め（デイトレは当日決済のため不要）
+    // swing/breakoutポジションの連休前引き締め（デイトレは当日決済のため不要）
     let trailOverride: number | undefined;
-    if (position.strategy === "swing") {
+    if (position.strategy === "swing" || position.strategy === "breakout") {
       const normalTrail = TRAILING_STOP.TRAIL_ATR_MULTIPLIER.swing;
       if (isPreLongHoliday) {
         trailOverride = normalTrail * WEEKEND_RISK.TRAILING_TIGHTEN_MULTIPLIER;
@@ -389,7 +389,7 @@ export async function main() {
     }
 
     // 保有スコアによる引き締め（最も保守的な値を採用）
-    if (position.strategy === "swing" && position.holdingScoreTrailOverride) {
+    if ((position.strategy === "swing" || position.strategy === "breakout") && position.holdingScoreTrailOverride) {
       const holdingOverride = Number(position.holdingScoreTrailOverride);
       trailOverride = trailOverride
         ? Math.min(trailOverride, holdingOverride)

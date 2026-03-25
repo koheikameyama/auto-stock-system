@@ -26,8 +26,16 @@ describe("getElapsedTradingMinutes", () => {
     expect(getElapsedTradingMinutes(14, 0)).toBe(240);
   });
 
-  it("大引け: 15:00 → 300分", () => {
+  it("旧大引け: 15:00 → 300分", () => {
     expect(getElapsedTradingMinutes(15, 0)).toBe(300);
+  });
+
+  it("大引け: 15:30 → 330分", () => {
+    expect(getElapsedTradingMinutes(15, 30)).toBe(330);
+  });
+
+  it("場後: 16:00 → 330分（上限）", () => {
+    expect(getElapsedTradingMinutes(16, 0)).toBe(330);
   });
 
   it("場前: 8:30 → 0分", () => {
@@ -36,11 +44,11 @@ describe("getElapsedTradingMinutes", () => {
 });
 
 describe("getElapsedFraction", () => {
-  it("9:30 → 0.1", () => {
-    expect(getElapsedFraction(9, 30)).toBeCloseTo(0.1);
+  it("9:33 → 0.1", () => {
+    expect(getElapsedFraction(9, 33)).toBeCloseTo(0.1);
   });
 
-  it("15:00 → 1.0", () => {
-    expect(getElapsedFraction(15, 0)).toBeCloseTo(1.0);
+  it("15:30 → 1.0", () => {
+    expect(getElapsedFraction(15, 30)).toBeCloseTo(1.0);
   });
 });
