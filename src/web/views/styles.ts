@@ -585,4 +585,28 @@ export const CSS = `
     color: ${COLORS.textDim};
     font-size: 12px;
   }
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .pagination-link {
+    color: ${COLORS.accent};
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: background 0.2s;
+  }
+  .pagination-link:hover { background: ${COLORS.cardHover}; }
+  .pagination-link.disabled {
+    color: ${COLORS.textDim};
+    pointer-events: none;
+  }
+  .pagination-info {
+    color: ${COLORS.textMuted};
+    font-size: 14px;
+  }
 `;

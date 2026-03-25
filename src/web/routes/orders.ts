@@ -22,6 +22,13 @@ const app = new Hono();
 app.get("/", async (c) => {
   const watchlist = await getWatchlist();
 
+  // ウォッチリストのページネーション
+  const perPage = QUERY_LIMITS.WATCHLIST_PER_PAGE;
+  const totalPages = Math.max(1, Math.ceil(watchlist.length / perPage));
+  const wlPage = Math.min(Math.max(1, Number(c.req.query("wl_page")) || 1), totalPages);
+  const wlStart = (wlPage - 1) * perPage;
+  const pagedWatchlist = watchlist.slice(wlStart, wlStart + perPage);
+
   const tickers = watchlist.map((w) => w.ticker);
   const [watchlistStocks, pendingOrders, recentOrders] = await Promise.all([
     tickers.length
@@ -48,40 +55,48 @@ app.get("/", async (c) => {
   const nameMap = new Map(watchlistStocks.map((s) => [s.tickerCode, s.name]));
 
   const content = html`
+    <p class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (${watchlist.length})</p>
     ${watchlist.length
       ? html`
-          <details>
-            <summary class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (${watchlist.length})</summary>
-            <div class="card table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>銘柄</th>
-                    <th>${tt("現在価格", "リアルタイム価格")}</th>
-                    <th>${tt("20日高値", "ブレイクアウト基準価格")}</th>
-                    <th>${tt("乖離", "現在価格と20日高値の差（%）")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${watchlist.map(
-                    (w) => html`
-                      <tr data-quote-row data-ticker="${w.ticker}" data-order-price="${w.high20}">
-                        <td>${tickerLink(w.ticker, nameMap.get(w.ticker) ?? w.ticker)}</td>
-                        <td data-quote-price><span class="quote-loading">...</span></td>
-                        <td>¥${formatYen(w.high20)}</td>
-                        <td data-quote-deviation><span class="quote-loading">...</span></td>
-                      </tr>
-                    `,
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </details>
+          <div class="card table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>銘柄</th>
+                  <th>${tt("現在価格", "リアルタイム価格")}</th>
+                  <th>${tt("20日高値", "ブレイクアウト基準価格")}</th>
+                  <th>${tt("乖離", "現在価格と20日高値の差（%）")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${pagedWatchlist.map(
+                  (w) => html`
+                    <tr data-quote-row data-ticker="${w.ticker}" data-order-price="${w.high20}">
+                      <td>${tickerLink(w.ticker, nameMap.get(w.ticker) ?? w.ticker)}</td>
+                      <td data-quote-price><span class="quote-loading">...</span></td>
+                      <td>¥${formatYen(w.high20)}</td>
+                      <td data-quote-deviation><span class="quote-loading">...</span></td>
+                    </tr>
+                  `,
+                )}
+              </tbody>
+            </table>
+          </div>
+          ${totalPages > 1
+            ? html`
+                <div class="pagination">
+                  ${wlPage > 1
+                    ? html`<a href="/orders?wl_page=${wlPage - 1}" class="pagination-link">← 前へ</a>`
+                    : html`<span class="pagination-link disabled">← 前へ</span>`}
+                  <span class="pagination-info">${wlPage} / ${totalPages}</span>
+                  ${wlPage < totalPages
+                    ? html`<a href="/orders?wl_page=${wlPage + 1}" class="pagination-link">次へ →</a>`
+                    : html`<span class="pagination-link disabled">次へ →</span>`}
+                </div>
+              `
+            : ""}
         `
-      : html`
-          <p class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (0)</p>
-          <div class="card">${emptyState("監視銘柄なし（8:00に構築）")}</div>
-        `}
+      : html`<div class="card">${emptyState("監視銘柄なし（8:00に構築）")}</div>`}
 
     <p class="section-title">待機中の注文 (${pendingOrders.length})</p>
     ${pendingOrders.length
