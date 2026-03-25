@@ -221,10 +221,6 @@ export async function main() {
       where: { date: getTodayForDB() },
     });
 
-    const scoringRecords = await prisma.scoringRecord.findMany({
-      where: { date: getTodayForDB() },
-    });
-
     if (todayAssessment) {
       noTradeContext += `\n【市場判断】\n`;
       noTradeContext += `- 判定: ${todayAssessment.shouldTrade ? "取引可" : "取引見送り"}\n`;
@@ -238,25 +234,31 @@ export async function main() {
       }
     }
 
-    if (scoringRecords.length > 0) {
-      const disqualified = scoringRecords.filter((r) => r.isDisqualified).length;
-      const belowThreshold = scoringRecords.filter((r) => r.rejectionReason === "below_threshold").length;
-      const aiNoGo = scoringRecords.filter((r) => r.rejectionReason === "ai_no_go").length;
-      const marketHalted = scoringRecords.filter((r) => r.rejectionReason === "market_halted").length;
+    // ブレイクアウト戦略の当日状況
+    const watchlistEntries = await prisma.breakoutWatchlistEntry.findMany({
+      where: { date: getTodayForDB() },
+    });
 
-      noTradeContext += `\n【スコアリング結果】\n`;
-      noTradeContext += `- 分析銘柄数: ${scoringRecords.length}件\n`;
-      if (disqualified > 0) noTradeContext += `- 即死ルール棄却: ${disqualified}件\n`;
-      if (belowThreshold > 0) noTradeContext += `- スコア閾値未達: ${belowThreshold}件\n`;
-      if (aiNoGo > 0) noTradeContext += `- AI却下: ${aiNoGo}件\n`;
-      if (marketHalted > 0) noTradeContext += `- 取引見送り(シャドウ): ${marketHalted}件\n`;
+    const breakoutOrders = await prisma.tradingOrder.findMany({
+      where: {
+        strategy: "breakout",
+        side: "buy",
+        createdAt: { gte: startOfDay, lte: endOfDay },
+      },
+      include: { stock: true },
+    });
 
-      // 上位銘柄のスコアを表示（最大3件）
-      const topRecords = [...scoringRecords]
-        .sort((a, b) => b.totalScore - a.totalScore)
-        .slice(0, 3);
-      if (topRecords.length > 0) {
-        noTradeContext += `- 上位銘柄: ${topRecords.map((r) => `${r.tickerCode}(${r.totalScore}点)`).join(", ")}\n`;
+    if (watchlistEntries.length > 0 || breakoutOrders.length > 0) {
+      noTradeContext += `\n【ブレイクアウト戦略】\n`;
+      noTradeContext += `- ウォッチリスト銘柄数: ${watchlistEntries.length}件\n`;
+
+      if (breakoutOrders.length > 0) {
+        const filled = breakoutOrders.filter((o) => o.status === "filled").length;
+        const cancelled = breakoutOrders.filter((o) => o.status === "cancelled").length;
+        const expired = breakoutOrders.filter((o) => o.status === "expired").length;
+        noTradeContext += `- 注文発生: ${breakoutOrders.length}件（約定${filled}, キャンセル${cancelled}, 失効${expired}）\n`;
+      } else {
+        noTradeContext += `- トリガー発火なし（出来高サージ+高値ブレイク条件未達）\n`;
       }
     }
   }

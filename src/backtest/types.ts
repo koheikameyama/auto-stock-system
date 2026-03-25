@@ -1,73 +1,63 @@
 /**
- * バックテスト型定義
+ * バックテスト型定義（ブレイクアウト戦略用）
  */
 
-import type { TradingStrategy } from "../core/market-regime";
+// ──────────────────────────────────────────
+// ブレイクアウトバックテスト設定
+// ──────────────────────────────────────────
 
-export interface BacktestConfig {
-  tickers: string[];
+export interface BreakoutBacktestConfig {
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   initialBudget: number;
   maxPositions: number;
-  scoreThreshold: number;
-  takeProfitRatio: number;
-  stopLossRatio: number;
+
+  // エントリー
+  /** 出来高サージ倍率（dailyVolume / avgVolume25 >= this） */
+  triggerThreshold: number;
+  /** 高値ルックバック日数 */
+  highLookbackDays: number;
+
+  // ストップロス
+  /** SL = entry - ATR × this */
   atrMultiplier: number;
-  trailingActivationMultiplier: number;
+  /** SLハードキャップ（%）— 0.03 = 3% */
+  maxLossPct: number;
+
+  // トレーリングストップ
+  /** ブレイクイーブン発動 ATR倍率 */
+  beActivationMultiplier: number;
+  /** トレーリングストップ発動 ATR倍率 */
+  tsActivationMultiplier: number;
+  /** トレール幅 ATR倍率 */
+  trailMultiplier: number;
+
+  // タイムストップ
+  /** ベース保有日数 */
+  maxHoldingDays: number;
+  /** 含み益時の延長上限 */
+  maxExtendedHoldingDays: number;
+
+  // ユニバースフィルター
   maxPrice: number;
-  strategy: TradingStrategy;
+  minAvgVolume25: number;
+  minAtrPct: number;
+
+  // コスト・リスク
   costModelEnabled: boolean;
   priceLimitEnabled: boolean;
-  gapRiskEnabled: boolean;
+
+  // クールダウン
   cooldownDays: number;
-  overrideTpSl: boolean;
-  trailMultiplier?: number;
-  /** トレンドプレフィルター: Price > SMA25 && SMA25 > SMA75 を要求 */
-  trendFilterEnabled: boolean;
-  /** プルバックエントリー: RSI < 60 AND SMA25乖離 <= 2% */
-  pullbackFilterEnabled: boolean;
-  /** ボラティリティフィルター: ATR% > MIN_ATR_PCT の銘柄のみ */
-  volatilityFilterEnabled: boolean;
-  /** ボラティリティフィルター閾値（ATR%）。未指定時は DAILY_BACKTEST.UNIVERSE_FILTER.MIN_ATR_PCT */
-  minAtrPct?: number;
-  /** RSフィルター: RS > MIN_RS_SCORE の銘柄のみ */
-  rsFilterEnabled: boolean;
-  /** 日経225トレンドフィルター: Nikkei < SMA(25) で新規エントリー制限 */
-  nikkeiTrendFilterEnabled: boolean;
-  /** タイムストップ日数オーバーライド（デフォルト: TIME_STOP.MAX_HOLDING_DAYS） */
-  maxHoldingDays?: number;
-  /** 指値カラー幅（現在価格からの最大乖離率）。デフォルト: 0.03 (3%) */
-  collarPct?: number;
-  outputFile?: string;
-  /** 取引見送り日（shouldTrade=false）のセット。ペーパートレード用 */
-  shouldTradeSkipDates?: Set<string>;
+
   verbose: boolean;
 }
 
-export type RegimeLevel = "normal" | "elevated" | "high" | "crisis";
+// ──────────────────────────────────────────
+// シミュレーション結果
+// ──────────────────────────────────────────
 
-export interface ScoreBreakdown {
-  trendQuality: {
-    total: number;
-    maAlignment: number;
-    weeklyTrend: number;
-    trendContinuity: number;
-  };
-  entryTiming: {
-    total: number;
-    pullbackDepth: number;
-    priorBreakout: number;
-    candlestickSignal: number;
-  };
-  riskQuality: {
-    total: number;
-    atrStability: number;
-    rangeContraction: number;
-    volumeStability: number;
-  };
-  sectorMomentum: number;
-}
+export type RegimeLevel = "normal" | "elevated" | "high" | "crisis";
 
 export interface SimulatedPosition {
   ticker: string;
@@ -76,8 +66,8 @@ export interface SimulatedPosition {
   takeProfitPrice: number;
   stopLossPrice: number;
   quantity: number;
-  score: number;
-  scoreBreakdown: ScoreBreakdown | null;
+  /** エントリー時の出来高サージ倍率 */
+  volumeSurgeRatio: number;
   regime: RegimeLevel | null;
   maxHighDuringHold: number;
   trailingStopPrice: number | null;
@@ -90,7 +80,6 @@ export interface SimulatedPosition {
     | "trailing_profit"
     | "time_stop"
     | "defensive_exit"
-    | "expired"
     | "still_open"
     | null;
   pnl: number | null;
@@ -114,12 +103,16 @@ export interface DailyEquity {
   openPositionCount: number;
 }
 
-export interface BacktestResult {
-  config: BacktestConfig;
+export interface BreakoutBacktestResult {
+  config: BreakoutBacktestConfig;
   trades: SimulatedPosition[];
   equityCurve: DailyEquity[];
   metrics: PerformanceMetrics;
 }
+
+// ──────────────────────────────────────────
+// パフォーマンス指標
+// ──────────────────────────────────────────
 
 export interface PerformanceMetrics {
   totalTrades: number;
@@ -146,10 +139,6 @@ export interface PerformanceMetrics {
   costImpactPct: number;
   expectancy: number;
   riskRewardRatio: number;
-  // 約定率
-  ordersPlaced: number;
-  ordersFilled: number;
-  fillRate: number;
 }
 
 export interface RankMetrics {
@@ -158,10 +147,4 @@ export interface RankMetrics {
   losses: number;
   winRate: number;
   avgPnlPct: number;
-}
-
-export interface SensitivityResult {
-  parameter: string;
-  value: number;
-  metrics: PerformanceMetrics;
 }
