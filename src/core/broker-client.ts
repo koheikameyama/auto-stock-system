@@ -331,3 +331,41 @@ export function resetTachibanaClient(): void {
     clientInstance = null;
   }
 }
+
+// ========================================
+// バッチジョブ用初期化
+// ========================================
+
+/**
+ * バッチジョブ用ブローカーセッション初期化
+ *
+ * GitHub Actionsでスタンドアロン実行されるジョブ向け。
+ * WebSocket接続・自動リフレッシュは不要（バッチは15分以内に完了）。
+ * 戻り値の cleanup() をジョブ終了時に呼ぶこと。
+ */
+export async function initBrokerForBatch(
+  mode: "simulation" | "demo" | "live" | "dry_run",
+): Promise<{ cleanup: () => Promise<void> }> {
+  if (mode === "simulation") {
+    console.log("[broker] simulation mode, skipping login");
+    return { cleanup: async () => {} };
+  }
+
+  console.log(`[broker] ${mode} mode, logging in...`);
+  const client = getTachibanaClient();
+  await client.login();
+  console.log("[broker] login successful");
+
+  return {
+    cleanup: async () => {
+      try {
+        if (client.isLoggedIn()) {
+          await client.logout();
+        }
+      } catch (e) {
+        console.warn("[broker] logout error (ignored):", e);
+      }
+      resetTachibanaClient();
+    },
+  };
+}

@@ -550,7 +550,7 @@ export async function main(context?: MarketAssessmentContext) {
     // MarketAssessment + ScoringRecord に結果を保存
     console.log("[3/3] 結果保存中...");
     const selectedStocksData = goStocks.map((g) => {
-      const scored = filtered.find((c) => c.tickerCode === g.tickerCode);
+      const scored = scoredCandidates.find((c) => c.tickerCode === g.tickerCode);
       return {
         tickerCode: g.tickerCode,
         strategy: g.strategy,
@@ -599,7 +599,7 @@ export async function main(context?: MarketAssessmentContext) {
     if (goStocks.length > 0) {
       await notifyStockCandidates(
         goStocks.map((g) => {
-          const scored = filtered.find((c) => c.tickerCode === g.tickerCode);
+          const scored = scoredCandidates.find((c) => c.tickerCode === g.tickerCode);
           return {
             tickerCode: g.tickerCode,
             name: candidates.find((c) => c.tickerCode === g.tickerCode)?.name,
