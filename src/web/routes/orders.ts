@@ -48,35 +48,40 @@ app.get("/", async (c) => {
   const nameMap = new Map(watchlistStocks.map((s) => [s.tickerCode, s.name]));
 
   const content = html`
-    <p class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (${watchlist.length})</p>
     ${watchlist.length
       ? html`
-          <div class="card table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>銘柄</th>
-                  <th>${tt("現在価格", "リアルタイム価格")}</th>
-                  <th>${tt("20日高値", "ブレイクアウト基準価格")}</th>
-                  <th>${tt("乖離", "現在価格と20日高値の差（%）")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${watchlist.map(
-                  (w) => html`
-                    <tr data-quote-row data-ticker="${w.ticker}" data-order-price="${w.high20}">
-                      <td>${tickerLink(w.ticker, nameMap.get(w.ticker) ?? w.ticker)}</td>
-                      <td data-quote-price><span class="quote-loading">...</span></td>
-                      <td>¥${formatYen(w.high20)}</td>
-                      <td data-quote-deviation><span class="quote-loading">...</span></td>
-                    </tr>
-                  `,
-                )}
-              </tbody>
-            </table>
-          </div>
+          <details>
+            <summary class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (${watchlist.length})</summary>
+            <div class="card table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>銘柄</th>
+                    <th>${tt("現在価格", "リアルタイム価格")}</th>
+                    <th>${tt("20日高値", "ブレイクアウト基準価格")}</th>
+                    <th>${tt("乖離", "現在価格と20日高値の差（%）")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${watchlist.map(
+                    (w) => html`
+                      <tr data-quote-row data-ticker="${w.ticker}" data-order-price="${w.high20}">
+                        <td>${tickerLink(w.ticker, nameMap.get(w.ticker) ?? w.ticker)}</td>
+                        <td data-quote-price><span class="quote-loading">...</span></td>
+                        <td>¥${formatYen(w.high20)}</td>
+                        <td data-quote-deviation><span class="quote-loading">...</span></td>
+                      </tr>
+                    `,
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </details>
         `
-      : html`<div class="card">${emptyState("監視銘柄なし（8:00に構築）")}</div>`}
+      : html`
+          <p class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (0)</p>
+          <div class="card">${emptyState("監視銘柄なし（8:00に構築）")}</div>
+        `}
 
     <p class="section-title">待機中の注文 (${pendingOrders.length})</p>
     ${pendingOrders.length
