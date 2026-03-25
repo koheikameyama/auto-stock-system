@@ -6,6 +6,8 @@
  */
 
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import {
   TACHIBANA_API_URLS,
   TACHIBANA_CLMID,
@@ -13,6 +15,10 @@ import {
   type TachibanaEnv,
 } from "../lib/constants/broker";
 import { mapNumericKeys } from "../lib/tachibana-key-map";
+import { TIMEZONE } from "../lib/constants";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // ========================================
 // 型定義
@@ -270,7 +276,7 @@ export class TachibanaClient {
   }
 
   private formatTimestamp(): string {
-    return dayjs().format("YYYY.MM.DD-HH:mm:ss.SSS");
+    return dayjs().tz(TIMEZONE).format("YYYY.MM.DD-HH:mm:ss.SSS");
   }
 
   private encodeParams(params: Record<string, string>): string {
