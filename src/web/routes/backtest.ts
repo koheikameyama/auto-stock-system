@@ -8,14 +8,21 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
 import { prisma } from "../../lib/prisma";
+import { TIMEZONE } from "../../lib/constants/timezone";
 import { layout } from "../views/layout";
 import {
   emptyState,
   detailRow,
   equityCurveChart,
+  pnlPercent,
 } from "../views/components";
 import type { PerformanceMetrics, SimulatedPosition, DailyEquity } from "../../backtest/types";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const app = new Hono();
 
@@ -69,11 +76,6 @@ app.get("/", async (c) => {
   };
 
   const fmtPf = (pf: number) => (pf >= 9999 ? "∞" : pf.toFixed(2));
-  const fmtPct = (v: number) => {
-    const sign = v >= 0 ? "+" : "";
-    const cls = v >= 0 ? "pnl-positive" : "pnl-negative";
-    return html`<span class="${cls}">${sign}${v.toFixed(2)}%</span>`;
-  };
 
   const content = html`
     <!-- 履歴リスト -->
@@ -87,10 +89,10 @@ app.get("/", async (c) => {
                 href="/backtest?id=${h.id}"
                 style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1e293b;text-decoration:none;color:inherit;${h.id === targetId ? "font-weight:bold;" : ""}"
               >
-                <span style="font-size:13px">${dayjs(h.runAt).format("MM/DD HH:mm")}</span>
+                <span style="font-size:13px">${dayjs(h.runAt).tz(TIMEZONE).format("MM/DD HH:mm")}</span>
                 <span style="display:flex;gap:12px;font-size:12px">
                   <span style="color:${pfColor(h.profitFactor)}">PF ${fmtPf(h.profitFactor)}</span>
-                  ${fmtPct(h.netReturnPct)}
+                  ${pnlPercent(h.netReturnPct)}
                   <span style="color:#64748b">${h.totalTrades}件</span>
                 </span>
               </a>
@@ -110,12 +112,12 @@ app.get("/", async (c) => {
             <div class="card">
               ${detailRow("Profit Factor", html`<span style="color:${pfColor(run.profitFactor)};font-weight:bold">${fmtPf(run.profitFactor)}</span>`)}
               ${detailRow("勝率", `${run.winRate}%`)}
-              ${detailRow("期待値", fmtPct(run.expectancy))}
+              ${detailRow("期待値", pnlPercent(run.expectancy))}
               ${detailRow("RR比", run.riskRewardRatio.toFixed(2))}
             </div>
             <div class="card">
               ${detailRow("最大DD", html`<span class="pnl-negative">-${run.maxDrawdown}%</span>`)}
-              ${detailRow("純リターン", fmtPct(run.netReturnPct))}
+              ${detailRow("純リターン", pnlPercent(run.netReturnPct))}
               ${detailRow("総トレード数", `${run.totalTrades}件（${run.wins}勝 ${run.losses}敗）`)}
               ${detailRow("平均保有日数", `${run.avgHoldingDays}日`)}
             </div>
@@ -150,7 +152,7 @@ app.get("/", async (c) => {
                       <td>${t.ticker}</td>
                       <td style="font-size:12px">${t.entryDate}</td>
                       <td style="font-size:12px">${t.exitDate ?? "-"}</td>
-                      <td>${t.pnlPct != null ? fmtPct(t.pnlPct) : "-"}</td>
+                      <td>${t.pnlPct != null ? pnlPercent(t.pnlPct) : "-"}</td>
                       <td>${t.holdingDays ?? "-"}</td>
                       <td style="font-size:11px;color:#94a3b8">${exitReasonLabel[t.exitReason ?? ""] ?? (t.exitReason ?? "-")}</td>
                     </tr>
