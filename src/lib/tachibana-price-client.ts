@@ -78,21 +78,31 @@ export async function tachibanaFetchQuote(
 export async function tachibanaFetchQuotesBatch(
   symbols: string[],
 ): Promise<(YfQuoteResult | null)[]> {
+  const errors: string[] = [];
+
   const tasks = symbols.map((symbol) =>
     limit(async (): Promise<YfQuoteResult | null> => {
       try {
         return await tachibanaFetchQuote(symbol);
       } catch (error) {
-        console.warn(
-          `[tachibana-price] Batch: failed for ${symbol}:`,
-          error instanceof Error ? error.message : error,
-        );
+        const msg = error instanceof Error ? error.message : String(error);
+        console.warn(`[tachibana-price] Batch: failed for ${symbol}:`, msg);
+        errors.push(`${symbol}: ${msg}`);
         return null;
       }
     }),
   );
 
-  return Promise.all(tasks);
+  const results = await Promise.all(tasks);
+
+  // 全銘柄失敗 → throw して上位（worker.ts runJob）で通知させる
+  if (symbols.length > 0 && errors.length === symbols.length) {
+    throw new Error(
+      `[tachibana-price] 全${errors.length}銘柄の時価取得に失敗\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...他${errors.length - 5}件` : ""}`,
+    );
+  }
+
+  return results;
 }
 
 /**
