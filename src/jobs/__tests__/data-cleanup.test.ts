@@ -6,6 +6,7 @@ const {
   mockScoringDelete, mockBacktestDelete, mockMarketDelete,
   mockArticleDelete, mockAnalysisDelete, mockSummaryDelete,
   mockStatusLogDelete, mockEventLogDelete, mockDefensiveDelete, mockUnfilledDelete,
+  mockWatchlistDelete,
 } = vi.hoisted(() => ({
   mockScoringDelete: vi.fn().mockResolvedValue({ count: 0 }),
   mockBacktestDelete: vi.fn().mockResolvedValue({ count: 0 }),
@@ -17,6 +18,7 @@ const {
   mockEventLogDelete: vi.fn().mockResolvedValue({ count: 0 }),
   mockDefensiveDelete: vi.fn().mockResolvedValue({ count: 0 }),
   mockUnfilledDelete: vi.fn().mockResolvedValue({ count: 0 }),
+  mockWatchlistDelete: vi.fn().mockResolvedValue({ count: 0 }),
 }));
 
 vi.mock("../../lib/prisma", () => ({
@@ -31,6 +33,7 @@ vi.mock("../../lib/prisma", () => ({
     corporateEventLog: { deleteMany: mockEventLogDelete },
     defensiveExitFollowUp: { deleteMany: mockDefensiveDelete },
     unfilledOrderFollowUp: { deleteMany: mockUnfilledDelete },
+    breakoutWatchlistEntry: { deleteMany: mockWatchlistDelete },
   },
 }));
 
@@ -38,6 +41,7 @@ const allMocks = [
   mockScoringDelete, mockBacktestDelete, mockMarketDelete,
   mockArticleDelete, mockAnalysisDelete, mockSummaryDelete,
   mockStatusLogDelete, mockEventLogDelete, mockDefensiveDelete, mockUnfilledDelete,
+  mockWatchlistDelete,
 ];
 
 // getDaysAgoForDB をモック
@@ -59,7 +63,7 @@ describe("runDataCleanup", () => {
       expect(mock).toHaveBeenCalledTimes(1);
     }
     expect(result.totalDeleted).toBe(0);
-    expect(Object.keys(result.deletedCounts)).toHaveLength(10);
+    expect(Object.keys(result.deletedCounts)).toHaveLength(11);
   });
 
   it("各テーブルで正しい日付カラムと lt を使う", async () => {
@@ -115,6 +119,7 @@ describe("runDataCleanup", () => {
     mockEventLogDelete.mockResolvedValueOnce({ count: 1 });
     mockDefensiveDelete.mockResolvedValueOnce({ count: 2 });
     mockUnfilledDelete.mockResolvedValueOnce({ count: 0 });
+    mockWatchlistDelete.mockResolvedValueOnce({ count: 0 });
 
     const result = await runDataCleanup();
 
