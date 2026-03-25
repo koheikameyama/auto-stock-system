@@ -16,6 +16,20 @@ import { canAddToSector, canAddToMacroFactor } from "./sector-analyzer";
 import { calculateDrawdownStatus } from "./drawdown-manager";
 import { fetchStockQuotesBatch } from "./market-data";
 import { getEffectiveCapital } from "./position-manager";
+import type { TradingConfig, TradingPosition } from "@prisma/client";
+
+/** stock リレーション付きのオープンポジション */
+type OpenPositionWithStock = TradingPosition & {
+  stock: { id: string; jpxSectorName: string | null };
+};
+
+/** 事前取得データ（重複クエリ削減用） */
+export interface RiskCheckPrefetch {
+  config?: TradingConfig;
+  /** stock リレーション付きのオープンポジション */
+  openPositions?: OpenPositionWithStock[];
+  effectiveCapital?: number;
+}
 
 /**
  * 新規ポジションを建てられるかチェックする
@@ -31,8 +45,9 @@ export async function canOpenPosition(
   stockId: string,
   quantity: number,
   price: number,
+  prefetch?: RiskCheckPrefetch,
 ): Promise<{ allowed: boolean; reason: string }> {
-  const config = await prisma.tradingConfig.findFirst({
+  const config = prefetch?.config ?? await prisma.tradingConfig.findFirst({
     orderBy: { createdAt: "desc" },
   });
 
@@ -44,16 +59,18 @@ export async function canOpenPosition(
     return { allowed: false, reason: "取引が無効化されています" };
   }
 
-  const effectiveCap = await getEffectiveCapital(config);
+  const effectiveCap = prefetch?.effectiveCapital ?? await getEffectiveCapital(config);
   const maxPositions = config.maxPositions;
   const maxPositionPct = Number(config.maxPositionPct);
   const requiredAmount = price * quantity;
 
-  // 1. オープンポジション数チェック
-  const openPositionCount = await prisma.tradingPosition.count({
+  const openPositions = prefetch?.openPositions ?? await prisma.tradingPosition.findMany({
     where: { status: "open" },
+    include: { stock: { select: { id: true, jpxSectorName: true } } },
   });
+  const openPositionCount = openPositions.length;
 
+  // 1. オープンポジション数チェック
   if (openPositionCount >= maxPositions) {
     return {
       allowed: false,
@@ -62,9 +79,6 @@ export async function canOpenPosition(
   }
 
   // 2. 現金残高チェック
-  const openPositions = await prisma.tradingPosition.findMany({
-    where: { status: "open" },
-  });
   const investedAmount = openPositions.reduce((sum, pos) => {
     return sum + Number(pos.entryPrice) * pos.quantity;
   }, 0);
@@ -94,7 +108,7 @@ export async function canOpenPosition(
   }
 
   // 4. 日次損失制限チェック
-  const isLossLimitHit = await checkDailyLossLimit();
+  const isLossLimitHit = await checkDailyLossLimit({ config, effectiveCapital: effectiveCap });
   if (isLossLimitHit) {
     return {
       allowed: false,
@@ -103,19 +117,19 @@ export async function canOpenPosition(
   }
 
   // 5. セクター集中チェック
-  const sectorCheck = await canAddToSector(stockId);
+  const sectorCheck = await canAddToSector(stockId, { openPositions });
   if (!sectorCheck.allowed) {
     return { allowed: false, reason: sectorCheck.reason };
   }
 
   // 5.5. マクロファクター集中チェック
-  const macroCheck = await canAddToMacroFactor(stockId);
+  const macroCheck = await canAddToMacroFactor(stockId, { openPositions });
   if (!macroCheck.allowed) {
     return { allowed: false, reason: macroCheck.reason };
   }
 
   // 6. ドローダウンチェック
-  const drawdown = await calculateDrawdownStatus();
+  const drawdown = await calculateDrawdownStatus({ config, effectiveCapital: effectiveCap });
   if (drawdown.shouldHaltTrading) {
     return {
       allowed: false,
@@ -142,8 +156,10 @@ export async function canOpenPosition(
  * 確定損益 + 含み損益の合計で判定する。
  * 含み損が大きい状態で新規ポジションを建てることを防ぐ。
  */
-export async function checkDailyLossLimit(): Promise<boolean> {
-  const config = await prisma.tradingConfig.findFirst({
+export async function checkDailyLossLimit(
+  prefetch?: { config?: TradingConfig; effectiveCapital?: number },
+): Promise<boolean> {
+  const config = prefetch?.config ?? await prisma.tradingConfig.findFirst({
     orderBy: { createdAt: "desc" },
   });
 
@@ -151,7 +167,7 @@ export async function checkDailyLossLimit(): Promise<boolean> {
     return true; // 設定がない場合は安全側に倒して取引停止
   }
 
-  const effectiveCap = await getEffectiveCapital(config);
+  const effectiveCap = prefetch?.effectiveCapital ?? await getEffectiveCapital(config);
   const maxDailyLossPct = Number(config.maxDailyLossPct);
   const maxDailyLoss = effectiveCap * (maxDailyLossPct / 100);
 

@@ -39,11 +39,21 @@ export async function executeEntry(
 ): Promise<ExecutionResult> {
   const { ticker, currentPrice, atr14 } = trigger;
 
-  // 1. 今日のMarketAssessmentを取得してshouldTradeを確認
-  const todayAssessment = await prisma.marketAssessment.findUnique({
-    where: { date: getTodayForDB() },
-  });
+  // 0. 共有データを並列で一括取得（重複クエリ削減）
+  const [todayAssessment, stock, cashBalance, effectiveCapital, config, openPositions] =
+    await Promise.all([
+      prisma.marketAssessment.findUnique({ where: { date: getTodayForDB() } }),
+      prisma.stock.findUnique({ where: { tickerCode: ticker } }),
+      getCashBalance(),
+      getEffectiveCapital(),
+      prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } }),
+      prisma.tradingPosition.findMany({
+        where: { status: "open" },
+        include: { stock: { select: { id: true, jpxSectorName: true, tickerCode: true } } },
+      }),
+    ]);
 
+  // 1. shouldTrade確認
   if (!todayAssessment || !todayAssessment.shouldTrade) {
     const reason = !todayAssessment
       ? "今日のMarketAssessmentがありません"
@@ -52,21 +62,14 @@ export async function executeEntry(
     return { success: false, reason };
   }
 
-  // 2. 銘柄マスタを取得
-  const stock = await prisma.stock.findUnique({
-    where: { tickerCode: ticker },
-  });
-
+  // 2. 銘柄マスタ確認
   if (!stock) {
     const reason = `銘柄マスタに存在しません: ${ticker}`;
     console.log(`[entry-executor] ${reason}`);
     return { success: false, reason };
   }
 
-  // 3. 買い余力チェック（実質資金を取得してキャッシュバランスを算出）
-  const cashBalance = await getCashBalance();
-
-  // 4. SL価格 = currentPrice - ATR × 1.0（最大3%に制限）
+  // 3. SL価格 = currentPrice - ATR × 1.0（最大3%に制限）
   const rawStopLoss = currentPrice - atr14 * BREAKOUT.STOP_LOSS.ATR_MULTIPLIER;
   const maxStopLoss = currentPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
   const stopLossPrice = Math.round(Math.max(rawStopLoss, maxStopLoss));
@@ -79,9 +82,7 @@ export async function executeEntry(
     );
   }
 
-  // 5. ポジションサイズ計算
-  //    riskAmount = 資金 × 2% / (currentPrice - SL)
-  const effectiveCapital = await getEffectiveCapital();
+  // 4. ポジションサイズ計算
   const riskAmount = effectiveCapital * (POSITION_SIZING.RISK_PER_TRADE_PCT / 100);
   const riskPerShare = currentPrice - stopLossPrice;
 
@@ -108,8 +109,12 @@ export async function executeEntry(
     return { success: false, reason };
   }
 
-  // 6. canOpenPosition でセクター集中・ドローダウン・ポジション数を確認
-  const riskCheck = await canOpenPosition(stock.id, quantity, currentPrice);
+  // 5. canOpenPosition でセクター集中・ドローダウン・ポジション数を確認（プリフェッチデータを渡す）
+  const riskCheck = await canOpenPosition(stock.id, quantity, currentPrice, {
+    config: config ?? undefined,
+    openPositions,
+    effectiveCapital,
+  });
   if (!riskCheck.allowed) {
     console.log(`[entry-executor] ${ticker} リスクチェック不可: ${riskCheck.reason}`);
     return { success: false, reason: riskCheck.reason };
@@ -118,7 +123,7 @@ export async function executeEntry(
   // 利確参考値: ATR × 5.0（トレーリングストップが実際の利確を担う）
   const takeProfitPrice = Math.round(currentPrice + atr14 * 5.0);
 
-  // 7. TradingOrderをDBに作成
+  // 6. TradingOrderをDBに作成
   const newOrder = await prisma.tradingOrder.create({
     data: {
       stockId: stock.id,
@@ -150,7 +155,7 @@ export async function executeEntry(
     `[entry-executor] ${ticker} 注文作成: id=${newOrder.id}, 指値=¥${currentPrice}, SL=¥${stopLossPrice}, TP=¥${takeProfitPrice}, 数量=${quantity}株`,
   );
 
-  // 8. ブローカー発注（simulationモードはスキップ）
+  // 7. ブローカー発注（simulationモードはスキップ）
   if (brokerMode !== "simulation") {
     try {
       const brokerResult = await submitBrokerOrder({
@@ -188,7 +193,7 @@ export async function executeEntry(
     }
   }
 
-  // 9. Slack通知
+  // 8. Slack通知
   await notifyOrderPlaced({
     tickerCode: ticker,
     name: stock.name,

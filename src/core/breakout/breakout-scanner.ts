@@ -23,6 +23,7 @@ export interface QuoteData {
 
 export class BreakoutScanner {
   private state: ScannerState;
+  private watchlistMap: Map<string, WatchlistEntry>;
 
   constructor(watchlist: WatchlistEntry[]) {
     this.state = {
@@ -31,6 +32,7 @@ export class BreakoutScanner {
       triggeredToday: new Set<string>(),
       lastColdScanTime: new Map<string, number>(),
     };
+    this.watchlistMap = new Map(watchlist.map((e) => [e.ticker, e]));
   }
 
   /**
@@ -160,6 +162,7 @@ export class BreakoutScanner {
       triggeredToday: new Set<string>(),
       lastColdScanTime: new Map<string, number>(),
     };
+    this.watchlistMap = new Map(newWatchlist.map((e) => [e.ticker, e]));
   }
 
   getState(): Readonly<ScannerState> {
@@ -171,7 +174,7 @@ export class BreakoutScanner {
   // ----------------------------------------------------------------
 
   private findWatchlistEntry(ticker: string): WatchlistEntry | undefined {
-    return this.state.watchlist.find((e) => e.ticker === ticker);
+    return this.watchlistMap.get(ticker);
   }
 
   /**

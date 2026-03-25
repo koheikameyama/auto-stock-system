@@ -16,6 +16,12 @@ vi.mock("../../../lib/prisma", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    tradingConfig: {
+      findFirst: vi.fn(),
+    },
+    tradingPosition: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -111,6 +117,15 @@ describe("executeEntry", () => {
     // requiredAmount = 1000 * 500 = 500,000 → cashBalance=1,000,000 で十分
     mockPrisma.marketAssessment.findUnique.mockResolvedValue(makeAssessment(true));
     mockPrisma.stock.findUnique.mockResolvedValue(makeStock());
+    mockPrisma.tradingConfig.findFirst.mockResolvedValue({
+      id: "config-1",
+      isActive: true,
+      totalBudget: 500_000,
+      maxPositions: 5,
+      maxPositionPct: 30,
+      maxDailyLossPct: 3,
+    });
+    mockPrisma.tradingPosition.findMany.mockResolvedValue([]);
     mockGetCashBalance.mockResolvedValue(1_000_000);
     mockGetEffectiveCapital.mockResolvedValue(500_000);
     mockCanOpenPosition.mockResolvedValue({ allowed: true, reason: "OK" });

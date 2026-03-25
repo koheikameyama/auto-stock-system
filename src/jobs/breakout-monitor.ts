@@ -45,30 +45,29 @@ export async function main(): Promise<void> {
     scanner = new BreakoutScanner(watchlist);
   }
 
-  // 0. 今日のMarketAssessmentを確認。shouldTrade=falseならスキャンをスキップ
-  const todayAssessment = await prisma.marketAssessment.findUnique({
-    where: { date: getTodayForDB() },
-  });
+  // 0-2. MarketAssessment・保有ポジション・エントリー件数を並列取得
+  const todayStart = dayjs().tz(TIMEZONE).startOf("day").toDate();
+  const [todayAssessment, openPositions, dailyEntryCount] = await Promise.all([
+    prisma.marketAssessment.findUnique({
+      where: { date: getTodayForDB() },
+    }),
+    prisma.tradingPosition.findMany({
+      where: { status: "open" },
+      include: { stock: { select: { tickerCode: true } } },
+    }),
+    prisma.tradingOrder.count({
+      where: {
+        side: "buy",
+        createdAt: { gte: todayStart },
+      },
+    }),
+  ]);
 
   if (!todayAssessment || !todayAssessment.shouldTrade) {
     return;
   }
 
-  // 1. 保有中ティッカーを取得
-  const openPositions = await prisma.tradingPosition.findMany({
-    where: { status: "open" },
-    include: { stock: { select: { tickerCode: true } } },
-  });
   const holdingTickers = new Set(openPositions.map((p) => p.stock.tickerCode));
-
-  // 2. 本日のエントリー済み件数を取得
-  const todayStart = dayjs().tz(TIMEZONE).startOf("day").toDate();
-  const dailyEntryCount = await prisma.tradingOrder.count({
-    where: {
-      side: "buy",
-      createdAt: { gte: todayStart },
-    },
-  });
 
   // 3. スキャン対象ティッカーを取得（ウォッチリスト全銘柄）
   const tickers = watchlist.map((e) => e.ticker);
@@ -100,20 +99,22 @@ export async function main(): Promise<void> {
   // 6. ブローカーモード取得
   const brokerMode = await getEffectiveBrokerMode();
 
-  // 7. 各トリガーに対してエントリー実行
-  for (const trigger of triggers) {
-    console.log(
-      `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
-    );
-    try {
-      await executeEntry(trigger, brokerMode);
-    } catch (err) {
-      console.error(
-        `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,
-        err,
+  // 7. 各トリガーに対してエントリー実行（並列）
+  await Promise.all(
+    triggers.map(async (trigger) => {
+      console.log(
+        `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
       );
-    }
-  }
+      try {
+        await executeEntry(trigger, brokerMode);
+      } catch (err) {
+        console.error(
+          `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,
+          err,
+        );
+      }
+    }),
+  );
 }
 
 /**

@@ -8,6 +8,7 @@
 import { prisma } from "../lib/prisma";
 import { DRAWDOWN, TIMEZONE } from "../lib/constants";
 import { getEffectiveCapital } from "./position-manager";
+import type { TradingConfig } from "@prisma/client";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
@@ -40,8 +41,16 @@ export interface DrawdownStatus {
  * - 5連敗 → 取引停止
  * - 3連敗 → 最大1ポジションに制限
  */
-export async function calculateDrawdownStatus(): Promise<DrawdownStatus> {
-  const config = await prisma.tradingConfig.findFirst({
+/** 事前取得データ（重複クエリ削減用） */
+export interface DrawdownPrefetch {
+  config?: TradingConfig;
+  effectiveCapital?: number;
+}
+
+export async function calculateDrawdownStatus(
+  prefetch?: DrawdownPrefetch,
+): Promise<DrawdownStatus> {
+  const config = prefetch?.config ?? await prisma.tradingConfig.findFirst({
     orderBy: { createdAt: "desc" },
   });
 
@@ -63,7 +72,7 @@ export async function calculateDrawdownStatus(): Promise<DrawdownStatus> {
     };
   }
 
-  const effectiveCap = await getEffectiveCapital(config);
+  const effectiveCap = prefetch?.effectiveCapital ?? await getEffectiveCapital(config);
   const peakEquity = config.peakEquity
     ? Number(config.peakEquity)
     : effectiveCap;

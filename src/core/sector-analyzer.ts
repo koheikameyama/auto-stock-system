@@ -8,6 +8,11 @@ import { prisma } from "../lib/prisma";
 import { getDaysAgoForDB } from "../lib/date-utils";
 import { getSectorGroup, getMacroFactor, SECTOR_RISK } from "../lib/constants";
 
+/** 事前取得データ（重複クエリ削減用） */
+export interface SectorCheckPrefetch {
+  openPositions?: Array<{ stockId: string; stock: { id: string; jpxSectorName: string | null } }>;
+}
+
 // ========================================
 // セクター集中チェック
 // ========================================
@@ -21,10 +26,12 @@ export interface SectorConcentration {
 /**
  * 現在のオープンポジションのセクター集中度を計算する
  */
-export async function getSectorConcentration(): Promise<
+export async function getSectorConcentration(
+  prefetch?: SectorCheckPrefetch,
+): Promise<
   SectorConcentration[]
 > {
-  const openPositions = await prisma.tradingPosition.findMany({
+  const openPositions = prefetch?.openPositions ?? await prisma.tradingPosition.findMany({
     where: { status: "open" },
     include: { stock: { select: { id: true, jpxSectorName: true } } },
   });
@@ -58,6 +65,7 @@ export async function getSectorConcentration(): Promise<
  */
 export async function canAddToSector(
   stockId: string,
+  prefetch?: SectorCheckPrefetch,
 ): Promise<{ allowed: boolean; reason: string }> {
   const stock = await prisma.stock.findUnique({
     where: { id: stockId },
@@ -74,7 +82,7 @@ export async function canAddToSector(
     return { allowed: true, reason: "OK" };
   }
 
-  const concentration = await getSectorConcentration();
+  const concentration = await getSectorConcentration(prefetch);
   const existing = concentration.find((c) => c.sectorGroup === sectorGroup);
 
   if (
@@ -103,8 +111,10 @@ export interface MacroConcentration {
 /**
  * 現在のオープンポジションのマクロファクター集中度を計算する
  */
-export async function getMacroConcentration(): Promise<MacroConcentration[]> {
-  const openPositions = await prisma.tradingPosition.findMany({
+export async function getMacroConcentration(
+  prefetch?: SectorCheckPrefetch,
+): Promise<MacroConcentration[]> {
+  const openPositions = prefetch?.openPositions ?? await prisma.tradingPosition.findMany({
     where: { status: "open" },
     include: { stock: { select: { id: true, jpxSectorName: true } } },
   });
@@ -136,6 +146,7 @@ export async function getMacroConcentration(): Promise<MacroConcentration[]> {
  */
 export async function canAddToMacroFactor(
   stockId: string,
+  prefetch?: SectorCheckPrefetch,
 ): Promise<{ allowed: boolean; reason: string }> {
   const stock = await prisma.stock.findUnique({
     where: { id: stockId },
@@ -154,7 +165,7 @@ export async function canAddToMacroFactor(
     return { allowed: true, reason: "OK" };
   }
 
-  const concentration = await getMacroConcentration();
+  const concentration = await getMacroConcentration(prefetch);
   const existing = concentration.find((c) => c.macroFactor === macroFactor);
 
   if (

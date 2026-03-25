@@ -15,7 +15,7 @@ import {
 } from "./constants/broker";
 import type { YfQuoteResult } from "./yfinance-client";
 
-const CONCURRENCY = 5;
+const CONCURRENCY = 20;
 const limit = pLimit(CONCURRENCY);
 
 interface PriceData {
