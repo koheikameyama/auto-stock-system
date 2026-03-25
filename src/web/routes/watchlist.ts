@@ -57,10 +57,10 @@ function statusBadgeHtml(status: WatchlistStatus) {
 function statusOrder(status: WatchlistStatus): number {
   switch (status) {
     case "ordered": return 0;
-    case "rejected": return 1;
-    case "hot": return 2;
-    case "holding": return 3;
-    case "cold": return 4;
+    case "hot": return 1;
+    case "holding": return 2;
+    case "cold": return 3;
+    case "rejected": return 4;
   }
 }
 
@@ -96,7 +96,12 @@ function isInEntryTimeWindow(): boolean {
   return current >= eh * 60 + em && current <= lh * 60 + lm;
 }
 
+const VALID_STATUSES = new Set<WatchlistStatus>(["ordered", "rejected", "hot", "holding", "cold"]);
+
 app.get("/", async (c) => {
+  const statusFilter = c.req.query("status") as WatchlistStatus | undefined;
+  const activeFilter = statusFilter && VALID_STATUSES.has(statusFilter) ? statusFilter : null;
+
   const watchlist = await getWatchlist();
 
   // スキャナー状態を取得（市場時間外は null）
@@ -146,12 +151,18 @@ app.get("/", async (c) => {
     return (b.surgeRatio ?? 0) - (a.surgeRatio ?? 0);
   });
 
+  // フィルター適用
+  const filteredWatchlist = activeFilter
+    ? watchlistWithStatus.filter((w) => w.status === activeFilter)
+    : watchlistWithStatus;
+
   // ページネーション
   const perPage = QUERY_LIMITS.WATCHLIST_PER_PAGE;
-  const totalPages = Math.max(1, Math.ceil(watchlistWithStatus.length / perPage));
+  const totalPages = Math.max(1, Math.ceil(filteredWatchlist.length / perPage));
   const page = Math.min(Math.max(1, Number(c.req.query("page")) || 1), totalPages);
   const start = (page - 1) * perPage;
-  const pagedWatchlist = watchlistWithStatus.slice(start, start + perPage);
+  const pagedWatchlist = filteredWatchlist.slice(start, start + perPage);
+  const filterQuery = activeFilter ? `&status=${activeFilter}` : "";
 
   const tickers = watchlist.map((w) => w.ticker);
   const stocks = tickers.length
@@ -174,17 +185,28 @@ app.get("/", async (c) => {
   const maxEntries = BREAKOUT.GUARD.MAX_DAILY_ENTRIES;
   const entrySlotOk = dailyEntryCount < maxEntries;
 
+  const coldCount = watchlistWithStatus.filter((w) => w.status === "cold").length;
+
+  /** フィルターバッジリンクを生成 */
+  function filterBadge(status: WatchlistStatus, label: string, count: number, badgeClass: string) {
+    const isActive = activeFilter === status;
+    const href = isActive ? "/watchlist" : `/watchlist?status=${status}`;
+    const activeStyle = isActive ? "outline: 2px solid currentColor; outline-offset: 1px;" : "opacity: 0.7;";
+    return raw(`<a href="${href}" class="badge ${badgeClass}" style="text-decoration: none; cursor: pointer; ${count ? activeStyle : "opacity: 0.3; pointer-events: none;"}">${label}: ${count}</a>`);
+  }
+
   const content = html`
     <p class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (${watchlist.length})</p>
     ${scannerInfo
       ? html`
           <div class="card" style="padding: 8px 12px; margin-bottom: 8px; font-size: 12px;">
-            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 6px;">
-              ${orderedCount ? html`<span class="badge badge-triggered">注文済: ${orderedCount}</span>` : ""}
-              ${rejectedCount ? html`<span class="badge badge-rejected">却下: ${rejectedCount}</span>` : ""}
-              ${hotCount ? html`<span class="badge badge-hot">急騰中: ${hotCount}</span>` : ""}
-              ${holdingCount ? html`<span class="badge badge-holding">保有中: ${holdingCount}</span>` : ""}
-              <span style="color: #94a3b8;">監視中: ${watchlistWithStatus.filter((w) => w.status === "cold").length}</span>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
+              <a href="/watchlist" style="text-decoration: none; color: ${!activeFilter ? "#e2e8f0" : "#94a3b8"}; font-size: 11px; ${!activeFilter ? "font-weight: 600;" : ""}">すべて</a>
+              ${filterBadge("ordered", "注文済", orderedCount, "badge-triggered")}
+              ${filterBadge("rejected", "却下", rejectedCount, "badge-rejected")}
+              ${filterBadge("hot", "急騰中", hotCount, "badge-hot")}
+              ${filterBadge("holding", "保有中", holdingCount, "badge-holding")}
+              ${filterBadge("cold", "監視中", coldCount, "badge-cold")}
             </div>
             <div style="display: flex; gap: 12px; flex-wrap: wrap; color: #94a3b8; font-size: 11px; border-top: 1px solid #334155; padding-top: 6px;">
               <span>${raw(`${tt("エントリー枠", `当日注文数/${maxEntries}。上限で新規停止`)}: <span style="color: ${entrySlotOk ? "#22c55e" : "#ef4444"};">${dailyEntryCount}/${maxEntries}</span>`)}</span>
@@ -230,11 +252,11 @@ app.get("/", async (c) => {
             ? html`
                 <div class="pagination">
                   ${page > 1
-                    ? html`<a href="/watchlist?page=${page - 1}" class="pagination-link">← 前へ</a>`
+                    ? html`<a href="/watchlist?page=${page - 1}${filterQuery}" class="pagination-link">← 前へ</a>`
                     : html`<span class="pagination-link disabled">← 前へ</span>`}
                   <span class="pagination-info">${page} / ${totalPages}</span>
                   ${page < totalPages
-                    ? html`<a href="/watchlist?page=${page + 1}" class="pagination-link">次へ →</a>`
+                    ? html`<a href="/watchlist?page=${page + 1}${filterQuery}" class="pagination-link">次へ →</a>`
                     : html`<span class="pagination-link disabled">次へ →</span>`}
                 </div>
               `
