@@ -14,10 +14,12 @@
 
 import { prisma } from "../../lib/prisma";
 import { TECHNICAL_MIN_DATA } from "../../lib/constants";
+import { STOP_LOSS, POSITION_SIZING, UNIT_SHARES } from "../../lib/constants";
 import { readHistoricalFromDB } from "../market-data";
 import { analyzeTechnicals } from "../technical-analysis";
 import { checkGates } from "../scoring/gates";
 import { computeScoringIntermediates } from "../scoring/intermediates";
+import { getEffectiveCapital } from "../position-manager";
 import { BREAKOUT } from "../../lib/constants/breakout";
 import type { WatchlistEntry, WatchlistBuildResult } from "./types";
 
@@ -41,6 +43,34 @@ function computeAvgVolume(data: { volume: number }[], days: number): number | nu
   const slice = data.slice(0, days);
   if (slice.length === 0) return null;
   return slice.reduce((sum, d) => sum + d.volume, 0) / slice.length;
+}
+
+/**
+ * 余力フィルター: entry-executor と同じロジックでポジションサイズを計算し、
+ * 実効資金で購入可能かチェックする
+ */
+function canAffordEntry(
+  latestPrice: number,
+  atr14: number,
+  effectiveCapital: number,
+): boolean {
+  // SL計算（entry-executorと同じ）
+  const rawStopLoss = latestPrice - atr14 * BREAKOUT.STOP_LOSS.ATR_MULTIPLIER;
+  const maxStopLoss = latestPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
+  const stopLossPrice = Math.max(rawStopLoss, maxStopLoss);
+  const riskPerShare = latestPrice - stopLossPrice;
+
+  if (riskPerShare <= 0) return false;
+
+  // ポジションサイズ計算
+  const riskAmount = effectiveCapital * (POSITION_SIZING.RISK_PER_TRADE_PCT / 100);
+  const rawQuantity = Math.floor(riskAmount / riskPerShare);
+  const quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
+
+  if (quantity === 0) return false;
+
+  const requiredAmount = latestPrice * quantity;
+  return effectiveCapital >= requiredAmount;
 }
 
 /**
@@ -76,6 +106,7 @@ export async function buildWatchlist(): Promise<WatchlistBuildResult> {
         historicalLoaded: 0,
         skipInsufficientData: 0,
         skipGate: 0,
+        skipAffordability: 0,
         skipWeeklyTrend: 0,
         skipHigh20: 0,
         skipAtr: 0,
@@ -88,7 +119,11 @@ export async function buildWatchlist(): Promise<WatchlistBuildResult> {
 
   const allTickerCodes = stocks.map((s) => s.tickerCode);
 
-  // 2. OHLCVデータを一括取得（DBから）
+  // 2. 実効資金を取得（余力フィルター用、1回だけ）
+  const effectiveCapital = await getEffectiveCapital();
+  console.log(`[watchlist-builder] 実効資金: ¥${effectiveCapital.toLocaleString()}`);
+
+  // 3. OHLCVデータを一括取得（DBから）
   const historicalMap = await readHistoricalFromDB(allTickerCodes);
   console.log(`[watchlist-builder] OHLCVデータ取得済: ${historicalMap.size}銘柄`);
 
@@ -98,6 +133,7 @@ export async function buildWatchlist(): Promise<WatchlistBuildResult> {
   // フィルター別カウンター
   let skipInsufficientData = 0;
   let skipGate = 0;
+  let skipAffordability = 0;
   let skipWeeklyTrend = 0;
   let skipHigh20 = 0;
   let skipAtr = 0;
@@ -140,7 +176,13 @@ export async function buildWatchlist(): Promise<WatchlistBuildResult> {
         continue;
       }
 
-      // 5. 週足下降トレンドチェック（checkGates には含まれていないため個別チェック）
+      // 5. 余力フィルター（ATRが計算可能な場合のみ）
+      if (summary.atr14 != null && !canAffordEntry(latestPrice, summary.atr14, effectiveCapital)) {
+        skipAffordability++;
+        continue;
+      }
+
+      // 6. 週足下降トレンドチェック（checkGates には含まれていないため個別チェック）
       const intermediates = computeScoringIntermediates(historical);
       const { weeklyClose, weeklySma13 } = intermediates;
 
@@ -186,6 +228,7 @@ export async function buildWatchlist(): Promise<WatchlistBuildResult> {
     historicalLoaded: historicalMap.size,
     skipInsufficientData,
     skipGate,
+    skipAffordability,
     skipWeeklyTrend,
     skipHigh20,
     skipAtr,
@@ -197,9 +240,9 @@ export async function buildWatchlist(): Promise<WatchlistBuildResult> {
   console.log(
     `[watchlist-builder] フィルター結果: ` +
       `データ不足=${skipInsufficientData}, ゲート落ち=${skipGate}, ` +
-      `週足下降=${skipWeeklyTrend}, high20欠損=${skipHigh20}, ` +
-      `ATR欠損=${skipAtr}, 出来高欠損=${skipAvgVolume}, エラー=${skipError} ` +
-      `→ 通過=${entries.length}銘柄`
+      `余力不足=${skipAffordability}, 週足下降=${skipWeeklyTrend}, ` +
+      `high20欠損=${skipHigh20}, ATR欠損=${skipAtr}, 出来高欠損=${skipAvgVolume}, ` +
+      `エラー=${skipError} → 通過=${entries.length}銘柄`
   );
 
   return { entries, stats };

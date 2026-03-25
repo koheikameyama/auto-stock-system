@@ -58,6 +58,8 @@ export interface WatchlistFilterStats {
   skipAtr: number;
   /** 出来高欠損 */
   skipAvgVolume: number;
+  /** 余力不足 */
+  skipAffordability: number;
   /** 処理エラー */
   skipError: number;
   /** 通過銘柄数 */
