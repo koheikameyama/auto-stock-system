@@ -7,6 +7,7 @@
 
 import { buildWatchlist } from "../core/breakout/watchlist-builder";
 import { notifySlack } from "../lib/slack";
+import { prisma } from "../lib/prisma";
 import type { WatchlistEntry } from "../core/breakout/types";
 
 let currentWatchlist: WatchlistEntry[] = [];
@@ -46,4 +47,16 @@ export async function main(): Promise<void> {
   }
 
   console.log("=== Watchlist Builder 終了 ===");
+}
+
+const isDirectRun = process.argv[1]?.includes("watchlist-builder");
+if (isDirectRun) {
+  main()
+    .catch((error) => {
+      console.error("Watchlist Builder エラー:", error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
 }
