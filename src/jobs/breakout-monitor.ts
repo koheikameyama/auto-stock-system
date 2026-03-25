@@ -16,6 +16,7 @@ import { tachibanaFetchQuotesBatch } from "../lib/tachibana-price-client";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
 import { getEffectiveBrokerMode } from "../core/broker-orders";
+import { notifySlack } from "../lib/slack";
 import { TIMEZONE } from "../lib/constants";
 import type { QuoteData } from "../core/breakout/breakout-scanner";
 
@@ -122,18 +123,30 @@ export async function main(): Promise<void> {
       );
       try {
         const result = await executeEntry(trigger, brokerMode);
-        // 一時的な理由で却下 → 再トリガーを許可
-        if (!result.success && result.retryable && scanner) {
-          scanner.removeFromTriggeredToday(trigger.ticker);
-          console.log(
-            `[breakout-monitor] ${trigger.ticker} 再トリガー許可（理由: ${result.reason}）`,
-          );
+        if (!result.success) {
+          // 一時的な理由で却下 → 再トリガーを許可
+          if (result.retryable && scanner) {
+            scanner.removeFromTriggeredToday(trigger.ticker);
+            console.log(
+              `[breakout-monitor] ${trigger.ticker} 再トリガー許可（理由: ${result.reason}）`,
+            );
+          }
+          await notifySlack({
+            title: `エントリー失敗: ${trigger.ticker}`,
+            message: `理由: ${result.reason ?? "不明"}\n価格: ¥${trigger.currentPrice.toLocaleString()} / 出来高サージ: ${trigger.volumeSurgeRatio.toFixed(2)}x${result.retryable ? "\n※ 再トリガー対象" : ""}`,
+            color: "warning",
+          });
         }
       } catch (err) {
         console.error(
           `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,
           err,
         );
+        await notifySlack({
+          title: `エントリー例外: ${trigger.ticker}`,
+          message: `${err instanceof Error ? err.message : String(err)}\n価格: ¥${trigger.currentPrice.toLocaleString()}`,
+          color: "danger",
+        });
       }
     }),
   );
