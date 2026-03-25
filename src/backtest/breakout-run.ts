@@ -15,6 +15,7 @@ import { runBreakoutBacktest } from "./breakout-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import type { BreakoutBacktestConfig, BreakoutBacktestResult, PerformanceMetrics } from "./types";
+import { saveBacktestResult } from "./db-saver";
 
 function getArg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
@@ -72,6 +73,14 @@ async function main() {
 
   // 5. レポート出力
   printReport(result);
+
+  // DBに保存
+  try {
+    const id = await saveBacktestResult(result);
+    console.log(`[db] BacktestRun 保存完了: ${id}`);
+  } catch (err) {
+    console.error("[db] BacktestRun 保存失敗:", err);
+  }
 
   await prisma.$disconnect();
 }
