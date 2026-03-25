@@ -346,7 +346,10 @@ export function resetTachibanaClient(): void {
 export async function initBrokerForBatch(
   mode: "simulation" | "demo" | "live" | "dry_run",
 ): Promise<{ cleanup: () => Promise<void> }> {
-  if (mode === "simulation") {
+  const needsPriceSession =
+    process.env.MARKET_DATA_PROVIDER === "tachibana";
+
+  if (mode === "simulation" && !needsPriceSession) {
     console.log("[broker] simulation mode, skipping login");
     return { cleanup: async () => {} };
   }
