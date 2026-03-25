@@ -16,7 +16,16 @@ import { stockModal } from "../views/stock-modal";
 import type { ModalAnalysis, ModalPositionInfo } from "../views/stock-modal";
 import { yfFetchIndexChart } from "../../lib/yfinance-client";
 import { nikkeiChartBody } from "../views/components";
-import { NIKKEI_CHART_PERIODS } from "../../lib/constants";
+import { NIKKEI_CHART_PERIODS, TIMEZONE } from "../../lib/constants";
+import { BREAKOUT } from "../../lib/constants/breakout";
+import { getScannerState } from "../../jobs/breakout-monitor";
+import { getTodayForDB } from "../../lib/date-utils";
+import dayjs from "dayjs";
+import utcPlugin from "dayjs/plugin/utc.js";
+import timezonePlugin from "dayjs/plugin/timezone.js";
+
+dayjs.extend(utcPlugin);
+dayjs.extend(timezonePlugin);
 
 const app = new Hono();
 
@@ -302,6 +311,90 @@ app.get("/quotes", async (c) => {
     result[key] = { price: value.price };
   }
   return c.json(result);
+});
+
+/**
+ * GET /api/watchlist/state?tickers=7203,8306 - ウォッチリスト状態（ポーリング用）
+ */
+app.get("/watchlist/state", async (c) => {
+  const tickersParam = c.req.query("tickers");
+  if (!tickersParam) return c.json({});
+
+  const tickers = tickersParam.split(",").filter(Boolean);
+  if (!tickers.length) return c.json({});
+
+  // スキャナー状態
+  const scannerInfo = getScannerState();
+  const hotSet = scannerInfo?.state.hotSet ?? new Map();
+  const triggeredToday = scannerInfo?.state.triggeredToday ?? new Set<string>();
+  const holdingTickers = scannerInfo?.holdingTickers ?? new Set<string>();
+  const surgeRatios = scannerInfo?.state.lastSurgeRatios ?? new Map();
+
+  // DB + 時価を並列取得
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const [todayOrders, todayAssessment, dailyEntryCount, quotes] = await Promise.all([
+    triggeredToday.size
+      ? prisma.tradingOrder.findMany({
+          where: { side: "buy", strategy: "breakout", createdAt: { gte: todayStart } },
+          select: { stock: { select: { tickerCode: true } } },
+        })
+      : Promise.resolve([]),
+    prisma.marketAssessment.findUnique({
+      where: { date: getTodayForDB() },
+      select: { shouldTrade: true },
+    }),
+    prisma.tradingOrder.count({
+      where: { side: "buy", createdAt: { gte: todayStart } },
+    }),
+    fetchStockQuotesBatch(tickers),
+  ]);
+
+  const orderedTickers = new Set(todayOrders.map((o) => o.stock.tickerCode));
+
+  // ステータス判定
+  type WatchlistStatus = "ordered" | "rejected" | "hot" | "holding" | "cold";
+  function getStatus(ticker: string): WatchlistStatus {
+    if (holdingTickers.has(ticker)) return "holding";
+    if (triggeredToday.has(ticker)) {
+      return orderedTickers.has(ticker) ? "ordered" : "rejected";
+    }
+    if (hotSet.has(ticker)) return "hot";
+    return "cold";
+  }
+
+  // ティッカーごとのデータ
+  const tickerData: Record<string, { status: WatchlistStatus; surgeRatio: number | null; price: number | null }> = {};
+  const summary = { ordered: 0, rejected: 0, hot: 0, holding: 0, cold: 0 };
+
+  for (const ticker of tickers) {
+    const status = getStatus(ticker);
+    summary[status]++;
+    const quote = quotes.get(ticker);
+    tickerData[ticker] = {
+      status,
+      surgeRatio: surgeRatios.get(ticker) ?? null,
+      price: quote?.price ?? null,
+    };
+  }
+
+  // 時間帯チェック
+  const now = dayjs().tz(TIMEZONE);
+  const [eh, em] = BREAKOUT.GUARD.EARLIEST_ENTRY_TIME.split(":").map(Number);
+  const [lh, lm] = BREAKOUT.GUARD.LATEST_ENTRY_TIME.split(":").map(Number);
+  const current = now.hour() * 60 + now.minute();
+  const inTimeWindow = current >= eh * 60 + em && current <= lh * 60 + lm;
+
+  return c.json({
+    tickers: tickerData,
+    summary,
+    global: {
+      dailyEntryCount,
+      maxEntries: BREAKOUT.GUARD.MAX_DAILY_ENTRIES,
+      inTimeWindow,
+      shouldTrade: todayAssessment?.shouldTrade ?? false,
+    },
+  });
 });
 
 /**
