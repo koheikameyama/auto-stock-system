@@ -17,6 +17,7 @@ on:
           - assess
           - holding
           - watchlist
+          - scan
       skip_market_day_check:
         description: "休場日チェックをスキップ"
         type: boolean
@@ -130,8 +131,29 @@ jobs:
       - run: npx prisma generate
       - run: npm run watchlist-build
 
+  stock-scanner:
+    needs: [check-market-day, market-assessment]
+    if: |
+      always() &&
+      needs.check-market-day.outputs.should_run == 'true' &&
+      needs.market-assessment.result != 'failure' &&
+      (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'scan')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: ".tool-versions"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Start yfinance sidecar
+        uses: ./.github/actions/start-yfinance
+      - run: npm run stock-scan
+
   notify-failure:
-    needs: [market-assessment, holding-score, watchlist-builder]
+    needs: [market-assessment, holding-score, watchlist-builder, stock-scanner]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
