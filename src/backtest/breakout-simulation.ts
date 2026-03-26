@@ -53,6 +53,32 @@ export function runBreakoutBacktest(
   }
   const tradingDays = [...allDatesSet].sort();
 
+  // 市場breadth事前計算（marketTrendFilter用）
+  const dailyBreadth = new Map<string, number>();
+  if (config.marketTrendFilter) {
+    const SMA_LEN = 25;
+    // 各銘柄のclose配列をdate順で保持
+    const tickerCloses = new Map<string, { dates: string[]; closes: number[] }>();
+    for (const [ticker, bars] of allData) {
+      const sorted = bars.filter((b) => b.date >= config.startDate && b.date <= config.endDate);
+      tickerCloses.set(ticker, { dates: sorted.map((b) => b.date), closes: sorted.map((b) => b.close) });
+    }
+    for (const day of tradingDays) {
+      let above = 0;
+      let total = 0;
+      for (const [, data] of tickerCloses) {
+        const idx = data.dates.indexOf(day);
+        if (idx < SMA_LEN - 1) continue;
+        let sum = 0;
+        for (let j = idx - SMA_LEN + 1; j <= idx; j++) sum += data.closes[j];
+        const sma = sum / SMA_LEN;
+        total++;
+        if (data.closes[idx] > sma) above++;
+      }
+      dailyBreadth.set(day, total > 0 ? above / total : 0);
+    }
+  }
+
   if (config.verbose) {
     console.log(`[breakout-bt] シミュレーション開始: ${tradingDays.length}営業日, ${allData.size}銘柄`);
   }
@@ -182,59 +208,68 @@ export function runBreakoutBacktest(
         console.log(`  [${today}] VIX crisis: 新規エントリースキップ`);
       }
     } else if (openPositions.length < config.maxPositions && cash > 0) {
-      const entries = detectBreakoutEntries(config, allData, today, cash, openPositions, lastExitDayIdx, dayIdx, tradingDays);
-
-      for (const entry of entries) {
-        if (openPositions.length >= config.maxPositions) break;
-
-        // 資金変動後の株数再計算（前のエントリーでcashが減っている場合に対応）
-        const riskPerShare = entry.entryPrice - entry.stopLossPrice;
-        if (riskPerShare <= 0) continue;
-        const riskAmount = cash * (RISK_PER_TRADE_PCT / 100);
-        const rawQuantity = Math.floor(riskAmount / riskPerShare);
-        const quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
-        if (quantity <= 0) continue;
-        if (entry.entryPrice * quantity > cash) continue;
-        entry.quantity = quantity;
-
-        const tradeValue = entry.entryPrice * entry.quantity;
-        const entryCommission = config.costModelEnabled ? calculateCommission(tradeValue) : 0;
-        cash -= tradeValue + entryCommission;
-
-        const position: SimulatedPosition = {
-          ticker: entry.ticker,
-          entryDate: today,
-          entryPrice: entry.entryPrice,
-          takeProfitPrice: entry.takeProfitPrice,
-          stopLossPrice: entry.stopLossPrice,
-          quantity: entry.quantity,
-          volumeSurgeRatio: entry.volumeSurgeRatio,
-          regime: todayRegime,
-          maxHighDuringHold: entry.entryPrice,
-          trailingStopPrice: null,
-          entryAtr: entry.entryAtr,
-          exitDate: null,
-          exitPrice: null,
-          exitReason: null,
-          pnl: null,
-          pnlPct: null,
-          holdingDays: null,
-          limitLockDays: 0,
-          entryCommission,
-          exitCommission: null,
-          totalCost: null,
-          tax: null,
-          grossPnl: null,
-          netPnl: null,
-        };
-
-        openPositions.push(position);
-
+      // A. 市場トレンドフィルター: breadth < 50% ならエントリースキップ
+      const skipByBreadth = config.marketTrendFilter && (dailyBreadth.get(today) ?? 0) < 0.5;
+      if (skipByBreadth) {
         if (config.verbose) {
-          console.log(
-            `  [${today}] ${entry.ticker} エントリー: ¥${entry.entryPrice} x${entry.quantity}` +
-            ` (サージ${entry.volumeSurgeRatio.toFixed(1)}x, SL¥${entry.stopLossPrice})`,
-          );
+          const breadth = dailyBreadth.get(today) ?? 0;
+          console.log(`  [${today}] 市場breadth ${(breadth * 100).toFixed(0)}% < 50%: エントリースキップ`);
+        }
+      } else {
+        const entries = detectBreakoutEntries(config, allData, today, cash, openPositions, lastExitDayIdx, dayIdx, tradingDays);
+
+        for (const entry of entries) {
+          if (openPositions.length >= config.maxPositions) break;
+
+          // 資金変動後の株数再計算（前のエントリーでcashが減っている場合に対応）
+          const riskPerShare = entry.entryPrice - entry.stopLossPrice;
+          if (riskPerShare <= 0) continue;
+          const riskAmount = cash * (RISK_PER_TRADE_PCT / 100);
+          const rawQuantity = Math.floor(riskAmount / riskPerShare);
+          const quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
+          if (quantity <= 0) continue;
+          if (entry.entryPrice * quantity > cash) continue;
+          entry.quantity = quantity;
+
+          const tradeValue = entry.entryPrice * entry.quantity;
+          const entryCommission = config.costModelEnabled ? calculateCommission(tradeValue) : 0;
+          cash -= tradeValue + entryCommission;
+
+          const position: SimulatedPosition = {
+            ticker: entry.ticker,
+            entryDate: today,
+            entryPrice: entry.entryPrice,
+            takeProfitPrice: entry.takeProfitPrice,
+            stopLossPrice: entry.stopLossPrice,
+            quantity: entry.quantity,
+            volumeSurgeRatio: entry.volumeSurgeRatio,
+            regime: todayRegime,
+            maxHighDuringHold: entry.entryPrice,
+            trailingStopPrice: null,
+            entryAtr: entry.entryAtr,
+            exitDate: null,
+            exitPrice: null,
+            exitReason: null,
+            pnl: null,
+            pnlPct: null,
+            holdingDays: null,
+            limitLockDays: 0,
+            entryCommission,
+            exitCommission: null,
+            totalCost: null,
+            tax: null,
+            grossPnl: null,
+            netPnl: null,
+          };
+
+          openPositions.push(position);
+
+          if (config.verbose) {
+            console.log(
+              `  [${today}] ${entry.ticker} エントリー: ¥${entry.entryPrice} x${entry.quantity}` +
+              ` (サージ${entry.volumeSurgeRatio.toFixed(1)}x, SL¥${entry.stopLossPrice})`,
+            );
+          }
         }
       }
     }
@@ -296,9 +331,14 @@ function detectBreakoutEntries(
   openPositions: SimulatedPosition[],
   lastExitDayIdx: Map<string, number>,
   currentDayIdx: number,
-  _tradingDays: string[],
+  tradingDays: string[],
 ): BreakoutEntry[] {
   const entries: BreakoutEntry[] = [];
+
+  // B. 確認足エントリー: シグナル日 = 前日、確認日 = 今日
+  const signalDate = config.confirmationEntry && currentDayIdx > 0
+    ? tradingDays[currentDayIdx - 1]
+    : today;
 
   for (const [ticker, bars] of allData) {
     // 同一銘柄のオープンポジションがある場合はスキップ
@@ -310,21 +350,28 @@ function detectBreakoutEntries(
       if (lastExit != null && currentDayIdx - lastExit < config.cooldownDays) continue;
     }
 
-    const todayIdx = bars.findIndex((b) => b.date === today);
+    // シグナル日のバーを取得（通常=today、確認足=yesterday）
+    const signalIdx = bars.findIndex((b) => b.date === signalDate);
+    if (signalIdx < 0) continue;
+
+    // 確認足モード: 今日のバーも必要
+    const todayIdx = config.confirmationEntry
+      ? bars.findIndex((b) => b.date === today)
+      : signalIdx;
     if (todayIdx < 0) continue;
 
-    // ウィンドウスライス
-    const windowEnd = todayIdx + 1;
+    // ウィンドウスライス（シグナル日ベース）
+    const windowEnd = signalIdx + 1;
     const windowStart = Math.max(0, windowEnd - MIN_WINDOW_BARS);
     const window = bars.slice(windowStart, windowEnd);
 
     if (window.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) continue;
 
-    const latest = window[window.length - 1];
+    const signalBar = bars[signalIdx];
 
-    // ゲートフィルター
-    if (latest.close > config.maxPrice) continue;
-    if (latest.close <= 0) continue;
+    // ゲートフィルター（シグナル日ベース）
+    if (signalBar.close > config.maxPrice) continue;
+    if (signalBar.close <= 0) continue;
 
     // テクニカル分析（newest-first を期待）
     const newestFirst = [...window].reverse();
@@ -332,35 +379,42 @@ function detectBreakoutEntries(
 
     // ATR% フィルター
     if (summary.atr14 == null) continue;
-    const atrPct = (summary.atr14 / latest.close) * 100;
+    const atrPct = (summary.atr14 / signalBar.close) * 100;
     if (atrPct < config.minAtrPct) continue;
 
     // 平均出来高フィルター
     const avgVolume25 = summary.volumeAnalysis.avgVolume20;
     if (avgVolume25 == null || avgVolume25 < config.minAvgVolume25) continue;
 
-    // ── ブレイクアウト条件チェック ──
+    // ── ブレイクアウト条件チェック（シグナル日） ──
 
     // 出来高サージ: dailyVolume / avgVolume25
-    const volumeSurgeRatio = latest.volume / avgVolume25;
+    const volumeSurgeRatio = signalBar.volume / avgVolume25;
     if (volumeSurgeRatio < config.triggerThreshold) continue;
 
     // 高値ブレイク: close > 過去N日の高値
-    const lookbackStart = Math.max(0, todayIdx - config.highLookbackDays);
-    const lookbackBars = bars.slice(lookbackStart, todayIdx); // 当日を含まない
+    const lookbackStart = Math.max(0, signalIdx - config.highLookbackDays);
+    const lookbackBars = bars.slice(lookbackStart, signalIdx); // シグナル日を含まない
     if (!lookbackBars.length) continue;
     const highN = Math.max(...lookbackBars.map((b) => b.high));
-    if (latest.close <= highN) continue;
+    if (signalBar.close <= highN) continue;
 
     // 高値追いフィルター: highNからATR×maxChaseAtr以上乖離していたらスキップ
     const atr14 = summary.atr14;
     if (config.maxChaseAtr != null && atr14 > 0) {
-      const chaseAmount = latest.close - highN;
+      const chaseAmount = signalBar.close - highN;
       if (chaseAmount > atr14 * config.maxChaseAtr) continue;
     }
 
-    // ── エントリー条件算出 ──
-    const entryPrice = latest.close;
+    // B. 確認足: 今日のcloseがブレイクアウトレベル(highN)を上回っているか確認
+    if (config.confirmationEntry) {
+      const todayBar = bars[todayIdx];
+      if (todayBar.close <= highN) continue;
+    }
+
+    // ── エントリー条件算出（確認足モード: 今日のclose、通常: シグナル日のclose）──
+    const entryBar = bars[todayIdx];
+    const entryPrice = entryBar.close;
 
     // SL: ATRベース、ハードキャップ適用
     const rawSL = entryPrice - atr14 * config.atrMultiplier;

@@ -56,6 +56,12 @@ export interface BreakoutBacktestConfig {
   /** スコアフィルター設定（省略時はフィルターなし） */
   scoreFilter?: ScoreFilterConfig;
 
+  // エントリーフィルター
+  /** 市場トレンドフィルター: 全銘柄のbreadth(SMA25上%)が閾値以上の時のみエントリー */
+  marketTrendFilter?: boolean;
+  /** 確認足エントリー: ブレイクアウト翌日にclose > breakout levelで初めてエントリー */
+  confirmationEntry?: boolean;
+
   verbose: boolean;
 }
 

@@ -42,6 +42,10 @@ export const BREAKOUT_BACKTEST_DEFAULTS: Omit<BreakoutBacktestConfig, "startDate
   // クールダウン
   cooldownDays: 3,
 
+  // エントリーフィルター
+  marketTrendFilter: true,
+  confirmationEntry: true,
+
   verbose: false,
 };
 

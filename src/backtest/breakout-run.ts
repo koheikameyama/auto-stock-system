@@ -108,6 +108,48 @@ function runStrategyComparison(
   console.log("");
 }
 
+interface EntryFilterRow {
+  label: string;
+  marketTrendFilter: boolean;
+  confirmationEntry: boolean;
+}
+
+const ENTRY_FILTER_GRID: EntryFilterRow[] = [
+  { label: "baseline", marketTrendFilter: false, confirmationEntry: false },
+  { label: "A: breadth", marketTrendFilter: true, confirmationEntry: false },
+  { label: "B: confirm", marketTrendFilter: false, confirmationEntry: true },
+  { label: "A+B", marketTrendFilter: true, confirmationEntry: true },
+];
+
+function runEntryFilterComparison(
+  baseConfig: BreakoutBacktestConfig,
+  allData: Map<string, OHLCVData[]>,
+  vixData: Map<string, number> | undefined,
+): void {
+  console.log("\n=== Entry Filter Comparison ===");
+  console.log(
+    `${"Filter".padEnd(16)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"RR".padStart(5)} | ${"AvgHold".padStart(7)} | ${"Return".padStart(8)}`,
+  );
+  console.log("-".repeat(95));
+
+  for (const row of ENTRY_FILTER_GRID) {
+    const config: BreakoutBacktestConfig = {
+      ...baseConfig,
+      marketTrendFilter: row.marketTrendFilter,
+      confirmationEntry: row.confirmationEntry,
+      verbose: false,
+    };
+    const result = runBreakoutBacktest(config, allData, vixData);
+    const m = result.metrics;
+    const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+    const returnStr = (m.totalReturnPct >= 0 ? "+" : "") + m.totalReturnPct.toFixed(1) + "%";
+    console.log(
+      `${row.label.padEnd(16)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${m.profitFactor.toFixed(2).padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.riskRewardRatio.toFixed(1).padStart(5)} | ${m.avgHoldingDays.toFixed(1).padStart(6)}d | ${returnStr.padStart(8)}`,
+    );
+  }
+  console.log("");
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const startDate = getArg(args, "--start") ?? dayjs().subtract(12, "month").format("YYYY-MM-DD");
@@ -116,6 +158,7 @@ async function main() {
   const budgetStr = getArg(args, "--budget");
   const scoreCompare = args.includes("--score-compare");
   const strategyCompare = args.includes("--strategy-compare");
+  const entryCompare = args.includes("--entry-compare");
 
   const config: BreakoutBacktestConfig = {
     ...BREAKOUT_BACKTEST_DEFAULTS,
@@ -167,6 +210,14 @@ async function main() {
   if (strategyCompare) {
     const vix = vixData.size > 0 ? vixData : undefined;
     runStrategyComparison(config, allData, vix);
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 4c. エントリーフィルター比較モード
+  if (entryCompare) {
+    const vix = vixData.size > 0 ? vixData : undefined;
+    runEntryFilterComparison(config, allData, vix);
     await prisma.$disconnect();
     return;
   }
