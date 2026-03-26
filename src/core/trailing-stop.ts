@@ -19,6 +19,7 @@ export interface TrailingStopInput {
   originalTakeProfit: number;
   entryAtr: number | null;
   strategy: TradingStrategy;
+  beActivationMultiplierOverride?: number;
   activationMultiplierOverride?: number;
   trailMultiplierOverride?: number;
 }
@@ -53,6 +54,7 @@ export function calculateTrailingStop(
     originalTakeProfit,
     entryAtr,
     strategy,
+    beActivationMultiplierOverride,
     activationMultiplierOverride,
     trailMultiplierOverride,
   } = input;
@@ -65,7 +67,7 @@ export function calculateTrailingStop(
     : entryPrice * (1 + TRAILING_STOP.ACTIVATION_PCT[strategy]);
 
   // 2. ブレイクイーブン発動価格を算出
-  const beMultiplier = BREAK_EVEN_STOP.ACTIVATION_ATR_MULTIPLIER[strategy];
+  const beMultiplier = beActivationMultiplierOverride ?? BREAK_EVEN_STOP.ACTIVATION_ATR_MULTIPLIER[strategy];
   const beActivationPrice = entryAtr
     ? entryPrice + entryAtr * beMultiplier
     : entryPrice * (1 + BREAK_EVEN_STOP.ACTIVATION_PCT[strategy]);

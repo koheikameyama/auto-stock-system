@@ -52,6 +52,7 @@ export const PARAMETER_GRID = {
   triggerThreshold: [1.5, 1.8, 2.0, 2.5, 3.0],
   highLookbackDays: [10, 15, 20, 30],
   atrMultiplier: [0.8, 1.0, 1.2, 1.5],
+  beActivationMultiplier: [0.8, 1.0, 1.5],
   trailMultiplier: [0.8, 1.0, 1.5],
   tsActivationMultiplier: [1.5, 2.0, 2.5],
 } as const;
@@ -65,15 +66,18 @@ export function generateParameterCombinations(): Array<Partial<BreakoutBacktestC
   for (const triggerThreshold of PARAMETER_GRID.triggerThreshold) {
     for (const highLookbackDays of PARAMETER_GRID.highLookbackDays) {
       for (const atrMultiplier of PARAMETER_GRID.atrMultiplier) {
-        for (const trailMultiplier of PARAMETER_GRID.trailMultiplier) {
-          for (const tsActivationMultiplier of PARAMETER_GRID.tsActivationMultiplier) {
-            combos.push({
-              triggerThreshold,
-              highLookbackDays,
-              atrMultiplier,
-              trailMultiplier,
-              tsActivationMultiplier,
-            });
+        for (const beActivationMultiplier of PARAMETER_GRID.beActivationMultiplier) {
+          for (const trailMultiplier of PARAMETER_GRID.trailMultiplier) {
+            for (const tsActivationMultiplier of PARAMETER_GRID.tsActivationMultiplier) {
+              combos.push({
+                triggerThreshold,
+                highLookbackDays,
+                atrMultiplier,
+                beActivationMultiplier,
+                trailMultiplier,
+                tsActivationMultiplier,
+              });
+            }
           }
         }
       }

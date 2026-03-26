@@ -24,6 +24,7 @@ export interface PositionForExit {
   currentTrailingStop: number | null;
   strategy: TradingStrategy;
   holdingBusinessDays: number;
+  beActivationMultiplierOverride?: number;
   activationMultiplierOverride?: number;
   trailMultiplierOverride?: number;
   maxHoldingDaysOverride?: number;
@@ -72,6 +73,7 @@ export function checkPositionExit(
     originalTakeProfit: position.takeProfitPrice,
     entryAtr: position.entryAtr,
     strategy: position.strategy,
+    beActivationMultiplierOverride: position.beActivationMultiplierOverride,
     activationMultiplierOverride: position.activationMultiplierOverride,
     trailMultiplierOverride: position.trailMultiplierOverride,
   });
