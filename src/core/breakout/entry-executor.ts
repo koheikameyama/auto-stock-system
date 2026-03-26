@@ -25,6 +25,7 @@ import { TIMEZONE } from "../../lib/constants/timezone";
 import { BREAKOUT } from "../../lib/constants/breakout";
 import { ORDER_EXPIRY } from "../../lib/constants/jobs";
 import type { BreakoutTrigger } from "./types";
+import type { QuoteData } from "./breakout-scanner";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -354,5 +355,85 @@ export async function resizePendingOrders(brokerMode: string): Promise<void> {
     });
 
     remainingCash -= limitPrice * newQuantity;
+  }
+}
+
+/**
+ * ブレイクアウト前提が崩壊したpending買い注文をキャンセルする
+ *
+ * 以下のいずれかを満たした場合にキャンセル:
+ * - 出来高萎縮: surgeRatio < COOL_DOWN_THRESHOLD (1.2)
+ * - 高値割り込み: currentPrice <= entrySnapshot.trigger.high20（フェイクアウト）
+ *
+ * @param quotes breakout-monitorが取得済みの時価データ
+ * @param surgeRatios scannerのlastSurgeRatiosマップ
+ * @param brokerMode ブローカーモード
+ */
+export async function invalidateStalePendingOrders(
+  quotes: QuoteData[],
+  surgeRatios: ReadonlyMap<string, number>,
+  brokerMode: string,
+): Promise<void> {
+  const pendingOrders = await prisma.tradingOrder.findMany({
+    where: { side: "buy", status: "pending", strategy: "breakout" },
+    include: { stock: { select: { tickerCode: true } } },
+  });
+
+  if (pendingOrders.length === 0) return;
+
+  const quoteMap = new Map(quotes.map((q) => [q.ticker, q]));
+
+  for (const order of pendingOrders) {
+    const ticker = order.stock.tickerCode;
+    const quote = quoteMap.get(ticker);
+    if (!quote) continue;
+
+    const surgeRatio = surgeRatios.get(ticker);
+    if (surgeRatio === undefined) continue;
+
+    const snapshot = order.entrySnapshot as { trigger?: { high20?: number } } | null;
+    const high20 = snapshot?.trigger?.high20;
+    if (high20 === undefined) continue;
+
+    const reasons: string[] = [];
+
+    if (surgeRatio < BREAKOUT.VOLUME_SURGE.COOL_DOWN_THRESHOLD) {
+      reasons.push(
+        `出来高萎縮（サージ比率 ${surgeRatio.toFixed(1)}x < ${BREAKOUT.VOLUME_SURGE.COOL_DOWN_THRESHOLD}x）`,
+      );
+    }
+
+    if (quote.price <= high20) {
+      reasons.push(
+        `高値割り込み（¥${quote.price.toLocaleString()} <= 20日高値 ¥${high20.toLocaleString()}）`,
+      );
+    }
+
+    if (reasons.length === 0) continue;
+
+    // ブローカー注文がある場合は取消
+    if (order.brokerOrderId && order.brokerBusinessDay && brokerMode !== "simulation") {
+      const result = await cancelOrder(order.brokerOrderId, order.brokerBusinessDay);
+      if (!result.success) {
+        console.warn(
+          `[invalidate-pending] ${ticker} ブローカー取消失敗: ${result.error}`,
+        );
+        continue;
+      }
+    }
+
+    await prisma.tradingOrder.update({
+      where: { id: order.id },
+      data: { status: "cancelled" },
+    });
+
+    const reasonText = reasons.join(" / ");
+    console.log(`[invalidate-pending] ${ticker} 前提崩壊キャンセル: ${reasonText}`);
+
+    await notifySlack({
+      title: `前提崩壊キャンセル: ${ticker}`,
+      message: reasonText,
+      color: "warning",
+    });
   }
 }

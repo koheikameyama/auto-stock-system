@@ -15,6 +15,7 @@ vi.mock("../../../lib/prisma", () => ({
     tradingOrder: {
       create: vi.fn(),
       update: vi.fn(),
+      findMany: vi.fn(),
     },
     tradingConfig: {
       findFirst: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock("../../risk-manager", () => ({
 
 vi.mock("../../broker-orders", () => ({
   submitOrder: vi.fn(),
+  cancelOrder: vi.fn(),
 }));
 
 vi.mock("../../../lib/slack", () => ({
@@ -47,13 +49,14 @@ vi.mock("../../../lib/date-utils", () => ({
   getTodayForDB: vi.fn().mockReturnValue(new Date("2026-03-24T00:00:00Z")),
 }));
 
-import { executeEntry } from "../entry-executor";
+import { executeEntry, invalidateStalePendingOrders } from "../entry-executor";
 import { prisma } from "../../../lib/prisma";
 import { getCashBalance, getEffectiveCapital } from "../../position-manager";
 import { canOpenPosition } from "../../risk-manager";
-import { submitOrder as submitBrokerOrder } from "../../broker-orders";
+import { submitOrder as submitBrokerOrder, cancelOrder } from "../../broker-orders";
 import { notifyOrderPlaced } from "../../../lib/slack";
 import type { BreakoutTrigger } from "../types";
+import type { QuoteData } from "../breakout-scanner";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any;
@@ -62,6 +65,7 @@ const mockGetEffectiveCapital = vi.mocked(getEffectiveCapital);
 const mockCanOpenPosition = vi.mocked(canOpenPosition);
 const mockSubmitBrokerOrder = vi.mocked(submitBrokerOrder);
 const mockNotifyOrderPlaced = vi.mocked(notifyOrderPlaced);
+const mockCancelOrder = vi.mocked(cancelOrder);
 
 // ========================================
 // テストデータ
@@ -285,5 +289,133 @@ describe("executeEntry", () => {
     // 時刻が15:00であること（JST→UTCで6:00）
     expect(expiresAt.getUTCHours()).toBe(6);
     expect(expiresAt.getUTCMinutes()).toBe(0);
+  });
+});
+
+describe("invalidateStalePendingOrders", () => {
+  function makePendingOrder(ticker: string, high20: number, overrides: Record<string, unknown> = {}) {
+    return {
+      id: `order-${ticker}`,
+      side: "buy",
+      status: "pending",
+      strategy: "breakout",
+      brokerOrderId: null,
+      brokerBusinessDay: null,
+      stock: { tickerCode: ticker },
+      entrySnapshot: {
+        trigger: { high20 },
+      },
+      ...overrides,
+    };
+  }
+
+  function makeQuotes(data: Array<{ ticker: string; price: number }>): QuoteData[] {
+    return data.map((d) => ({ ticker: d.ticker, price: d.price, volume: 100_000 }));
+  }
+
+  function makeSurgeRatios(data: Array<{ ticker: string; ratio: number }>): Map<string, number> {
+    return new Map(data.map((d) => [d.ticker, d.ratio]));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCancelOrder.mockResolvedValue({ success: true, isDryRun: false });
+  });
+
+  it("出来高萎縮（surgeRatio < 1.2）でpending注文をキャンセルする", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 990),
+    ]);
+
+    await invalidateStalePendingOrders(
+      makeQuotes([{ ticker: "7203", price: 1000 }]),
+      makeSurgeRatios([{ ticker: "7203", ratio: 0.8 }]),
+      "simulation",
+    );
+
+    expect(mockPrisma.tradingOrder.update).toHaveBeenCalledWith({
+      where: { id: "order-7203" },
+      data: { status: "cancelled" },
+    });
+  });
+
+  it("高値割り込み（price <= high20）でpending注文をキャンセルする", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 1000),
+    ]);
+
+    await invalidateStalePendingOrders(
+      makeQuotes([{ ticker: "7203", price: 995 }]),
+      makeSurgeRatios([{ ticker: "7203", ratio: 2.5 }]),
+      "simulation",
+    );
+
+    expect(mockPrisma.tradingOrder.update).toHaveBeenCalledWith({
+      where: { id: "order-7203" },
+      data: { status: "cancelled" },
+    });
+  });
+
+  it("条件を満たさない場合はキャンセルしない", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 990),
+    ]);
+
+    await invalidateStalePendingOrders(
+      makeQuotes([{ ticker: "7203", price: 1000 }]),
+      makeSurgeRatios([{ ticker: "7203", ratio: 2.5 }]),
+      "simulation",
+    );
+
+    expect(mockPrisma.tradingOrder.update).not.toHaveBeenCalled();
+  });
+
+  it("quoteが取得できない銘柄はスキップする", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 990),
+    ]);
+
+    await invalidateStalePendingOrders(
+      makeQuotes([]),
+      makeSurgeRatios([{ ticker: "7203", ratio: 0.5 }]),
+      "simulation",
+    );
+
+    expect(mockPrisma.tradingOrder.update).not.toHaveBeenCalled();
+  });
+
+  it("surgeRatioが取得できない銘柄はスキップする", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 990),
+    ]);
+
+    await invalidateStalePendingOrders(
+      makeQuotes([{ ticker: "7203", price: 1000 }]),
+      makeSurgeRatios([]),
+      "simulation",
+    );
+
+    expect(mockPrisma.tradingOrder.update).not.toHaveBeenCalled();
+  });
+
+  it("liveモードでブローカー注文がある場合はcancelOrderを呼ぶ", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 1000, {
+        brokerOrderId: "B001",
+        brokerBusinessDay: "20260326",
+      }),
+    ]);
+
+    await invalidateStalePendingOrders(
+      makeQuotes([{ ticker: "7203", price: 995 }]),
+      makeSurgeRatios([{ ticker: "7203", ratio: 2.5 }]),
+      "live",
+    );
+
+    expect(mockCancelOrder).toHaveBeenCalledWith("B001", "20260326");
+    expect(mockPrisma.tradingOrder.update).toHaveBeenCalledWith({
+      where: { id: "order-7203" },
+      data: { status: "cancelled" },
+    });
   });
 });
