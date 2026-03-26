@@ -143,17 +143,6 @@ export async function canOpenPosition(
     };
   }
 
-  // 7. クールダウンによるポジション数制限
-  if (drawdown.maxPositionsOverride !== null) {
-    if (openPositionCount >= drawdown.maxPositionsOverride) {
-      return {
-        allowed: false,
-        reason: `クールダウン中: 最大${drawdown.maxPositionsOverride}ポジションに制限（${drawdown.reason}）`,
-        retryable: true,
-      };
-    }
-  }
-
   return { allowed: true, reason: "OK" };
 }
 

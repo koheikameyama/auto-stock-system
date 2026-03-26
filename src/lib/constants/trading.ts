@@ -266,10 +266,6 @@ export const SECTOR_RISK = {
 export const DRAWDOWN = {
   WEEKLY_HALT_PCT: 5, // 週次5%で取引停止
   MONTHLY_HALT_PCT: 10, // 月次10%で取引停止
-  COOLDOWN_TRIGGER: 3, // 3連敗でクールダウン発動
-  COOLDOWN_HALT_TRIGGER: 5, // 5連敗で取引停止
-  COOLDOWN_MAX_POSITIONS: 1, // クールダウン中の最大ポジション数
-  RECOVERY_WINS_REQUIRED: 3, // 5連敗停止後、再開には3連勝が必要
 } as const;
 
 // ========================================

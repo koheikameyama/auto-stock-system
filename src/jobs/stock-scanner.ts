@@ -154,7 +154,7 @@ export async function main(context?: MarketAssessmentContext) {
   // コンテキストがなければDBから復元
   const ctx = context ?? await restoreContextFromDB();
   let { regime } = ctx;
-  const { isShadowMode, drawdown, strategyDecision } = ctx;
+  const { isShadowMode, strategyDecision } = ctx;
 
   // 日経225 SMA(25)フィルター適用（本番: より制限的な方を採用）
   try {
@@ -532,9 +532,6 @@ export async function main(context?: MarketAssessmentContext) {
 
       const riskParts: string[] = [];
       riskParts.push(`レジーム: ${regime.level}（VIX ${regime.vix.toFixed(1)}）`);
-      if (drawdown.consecutiveLosses > 0) {
-        riskParts.push(`連敗: ${drawdown.consecutiveLosses}`);
-      }
       if (sectorInfo) {
         riskParts.push(
           `セクター(${sectorGroup}): 相対強度 ${sectorInfo.relativeStrength >= 0 ? "+" : ""}${sectorInfo.relativeStrength.toFixed(1)}%`,

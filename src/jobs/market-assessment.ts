@@ -252,7 +252,7 @@ ${sectorText || "  特になし"}`;
   console.log("[1.9/2] ドローダウンチェック...");
   const drawdown = await calculateDrawdownStatus();
   console.log(
-    `  → 週次損益: ¥${drawdown.weeklyPnl.toLocaleString()}, 月次損益: ¥${drawdown.monthlyPnl.toLocaleString()}, 連敗: ${drawdown.consecutiveLosses}`,
+    `  → 週次損益: ¥${drawdown.weeklyPnl.toLocaleString()}, 月次損益: ¥${drawdown.monthlyPnl.toLocaleString()}`,
   );
 
   if (drawdown.shouldHaltTrading) {
