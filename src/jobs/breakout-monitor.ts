@@ -115,41 +115,41 @@ export async function main(): Promise<void> {
   // 6. ブローカーモード取得
   const brokerMode = await getEffectiveBrokerMode();
 
-  // 7. 各トリガーに対してエントリー実行（並列）
-  await Promise.all(
-    triggers.map(async (trigger) => {
-      console.log(
-        `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
-      );
-      try {
-        const result = await executeEntry(trigger, brokerMode);
-        if (!result.success) {
-          // 一時的な理由で却下 → 再トリガーを許可
-          if (result.retryable && scanner) {
-            scanner.removeFromTriggeredToday(trigger.ticker);
-            console.log(
-              `[breakout-monitor] ${trigger.ticker} 再トリガー許可（理由: ${result.reason}）`,
-            );
-          }
-          await notifySlack({
-            title: `エントリー失敗: ${trigger.ticker}`,
-            message: `理由: ${result.reason ?? "不明"}\n価格: ¥${trigger.currentPrice.toLocaleString()} / 出来高サージ: ${trigger.volumeSurgeRatio.toFixed(2)}x${result.retryable ? "\n※ 再トリガー対象" : ""}`,
-            color: "warning",
-          });
+  // 7. 各トリガーに対してエントリー実行（優先順位順に直列）
+  // scanner が volumeSurgeRatio 降順でソート済み。
+  // 直列実行により各 executeEntry が最新の残高を参照し、レースコンディションを防ぐ。
+  for (const trigger of triggers) {
+    console.log(
+      `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
+    );
+    try {
+      const result = await executeEntry(trigger, brokerMode);
+      if (!result.success) {
+        // 一時的な理由で却下 → 再トリガーを許可
+        if (result.retryable && scanner) {
+          scanner.removeFromTriggeredToday(trigger.ticker);
+          console.log(
+            `[breakout-monitor] ${trigger.ticker} 再トリガー許可（理由: ${result.reason}）`,
+          );
         }
-      } catch (err) {
-        console.error(
-          `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,
-          err,
-        );
         await notifySlack({
-          title: `エントリー例外: ${trigger.ticker}`,
-          message: `${err instanceof Error ? err.message : String(err)}\n価格: ¥${trigger.currentPrice.toLocaleString()}`,
-          color: "danger",
+          title: `エントリー失敗: ${trigger.ticker}`,
+          message: `理由: ${result.reason ?? "不明"}\n価格: ¥${trigger.currentPrice.toLocaleString()} / 出来高サージ: ${trigger.volumeSurgeRatio.toFixed(2)}x${result.retryable ? "\n※ 再トリガー対象" : ""}`,
+          color: "warning",
         });
       }
-    }),
-  );
+    } catch (err) {
+      console.error(
+        `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,
+        err,
+      );
+      await notifySlack({
+        title: `エントリー例外: ${trigger.ticker}`,
+        message: `${err instanceof Error ? err.message : String(err)}\n価格: ¥${trigger.currentPrice.toLocaleString()}`,
+        color: "danger",
+      });
+    }
+  }
 }
 
 /**

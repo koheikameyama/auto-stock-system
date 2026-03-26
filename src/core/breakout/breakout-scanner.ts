@@ -152,6 +152,7 @@ export class BreakoutScanner {
       }
     }
 
+    triggers.sort((a, b) => b.volumeSurgeRatio - a.volumeSurgeRatio);
     return triggers;
   }
 
