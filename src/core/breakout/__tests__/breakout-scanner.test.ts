@@ -300,4 +300,40 @@ describe("BreakoutScanner", () => {
     scanner.scan([promotingQuote], time3, DAILY_ENTRY_COUNT, NO_HOLDINGS);
     expect(scanner.getState().hotSet.has(DEFAULT_TICKER)).toBe(true);
   });
+
+  // 12. Multiple triggers → sorted by volumeSurgeRatio descending
+  it("12. 複数トリガー発火時 → volumeSurgeRatio 降順でソートされる", () => {
+    const tickerA = "1111";
+    const tickerB = "2222";
+    const tickerC = "3333";
+    const watchlist: WatchlistEntry[] = [
+      makeWatchlistEntry(tickerA),
+      makeWatchlistEntry(tickerB),
+      makeWatchlistEntry(tickerC),
+    ];
+    const multiScanner = new BreakoutScanner(watchlist);
+
+    // Step 1: Cold → Hot に全銘柄を昇格
+    const hotQuotes: QuoteData[] = [
+      { ticker: tickerA, price: 980, volume: Math.ceil(volumeForRatio(1.5, 100_000, 9, 30)) },
+      { ticker: tickerB, price: 980, volume: Math.ceil(volumeForRatio(1.5, 100_000, 9, 30)) },
+      { ticker: tickerC, price: 980, volume: Math.ceil(volumeForRatio(1.5, 100_000, 9, 30)) },
+    ];
+    multiScanner.scan(hotQuotes, SCAN_TIME, DAILY_ENTRY_COUNT, NO_HOLDINGS);
+
+    // Step 2: 異なるサージ比率でトリガー発火（A=2.5x, B=3.0x, C=2.0x）
+    const time2 = makeTime(9, 31);
+    const triggerQuotes: QuoteData[] = [
+      { ticker: tickerA, price: 1010, volume: Math.ceil(volumeForRatio(2.5, 100_000, 9, 31)) },
+      { ticker: tickerB, price: 1010, volume: Math.ceil(volumeForRatio(3.0, 100_000, 9, 31)) },
+      { ticker: tickerC, price: 1010, volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)) },
+    ];
+    const triggers = multiScanner.scan(triggerQuotes, time2, DAILY_ENTRY_COUNT, NO_HOLDINGS);
+
+    expect(triggers).toHaveLength(3);
+    // B(3.0x) > A(2.5x) > C(2.0x) の順
+    expect(triggers[0].ticker).toBe(tickerB);
+    expect(triggers[1].ticker).toBe(tickerA);
+    expect(triggers[2].ticker).toBe(tickerC);
+  });
 });
