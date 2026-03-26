@@ -19,23 +19,23 @@ npm run backtest:breakout
 npm run walk-forward:breakout
 ```
 
-実行時間の目安: 60〜120分（2,880パラメータ × 6ウィンドウ × IS+OOS）
+実行時間の目安: 数分〜十数分（81パラメータ × 6ウィンドウ × IS+OOS）
 
 #### ウィンドウ構成
 
 - IS（In-Sample）: 6ヶ月 / OOS（Out-of-Sample）: 3ヶ月
 - スライド: 3ヶ月 × 6ウィンドウ = 24ヶ月
 
-#### パラメータグリッド（2,880通り）
+#### パラメータグリッド（81通り、エグジット系のみ）
+
+エントリー系パラメータ（triggerThreshold, highLookbackDays, maxChaseAtr）はデフォルト固定。
 
 | パラメータ | 値 |
 |-----------|-----|
-| triggerThreshold | 1.5, 1.8, 2.0, 2.5, 3.0 |
-| highLookbackDays | 10, 15, 20, 30 |
-| atrMultiplier | 0.8, 1.0, 1.2, 1.5 |
+| atrMultiplier | 0.8, 1.0, 1.2 |
+| beActivationMultiplier | 0.8, 1.0, 1.5 |
 | trailMultiplier | 0.8, 1.0, 1.5 |
 | tsActivationMultiplier | 1.5, 2.0, 2.5 |
-| maxChaseAtr | 0.5, 1.0, 1.5, 2.0 |
 
 ### 実行タイミング
 
@@ -67,5 +67,6 @@ npm run walk-forward:breakout
 | `src/backtest/data-fetcher.ts` | StockDailyBarからのDB一括取得 |
 | `src/backtest/breakout-config.ts` | デフォルト設定 + パラメータグリッド |
 | `src/backtest/breakout-simulation.ts` | シミュレーションエンジン |
-| `src/backtest/breakout-run.ts` | CLI実行エントリーポイント |
+| `src/backtest/breakout-run.ts` | CLI実行エントリーポイント（`--score-compare` オプションあり） |
+| `src/backtest/scoring-filter.ts` | スコアフィルター（100点満点、OHLCV計算のみ） |
 | `scripts/walk-forward-breakout.ts` | walk-forward検証スクリプト |

@@ -90,18 +90,18 @@ export function scoreTrendContinuity(daysAboveSma25: number): number {
   return 2;
 }
 
-/** SMA25上の連続日数をカウント（newest-first配列） */
+/** SMA25上の連続日数をカウント（newest-first配列、sliding window O(n)） */
 export function countDaysAboveSma25(data: OHLCVData[]): number {
   if (data.length < 25) return 0;
+  let sum = 0;
+  for (let j = 0; j < 25; j++) sum += data[j].close;
   let count = 0;
-  for (let i = 0; i < data.length - 24; i++) {
-    const closes = data.slice(i, i + 25).map((d) => d.close);
-    const sma25 = closes.reduce((s, v) => s + v, 0) / 25;
-    if (data[i].close > sma25) {
-      count++;
-    } else {
-      break;
-    }
+  if (data[0].close > sum / 25) count++;
+  else return 0;
+  for (let i = 1; i <= data.length - 25; i++) {
+    sum = sum - data[i - 1].close + data[i + 24].close;
+    if (data[i].close > sum / 25) count++;
+    else break;
   }
   return count;
 }
