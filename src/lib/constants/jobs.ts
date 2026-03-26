@@ -33,9 +33,10 @@ export const BREAK_EVEN_STOP = {
   ACTIVATION_ATR_MULTIPLIER: {
     day_trade: 0.8,  // ATR×0.8の含み益でBE発動（トレーリング発動=1.2より手前）
     swing: 1.5,      // ATR×1.5の含み益でBE発動（トレーリング発動=2.5より手前）
+    breakout: 1.5,   // swingと同じ（ブレイクアウトはスイングトレード）
   },
   // ATR不明時のフォールバック（%ベース）
-  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.03 },
+  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.03, breakout: 0.03 },
 } as const;
 
 // トレーリングストップ
@@ -45,15 +46,17 @@ export const TRAILING_STOP = {
   ACTIVATION_ATR_MULTIPLIER: {
     day_trade: 1.2,  // trail=0.8より大きく設定しBE保証不要に
     swing: 2.5,      // ATR×2.5上昇で発動（BE=1.5との連携でPF改善）
+    breakout: 2.5,   // swingと同じ
   },
   // トレール幅（最高値 - ATR×N がストップライン）
   TRAIL_ATR_MULTIPLIER: {
     day_trade: 0.8,  // activation=1.2に対して十分小さく
     swing: 1.5,      // activation=2.5に対してtrail=1.5→発動時ATR×1.0の含み益確保
+    breakout: 1.5,   // swingと同じ
   },
   // ATR不明時のフォールバック（%ベース）— 同じ制約: ACTIVATION >= TRAIL
-  ACTIVATION_PCT: { day_trade: 0.015, swing: 0.04 },
-  TRAIL_PCT: { day_trade: 0.01, swing: 0.04 },
+  ACTIVATION_PCT: { day_trade: 0.015, swing: 0.04, breakout: 0.04 },
+  TRAIL_PCT: { day_trade: 0.01, swing: 0.04, breakout: 0.04 },
 } as const;
 
 // ディフェンシブモード（市場環境悪化時のポジション防衛）

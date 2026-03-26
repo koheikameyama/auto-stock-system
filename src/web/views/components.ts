@@ -75,6 +75,7 @@ export function strategyBadge(strategy: string): HtmlContent {
   const labels: Record<string, string> = {
     day_trade: "デイ",
     swing: "スイング",
+    breakout: "ブレイクアウト",
   };
   return html`<span class="badge badge-${strategy}"
     >${labels[strategy] ?? strategy}</span
