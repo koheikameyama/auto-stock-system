@@ -72,6 +72,42 @@ function runScoreComparison(
   console.log("");
 }
 
+const STRATEGY_GRID = [
+  { label: "3pos (default)", maxPositions: 3 },
+  { label: "5pos", maxPositions: 5 },
+  { label: "10pos", maxPositions: 10 },
+  { label: "20pos", maxPositions: 20 },
+  { label: "50pos", maxPositions: 50 },
+];
+
+function runStrategyComparison(
+  baseConfig: BreakoutBacktestConfig,
+  allData: Map<string, OHLCVData[]>,
+  vixData: Map<string, number> | undefined,
+): void {
+  console.log("\n=== Strategy Comparison (BE→Trail integrated) ===");
+  console.log(
+    `${"Strategy".padEnd(18)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"RR".padStart(5)} | ${"AvgHold".padStart(7)} | ${"Return".padStart(8)}`,
+  );
+  console.log("-".repeat(95));
+
+  for (const row of STRATEGY_GRID) {
+    const config: BreakoutBacktestConfig = {
+      ...baseConfig,
+      maxPositions: row.maxPositions,
+      verbose: false,
+    };
+    const result = runBreakoutBacktest(config, allData, vixData);
+    const m = result.metrics;
+    const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+    const returnStr = (m.totalReturnPct >= 0 ? "+" : "") + m.totalReturnPct.toFixed(1) + "%";
+    console.log(
+      `${row.label.padEnd(18)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${m.profitFactor.toFixed(2).padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.riskRewardRatio.toFixed(1).padStart(5)} | ${m.avgHoldingDays.toFixed(1).padStart(6)}d | ${returnStr.padStart(8)}`,
+    );
+  }
+  console.log("");
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const startDate = getArg(args, "--start") ?? dayjs().subtract(12, "month").format("YYYY-MM-DD");
@@ -79,6 +115,7 @@ async function main() {
   const verbose = args.includes("--verbose") || args.includes("-v");
   const budgetStr = getArg(args, "--budget");
   const scoreCompare = args.includes("--score-compare");
+  const strategyCompare = args.includes("--strategy-compare");
 
   const config: BreakoutBacktestConfig = {
     ...BREAKOUT_BACKTEST_DEFAULTS,
@@ -118,10 +155,18 @@ async function main() {
     console.log(`[data] VIXデータ: ${vixData.size}日`);
   }
 
-  // 4. スコア比較モード
+  // 4a. スコア比較モード
   if (scoreCompare) {
     const vix = vixData.size > 0 ? vixData : undefined;
     runScoreComparison(config, allData, vix);
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 4b. 戦略比較モード（maxPositions変化）
+  if (strategyCompare) {
+    const vix = vixData.size > 0 ? vixData : undefined;
+    runStrategyComparison(config, allData, vix);
     await prisma.$disconnect();
     return;
   }

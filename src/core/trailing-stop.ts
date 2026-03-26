@@ -72,27 +72,14 @@ export function calculateTrailingStop(
     ? entryPrice + entryAtr * beMultiplier
     : entryPrice * (1 + BREAK_EVEN_STOP.ACTIVATION_PCT[strategy]);
 
-  // 3. 未発動チェック
-  if (maxHighDuringHold < activationPrice) {
-    if (maxHighDuringHold >= beActivationPrice) {
-      const breakEvenStop = Math.max(entryPrice, originalStopLoss);
-      return {
-        isActivated: false,
-        trailingStopPrice: null,
-        effectiveStopLoss: breakEvenStop,
-        effectiveTakeProfit: originalTakeProfit,
-        reason: `ブレイクイーブン発動（最高値¥${Math.round(maxHighDuringHold)} >= BE発動¥${Math.round(beActivationPrice)}、SL→¥${Math.round(breakEvenStop)}）`,
-        beActivationPrice,
-        tsActivationPrice: activationPrice,
-      };
-    }
-
+  // 3. 未発動チェック — BE発動時点からトレーリング開始（デッドゾーン解消）
+  if (maxHighDuringHold < beActivationPrice) {
     return {
       isActivated: false,
       trailingStopPrice: null,
       effectiveStopLoss: originalStopLoss,
       effectiveTakeProfit: originalTakeProfit,
-      reason: `未発動（最高値¥${Math.round(maxHighDuringHold)} < BE発動¥${Math.round(beActivationPrice)} < TS発動¥${Math.round(activationPrice)}）`,
+      reason: `未発動（最高値¥${Math.round(maxHighDuringHold)} < BE発動¥${Math.round(beActivationPrice)}）`,
       beActivationPrice,
       tsActivationPrice: activationPrice,
     };
