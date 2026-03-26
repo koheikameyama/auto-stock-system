@@ -48,7 +48,7 @@ export const BREAKOUT = {
     /** 最遅エントリー時刻（JST） */
     LATEST_ENTRY_TIME: "15:25",
     /** 1日の最大エントリー件数 */
-    MAX_DAILY_ENTRIES: 3,
+    MAX_DAILY_ENTRIES: 2,
   },
 
   /** 1営業日の取引分数（前場150分 + 後場180分） */
