@@ -76,10 +76,10 @@ export function runBreakoutBacktest(
     // 各銘柄のclose配列をdate順で保持
     const tickerCloses = new Map<string, { dateIndex: Map<string, number>; closes: number[] }>();
     for (const [ticker, bars] of allData) {
-      const sorted = bars.filter((b) => b.date >= config.startDate && b.date <= config.endDate);
+      // ルックバック期間を含む全データを使用（startDate以前のデータもSMA25計算に必要）
       const di = new Map<string, number>();
-      for (let i = 0; i < sorted.length; i++) di.set(sorted[i].date, i);
-      tickerCloses.set(ticker, { dateIndex: di, closes: sorted.map((b) => b.close) });
+      for (let i = 0; i < bars.length; i++) di.set(bars[i].date, i);
+      tickerCloses.set(ticker, { dateIndex: di, closes: bars.map((b) => b.close) });
     }
     for (const day of tradingDays) {
       let above = 0;
