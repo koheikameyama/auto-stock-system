@@ -44,6 +44,7 @@ export const BREAKOUT_BACKTEST_DEFAULTS: Omit<BreakoutBacktestConfig, "startDate
 
   // エントリーフィルター
   marketTrendFilter: true,
+  marketTrendThreshold: 0.7, // breadth 70%以上の強い上昇相場のみエントリー（50%→70%に改善）
   confirmationEntry: true,
 
   verbose: false,

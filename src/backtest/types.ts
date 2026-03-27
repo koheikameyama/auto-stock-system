@@ -59,8 +59,12 @@ export interface BreakoutBacktestConfig {
   // エントリーフィルター
   /** 市場トレンドフィルター: 全銘柄のbreadth(SMA25上%)が閾値以上の時のみエントリー */
   marketTrendFilter?: boolean;
+  /** 市場breadth閾値 (0〜1、デフォルト: 0.5) */
+  marketTrendThreshold?: number;
   /** 確認足エントリー: ブレイクアウト翌日にclose > breakout levelで初めてエントリー */
   confirmationEntry?: boolean;
+  /** 確認足＋出来高継続: 確認日の出来高が avgVolume25 以上の場合のみエントリー */
+  confirmationVolumeFilter?: boolean;
 
   verbose: boolean;
 }

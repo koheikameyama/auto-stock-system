@@ -229,12 +229,13 @@ export function runBreakoutBacktest(
         console.log(`  [${today}] VIX crisis: 新規エントリースキップ`);
       }
     } else if (openPositions.length < config.maxPositions && cash > 0) {
-      // A. 市場トレンドフィルター: breadth < 50% ならエントリースキップ
-      const skipByBreadth = config.marketTrendFilter && (dailyBreadth.get(today) ?? 0) < 0.5;
+      // A. 市場トレンドフィルター: breadth < 閾値 ならエントリースキップ
+      const breadthThreshold = config.marketTrendThreshold ?? 0.5;
+      const skipByBreadth = config.marketTrendFilter && (dailyBreadth.get(today) ?? 0) < breadthThreshold;
       if (skipByBreadth) {
         if (config.verbose) {
           const breadth = dailyBreadth.get(today) ?? 0;
-          console.log(`  [${today}] 市場breadth ${(breadth * 100).toFixed(0)}% < 50%: エントリースキップ`);
+          console.log(`  [${today}] 市場breadth ${(breadth * 100).toFixed(0)}% < ${(breadthThreshold * 100).toFixed(0)}%: エントリースキップ`);
         }
       } else {
         const entries = detectBreakoutEntries(config, allData, today, cash, openPositions, lastExitDayIdx, dayIdx, tradingDays, dateIndexMap);
@@ -432,6 +433,10 @@ function detectBreakoutEntries(
     if (config.confirmationEntry) {
       const todayBar = bars[todayIdx];
       if (todayBar.close <= highN) continue;
+      // 確認足＋出来高継続: 確認日の出来高が avgVolume25 以上か
+      if (config.confirmationVolumeFilter && avgVolume25 != null) {
+        if (todayBar.volume < avgVolume25) continue;
+      }
     }
 
     // ── エントリー条件算出（確認足モード: 今日のclose、通常: シグナル日のclose）──

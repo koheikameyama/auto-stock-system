@@ -111,14 +111,20 @@ function runStrategyComparison(
 interface EntryFilterRow {
   label: string;
   marketTrendFilter: boolean;
+  marketTrendThreshold?: number;
   confirmationEntry: boolean;
+  confirmationVolumeFilter?: boolean;
 }
 
 const ENTRY_FILTER_GRID: EntryFilterRow[] = [
-  { label: "baseline", marketTrendFilter: false, confirmationEntry: false },
-  { label: "A: breadth", marketTrendFilter: true, confirmationEntry: false },
-  { label: "B: confirm", marketTrendFilter: false, confirmationEntry: true },
-  { label: "A+B", marketTrendFilter: true, confirmationEntry: true },
+  { label: "baseline",          marketTrendFilter: false,                           confirmationEntry: false },
+  { label: "A: breadth50%",     marketTrendFilter: true,  marketTrendThreshold: 0.5, confirmationEntry: false },
+  { label: "A: breadth60%",     marketTrendFilter: true,  marketTrendThreshold: 0.6, confirmationEntry: false },
+  { label: "A: breadth70%",     marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: false },
+  { label: "B: confirm",        marketTrendFilter: false,                           confirmationEntry: true },
+  { label: "B: confirm+vol",    marketTrendFilter: false,                           confirmationEntry: true, confirmationVolumeFilter: true },
+  { label: "B70%+confirm",      marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true },
+  { label: "B70%+confirm+vol",  marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true, confirmationVolumeFilter: true },
 ];
 
 function runEntryFilterComparison(
@@ -136,7 +142,9 @@ function runEntryFilterComparison(
     const config: BreakoutBacktestConfig = {
       ...baseConfig,
       marketTrendFilter: row.marketTrendFilter,
+      marketTrendThreshold: row.marketTrendThreshold,
       confirmationEntry: row.confirmationEntry,
+      confirmationVolumeFilter: row.confirmationVolumeFilter,
       verbose: false,
     };
     const result = runBreakoutBacktest(config, allData, vixData);
