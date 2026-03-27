@@ -18,7 +18,7 @@
 
 import dayjs from "dayjs";
 import { prisma } from "../src/lib/prisma";
-import { fetchHistoricalFromDB, fetchVixFromDB } from "../src/backtest/data-fetcher";
+import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "../src/backtest/data-fetcher";
 import { runBreakoutBacktest, precomputeSimData, precomputeDailySignals } from "../src/backtest/breakout-simulation";
 import { BREAKOUT_BACKTEST_DEFAULTS, generateParameterCombinations, PARAMETER_GRID } from "../src/backtest/breakout-config";
 import type { BreakoutBacktestConfig, PerformanceMetrics } from "../src/backtest/types";
@@ -155,7 +155,8 @@ async function main() {
 
   const rawData = await fetchHistoricalFromDB(tickerCodes, startDate, endDate);
   const vixData = await fetchVixFromDB(startDate, endDate);
-  console.log(`[data] ${rawData.size}銘柄（raw）, VIX ${vixData.size}日`);
+  const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
+  console.log(`[data] ${rawData.size}銘柄（raw）, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
   // 事前フィルタ: maxPrice以下のバーが1つ以上ある銘柄のみ残す（高速化）
   const maxPrice = BREAKOUT_BACKTEST_DEFAULTS.maxPrice;
@@ -177,6 +178,7 @@ async function main() {
   // デフォルト設定からフィルター設定を取得（全コンボ共通）
   const filterCfg = BREAKOUT_BACKTEST_DEFAULTS;
   const vixArg = vixData.size > 0 ? vixData : undefined;
+  const indexArg = indexData.size > 0 ? indexData : undefined;
 
   for (let w = 0; w < windows.length; w++) {
     const { isStart, isEnd, oosStart, oosEnd } = windows[w];
@@ -190,6 +192,9 @@ async function main() {
       filterCfg.marketTrendFilter ?? false,
       filterCfg.indexTrendFilter ?? false,
       filterCfg.indexTrendSmaPeriod ?? 50,
+      indexArg,
+      filterCfg.indexMomentumFilter ?? false,
+      filterCfg.indexMomentumDays ?? 60,
     );
     // IS期間のエントリーシグナルも1回だけ計算（analyzeTechnicals を240→1回に削減）
     const isSignals = precomputeDailySignals(filterCfg, allData, isPrecomputed);
@@ -206,7 +211,7 @@ async function main() {
         verbose: false,
       };
 
-      const result = runBreakoutBacktest(config, allData, vixArg, undefined, isPrecomputed, isSignals);
+      const result = runBreakoutBacktest(config, allData, vixArg, indexArg, isPrecomputed, isSignals);
 
       // トレード数が少なすぎる場合はスキップ
       if (result.metrics.totalTrades < 5) continue;
@@ -231,6 +236,9 @@ async function main() {
       filterCfg.marketTrendFilter ?? false,
       filterCfg.indexTrendFilter ?? false,
       filterCfg.indexTrendSmaPeriod ?? 50,
+      indexArg,
+      filterCfg.indexMomentumFilter ?? false,
+      filterCfg.indexMomentumDays ?? 60,
     );
     const oosSignals = precomputeDailySignals(filterCfg, allData, oosPrecomputed);
 
@@ -243,7 +251,7 @@ async function main() {
       verbose: false,
     };
 
-    const oosResult = runBreakoutBacktest(oosConfig, allData, vixArg, undefined, oosPrecomputed, oosSignals);
+    const oosResult = runBreakoutBacktest(oosConfig, allData, vixArg, indexArg, oosPrecomputed, oosSignals);
 
     results.push({
       windowIdx: w,

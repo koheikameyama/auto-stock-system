@@ -69,6 +69,10 @@ export interface BreakoutBacktestConfig {
   indexTrendFilter?: boolean;
   /** 指数SMA期間（デフォルト: 50） */
   indexTrendSmaPeriod?: number;
+  /** N225モメンタムフィルター: N225の現在値がN日前より高い場合のみエントリー */
+  indexMomentumFilter?: boolean;
+  /** N225モメンタム比較日数（デフォルト: 60） */
+  indexMomentumDays?: number;
 
   verbose: boolean;
 }

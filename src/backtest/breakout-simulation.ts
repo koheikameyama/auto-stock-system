@@ -41,6 +41,8 @@ export interface PrecomputedSimData {
   dailyBreadth: Map<string, number>;
   /** indexTrendFilter 用。filter=false または indexData がない場合は空Map */
   dailyIndexAboveSma: Map<string, boolean>;
+  /** indexMomentumFilter 用。filter=false または indexData がない場合は空Map */
+  dailyIndexMomentumPositive: Map<string, boolean>;
 }
 
 /**
@@ -55,6 +57,8 @@ export function precomputeSimData(
   indexTrendFilter: boolean,
   indexTrendSmaPeriod: number,
   indexData?: Map<string, number>,
+  indexMomentumFilter?: boolean,
+  indexMomentumDays?: number,
 ): PrecomputedSimData {
   // dateIndexMap
   const dateIndexMap = new Map<string, Map<string, number>>();
@@ -121,7 +125,25 @@ export function precomputeSimData(
     }
   }
 
-  return { dateIndexMap, tradingDays, tradingDayIndex, dailyBreadth, dailyIndexAboveSma };
+  // dailyIndexMomentumPositive
+  const dailyIndexMomentumPositive = new Map<string, boolean>();
+  if (indexMomentumFilter && indexData && indexData.size > 0) {
+    const momentumDays = indexMomentumDays ?? 60;
+    const indexDates = [...indexData.keys()].sort();
+    const indexCloses = indexDates.map((d) => indexData.get(d)!);
+    const indexDateIdx = new Map<string, number>();
+    for (let i = 0; i < indexDates.length; i++) indexDateIdx.set(indexDates[i], i);
+    for (const day of tradingDays) {
+      const idx = indexDateIdx.get(day);
+      if (idx == null || idx < momentumDays) {
+        dailyIndexMomentumPositive.set(day, false);
+        continue;
+      }
+      dailyIndexMomentumPositive.set(day, indexCloses[idx] > indexCloses[idx - momentumDays]);
+    }
+  }
+
+  return { dateIndexMap, tradingDays, tradingDayIndex, dailyBreadth, dailyIndexAboveSma, dailyIndexMomentumPositive };
 }
 
 /**
@@ -155,21 +177,22 @@ export function precomputeDailySignals(
     | "maxPrice" | "minAtrPct" | "minAvgVolume25" | "triggerThreshold"
     | "highLookbackDays" | "maxChaseAtr" | "confirmationEntry" | "confirmationVolumeFilter"
     | "marketTrendFilter" | "marketTrendThreshold" | "indexTrendFilter"
-    | "maxLossPct"
+    | "indexMomentumFilter" | "maxLossPct"
   >,
   allData: Map<string, OHLCVData[]>,
   precomputed: PrecomputedSimData,
 ): PrecomputedSignals {
   const result: PrecomputedSignals = new Map();
-  const { tradingDays, dateIndexMap, dailyBreadth, dailyIndexAboveSma } = precomputed;
+  const { tradingDays, dateIndexMap, dailyBreadth, dailyIndexAboveSma, dailyIndexMomentumPositive } = precomputed;
   const breadthThreshold = config.marketTrendThreshold ?? 0.5;
 
   for (let dayIdx = 0; dayIdx < tradingDays.length; dayIdx++) {
     const today = tradingDays[dayIdx];
 
-    // 市場フィルター（breadth / index）
+    // 市場フィルター（breadth / index / momentum）
     if (config.marketTrendFilter && (dailyBreadth.get(today) ?? 0) < breadthThreshold) continue;
     if (config.indexTrendFilter && !dailyIndexAboveSma.get(today)) continue;
+    if (config.indexMomentumFilter && !dailyIndexMomentumPositive.get(today)) continue;
 
     const signalDate = config.confirmationEntry && dayIdx > 0
       ? tradingDays[dayIdx - 1]
@@ -269,6 +292,7 @@ export function runBreakoutBacktest(
   let tradingDayIndex: Map<string, number>;
   let dailyBreadth: Map<string, number>;
   let dailyIndexAboveSma: Map<string, boolean>;
+  let dailyIndexMomentumPositive: Map<string, boolean>;
 
   if (precomputed) {
     dateIndexMap = precomputed.dateIndexMap;
@@ -276,6 +300,7 @@ export function runBreakoutBacktest(
     tradingDayIndex = precomputed.tradingDayIndex;
     dailyBreadth = precomputed.dailyBreadth;
     dailyIndexAboveSma = precomputed.dailyIndexAboveSma;
+    dailyIndexMomentumPositive = precomputed.dailyIndexMomentumPositive;
   } else {
     // 単体実行時はインラインで計算（後方互換）
     dateIndexMap = new Map<string, Map<string, number>>();
@@ -350,6 +375,24 @@ export function runBreakoutBacktest(
         for (let j = idx - smaPeriod + 1; j <= idx; j++) sum += indexCloses[j];
         const sma = sum / smaPeriod;
         dailyIndexAboveSma.set(day, indexCloses[idx] > sma);
+      }
+    }
+
+    // N225モメンタムフィルター事前計算（indexMomentumFilter用）
+    dailyIndexMomentumPositive = new Map<string, boolean>();
+    if (config.indexMomentumFilter && indexData && indexData.size > 0) {
+      const momentumDays = config.indexMomentumDays ?? 60;
+      const indexDates = [...indexData.keys()].sort();
+      const indexCloses = indexDates.map((d) => indexData.get(d)!);
+      const indexDateIdx = new Map<string, number>();
+      for (let i = 0; i < indexDates.length; i++) indexDateIdx.set(indexDates[i], i);
+      for (const day of tradingDays) {
+        const idx = indexDateIdx.get(day);
+        if (idx == null || idx < momentumDays) {
+          dailyIndexMomentumPositive.set(day, false);
+          continue;
+        }
+        dailyIndexMomentumPositive.set(day, indexCloses[idx] > indexCloses[idx - momentumDays]);
       }
     }
   }
@@ -491,6 +534,8 @@ export function runBreakoutBacktest(
       const skipByBreadth = config.marketTrendFilter && (dailyBreadth.get(today) ?? 0) < breadthThreshold;
       // C. 指数トレンドフィルター: 日経225などの指数がSMA以下ならエントリースキップ
       const skipByIndex = config.indexTrendFilter && !dailyIndexAboveSma.get(today);
+      // D. N225モメンタムフィルター: N225が60日前より低い場合はエントリースキップ
+      const skipByMomentum = config.indexMomentumFilter && !dailyIndexMomentumPositive.get(today);
       if (skipByBreadth) {
         if (config.verbose) {
           const breadth = dailyBreadth.get(today) ?? 0;
@@ -500,6 +545,11 @@ export function runBreakoutBacktest(
         if (config.verbose) {
           const smaPeriod = config.indexTrendSmaPeriod ?? 50;
           console.log(`  [${today}] 日経225 SMA${smaPeriod}以下: エントリースキップ`);
+        }
+      } else if (skipByMomentum) {
+        if (config.verbose) {
+          const momentumDays = config.indexMomentumDays ?? 60;
+          console.log(`  [${today}] N225モメンタム（${momentumDays}日前比）ネガティブ: エントリースキップ`);
         }
       } else {
         // エントリー候補を取得（事前計算済みシグナルがあれば高速パス）

@@ -116,6 +116,8 @@ interface EntryFilterRow {
   confirmationVolumeFilter?: boolean;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
+  indexMomentumFilter?: boolean;
+  indexMomentumDays?: number;
 }
 
 const ENTRY_FILTER_GRID: EntryFilterRow[] = [
@@ -130,6 +132,9 @@ const ENTRY_FILTER_GRID: EntryFilterRow[] = [
   { label: "C: N225 SMA50",     marketTrendFilter: false,                            confirmationEntry: false, indexTrendFilter: true, indexTrendSmaPeriod: 50 },
   { label: "C+confirm",         marketTrendFilter: false,                            confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50 },
   { label: "B70%+C+confirm",    marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50 },
+  { label: "D: N225 mom60",     marketTrendFilter: false,                            confirmationEntry: false, indexMomentumFilter: true, indexMomentumDays: 60 },
+  { label: "D+confirm",         marketTrendFilter: false,                            confirmationEntry: true,  indexMomentumFilter: true, indexMomentumDays: 60 },
+  { label: "B70%+D+confirm",    marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true,  indexMomentumFilter: true, indexMomentumDays: 60 },
 ];
 
 function runEntryFilterComparison(
@@ -153,6 +158,8 @@ function runEntryFilterComparison(
       confirmationVolumeFilter: row.confirmationVolumeFilter,
       indexTrendFilter: row.indexTrendFilter,
       indexTrendSmaPeriod: row.indexTrendSmaPeriod,
+      indexMomentumFilter: row.indexMomentumFilter,
+      indexMomentumDays: row.indexMomentumDays,
       verbose: false,
     };
     const result = runBreakoutBacktest(config, allData, vixData, indexData);
