@@ -19,7 +19,7 @@
 import dayjs from "dayjs";
 import { prisma } from "../src/lib/prisma";
 import { fetchHistoricalFromDB, fetchVixFromDB } from "../src/backtest/data-fetcher";
-import { runBreakoutBacktest } from "../src/backtest/breakout-simulation";
+import { runBreakoutBacktest, precomputeSimData, precomputeDailySignals } from "../src/backtest/breakout-simulation";
 import { BREAKOUT_BACKTEST_DEFAULTS, generateParameterCombinations, PARAMETER_GRID } from "../src/backtest/breakout-config";
 import type { BreakoutBacktestConfig, PerformanceMetrics } from "../src/backtest/types";
 
@@ -174,11 +174,25 @@ async function main() {
   // 各ウィンドウの実行
   const results: WindowResult[] = [];
 
+  // デフォルト設定からフィルター設定を取得（全コンボ共通）
+  const filterCfg = BREAKOUT_BACKTEST_DEFAULTS;
+  const vixArg = vixData.size > 0 ? vixData : undefined;
+
   for (let w = 0; w < windows.length; w++) {
     const { isStart, isEnd, oosStart, oosEnd } = windows[w];
     console.log(`━━━ Window ${w + 1}/${NUM_WINDOWS} ━━━`);
     console.log(`  IS:  ${isStart} → ${isEnd}`);
     console.log(`  OOS: ${oosStart} → ${oosEnd}`);
+
+    // IS期間の共有データを1回だけ事前計算（240コンボで使い回す）
+    const isPrecomputed = precomputeSimData(
+      isStart, isEnd, allData,
+      filterCfg.marketTrendFilter ?? false,
+      filterCfg.indexTrendFilter ?? false,
+      filterCfg.indexTrendSmaPeriod ?? 50,
+    );
+    // IS期間のエントリーシグナルも1回だけ計算（analyzeTechnicals を240→1回に削減）
+    const isSignals = precomputeDailySignals(filterCfg, allData, isPrecomputed);
 
     // IS: 全パラメータ組み合わせをテスト → 結果を蓄積
     const comboResults = new Map<string, ComboResult>();
@@ -192,7 +206,7 @@ async function main() {
         verbose: false,
       };
 
-      const result = runBreakoutBacktest(config, allData, vixData.size > 0 ? vixData : undefined);
+      const result = runBreakoutBacktest(config, allData, vixArg, undefined, isPrecomputed, isSignals);
 
       // トレード数が少なすぎる場合はスキップ
       if (result.metrics.totalTrades < 5) continue;
@@ -211,6 +225,15 @@ async function main() {
     const bestParams = selected.params;
     const bestIsMetrics = selected.metrics;
 
+    // OOS期間の共有データとシグナルを1回だけ事前計算
+    const oosPrecomputed = precomputeSimData(
+      oosStart, oosEnd, allData,
+      filterCfg.marketTrendFilter ?? false,
+      filterCfg.indexTrendFilter ?? false,
+      filterCfg.indexTrendSmaPeriod ?? 50,
+    );
+    const oosSignals = precomputeDailySignals(filterCfg, allData, oosPrecomputed);
+
     // OOS: ISで最適なパラメータで実行
     const oosConfig: BreakoutBacktestConfig = {
       ...BREAKOUT_BACKTEST_DEFAULTS,
@@ -220,7 +243,7 @@ async function main() {
       verbose: false,
     };
 
-    const oosResult = runBreakoutBacktest(oosConfig, allData, vixData.size > 0 ? vixData : undefined);
+    const oosResult = runBreakoutBacktest(oosConfig, allData, vixArg, undefined, oosPrecomputed, oosSignals);
 
     results.push({
       windowIdx: w,

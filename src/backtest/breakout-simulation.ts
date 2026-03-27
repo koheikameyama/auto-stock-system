@@ -29,55 +29,58 @@ import type {
 const MIN_WINDOW_BARS = 80;
 
 /**
- * ブレイクアウトバックテストを実行する
+ * walk-forward など複数コンボで共有できる事前計算データ。
+ * dateIndexMap・tradingDays・dailyBreadth は設定ではなくデータと日付範囲に依存するため、
+ * 同じ期間の全コンボで使い回すことで大幅に高速化できる。
  */
-export function runBreakoutBacktest(
-  config: BreakoutBacktestConfig,
-  allData: Map<string, OHLCVData[]>,
-  vixData?: Map<string, number>,
-  indexData?: Map<string, number>,
-): BreakoutBacktestResult {
-  const openPositions: SimulatedPosition[] = [];
-  const closedTrades: SimulatedPosition[] = [];
-  const equityCurve: DailyEquity[] = [];
-  const lastExitDayIdx = new Map<string, number>();
-  let cash = config.initialBudget;
+export interface PrecomputedSimData {
+  dateIndexMap: Map<string, Map<string, number>>;
+  tradingDays: string[];
+  tradingDayIndex: Map<string, number>;
+  /** marketTrendFilter 用。filter=false の場合は空Map */
+  dailyBreadth: Map<string, number>;
+  /** indexTrendFilter 用。filter=false または indexData がない場合は空Map */
+  dailyIndexAboveSma: Map<string, boolean>;
+}
 
-  // 各銘柄の date→index ルックアップを事前構築（O(1)探索用）
+/**
+ * 複数コンボで共有できる事前計算を一度だけ実行する。
+ * walk-forward で IS/OOS それぞれ1回呼んで、全コンボに渡すことを想定。
+ */
+export function precomputeSimData(
+  startDate: string,
+  endDate: string,
+  allData: Map<string, OHLCVData[]>,
+  marketTrendFilter: boolean,
+  indexTrendFilter: boolean,
+  indexTrendSmaPeriod: number,
+  indexData?: Map<string, number>,
+): PrecomputedSimData {
+  // dateIndexMap
   const dateIndexMap = new Map<string, Map<string, number>>();
   for (const [ticker, bars] of allData) {
-    const indexMap = new Map<string, number>();
-    for (let i = 0; i < bars.length; i++) {
-      indexMap.set(bars[i].date, i);
-    }
-    dateIndexMap.set(ticker, indexMap);
+    const idxMap = new Map<string, number>();
+    for (let i = 0; i < bars.length; i++) idxMap.set(bars[i].date, i);
+    dateIndexMap.set(ticker, idxMap);
   }
 
-  // 全銘柄の営業日をマージしてソート
+  // tradingDays
   const allDatesSet = new Set<string>();
   for (const bars of allData.values()) {
     for (const bar of bars) {
-      if (bar.date >= config.startDate && bar.date <= config.endDate) {
-        allDatesSet.add(bar.date);
-      }
+      if (bar.date >= startDate && bar.date <= endDate) allDatesSet.add(bar.date);
     }
   }
   const tradingDays = [...allDatesSet].sort();
-
-  // tradingDays の日付→index ルックアップ
   const tradingDayIndex = new Map<string, number>();
-  for (let i = 0; i < tradingDays.length; i++) {
-    tradingDayIndex.set(tradingDays[i], i);
-  }
+  for (let i = 0; i < tradingDays.length; i++) tradingDayIndex.set(tradingDays[i], i);
 
-  // 市場breadth事前計算（marketTrendFilter用）
+  // dailyBreadth
   const dailyBreadth = new Map<string, number>();
-  if (config.marketTrendFilter) {
+  if (marketTrendFilter) {
     const SMA_LEN = 25;
-    // 各銘柄のclose配列をdate順で保持
     const tickerCloses = new Map<string, { dateIndex: Map<string, number>; closes: number[] }>();
     for (const [ticker, bars] of allData) {
-      // ルックバック期間を含む全データを使用（startDate以前のデータもSMA25計算に必要）
       const di = new Map<string, number>();
       for (let i = 0; i < bars.length; i++) di.set(bars[i].date, i);
       tickerCloses.set(ticker, { dateIndex: di, closes: bars.map((b) => b.close) });
@@ -98,27 +101,256 @@ export function runBreakoutBacktest(
     }
   }
 
-  // 指数トレンドフィルター事前計算（indexTrendFilter用）
-  // indexData は date→close のMap（startDate前のlookback期間を含む）
+  // dailyIndexAboveSma
   const dailyIndexAboveSma = new Map<string, boolean>();
-  if (config.indexTrendFilter && indexData && indexData.size > 0) {
-    const smaPeriod = config.indexTrendSmaPeriod ?? 50;
-    // date昇順で配列化
+  if (indexTrendFilter && indexData && indexData.size > 0) {
     const indexDates = [...indexData.keys()].sort();
     const indexCloses = indexDates.map((d) => indexData.get(d)!);
     const indexDateIdx = new Map<string, number>();
     for (let i = 0; i < indexDates.length; i++) indexDateIdx.set(indexDates[i], i);
-
     for (const day of tradingDays) {
       const idx = indexDateIdx.get(day);
-      if (idx == null || idx < smaPeriod - 1) {
+      if (idx == null || idx < indexTrendSmaPeriod - 1) {
         dailyIndexAboveSma.set(day, false);
         continue;
       }
       let sum = 0;
-      for (let j = idx - smaPeriod + 1; j <= idx; j++) sum += indexCloses[j];
-      const sma = sum / smaPeriod;
+      for (let j = idx - indexTrendSmaPeriod + 1; j <= idx; j++) sum += indexCloses[j];
+      const sma = sum / indexTrendSmaPeriod;
       dailyIndexAboveSma.set(day, indexCloses[idx] > sma);
+    }
+  }
+
+  return { dateIndexMap, tradingDays, tradingDayIndex, dailyBreadth, dailyIndexAboveSma };
+}
+
+/**
+ * エントリーシグナルの事前計算結果（1銘柄分）。
+ * cooldown / openPosition フィルターを除く全フィルターが適用済み。
+ * atrMultiplier は walk-forward コンボで変化するため含めず、atr14 のみ保持する。
+ */
+export interface PrecomputedSignal {
+  ticker: string;
+  entryPrice: number;
+  /** SL計算用: SL = entryPrice - atr14 * config.atrMultiplier */
+  atr14: number;
+  volumeSurgeRatio: number;
+}
+
+/** entryDate → signals (volumeSurgeRatio 降順) */
+export type PrecomputedSignals = Map<string, PrecomputedSignal[]>;
+
+/**
+ * エントリーシグナルを一括事前計算する。
+ * walk-forward では IS/OOS それぞれ1回呼んで全コンボに渡すことで
+ * analyzeTechnicals の呼び出し回数を 240 → 1 に削減できる。
+ *
+ * 前提: config のエントリー系パラメータ（triggerThreshold, highLookbackDays,
+ * maxChaseAtr, marketTrendFilter/Threshold, confirmationEntry 等）が
+ * 全コンボで共通であること。atrMultiplier はコンボ別に変化する SL 計算に
+ * だけ影響するため、atr14 を保持してコンボ側で適用する。
+ */
+export function precomputeDailySignals(
+  config: Pick<BreakoutBacktestConfig,
+    | "maxPrice" | "minAtrPct" | "minAvgVolume25" | "triggerThreshold"
+    | "highLookbackDays" | "maxChaseAtr" | "confirmationEntry" | "confirmationVolumeFilter"
+    | "marketTrendFilter" | "marketTrendThreshold" | "indexTrendFilter"
+    | "maxLossPct"
+  >,
+  allData: Map<string, OHLCVData[]>,
+  precomputed: PrecomputedSimData,
+): PrecomputedSignals {
+  const result: PrecomputedSignals = new Map();
+  const { tradingDays, dateIndexMap, dailyBreadth, dailyIndexAboveSma } = precomputed;
+  const breadthThreshold = config.marketTrendThreshold ?? 0.5;
+
+  for (let dayIdx = 0; dayIdx < tradingDays.length; dayIdx++) {
+    const today = tradingDays[dayIdx];
+
+    // 市場フィルター（breadth / index）
+    if (config.marketTrendFilter && (dailyBreadth.get(today) ?? 0) < breadthThreshold) continue;
+    if (config.indexTrendFilter && !dailyIndexAboveSma.get(today)) continue;
+
+    const signalDate = config.confirmationEntry && dayIdx > 0
+      ? tradingDays[dayIdx - 1]
+      : today;
+
+    const daySignals: PrecomputedSignal[] = [];
+
+    for (const [ticker, bars] of allData) {
+      const tickerIndex = dateIndexMap.get(ticker);
+      const signalIdx = tickerIndex?.get(signalDate);
+      if (signalIdx == null) continue;
+
+      const todayIdx = config.confirmationEntry ? tickerIndex?.get(today) : signalIdx;
+      if (todayIdx == null) continue;
+
+      // ウィンドウスライス（シグナル日ベース）
+      const windowEnd = signalIdx + 1;
+      const windowStart = Math.max(0, windowEnd - MIN_WINDOW_BARS);
+      const window = bars.slice(windowStart, windowEnd);
+      if (window.length < TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) continue;
+
+      const signalBar = bars[signalIdx];
+      if (signalBar.close > config.maxPrice || signalBar.close <= 0) continue;
+
+      const summary = analyzeTechnicals([...window].reverse());
+      if (summary.atr14 == null) continue;
+
+      const atrPct = (summary.atr14 / signalBar.close) * 100;
+      if (atrPct < config.minAtrPct) continue;
+
+      const avgVolume25 = summary.volumeAnalysis.avgVolume20;
+      if (avgVolume25 == null || avgVolume25 < config.minAvgVolume25) continue;
+
+      const volumeSurgeRatio = signalBar.volume / avgVolume25;
+      if (volumeSurgeRatio < config.triggerThreshold) continue;
+
+      // 高値ブレイク
+      const lookbackStart = Math.max(0, signalIdx - config.highLookbackDays);
+      const lookbackBars = bars.slice(lookbackStart, signalIdx);
+      if (!lookbackBars.length) continue;
+      const highN = Math.max(...lookbackBars.map((b) => b.high));
+      if (signalBar.close <= highN) continue;
+
+      // 高値追いフィルター
+      const atr14 = summary.atr14;
+      if (config.maxChaseAtr != null && atr14 > 0 && signalBar.close - highN > atr14 * config.maxChaseAtr) continue;
+
+      // 確認足
+      if (config.confirmationEntry) {
+        const todayBar = bars[todayIdx];
+        if (todayBar.close <= highN) continue;
+        if (config.confirmationVolumeFilter && todayBar.volume < avgVolume25) continue;
+      }
+
+      const entryPrice = bars[todayIdx].close;
+      // SL プレビュー（riskPerShare <= 0 の銘柄を早期除外）
+      const rawSL = entryPrice - atr14; // atrMultiplier=1.0 相当で確認
+      if (rawSL >= entryPrice) continue;
+
+      daySignals.push({
+        ticker,
+        entryPrice,
+        atr14,
+        volumeSurgeRatio: Math.round(volumeSurgeRatio * 100) / 100,
+      });
+    }
+
+    if (daySignals.length > 0) {
+      daySignals.sort((a, b) => b.volumeSurgeRatio - a.volumeSurgeRatio);
+      result.set(today, daySignals);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * ブレイクアウトバックテストを実行する
+ */
+export function runBreakoutBacktest(
+  config: BreakoutBacktestConfig,
+  allData: Map<string, OHLCVData[]>,
+  vixData?: Map<string, number>,
+  indexData?: Map<string, number>,
+  precomputed?: PrecomputedSimData,
+  precomputedSignals?: PrecomputedSignals,
+): BreakoutBacktestResult {
+  const openPositions: SimulatedPosition[] = [];
+  const closedTrades: SimulatedPosition[] = [];
+  const equityCurve: DailyEquity[] = [];
+  const lastExitDayIdx = new Map<string, number>();
+  let cash = config.initialBudget;
+
+  // 各銘柄の date→index ルックアップを事前構築（precomputed があれば再利用）
+  let dateIndexMap: Map<string, Map<string, number>>;
+  let tradingDays: string[];
+  let tradingDayIndex: Map<string, number>;
+  let dailyBreadth: Map<string, number>;
+  let dailyIndexAboveSma: Map<string, boolean>;
+
+  if (precomputed) {
+    dateIndexMap = precomputed.dateIndexMap;
+    tradingDays = precomputed.tradingDays;
+    tradingDayIndex = precomputed.tradingDayIndex;
+    dailyBreadth = precomputed.dailyBreadth;
+    dailyIndexAboveSma = precomputed.dailyIndexAboveSma;
+  } else {
+    // 単体実行時はインラインで計算（後方互換）
+    dateIndexMap = new Map<string, Map<string, number>>();
+    for (const [ticker, bars] of allData) {
+      const indexMap = new Map<string, number>();
+      for (let i = 0; i < bars.length; i++) {
+        indexMap.set(bars[i].date, i);
+      }
+      dateIndexMap.set(ticker, indexMap);
+    }
+
+    const allDatesSet = new Set<string>();
+    for (const bars of allData.values()) {
+      for (const bar of bars) {
+        if (bar.date >= config.startDate && bar.date <= config.endDate) {
+          allDatesSet.add(bar.date);
+        }
+      }
+    }
+    tradingDays = [...allDatesSet].sort();
+
+    tradingDayIndex = new Map<string, number>();
+    for (let i = 0; i < tradingDays.length; i++) {
+      tradingDayIndex.set(tradingDays[i], i);
+    }
+
+    // 市場breadth事前計算（marketTrendFilter用）
+    dailyBreadth = new Map<string, number>();
+    if (config.marketTrendFilter) {
+      const SMA_LEN = 25;
+      const tickerCloses = new Map<string, { dateIndex: Map<string, number>; closes: number[] }>();
+      for (const [ticker, bars] of allData) {
+        // ルックバック期間を含む全データを使用（startDate以前のデータもSMA25計算に必要）
+        const di = new Map<string, number>();
+        for (let i = 0; i < bars.length; i++) di.set(bars[i].date, i);
+        tickerCloses.set(ticker, { dateIndex: di, closes: bars.map((b) => b.close) });
+      }
+      for (const day of tradingDays) {
+        let above = 0;
+        let total = 0;
+        for (const [, data] of tickerCloses) {
+          const idx = data.dateIndex.get(day);
+          if (idx == null || idx < SMA_LEN - 1) continue;
+          let sum = 0;
+          for (let j = idx - SMA_LEN + 1; j <= idx; j++) sum += data.closes[j];
+          const sma = sum / SMA_LEN;
+          total++;
+          if (data.closes[idx] > sma) above++;
+        }
+        dailyBreadth.set(day, total > 0 ? above / total : 0);
+      }
+    }
+
+    // 指数トレンドフィルター事前計算（indexTrendFilter用）
+    // indexData は date→close のMap（startDate前のlookback期間を含む）
+    dailyIndexAboveSma = new Map<string, boolean>();
+    if (config.indexTrendFilter && indexData && indexData.size > 0) {
+      const smaPeriod = config.indexTrendSmaPeriod ?? 50;
+      // date昇順で配列化
+      const indexDates = [...indexData.keys()].sort();
+      const indexCloses = indexDates.map((d) => indexData.get(d)!);
+      const indexDateIdx = new Map<string, number>();
+      for (let i = 0; i < indexDates.length; i++) indexDateIdx.set(indexDates[i], i);
+
+      for (const day of tradingDays) {
+        const idx = indexDateIdx.get(day);
+        if (idx == null || idx < smaPeriod - 1) {
+          dailyIndexAboveSma.set(day, false);
+          continue;
+        }
+        let sum = 0;
+        for (let j = idx - smaPeriod + 1; j <= idx; j++) sum += indexCloses[j];
+        const sma = sum / smaPeriod;
+        dailyIndexAboveSma.set(day, indexCloses[idx] > sma);
+      }
     }
   }
 
@@ -270,7 +502,34 @@ export function runBreakoutBacktest(
           console.log(`  [${today}] 日経225 SMA${smaPeriod}以下: エントリースキップ`);
         }
       } else {
-        const entries = detectBreakoutEntries(config, allData, today, cash, openPositions, lastExitDayIdx, dayIdx, tradingDays, dateIndexMap);
+        // エントリー候補を取得（事前計算済みシグナルがあれば高速パス）
+        let entries: BreakoutEntry[];
+        if (precomputedSignals) {
+          const rawSignals = precomputedSignals.get(today) ?? [];
+          entries = [];
+          for (const signal of rawSignals) {
+            if (openPositions.some((p) => p.ticker === signal.ticker)) continue;
+            if (config.cooldownDays > 0) {
+              const lastExit = lastExitDayIdx.get(signal.ticker);
+              if (lastExit != null && dayIdx - lastExit < config.cooldownDays) continue;
+            }
+            const rawSL = signal.entryPrice - signal.atr14 * config.atrMultiplier;
+            const maxSL = signal.entryPrice * (1 - config.maxLossPct);
+            const stopLossPrice = Math.round(Math.max(rawSL, maxSL));
+            if (stopLossPrice >= signal.entryPrice) continue;
+            entries.push({
+              ticker: signal.ticker,
+              entryPrice: signal.entryPrice,
+              stopLossPrice,
+              takeProfitPrice: Math.round(signal.entryPrice + signal.atr14 * 5),
+              quantity: 0,
+              volumeSurgeRatio: signal.volumeSurgeRatio,
+              entryAtr: signal.atr14,
+            });
+          }
+        } else {
+          entries = detectBreakoutEntries(config, allData, today, cash, openPositions, lastExitDayIdx, dayIdx, tradingDays, dateIndexMap);
+        }
 
         for (const entry of entries) {
           if (openPositions.length >= config.maxPositions) break;
