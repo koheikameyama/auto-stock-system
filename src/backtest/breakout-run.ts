@@ -17,6 +17,7 @@ import { calculateCapitalUtilization } from "./metrics";
 import type { BreakoutBacktestConfig, BreakoutBacktestResult, PerformanceMetrics, ScoreFilterConfig } from "./types";
 import { saveBacktestResult } from "./db-saver";
 import type { OHLCVData } from "../core/technical-analysis";
+import { runMonteCarloSimulation, printMonteCarloReport } from "./monte-carlo";
 
 function getArg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
@@ -247,6 +248,8 @@ async function main() {
   const entryCompare = args.includes("--entry-compare");
   const exitCompare = args.includes("--exit-compare");
   const noCost = args.includes("--no-cost");
+  const monteCarlo = args.includes("--monte-carlo");
+  const mcIterationsStr = getArg(args, "--mc-iterations");
 
   const config: BreakoutBacktestConfig = {
     ...BREAKOUT_BACKTEST_DEFAULTS,
@@ -336,6 +339,19 @@ async function main() {
 
   // 5. レポート出力
   printReport(result);
+
+  // 5b. Monte Carlo simulation
+  if (monteCarlo) {
+    const mcIterations = mcIterationsStr ? Number(mcIterationsStr) : 10_000;
+    console.log(`\n[mc] Monte Carlo simulation (${mcIterations.toLocaleString()} iterations)...`);
+    const mcResult = runMonteCarloSimulation(result.trades, {
+      iterations: mcIterations,
+      maxPositions: config.maxPositions,
+      initialCapital: config.initialBudget,
+      ruinThresholdPct: 50,
+    });
+    printMonteCarloReport(mcResult);
+  }
 
   // DBに保存
   try {
