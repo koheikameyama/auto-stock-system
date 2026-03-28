@@ -12,6 +12,7 @@ import {
   POSITION_SIZING,
   GAP_RISK,
   TRADING_DEFAULTS,
+  GAPUP_DEFAULTS,
 } from "../lib/constants";
 import { canAddToSector, canAddToMacroFactor } from "./sector-analyzer";
 import { calculateDrawdownStatus } from "./drawdown-manager";
@@ -47,6 +48,7 @@ export async function canOpenPosition(
   quantity: number,
   price: number,
   prefetch?: RiskCheckPrefetch,
+  strategy?: string,
 ): Promise<{ allowed: boolean; reason: string; retryable?: boolean }> {
   const config = prefetch?.config ?? await prisma.tradingConfig.findFirst({
     orderBy: { createdAt: "desc" },
@@ -69,15 +71,32 @@ export async function canOpenPosition(
     where: { status: "open" },
     include: { stock: { select: { id: true, jpxSectorName: true } } },
   });
-  const openPositionCount = openPositions.length;
 
-  // 1. オープンポジション数チェック
-  if (openPositionCount >= maxPositions) {
-    return {
-      allowed: false,
-      reason: `最大同時保有数（${maxPositions}）に達しています（現在: ${openPositionCount}）`,
-      retryable: true,
-    };
+  // 1. オープンポジション数チェック（strategy別）
+  if (strategy === "gapup") {
+    const gapupPositionCount = openPositions.filter(
+      (pos) => pos.strategy === "gapup",
+    ).length;
+    const gapupMax = GAPUP_DEFAULTS.MAX_POSITIONS;
+    if (gapupPositionCount >= gapupMax) {
+      return {
+        allowed: false,
+        reason: `gapup最大同時保有数（${gapupMax}）に達しています（現在: ${gapupPositionCount}）`,
+        retryable: true,
+      };
+    }
+  } else {
+    // breakout/swing/day_trade は従来通り（gapupポジションを除外してカウント）
+    const nonGapupCount = openPositions.filter(
+      (pos) => pos.strategy !== "gapup",
+    ).length;
+    if (nonGapupCount >= maxPositions) {
+      return {
+        allowed: false,
+        reason: `最大同時保有数（${maxPositions}）に達しています（現在: ${nonGapupCount}）`,
+        retryable: true,
+      };
+    }
   }
 
   // 2. 現金残高チェック
