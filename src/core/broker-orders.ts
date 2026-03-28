@@ -39,6 +39,8 @@ export interface BrokerOrderRequest {
   expireDay?: string;
   /** 譲渡益課税区分（デフォルト: 特定） */
   taxType?: string;
+  /** 執行条件: "0"=指定なし, "2"=寄付, "4"=引け（デフォルト: "0"） */
+  condition?: string;
 }
 
 export interface BrokerOrderResult {
@@ -112,7 +114,7 @@ export async function submitOrder(
     sIssueCode: brokerCode,
     sSizyouC: TACHIBANA_ORDER.EXCHANGE.TSE,
     sBaibaiKubun: baibaiKubun,
-    sCondition: TACHIBANA_ORDER.CONDITION.NONE,
+    sCondition: req.condition ?? TACHIBANA_ORDER.CONDITION.NONE,
     sOrderPrice: req.limitPrice != null ? String(req.limitPrice) : TACHIBANA_ORDER.MARKET_PRICE,
     sOrderSuryou: String(req.quantity),
     sGenkinShinyouKubun: TACHIBANA_ORDER.MARGIN_TYPE.CASH,
