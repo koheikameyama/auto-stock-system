@@ -25,7 +25,6 @@ concurrency:
 
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  MARKET_DATA_PROVIDER: yahoo
 
 jobs:
   check-market-day:
