@@ -196,3 +196,50 @@ export interface ScoreFilterConfig {
   /** 最低スコア閾値 */
   minScore: number;
 }
+
+// ──────────────────────────────────────────
+// ギャップアップバックテスト設定
+// ──────────────────────────────────────────
+
+export interface GapUpBacktestConfig {
+  startDate: string;
+  endDate: string;
+  initialBudget: number;
+  maxPositions: number;
+
+  gapMinPct: number;
+  volSurgeRatio: number;
+
+  atrMultiplier: number;
+  maxLossPct: number;
+
+  beActivationMultiplier: number;
+  tsActivationMultiplier: number;
+  trailMultiplier: number;
+
+  maxHoldingDays: number;
+  maxExtendedHoldingDays: number;
+
+  maxPrice: number;
+  minAvgVolume25: number;
+  minAtrPct: number;
+
+  costModelEnabled: boolean;
+  priceLimitEnabled: boolean;
+
+  cooldownDays: number;
+
+  marketTrendFilter?: boolean;
+  marketTrendThreshold?: number;
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+
+  verbose: boolean;
+}
+
+export interface GapUpBacktestResult {
+  config: GapUpBacktestConfig;
+  trades: SimulatedPosition[];
+  equityCurve: DailyEquity[];
+  metrics: PerformanceMetrics;
+}
