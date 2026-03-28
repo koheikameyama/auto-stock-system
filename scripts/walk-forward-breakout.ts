@@ -4,7 +4,7 @@
  * IS（In-Sample）6ヶ月 / OOS（Out-of-Sample）3ヶ月
  * 3ヶ月スライド × 6ウィンドウ = 24ヶ月
  *
- * パラメータグリッド（240通り）を IS で最適化し、
+ * パラメータグリッド（288通り）を IS で最適化し、
  * OOS で汎化性能を検証する。
  *
  * 選択方式:
@@ -48,7 +48,7 @@ interface ComboResult {
 }
 
 function paramComboKey(params: Partial<BreakoutBacktestConfig>): string {
-  return `${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}_${params.tsActivationMultiplier}`;
+  return `${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}_${params.tsActivationMultiplier}_${params.minBreakoutAtr ?? 0}_${params.volumeTrendThreshold ?? 1.0}`;
 }
 
 function calcMedian(values: number[]): number {
@@ -78,6 +78,8 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
     [...PARAMETER_GRID.beActivationMultiplier],
     [...PARAMETER_GRID.trailMultiplier],
     [...PARAMETER_GRID.tsActivationMultiplier],
+    [...PARAMETER_GRID.minBreakoutAtr],
+    [...PARAMETER_GRID.volumeTrendThreshold],
   ];
   const gridSizes = gridArrays.map((a) => a.length);
 
@@ -91,6 +93,8 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
       gridArrays[1].indexOf(p.beActivationMultiplier!),
       gridArrays[2].indexOf(p.trailMultiplier!),
       gridArrays[3].indexOf(p.tsActivationMultiplier!),
+      gridArrays[4].indexOf(p.minBreakoutAtr ?? 0),
+      gridArrays[5].indexOf(p.volumeTrendThreshold ?? 1.0),
     ];
 
     // 近傍 (±1 grid step in each dimension) のPFを収集
@@ -103,17 +107,19 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
       return vals;
     });
 
-    for (const i0 of ranges[0]) {
-      for (const i1 of ranges[1]) {
-        for (const i2 of ranges[2]) {
-          for (const i3 of ranges[3]) {
-            const nKey = `${gridArrays[0][i0]}_${gridArrays[1][i1]}_${gridArrays[2][i2]}_${gridArrays[3][i3]}`;
-            const nResult = comboResults.get(nKey);
-            if (nResult) neighborPFs.push(nResult.metrics.profitFactor);
-          }
-        }
+    // 6次元の近傍を再帰的に列挙
+    function collectNeighbors(dim: number, current: number[]): void {
+      if (dim === ranges.length) {
+        const nKey = current.map((i, d) => gridArrays[d][i]).join("_");
+        const nResult = comboResults.get(nKey);
+        if (nResult) neighborPFs.push(nResult.metrics.profitFactor);
+        return;
+      }
+      for (const idx of ranges[dim]) {
+        collectNeighbors(dim + 1, [...current, idx]);
       }
     }
+    collectNeighbors(0, []);
 
     const score = calcMedian(neighborPFs);
     if (score > bestScore) {
@@ -266,7 +272,7 @@ async function main() {
 
     console.log(`  IS  最適PF: ${formatPF(bestIsMetrics.profitFactor)} (${bestIsMetrics.totalTrades}トレード, 勝率${bestIsMetrics.winRate}%)`);
     console.log(`  OOS PF:     ${formatPF(oosResult.metrics.profitFactor)} (${oosResult.metrics.totalTrades}トレード, 勝率${oosResult.metrics.winRate}%)`);
-    console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}, ts=${bestParams.tsActivationMultiplier}`);
+    console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}, ts=${bestParams.tsActivationMultiplier}, ba=${bestParams.minBreakoutAtr ?? 0}, vt=${bestParams.volumeTrendThreshold ?? 1.0}`);
     console.log("");
   }
 
@@ -347,7 +353,7 @@ function printSummary(results: WindowResult[]): void {
   console.log("-".repeat(90));
   for (const r of results) {
     const p = r.bestIsParams;
-    const paramStr = `atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}`;
+    const paramStr = `atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier} ba=${p.minBreakoutAtr ?? 0} vt=${p.volumeTrendThreshold ?? 1.0}`;
     console.log(
       `  ${r.windowIdx + 1}    | ${padPF(r.isMetrics.profitFactor)} | ${padPF(r.oosMetrics.profitFactor)} | ` +
       `${r.oosMetrics.winRate.toFixed(1).padStart(5)}%  | ${String(r.oosMetrics.totalTrades).padStart(11)} | ${paramStr}`,
@@ -356,9 +362,9 @@ function printSummary(results: WindowResult[]): void {
 
   // パラメータ安定性分析
   console.log("\n[パラメータ安定性]");
-  const paramKeys = ["atrMultiplier", "beActivationMultiplier", "trailMultiplier", "tsActivationMultiplier"] as const;
+  const paramKeys = ["atrMultiplier", "beActivationMultiplier", "trailMultiplier", "tsActivationMultiplier", "minBreakoutAtr", "volumeTrendThreshold"] as const;
   for (const key of paramKeys) {
-    const values = results.map((r) => r.bestIsParams[key]);
+    const values = results.map((r) => r.bestIsParams[key] ?? (key === "volumeTrendThreshold" ? 1.0 : 0));
     const uniqueValues = [...new Set(values)];
     const stability = uniqueValues.length === 1 ? "安定" : uniqueValues.length <= 2 ? "やや安定" : "不安定";
     console.log(`  ${key}: ${uniqueValues.join(", ")} → ${stability}`);
