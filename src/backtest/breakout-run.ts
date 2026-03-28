@@ -12,7 +12,7 @@ import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { BREAKOUT_BACKTEST_DEFAULTS } from "./breakout-config";
 import { runBreakoutBacktest } from "./breakout-simulation";
-import { fetchHistoricalFromDB, fetchVixFromDB } from "./data-fetcher";
+import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import type { BreakoutBacktestConfig, BreakoutBacktestResult, PerformanceMetrics, ScoreFilterConfig } from "./types";
 import { saveBacktestResult } from "./db-saver";
@@ -111,40 +111,63 @@ function runStrategyComparison(
 interface EntryFilterRow {
   label: string;
   marketTrendFilter: boolean;
+  marketTrendThreshold?: number;
   confirmationEntry: boolean;
+  confirmationVolumeFilter?: boolean;
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+  indexMomentumFilter?: boolean;
+  indexMomentumDays?: number;
 }
 
 const ENTRY_FILTER_GRID: EntryFilterRow[] = [
-  { label: "baseline", marketTrendFilter: false, confirmationEntry: false },
-  { label: "A: breadth", marketTrendFilter: true, confirmationEntry: false },
-  { label: "B: confirm", marketTrendFilter: false, confirmationEntry: true },
-  { label: "A+B", marketTrendFilter: true, confirmationEntry: true },
+  { label: "baseline",          marketTrendFilter: false,                            confirmationEntry: false },
+  { label: "A: breadth50%",     marketTrendFilter: true,  marketTrendThreshold: 0.5, confirmationEntry: false },
+  { label: "A: breadth60%",     marketTrendFilter: true,  marketTrendThreshold: 0.6, confirmationEntry: false },
+  { label: "A: breadth70%",     marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: false },
+  { label: "B: confirm",        marketTrendFilter: false,                            confirmationEntry: true },
+  { label: "B: confirm+vol",    marketTrendFilter: false,                            confirmationEntry: true, confirmationVolumeFilter: true },
+  { label: "B70%+confirm",      marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true },
+  { label: "C: N225 SMA25",     marketTrendFilter: false,                            confirmationEntry: false, indexTrendFilter: true, indexTrendSmaPeriod: 25 },
+  { label: "C: N225 SMA50",     marketTrendFilter: false,                            confirmationEntry: false, indexTrendFilter: true, indexTrendSmaPeriod: 50 },
+  { label: "C+confirm",         marketTrendFilter: false,                            confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50 },
+  { label: "B70%+C+confirm",    marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50 },
+  { label: "D: N225 mom60",     marketTrendFilter: false,                            confirmationEntry: false, indexMomentumFilter: true, indexMomentumDays: 60 },
+  { label: "D+confirm",         marketTrendFilter: false,                            confirmationEntry: true,  indexMomentumFilter: true, indexMomentumDays: 60 },
+  { label: "B70%+D+confirm",    marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true,  indexMomentumFilter: true, indexMomentumDays: 60 },
 ];
 
 function runEntryFilterComparison(
   baseConfig: BreakoutBacktestConfig,
   allData: Map<string, OHLCVData[]>,
   vixData: Map<string, number> | undefined,
+  indexData: Map<string, number> | undefined,
 ): void {
   console.log("\n=== Entry Filter Comparison ===");
   console.log(
-    `${"Filter".padEnd(16)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"RR".padStart(5)} | ${"AvgHold".padStart(7)} | ${"Return".padStart(8)}`,
+    `${"Filter".padEnd(20)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"RR".padStart(5)} | ${"AvgHold".padStart(7)} | ${"Return".padStart(8)}`,
   );
-  console.log("-".repeat(95));
+  console.log("-".repeat(99));
 
   for (const row of ENTRY_FILTER_GRID) {
     const config: BreakoutBacktestConfig = {
       ...baseConfig,
       marketTrendFilter: row.marketTrendFilter,
+      marketTrendThreshold: row.marketTrendThreshold,
       confirmationEntry: row.confirmationEntry,
+      confirmationVolumeFilter: row.confirmationVolumeFilter,
+      indexTrendFilter: row.indexTrendFilter,
+      indexTrendSmaPeriod: row.indexTrendSmaPeriod,
+      indexMomentumFilter: row.indexMomentumFilter,
+      indexMomentumDays: row.indexMomentumDays,
       verbose: false,
     };
-    const result = runBreakoutBacktest(config, allData, vixData);
+    const result = runBreakoutBacktest(config, allData, vixData, indexData);
     const m = result.metrics;
     const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
     const returnStr = (m.totalReturnPct >= 0 ? "+" : "") + m.totalReturnPct.toFixed(1) + "%";
     console.log(
-      `${row.label.padEnd(16)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${m.profitFactor.toFixed(2).padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.riskRewardRatio.toFixed(1).padStart(5)} | ${m.avgHoldingDays.toFixed(1).padStart(6)}d | ${returnStr.padStart(8)}`,
+      `${row.label.padEnd(20)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${m.profitFactor.toFixed(2).padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.riskRewardRatio.toFixed(1).padStart(5)} | ${m.avgHoldingDays.toFixed(1).padStart(6)}d | ${returnStr.padStart(8)}`,
     );
   }
   console.log("");
@@ -261,6 +284,12 @@ async function main() {
     console.log(`[data] VIXデータ: ${vixData.size}日`);
   }
 
+  // 3b. 指数データ取得（^N225）
+  const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
+  if (indexData.size > 0) {
+    console.log(`[data] 日経225: ${indexData.size}日`);
+  }
+
   // 4a. スコア比較モード
   if (scoreCompare) {
     const vix = vixData.size > 0 ? vixData : undefined;
@@ -280,7 +309,8 @@ async function main() {
   // 4c. エントリーフィルター比較モード
   if (entryCompare) {
     const vix = vixData.size > 0 ? vixData : undefined;
-    runEntryFilterComparison(config, allData, vix);
+    const idx = indexData.size > 0 ? indexData : undefined;
+    runEntryFilterComparison(config, allData, vix, idx);
     await prisma.$disconnect();
     return;
   }
@@ -295,7 +325,8 @@ async function main() {
 
   // 4. バックテスト実行
   console.log("[sim] シミュレーション実行中...\n");
-  const result = runBreakoutBacktest(config, allData, vixData.size > 0 ? vixData : undefined);
+  const idx = indexData.size > 0 ? indexData : undefined;
+  const result = runBreakoutBacktest(config, allData, vixData.size > 0 ? vixData : undefined, idx);
 
   // 5. レポート出力
   printReport(result);

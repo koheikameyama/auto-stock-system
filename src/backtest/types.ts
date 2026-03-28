@@ -59,8 +59,24 @@ export interface BreakoutBacktestConfig {
   // エントリーフィルター
   /** 市場トレンドフィルター: 全銘柄のbreadth(SMA25上%)が閾値以上の時のみエントリー */
   marketTrendFilter?: boolean;
+  /** 市場breadth閾値 (0〜1、デフォルト: 0.5) */
+  marketTrendThreshold?: number;
   /** 確認足エントリー: ブレイクアウト翌日にclose > breakout levelで初めてエントリー */
   confirmationEntry?: boolean;
+  /** 確認足＋出来高継続: 確認日の出来高が avgVolume25 以上の場合のみエントリー */
+  confirmationVolumeFilter?: boolean;
+  /** 指数トレンドフィルター: 日経225などの指数がSMA以上の時のみエントリー */
+  indexTrendFilter?: boolean;
+  /** 指数SMA期間（デフォルト: 50） */
+  indexTrendSmaPeriod?: number;
+  /** N225モメンタムフィルター: N225の現在値がN日前より高い場合のみエントリー */
+  indexMomentumFilter?: boolean;
+  /** N225モメンタム比較日数（デフォルト: 60） */
+  indexMomentumDays?: number;
+  /** ブレイクアウト強度フィルター: (close - highN) / atr14 >= this でのみエントリー。0=無効 */
+  minBreakoutAtr?: number;
+  /** 出来高トレンドフィルター: avgVolume5 / avgVolume25 >= this でのみエントリー。1.0=最も緩い */
+  volumeTrendThreshold?: number;
 
   verbose: boolean;
 }
