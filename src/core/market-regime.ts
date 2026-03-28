@@ -197,7 +197,7 @@ export function applyNikkeiFilter(
   };
 }
 
-export type TradingStrategy = "day_trade" | "swing" | "breakout";
+export type TradingStrategy = "day_trade" | "swing" | "breakout" | "gapup";
 
 export interface StrategyDecision {
   strategy: TradingStrategy;
