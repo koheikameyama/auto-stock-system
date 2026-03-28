@@ -10,7 +10,7 @@ import type { BreakoutBacktestConfig } from "./types";
 /** デフォルト設定（本番パラメータと同一） */
 export const BREAKOUT_BACKTEST_DEFAULTS: Omit<BreakoutBacktestConfig, "startDate" | "endDate"> = {
   initialBudget: 500_000,
-  maxPositions: 3,
+  maxPositions: 5,
 
   // エントリー
   triggerThreshold: BREAKOUT.VOLUME_SURGE.TRIGGER_THRESHOLD, // 2.0

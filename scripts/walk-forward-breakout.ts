@@ -326,10 +326,168 @@ function printScoreFilterSummary(variants: ScoreFilterVariant[], variantResults:
   }
 }
 
+interface PositionVariant {
+  label: string;
+  maxPositions: number;
+}
+
+const POSITION_VARIANTS: PositionVariant[] = [
+  { label: "3pos", maxPositions: 3 },
+  { label: "5pos", maxPositions: 5 },
+  { label: "10pos", maxPositions: 10 },
+];
+
+async function runPositionComparison(
+  windows: WindowDef[],
+  paramCombos: Partial<BreakoutBacktestConfig>[],
+  filterCfg: typeof BREAKOUT_BACKTEST_DEFAULTS,
+  allData: Map<string, import("../src/core/technical-analysis").OHLCVData[]>,
+  vixArg: Map<string, number> | undefined,
+  indexArg: Map<string, number> | undefined,
+  useRobust: boolean,
+): Promise<void> {
+  const variants = POSITION_VARIANTS;
+  const variantResults: WindowResult[][] = variants.map(() => []);
+
+  for (let w = 0; w < windows.length; w++) {
+    const { isStart, isEnd, oosStart, oosEnd } = windows[w];
+    console.log(`━━━ Window ${w + 1}/${NUM_WINDOWS} ━━━`);
+    console.log(`  IS:  ${isStart} → ${isEnd}`);
+    console.log(`  OOS: ${oosStart} → ${oosEnd}`);
+
+    // IS/OOS事前計算（全バリアント共有）
+    const isPrecomputed = precomputeSimData(
+      isStart, isEnd, allData,
+      filterCfg.marketTrendFilter ?? false,
+      filterCfg.indexTrendFilter ?? false,
+      filterCfg.indexTrendSmaPeriod ?? 50,
+      indexArg,
+      filterCfg.indexMomentumFilter ?? false,
+      filterCfg.indexMomentumDays ?? 60,
+    );
+    const isSignals = precomputeDailySignals(filterCfg, allData, isPrecomputed);
+
+    let needOos = false;
+    const bestPerVariant: (ComboResult | null)[] = [];
+
+    for (let v = 0; v < variants.length; v++) {
+      const variant = variants[v];
+      const comboResults = new Map<string, ComboResult>();
+
+      for (const params of paramCombos) {
+        const config: BreakoutBacktestConfig = {
+          ...BREAKOUT_BACKTEST_DEFAULTS,
+          ...params,
+          startDate: isStart,
+          endDate: isEnd,
+          verbose: false,
+          maxPositions: variant.maxPositions,
+        };
+        const result = runBreakoutBacktest(config, allData, vixArg, indexArg, isPrecomputed, isSignals);
+        if (result.metrics.totalTrades < 5) continue;
+        comboResults.set(paramComboKey(params), { params, metrics: result.metrics });
+      }
+
+      const selected = useRobust ? selectByRobustness(comboResults) : selectByMaxPF(comboResults);
+      bestPerVariant.push(selected);
+
+      if (selected && selected.metrics.profitFactor >= MIN_IS_PF) {
+        needOos = true;
+      }
+    }
+
+    let oosPrecomputed: ReturnType<typeof precomputeSimData> | undefined;
+    let oosSignals: ReturnType<typeof precomputeDailySignals> | undefined;
+    if (needOos) {
+      oosPrecomputed = precomputeSimData(
+        oosStart, oosEnd, allData,
+        filterCfg.marketTrendFilter ?? false,
+        filterCfg.indexTrendFilter ?? false,
+        filterCfg.indexTrendSmaPeriod ?? 50,
+        indexArg,
+        filterCfg.indexMomentumFilter ?? false,
+        filterCfg.indexMomentumDays ?? 60,
+      );
+      oosSignals = precomputeDailySignals(filterCfg, allData, oosPrecomputed);
+    }
+
+    for (let v = 0; v < variants.length; v++) {
+      const variant = variants[v];
+      const selected = bestPerVariant[v];
+
+      if (!selected) {
+        console.log(`  [${variant.label}] IS: トレードなし → スキップ`);
+        continue;
+      }
+
+      const bestParams = selected.params;
+      const bestIsMetrics = selected.metrics;
+
+      if (bestIsMetrics.profitFactor < MIN_IS_PF) {
+        console.log(`  [${variant.label}] IS PF: ${formatPF(bestIsMetrics.profitFactor)} < ${MIN_IS_PF} → 休止`);
+        variantResults[v].push({
+          windowIdx: w, isStart, isEnd, oosStart, oosEnd,
+          bestIsParams: bestParams, isMetrics: bestIsMetrics, oosMetrics: null,
+        });
+        continue;
+      }
+
+      const oosConfig: BreakoutBacktestConfig = {
+        ...BREAKOUT_BACKTEST_DEFAULTS,
+        ...bestParams,
+        startDate: oosStart,
+        endDate: oosEnd,
+        verbose: false,
+        maxPositions: variant.maxPositions,
+      };
+      const oosResult = runBreakoutBacktest(oosConfig, allData, vixArg, indexArg, oosPrecomputed!, oosSignals!);
+
+      variantResults[v].push({
+        windowIdx: w, isStart, isEnd, oosStart, oosEnd,
+        bestIsParams: bestParams, isMetrics: bestIsMetrics, oosMetrics: oosResult.metrics,
+      });
+
+      const p = bestParams;
+      console.log(
+        `  [${variant.label}] IS PF: ${formatPF(bestIsMetrics.profitFactor)} → OOS PF: ${formatPF(oosResult.metrics.profitFactor)} ` +
+        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}]`,
+      );
+    }
+    console.log("");
+  }
+
+  printPositionSummary(variants, variantResults);
+}
+
+function printPositionSummary(variants: PositionVariant[], variantResults: WindowResult[][]): void {
+  console.log("=".repeat(70));
+  console.log("MaxPositions Walk-Forward 比較");
+  console.log("=".repeat(70));
+
+  console.log(
+    `\n${"Variant".padEnd(14)}| ${"OOS PF".padStart(7)} | ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"IS/OOS".padStart(6)} | ${"Active".padStart(6)} | 判定`,
+  );
+  console.log("-".repeat(68));
+
+  for (let v = 0; v < variants.length; v++) {
+    const agg = calcOosAggregate(variantResults[v]);
+    const j = judge(agg.pf, agg.isOosRatio);
+    console.log(
+      `${variants[v].label.padEnd(14)}| ${formatPF(agg.pf).padStart(7)} | ${String(agg.trades).padStart(6)} | ${agg.winRate.toFixed(1).padStart(6)}% | ${agg.isOosRatio.toFixed(2).padStart(6)} | ${`${agg.active}/${agg.active + agg.skipped}`.padStart(6)} | ${j}`,
+    );
+  }
+
+  for (let v = 0; v < variants.length; v++) {
+    console.log(`\n${"━".repeat(30)} ${variants[v].label} ${"━".repeat(30)}`);
+    printSummary(variantResults[v]);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const useRobust = !args.includes("--max-pf"); // デフォルトはロバスト方式
   const scoreFilterCompare = args.includes("--score-filter");
+  const positionCompare = args.includes("--positions");
   const endDate = dayjs().format("YYYY-MM-DD");
   const startDate = dayjs().subtract(TOTAL_MONTHS, "month").format("YYYY-MM-DD");
 
@@ -382,6 +540,15 @@ async function main() {
   // Score Filter 比較モード
   if (scoreFilterCompare) {
     await runScoreFilterComparison(
+      windows, paramCombos, filterCfg, allData, vixArg, indexArg, useRobust,
+    );
+    await prisma.$disconnect();
+    return;
+  }
+
+  // MaxPositions 比較モード
+  if (positionCompare) {
+    await runPositionComparison(
       windows, paramCombos, filterCfg, allData, vixArg, indexArg, useRobust,
     );
     await prisma.$disconnect();
