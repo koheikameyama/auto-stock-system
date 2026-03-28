@@ -19,6 +19,9 @@ import { getEffectiveBrokerMode } from "../core/broker-orders";
 import { notifySlack } from "../lib/slack";
 import { TIMEZONE } from "../lib/constants";
 import type { QuoteData } from "../core/breakout/breakout-scanner";
+import { GapUpScanner } from "../core/gapup/gapup-scanner";
+import type { GapUpQuoteData } from "../core/gapup/gapup-scanner";
+import { GAPUP } from "../lib/constants/gapup";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -27,6 +30,9 @@ let scanner: BreakoutScanner | null = null;
 let lastScanDate: string | null = null;
 /** 保有中ティッカー（直近スキャン時のスナップショット） */
 let lastHoldingTickers: Set<string> = new Set();
+let gapupScanner: GapUpScanner | null = null;
+/** 本日のgapupスキャン実行済みフラグ */
+let gapupScannedToday = false;
 
 /**
  * スキャナーの状態を外部から取得する（Web UIで使用）
@@ -55,11 +61,17 @@ export async function main(): Promise<void> {
   const today = dayjs().tz(TIMEZONE).format("YYYY-MM-DD");
   if (lastScanDate && lastScanDate !== today) {
     scanner = null;
+    gapupScanner = null;
+    gapupScannedToday = false;
   }
   lastScanDate = today;
 
   if (!scanner) {
     scanner = new BreakoutScanner(watchlist);
+  }
+
+  if (!gapupScanner) {
+    gapupScanner = new GapUpScanner(watchlist);
   }
 
   // 0-2. MarketAssessment・保有ポジション・エントリー件数を並列取得
@@ -120,56 +132,124 @@ export async function main(): Promise<void> {
     `${tag} スキャン完了: WL=${watchlist.length} 時価=${quotes.length} 保有=${holdingTickers.size} 本日エントリー=${dailyEntryCount} トリガー=${triggers.length}`,
   );
 
-  if (triggers.length === 0) {
-    return;
-  }
-
   // 6. ブローカーモード取得
   const brokerMode = getEffectiveBrokerMode();
 
-  // 6.5 既存pending注文の株数チェック（資金変動対応）
-  await resizePendingOrders(brokerMode);
+  if (triggers.length > 0) {
+    // 6.5 既存pending注文の株数チェック（資金変動対応）
+    await resizePendingOrders(brokerMode);
 
-  // 6.6 ブレイクアウト前提崩壊チェック（出来高萎縮・高値割り込み）
-  await invalidateStalePendingOrders(
-    quotes,
-    scanner.getState().lastSurgeRatios,
-    brokerMode,
-  );
-
-  // 7. 各トリガーに対してエントリー実行（優先順位順に直列）
-  // scanner が volumeSurgeRatio 降順でソート済み。
-  // 直列実行により各 executeEntry が最新の残高を参照し、レースコンディションを防ぐ。
-  for (const trigger of triggers) {
-    console.log(
-      `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
+    // 6.6 ブレイクアウト前提崩壊チェック（出来高萎縮・高値割り込み）
+    await invalidateStalePendingOrders(
+      quotes,
+      scanner.getState().lastSurgeRatios,
+      brokerMode,
     );
-    try {
-      const result = await executeEntry(trigger, brokerMode);
-      if (!result.success) {
-        // 一時的な理由で却下 → 再トリガーを許可
-        if (result.retryable && scanner) {
-          scanner.removeFromTriggeredToday(trigger.ticker);
-          console.log(
-            `[breakout-monitor] ${trigger.ticker} 再トリガー許可（理由: ${result.reason}）`,
-          );
+
+    // 7. 各トリガーに対してエントリー実行（優先順位順に直列）
+    // scanner が volumeSurgeRatio 降順でソート済み。
+    // 直列実行により各 executeEntry が最新の残高を参照し、レースコンディションを防ぐ。
+    for (const trigger of triggers) {
+      console.log(
+        `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
+      );
+      try {
+        const result = await executeEntry(trigger, brokerMode);
+        if (!result.success) {
+          // 一時的な理由で却下 → 再トリガーを許可
+          if (result.retryable && scanner) {
+            scanner.removeFromTriggeredToday(trigger.ticker);
+            console.log(
+              `[breakout-monitor] ${trigger.ticker} 再トリガー許可（理由: ${result.reason}）`,
+            );
+          }
+          await notifySlack({
+            title: `エントリー失敗: ${trigger.ticker}`,
+            message: `理由: ${result.reason ?? "不明"}\n価格: ¥${trigger.currentPrice.toLocaleString()} / 出来高サージ: ${trigger.volumeSurgeRatio.toFixed(2)}x${result.retryable ? "\n※ 再トリガー対象" : ""}`,
+            color: "warning",
+          });
         }
+      } catch (err) {
+        console.error(
+          `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,
+          err,
+        );
         await notifySlack({
-          title: `エントリー失敗: ${trigger.ticker}`,
-          message: `理由: ${result.reason ?? "不明"}\n価格: ¥${trigger.currentPrice.toLocaleString()} / 出来高サージ: ${trigger.volumeSurgeRatio.toFixed(2)}x${result.retryable ? "\n※ 再トリガー対象" : ""}`,
-          color: "warning",
+          title: `エントリー例外: ${trigger.ticker}`,
+          message: `${err instanceof Error ? err.message : String(err)}\n価格: ¥${trigger.currentPrice.toLocaleString()}`,
+          color: "danger",
         });
       }
-    } catch (err) {
-      console.error(
-        `[breakout-monitor] エントリーエラー: ${trigger.ticker}`,
-        err,
+    }
+  }
+
+  // ========================================
+  // gapupスキャン（14:50以降、1日1回）
+  // ========================================
+  const jstNow = dayjs().tz(TIMEZONE);
+  const currentMinutes = jstNow.hour() * 60 + jstNow.minute();
+  const gapupScanTime = GAPUP.GUARD.SCAN_HOUR * 60 + GAPUP.GUARD.SCAN_MINUTE;
+
+  if (!gapupScannedToday && currentMinutes >= gapupScanTime && gapupScanner) {
+    gapupScannedToday = true;
+    console.log(`${tag} [gapup] 14:50 gapupスキャン開始`);
+
+    // quotesRawは既に取得済み（上のbreakoutスキャンで使った全銘柄OHLCVデータ）
+    // YfQuoteResult には open, high, low, price, volume が全て含まれている
+    const gapupQuotes: GapUpQuoteData[] = quotesRaw
+      .filter((q): q is NonNullable<typeof q> => q !== null && q.open > 0 && q.volume > 0)
+      .map((q) => ({
+        ticker: q.tickerCode,
+        open: q.open,
+        price: q.price,
+        high: q.high,
+        low: q.low,
+        volume: q.volume,
+      }));
+
+    if (gapupQuotes.length > 0) {
+      const gapupTriggers = gapupScanner.scan(gapupQuotes, holdingTickers);
+      console.log(
+        `${tag} [gapup] スキャン完了: 時価=${gapupQuotes.length} トリガー=${gapupTriggers.length}`,
       );
-      await notifySlack({
-        title: `エントリー例外: ${trigger.ticker}`,
-        message: `${err instanceof Error ? err.message : String(err)}\n価格: ¥${trigger.currentPrice.toLocaleString()}`,
-        color: "danger",
+
+      // gapupエントリー件数カウント（当日のgapup注文数）
+      const gapupDailyCount = await prisma.tradingOrder.count({
+        where: {
+          side: "buy",
+          strategy: "gapup",
+          createdAt: { gte: todayStart },
+        },
       });
+
+      // MAX_DAILY_ENTRIES制限
+      const remainingSlots = GAPUP.GUARD.MAX_DAILY_ENTRIES - gapupDailyCount;
+      const gapupTriggersLimited = gapupTriggers.slice(0, Math.max(0, remainingSlots));
+
+      for (const trigger of gapupTriggersLimited) {
+        console.log(
+          `${tag} [gapup] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
+        );
+        try {
+          const result = await executeEntry(trigger, brokerMode, "gapup");
+          if (!result.success) {
+            await notifySlack({
+              title: `[gapup] エントリー失敗: ${trigger.ticker}`,
+              message: `理由: ${result.reason ?? "不明"}\n価格: ¥${trigger.currentPrice.toLocaleString()} / 出来高サージ: ${trigger.volumeSurgeRatio.toFixed(2)}x`,
+              color: "warning",
+            });
+          }
+        } catch (err) {
+          console.error(`${tag} [gapup] エントリーエラー: ${trigger.ticker}`, err);
+          await notifySlack({
+            title: `[gapup] エントリー例外: ${trigger.ticker}`,
+            message: `${err instanceof Error ? err.message : String(err)}`,
+            color: "danger",
+          });
+        }
+      }
+    } else {
+      console.log(`${tag} [gapup] スキップ: OHLCV取得0件`);
     }
   }
 }
@@ -179,4 +259,6 @@ export async function main(): Promise<void> {
  */
 export function resetScanner(): void {
   scanner = null;
+  gapupScanner = null;
+  gapupScannedToday = false;
 }

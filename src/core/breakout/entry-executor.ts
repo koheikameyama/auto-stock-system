@@ -23,9 +23,12 @@ import { notifyOrderPlaced, notifySlack } from "../../lib/slack";
 import { STOP_LOSS, POSITION_SIZING, UNIT_SHARES } from "../../lib/constants";
 import { TIMEZONE } from "../../lib/constants/timezone";
 import { BREAKOUT } from "../../lib/constants/breakout";
+import { GAPUP } from "../../lib/constants/gapup";
+import { TACHIBANA_ORDER } from "../../lib/constants/broker";
 import { ORDER_EXPIRY } from "../../lib/constants/jobs";
 import type { BreakoutTrigger } from "./types";
 import type { QuoteData } from "./breakout-scanner";
+import type { GapUpTrigger } from "../gapup/gapup-scanner";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -39,14 +42,16 @@ export interface ExecutionResult {
 }
 
 /**
- * ブレイクアウトトリガーのエントリー実行
+ * ブレイクアウト / ギャップアップトリガーのエントリー実行
  *
- * @param trigger ブレイクアウトトリガーイベント
+ * @param trigger ブレイクアウトまたはギャップアップトリガーイベント
  * @param brokerMode ブローカーモード（"simulation" | "dry_run" | "live"）
+ * @param strategy 戦略種別（デフォルト: "breakout"）
  */
 export async function executeEntry(
-  trigger: BreakoutTrigger,
+  trigger: BreakoutTrigger | GapUpTrigger,
   brokerMode: string,
+  strategy: "breakout" | "gapup" = "breakout",
 ): Promise<ExecutionResult> {
   const { ticker, currentPrice, atr14 } = trigger;
 
@@ -80,8 +85,10 @@ export async function executeEntry(
     return { success: false, reason, retryable: false };
   }
 
-  // 3. SL価格 = currentPrice - ATR × 1.0（最大3%に制限）
-  const rawStopLoss = currentPrice - atr14 * BREAKOUT.STOP_LOSS.ATR_MULTIPLIER;
+  // 3. SL価格 = currentPrice - ATR × multiplier（最大3%に制限）
+  const slAtrMultiplier =
+    strategy === "gapup" ? GAPUP.STOP_LOSS.ATR_MULTIPLIER : BREAKOUT.STOP_LOSS.ATR_MULTIPLIER;
+  const rawStopLoss = currentPrice - atr14 * slAtrMultiplier;
   const maxStopLoss = currentPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
   const stopLossPrice = Math.round(Math.max(rawStopLoss, maxStopLoss));
 
@@ -121,11 +128,17 @@ export async function executeEntry(
   }
 
   // 5. canOpenPosition でセクター集中・ドローダウン・ポジション数を確認（プリフェッチデータを渡す）
-  const riskCheck = await canOpenPosition(stock.id, quantity, currentPrice, {
-    config: config ?? undefined,
-    openPositions,
-    effectiveCapital,
-  });
+  const riskCheck = await canOpenPosition(
+    stock.id,
+    quantity,
+    currentPrice,
+    {
+      config: config ?? undefined,
+      openPositions,
+      effectiveCapital,
+    },
+    strategy,
+  );
   if (!riskCheck.allowed) {
     console.log(`[entry-executor] ${ticker} リスクチェック不可: ${riskCheck.reason}`);
     return { success: false, reason: riskCheck.reason, retryable: riskCheck.retryable ?? false };
@@ -135,25 +148,33 @@ export async function executeEntry(
   const takeProfitPrice = Math.round(currentPrice + atr14 * 5.0);
 
   // 6. TradingOrderをDBに作成
+  const isGapUp = strategy === "gapup";
+  const expiresAt = isGapUp
+    ? dayjs().tz(TIMEZONE).hour(15).minute(30).second(0).toDate()
+    : dayjs().tz(TIMEZONE).add(ORDER_EXPIRY.SWING_DAYS, "day").hour(15).minute(0).second(0).toDate();
+  const reasoning = isGapUp
+    ? `ギャップアップトリガー: 出来高サージ比率 ${trigger.volumeSurgeRatio.toFixed(2)}x, ギャップ3%以上`
+    : `ブレイクアウトトリガー: 出来高サージ比率 ${trigger.volumeSurgeRatio.toFixed(2)}x, 20日高値 ¥${'high20' in trigger ? trigger.high20 : ''} 突破`;
+
   const newOrder = await prisma.tradingOrder.create({
     data: {
       stockId: stock.id,
       side: "buy",
-      orderType: "limit",
-      strategy: "breakout",
-      limitPrice: currentPrice,
+      orderType: isGapUp ? "market" : "limit",
+      strategy,
+      limitPrice: currentPrice, // gapup: スナップショット価格（実約定は引け値）
       takeProfitPrice,
       stopLossPrice,
       quantity,
       status: "pending",
-      expiresAt: dayjs().tz(TIMEZONE).add(ORDER_EXPIRY.SWING_DAYS, "day").hour(15).minute(0).second(0).toDate(),
-      reasoning: `ブレイクアウトトリガー: 出来高サージ比率 ${trigger.volumeSurgeRatio.toFixed(2)}x, 20日高値 ¥${trigger.high20} 突破`,
+      expiresAt,
+      reasoning,
       entrySnapshot: {
         trigger: {
           ticker: trigger.ticker,
           currentPrice: trigger.currentPrice,
           volumeSurgeRatio: trigger.volumeSurgeRatio,
-          high20: trigger.high20,
+          ...('high20' in trigger ? { high20: trigger.high20 } : {}),
           atr14: trigger.atr14,
           triggeredAt: trigger.triggeredAt.toISOString(),
         },
@@ -191,9 +212,10 @@ export async function executeEntry(
         ticker,
         side: "buy",
         quantity,
-        limitPrice: currentPrice,
-        stopTriggerPrice: stopLossPrice,
-        stopOrderPrice: undefined, // SL成行
+        limitPrice: isGapUp ? null : currentPrice,
+        stopTriggerPrice: isGapUp ? undefined : stopLossPrice,
+        stopOrderPrice: undefined,
+        condition: isGapUp ? TACHIBANA_ORDER.CONDITION.CLOSE : undefined,
       });
 
       if (brokerResult.success && brokerResult.orderNumber) {
@@ -223,16 +245,19 @@ export async function executeEntry(
   }
 
   // 8. Slack通知
+  const slackReasoning = isGapUp
+    ? `ギャップアップトリガー: 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x / ギャップ3%以上`
+    : `ブレイクアウトトリガー: 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x / 20日高値 ¥${'high20' in trigger ? trigger.high20 : ''} 突破`;
   await notifyOrderPlaced({
     tickerCode: ticker,
     name: stock.name,
     side: "buy",
-    strategy: "breakout",
+    strategy,
     limitPrice: currentPrice,
     takeProfitPrice,
     stopLossPrice,
     quantity,
-    reasoning: `ブレイクアウトトリガー: 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x / 20日高値 ¥${trigger.high20} 突破`,
+    reasoning: slackReasoning,
   });
 
   return { success: true, orderId: newOrder.id };
