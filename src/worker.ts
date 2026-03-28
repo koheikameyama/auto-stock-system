@@ -187,14 +187,12 @@ serve({ fetch: app.fetch, port }, (info) => {
 (async () => {
   try {
     const mode = getEffectiveBrokerMode();
-    const needsPriceSession =
-      process.env.MARKET_DATA_PROVIDER === "tachibana";
+
+    console.log(`  ブローカーモード: ${mode} — ログイン中...`);
+    const client = getTachibanaClient();
+    const session = await client.login();
 
     if (mode !== "simulation") {
-      console.log(`  ブローカーモード: ${mode} — ログイン中...`);
-      const client = getTachibanaClient();
-      const session = await client.login();
-
       // WebSocket EVENT I/F 接続（約定通知のリアルタイム受信）
       const stream = getBrokerEventStream();
       stream.on("execution", (event) => {
@@ -211,18 +209,12 @@ serve({ fetch: app.fetch, port }, (info) => {
       client.startAutoRefresh((newSession) => {
         stream.reconnect(newSession.urlEventWebSocket);
       });
-
-      console.log(`  ブローカーセッション確立`);
-    } else if (needsPriceSession) {
-      // simulation でも株価取得に立花APIを使う場合はログイン
-      console.log(`  ブローカーモード: simulation（株価取得用にログイン中...）`);
-      const client = getTachibanaClient();
-      await client.login();
-      client.startAutoRefresh();
-      console.log(`  株価取得用セッション確立`);
     } else {
-      console.log(`  ブローカーモード: simulation（APIスキップ）`);
+      // simulationでもクォート取得用にセッション維持
+      client.startAutoRefresh();
     }
+
+    console.log(`  ブローカーセッション確立`);
   } catch (e) {
     console.error("  ブローカーログイン失敗:", e);
     await notifyBrokerError(

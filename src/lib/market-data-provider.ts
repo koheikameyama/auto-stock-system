@@ -1,14 +1,11 @@
 /**
- * マーケットデータプロバイダー（切り替え層）
+ * マーケットデータプロバイダー
  *
- * 環境変数 MARKET_DATA_PROVIDER で制御:
- * - "yfinance"   (デフォルト): yfinance のみ
- * - "tachibana"   : 立花APIのみ（失敗時はエラー）
+ * - リアルタイムクォート: 立花証券API
+ * - ヒストリカル・市場指標・ニュース等: yfinance
  */
 
 import {
-  yfFetchQuote,
-  yfFetchQuotesBatch,
   yfFetchHistorical,
   yfFetchHistoricalRange,
   yfFetchHistoricalBatch,
@@ -26,37 +23,24 @@ import {
   tachibanaFetchQuotesBatch,
 } from "./tachibana-price-client";
 
-type ProviderMode = "yfinance" | "tachibana";
-
-const PROVIDER_MODE: ProviderMode =
-  (process.env.MARKET_DATA_PROVIDER as ProviderMode) || "yfinance";
-
 // ========================================
 // 公開 API
 // ========================================
 
 /**
- * 個別銘柄のクォートを取得
+ * 個別銘柄のクォートを取得（立花証券API）
  */
 export async function providerFetchQuote(symbol: string): Promise<YfQuoteResult> {
-  if (PROVIDER_MODE === "tachibana") {
-    return tachibanaFetchQuote(symbol);
-  }
-
-  return yfFetchQuote(symbol);
+  return tachibanaFetchQuote(symbol);
 }
 
 /**
- * 複数銘柄のクォートをバッチ取得
+ * 複数銘柄のクォートをバッチ取得（立花証券API）
  */
 export async function providerFetchQuotesBatch(
   symbols: string[],
 ): Promise<(YfQuoteResult | null)[]> {
-  if (PROVIDER_MODE === "tachibana") {
-    return tachibanaFetchQuotesBatch(symbols);
-  }
-
-  return yfFetchQuotesBatch(symbols);
+  return tachibanaFetchQuotesBatch(symbols);
 }
 
 /**

@@ -138,20 +138,20 @@ create → ブローカーに送信 → pending（ブローカーID付き）
 
 ## B. マーケットデータ（実装済み）
 
-### 現状: 立花API + Yahoo Finance ハイブリッド
+### 立花API + yfinance ハイブリッド（固定）
 
-`MARKET_DATA_PROVIDER=tachibana` 設定で、日本株クォートは立花API（リアルタイム）、その他はyfinance。
+リアルタイムクォートは常に立花API、それ以外はyfinance。環境変数による切り替えは不要。
 
 ### 実装状況
 
 | 関数 | 取得元 | 状態 |
 |------|--------|------|
-| `fetchStockQuote()` | 立花API `CLMMfdsGetMarketPrice` → yfinance fallback | **実装済み** |
-| `fetchStockQuotesBatch()` | 立花API（p-limit並列） → yfinance fallback | **実装済み** |
-| `fetchHistoricalData()` | yfinance（変更なし） | 据え置き |
-| `fetchMarketData()` | yfinance（変更なし、US指標は立花で取得不可） | 据え置き |
+| `providerFetchQuote()` | 立花API `CLMMfdsGetMarketPrice` | **実装済み** |
+| `providerFetchQuotesBatch()` | 立花API（p-limit並列） | **実装済み** |
+| `providerFetchHistorical()` | yfinance | 据え置き |
+| `providerFetchMarket()` | yfinance（US指標は立花で取得不可） | 据え置き |
 | ファンダメンタルズ（PER/PBR/EPS） | yfinance（立花APIでは取得不可） | 据え置き |
-| コーポレートイベント | yfinance（変更なし） | 据え置き |
+| コーポレートイベント | yfinance | 据え置き |
 | ニュース | yfinance（変更なし） | 据え置き |
 
 ### 関連ファイル
