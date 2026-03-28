@@ -49,6 +49,7 @@ function runScoreComparison(
   baseConfig: BreakoutBacktestConfig,
   allData: Map<string, OHLCVData[]>,
   vixData: Map<string, number> | undefined,
+  indexData: Map<string, number> | undefined,
 ): void {
   console.log("\n=== Score Filter Comparison ===");
   console.log(
@@ -62,7 +63,7 @@ function runScoreComparison(
       scoreFilter: row.filter,
       verbose: false,
     };
-    const result = runBreakoutBacktest(config, allData, vixData);
+    const result = runBreakoutBacktest(config, allData, vixData, indexData);
     const m = result.metrics;
     const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
     console.log(
@@ -84,6 +85,7 @@ function runStrategyComparison(
   baseConfig: BreakoutBacktestConfig,
   allData: Map<string, OHLCVData[]>,
   vixData: Map<string, number> | undefined,
+  indexData: Map<string, number> | undefined,
 ): void {
   console.log("\n=== Strategy Comparison (BE→Trail integrated) ===");
   console.log(
@@ -97,7 +99,7 @@ function runStrategyComparison(
       maxPositions: row.maxPositions,
       verbose: false,
     };
-    const result = runBreakoutBacktest(config, allData, vixData);
+    const result = runBreakoutBacktest(config, allData, vixData, indexData);
     const m = result.metrics;
     const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
     const returnStr = (m.totalReturnPct >= 0 ? "+" : "") + m.totalReturnPct.toFixed(1) + "%";
@@ -206,6 +208,7 @@ function runExitParamComparison(
   baseConfig: BreakoutBacktestConfig,
   allData: Map<string, OHLCVData[]>,
   vixData: Map<string, number> | undefined,
+  indexData: Map<string, number> | undefined,
 ): void {
   console.log("\n=== Exit Parameter Comparison ===");
   console.log(
@@ -222,7 +225,7 @@ function runExitParamComparison(
       trailMultiplier: row.trailMultiplier,
       verbose: false,
     };
-    const result = runBreakoutBacktest(config, allData, vixData);
+    const result = runBreakoutBacktest(config, allData, vixData, indexData);
     const m = result.metrics;
     const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
     const returnStr = (m.totalReturnPct >= 0 ? "+" : "") + m.totalReturnPct.toFixed(1) + "%";
@@ -293,7 +296,8 @@ async function main() {
   // 4a. スコア比較モード
   if (scoreCompare) {
     const vix = vixData.size > 0 ? vixData : undefined;
-    runScoreComparison(config, allData, vix);
+    const idx = indexData.size > 0 ? indexData : undefined;
+    runScoreComparison(config, allData, vix, idx);
     await prisma.$disconnect();
     return;
   }
@@ -301,7 +305,8 @@ async function main() {
   // 4b. 戦略比較モード（maxPositions変化）
   if (strategyCompare) {
     const vix = vixData.size > 0 ? vixData : undefined;
-    runStrategyComparison(config, allData, vix);
+    const idx = indexData.size > 0 ? indexData : undefined;
+    runStrategyComparison(config, allData, vix, idx);
     await prisma.$disconnect();
     return;
   }
@@ -318,7 +323,8 @@ async function main() {
   // 4d. 出口パラメータ比較モード
   if (exitCompare) {
     const vix = vixData.size > 0 ? vixData : undefined;
-    runExitParamComparison(config, allData, vix);
+    const idx = indexData.size > 0 ? indexData : undefined;
+    runExitParamComparison(config, allData, vix, idx);
     await prisma.$disconnect();
     return;
   }

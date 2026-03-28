@@ -21,7 +21,7 @@ import { prisma } from "../src/lib/prisma";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "../src/backtest/data-fetcher";
 import { runBreakoutBacktest, precomputeSimData, precomputeDailySignals } from "../src/backtest/breakout-simulation";
 import { BREAKOUT_BACKTEST_DEFAULTS, generateParameterCombinations, PARAMETER_GRID } from "../src/backtest/breakout-config";
-import type { BreakoutBacktestConfig, PerformanceMetrics } from "../src/backtest/types";
+import type { BreakoutBacktestConfig, PerformanceMetrics, ScoreFilterConfig } from "../src/backtest/types";
 
 const IS_MONTHS = 6;
 const OOS_MONTHS = 3;
@@ -130,9 +130,206 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
   return best;
 }
 
+interface ScoreFilterVariant {
+  label: string;
+  filter: ScoreFilterConfig | undefined;
+}
+
+const SCORE_FILTER_VARIANTS: ScoreFilterVariant[] = [
+  { label: "baseline", filter: undefined },
+  { label: "trend>=20", filter: { category: "trend", minScore: 20 } },
+  { label: "risk>=10", filter: { category: "risk", minScore: 10 } },
+];
+
+type WindowDef = { isStart: string; isEnd: string; oosStart: string; oosEnd: string };
+
+async function runScoreFilterComparison(
+  windows: WindowDef[],
+  paramCombos: Partial<BreakoutBacktestConfig>[],
+  filterCfg: typeof BREAKOUT_BACKTEST_DEFAULTS,
+  allData: Map<string, import("../src/core/technical-analysis").OHLCVData[]>,
+  vixArg: Map<string, number> | undefined,
+  indexArg: Map<string, number> | undefined,
+  useRobust: boolean,
+): Promise<void> {
+  const variants = SCORE_FILTER_VARIANTS;
+  // variantResults[v][w] = WindowResult
+  const variantResults: WindowResult[][] = variants.map(() => []);
+
+  for (let w = 0; w < windows.length; w++) {
+    const { isStart, isEnd, oosStart, oosEnd } = windows[w];
+    console.log(`━━━ Window ${w + 1}/${NUM_WINDOWS} ━━━`);
+    console.log(`  IS:  ${isStart} → ${isEnd}`);
+    console.log(`  OOS: ${oosStart} → ${oosEnd}`);
+
+    // IS期間の事前計算（全バリアント共有）
+    const isPrecomputed = precomputeSimData(
+      isStart, isEnd, allData,
+      filterCfg.marketTrendFilter ?? false,
+      filterCfg.indexTrendFilter ?? false,
+      filterCfg.indexTrendSmaPeriod ?? 50,
+      indexArg,
+      filterCfg.indexMomentumFilter ?? false,
+      filterCfg.indexMomentumDays ?? 60,
+    );
+    const isSignals = precomputeDailySignals(filterCfg, allData, isPrecomputed);
+
+    // 各バリアントのIS最適化
+    let needOos = false;
+    const bestPerVariant: (ComboResult | null)[] = [];
+
+    for (let v = 0; v < variants.length; v++) {
+      const variant = variants[v];
+      const comboResults = new Map<string, ComboResult>();
+
+      for (const params of paramCombos) {
+        const config: BreakoutBacktestConfig = {
+          ...BREAKOUT_BACKTEST_DEFAULTS,
+          ...params,
+          startDate: isStart,
+          endDate: isEnd,
+          verbose: false,
+          scoreFilter: variant.filter,
+        };
+        const result = runBreakoutBacktest(config, allData, vixArg, indexArg, isPrecomputed, isSignals);
+        if (result.metrics.totalTrades < 5) continue;
+        comboResults.set(paramComboKey(params), { params, metrics: result.metrics });
+      }
+
+      const selected = useRobust ? selectByRobustness(comboResults) : selectByMaxPF(comboResults);
+      bestPerVariant.push(selected);
+
+      if (selected && selected.metrics.profitFactor >= MIN_IS_PF) {
+        needOos = true;
+      }
+    }
+
+    // OOS期間の事前計算（必要な場合のみ、全バリアント共有）
+    let oosPrecomputed: ReturnType<typeof precomputeSimData> | undefined;
+    let oosSignals: ReturnType<typeof precomputeDailySignals> | undefined;
+    if (needOos) {
+      oosPrecomputed = precomputeSimData(
+        oosStart, oosEnd, allData,
+        filterCfg.marketTrendFilter ?? false,
+        filterCfg.indexTrendFilter ?? false,
+        filterCfg.indexTrendSmaPeriod ?? 50,
+        indexArg,
+        filterCfg.indexMomentumFilter ?? false,
+        filterCfg.indexMomentumDays ?? 60,
+      );
+      oosSignals = precomputeDailySignals(filterCfg, allData, oosPrecomputed);
+    }
+
+    // 各バリアントのOOS評価
+    for (let v = 0; v < variants.length; v++) {
+      const variant = variants[v];
+      const selected = bestPerVariant[v];
+
+      if (!selected) {
+        console.log(`  [${variant.label}] IS: トレードなし → スキップ`);
+        continue;
+      }
+
+      const bestParams = selected.params;
+      const bestIsMetrics = selected.metrics;
+
+      if (bestIsMetrics.profitFactor < MIN_IS_PF) {
+        console.log(`  [${variant.label}] IS PF: ${formatPF(bestIsMetrics.profitFactor)} < ${MIN_IS_PF} → 休止`);
+        variantResults[v].push({
+          windowIdx: w, isStart, isEnd, oosStart, oosEnd,
+          bestIsParams: bestParams, isMetrics: bestIsMetrics, oosMetrics: null,
+        });
+        continue;
+      }
+
+      const oosConfig: BreakoutBacktestConfig = {
+        ...BREAKOUT_BACKTEST_DEFAULTS,
+        ...bestParams,
+        startDate: oosStart,
+        endDate: oosEnd,
+        verbose: false,
+        scoreFilter: variant.filter,
+      };
+      const oosResult = runBreakoutBacktest(oosConfig, allData, vixArg, indexArg, oosPrecomputed!, oosSignals!);
+
+      variantResults[v].push({
+        windowIdx: w, isStart, isEnd, oosStart, oosEnd,
+        bestIsParams: bestParams, isMetrics: bestIsMetrics, oosMetrics: oosResult.metrics,
+      });
+
+      const p = bestParams;
+      console.log(
+        `  [${variant.label}] IS PF: ${formatPF(bestIsMetrics.profitFactor)} → OOS PF: ${formatPF(oosResult.metrics.profitFactor)} ` +
+        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}]`,
+      );
+    }
+    console.log("");
+  }
+
+  // 比較サマリー
+  printScoreFilterSummary(variants, variantResults);
+}
+
+function calcOosAggregate(results: WindowResult[]): {
+  pf: number; trades: number; winRate: number; isAvgPF: number; oosAvgPF: number; isOosRatio: number;
+  active: number; skipped: number;
+} {
+  const activeResults = results.filter((r) => r.oosMetrics !== null);
+  const skipped = results.length - activeResults.length;
+
+  let oosGrossProfit = 0;
+  let oosGrossLoss = 0;
+  let oosTotalTrades = 0;
+  let oosWins = 0;
+
+  for (const r of activeResults) {
+    const oos = r.oosMetrics!;
+    oosTotalTrades += oos.totalTrades;
+    oosWins += oos.wins;
+    if (oos.wins > 0) oosGrossProfit += oos.avgWinPct * oos.wins;
+    if (oos.losses > 0) oosGrossLoss += Math.abs(oos.avgLossPct) * oos.losses;
+  }
+
+  const pf = oosGrossLoss > 0 ? oosGrossProfit / oosGrossLoss : oosGrossProfit > 0 ? Infinity : 0;
+  const winRate = oosTotalTrades > 0 ? (oosWins / oosTotalTrades) * 100 : 0;
+  const isAvgPF = results.length > 0 ? results.reduce((s, r) => s + r.isMetrics.profitFactor, 0) / results.length : 0;
+  const oosAvgPF = activeResults.length > 0
+    ? activeResults.reduce((s, r) => s + r.oosMetrics!.profitFactor, 0) / activeResults.length
+    : 0;
+  const isOosRatio = oosAvgPF > 0 ? isAvgPF / oosAvgPF : Infinity;
+
+  return { pf, trades: oosTotalTrades, winRate, isAvgPF, oosAvgPF, isOosRatio, active: activeResults.length, skipped };
+}
+
+function printScoreFilterSummary(variants: ScoreFilterVariant[], variantResults: WindowResult[][]): void {
+  console.log("=".repeat(70));
+  console.log("Score Filter Walk-Forward 比較");
+  console.log("=".repeat(70));
+
+  console.log(
+    `\n${"Variant".padEnd(14)}| ${"OOS PF".padStart(7)} | ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"IS/OOS".padStart(6)} | ${"Active".padStart(6)} | 判定`,
+  );
+  console.log("-".repeat(68));
+
+  for (let v = 0; v < variants.length; v++) {
+    const agg = calcOosAggregate(variantResults[v]);
+    const j = judge(agg.pf, agg.isOosRatio);
+    console.log(
+      `${variants[v].label.padEnd(14)}| ${formatPF(agg.pf).padStart(7)} | ${String(agg.trades).padStart(6)} | ${agg.winRate.toFixed(1).padStart(6)}% | ${agg.isOosRatio.toFixed(2).padStart(6)} | ${`${agg.active}/${agg.active + agg.skipped}`.padStart(6)} | ${j}`,
+    );
+  }
+
+  // 各バリアントのウィンドウ別詳細
+  for (let v = 0; v < variants.length; v++) {
+    console.log(`\n${"━".repeat(30)} ${variants[v].label} ${"━".repeat(30)}`);
+    printSummary(variantResults[v]);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const useRobust = !args.includes("--max-pf"); // デフォルトはロバスト方式
+  const scoreFilterCompare = args.includes("--score-filter");
   const endDate = dayjs().format("YYYY-MM-DD");
   const startDate = dayjs().subtract(TOTAL_MONTHS, "month").format("YYYY-MM-DD");
 
@@ -177,13 +374,22 @@ async function main() {
   // ウィンドウ生成
   const windows = generateWindows(startDate);
 
-  // 各ウィンドウの実行
-  const results: WindowResult[] = [];
-
   // デフォルト設定からフィルター設定を取得（全コンボ共通）
   const filterCfg = BREAKOUT_BACKTEST_DEFAULTS;
   const vixArg = vixData.size > 0 ? vixData : undefined;
   const indexArg = indexData.size > 0 ? indexData : undefined;
+
+  // Score Filter 比較モード
+  if (scoreFilterCompare) {
+    await runScoreFilterComparison(
+      windows, paramCombos, filterCfg, allData, vixArg, indexArg, useRobust,
+    );
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 各ウィンドウの実行
+  const results: WindowResult[] = [];
 
   for (let w = 0; w < windows.length; w++) {
     const { isStart, isEnd, oosStart, oosEnd } = windows[w];
