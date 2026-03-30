@@ -14,7 +14,6 @@ import { TIME_STOP } from "../lib/constants";
 import {
   submitOrder,
   cancelOrder,
-  getEffectiveBrokerMode,
 } from "./broker-orders";
 import { notifySlack } from "../lib/slack";
 
@@ -32,9 +31,6 @@ export async function submitBrokerSL(params: {
   stopTriggerPrice: number;
   strategy: string;
 }): Promise<void> {
-  const mode = getEffectiveBrokerMode();
-  if (mode === "simulation") return;
-
   try {
     // SL注文の期限: swing はタイムストップ上限分、day_trade は当日
     const expireDay =
@@ -96,9 +92,6 @@ export async function submitBrokerSL(params: {
  * SL注文を取消す（再発注なし）
  */
 export async function cancelBrokerSL(positionId: string): Promise<void> {
-  const mode = getEffectiveBrokerMode();
-  if (mode === "simulation") return;
-
   try {
     const position = await prisma.tradingPosition.findUnique({
       where: { id: positionId },
@@ -157,9 +150,6 @@ export async function updateBrokerSL(params: {
   newStopTriggerPrice: number;
   strategy: string;
 }): Promise<void> {
-  const mode = getEffectiveBrokerMode();
-  if (mode === "simulation") return;
-
   await cancelBrokerSL(params.positionId);
   await submitBrokerSL({
     positionId: params.positionId,

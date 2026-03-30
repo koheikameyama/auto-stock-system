@@ -26,7 +26,6 @@ import { isMarketDay } from "./lib/market-calendar";
 import { TIMEZONE } from "./lib/constants";
 import { cronControl } from "./lib/cron-control";
 import { getTachibanaClient, resetTachibanaClient } from "./core/broker-client";
-import { getEffectiveBrokerMode } from "./core/broker-orders";
 import { getBrokerEventStream, resetBrokerEventStream, isBrokerConnectionWindow } from "./core/broker-event-stream";
 import { handleBrokerFill } from "./core/broker-fill-handler";
 
@@ -186,36 +185,29 @@ serve({ fetch: app.fetch, port }, (info) => {
 // ブローカーセッション初期化
 (async () => {
   try {
-    const mode = getEffectiveBrokerMode();
-
-    console.log(`  ブローカーモード: ${mode} — ログイン中...`);
+    console.log("  ブローカーログイン中...");
     const client = getTachibanaClient();
     const session = await client.login();
 
-    if (mode !== "simulation") {
-      // WebSocket EVENT I/F 接続（約定通知のリアルタイム受信）
-      const stream = getBrokerEventStream();
-      stream.on("execution", (event) => {
-        handleBrokerFill(event).catch((err) => {
-          console.error("[worker] broker-fill error:", err);
-        });
+    // WebSocket EVENT I/F 接続（約定通知のリアルタイム受信）
+    const stream = getBrokerEventStream();
+    stream.on("execution", (event) => {
+      handleBrokerFill(event).catch((err) => {
+        console.error("[worker] broker-fill error:", err);
       });
-      stream.on("error", (err) => {
-        console.error("[worker] EventStream error:", err);
-      });
-      if (!isBrokerConnectionWindow()) {
-        console.log("  WebSocket: 営業時間外 — 次の営業時間に自動接続します");
-      }
-      stream.connect(session.urlEventWebSocket);
-
-      // セッション更新時にWebSocket再接続
-      client.startAutoRefresh((newSession) => {
-        stream.reconnect(newSession.urlEventWebSocket);
-      });
-    } else {
-      // simulationでもクォート取得用にセッション維持
-      client.startAutoRefresh();
+    });
+    stream.on("error", (err) => {
+      console.error("[worker] EventStream error:", err);
+    });
+    if (!isBrokerConnectionWindow()) {
+      console.log("  WebSocket: 営業時間外 — 次の営業時間に自動接続します");
     }
+    stream.connect(session.urlEventWebSocket);
+
+    // セッション更新時にWebSocket再接続
+    client.startAutoRefresh((newSession) => {
+      stream.reconnect(newSession.urlEventWebSocket);
+    });
 
     console.log(`  ブローカーセッション確立`);
   } catch (e) {

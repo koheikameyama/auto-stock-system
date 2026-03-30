@@ -7,7 +7,7 @@
  * 3. SL価格 = currentPrice - ATR(14) × 1.0（最大3%）
  * 4. ポジションサイズ = リスク金額（資金の2%） / (currentPrice - SL)、100株単位切捨て
  * 5. TradingOrderをDBに作成
- * 6. submitBrokerOrder()でブローカー発注（シミュレーションモードはスキップ）
+ * 6. submitBrokerOrder()でブローカー発注
  * 7. Slack通知
  */
 
@@ -45,12 +45,10 @@ export interface ExecutionResult {
  * ブレイクアウト / ギャップアップトリガーのエントリー実行
  *
  * @param trigger ブレイクアウトまたはギャップアップトリガーイベント
- * @param brokerMode ブローカーモード（"simulation" | "dry_run" | "live"）
  * @param strategy 戦略種別（デフォルト: "breakout"）
  */
 export async function executeEntry(
   trigger: BreakoutTrigger | GapUpTrigger,
-  brokerMode: string,
   strategy: "breakout" | "gapup" = "breakout",
 ): Promise<ExecutionResult> {
   const { ticker, currentPrice, atr14 } = trigger;
@@ -205,43 +203,41 @@ export async function executeEntry(
     return { success: false, reason, retryable: true };
   }
 
-  // 7. ブローカー発注（simulationモードはスキップ）
-  if (brokerMode !== "simulation") {
-    try {
-      const brokerResult = await submitBrokerOrder({
-        ticker,
-        side: "buy",
-        quantity,
-        limitPrice: isGapUp ? null : currentPrice,
-        stopTriggerPrice: isGapUp ? undefined : stopLossPrice,
-        stopOrderPrice: undefined,
-        condition: isGapUp ? TACHIBANA_ORDER.CONDITION.CLOSE : undefined,
-      });
+  // 7. ブローカー発注（simulationモードではsubmitBrokerOrder内部でスキップ）
+  try {
+    const brokerResult = await submitBrokerOrder({
+      ticker,
+      side: "buy",
+      quantity,
+      limitPrice: isGapUp ? null : currentPrice,
+      stopTriggerPrice: isGapUp ? undefined : stopLossPrice,
+      stopOrderPrice: undefined,
+      condition: isGapUp ? TACHIBANA_ORDER.CONDITION.CLOSE : undefined,
+    });
 
-      if (brokerResult.success && brokerResult.orderNumber) {
-        await prisma.tradingOrder.update({
-          where: { id: newOrder.id },
-          data: {
-            brokerOrderId: brokerResult.orderNumber,
-            brokerBusinessDay: brokerResult.businessDay,
-          },
-        });
-        console.log(
-          `[entry-executor] ${ticker} ブローカー発注成功: orderNumber=${brokerResult.orderNumber}`,
-        );
-      } else if (!brokerResult.success && !brokerResult.isDryRun) {
-        console.warn(
-          `[entry-executor] ブローカー発注失敗: ${ticker}: ${brokerResult.error}`,
-        );
-        await notifySlack({
-          title: `ブローカー発注失敗: ${ticker}`,
-          message: brokerResult.error ?? "Unknown error",
-          color: "danger",
-        });
-      }
-    } catch (brokerErr) {
-      console.error(`[entry-executor] ブローカーエラー ${ticker}:`, brokerErr);
+    if (brokerResult.success && brokerResult.orderNumber) {
+      await prisma.tradingOrder.update({
+        where: { id: newOrder.id },
+        data: {
+          brokerOrderId: brokerResult.orderNumber,
+          brokerBusinessDay: brokerResult.businessDay,
+        },
+      });
+      console.log(
+        `[entry-executor] ${ticker} ブローカー発注成功: orderNumber=${brokerResult.orderNumber}`,
+      );
+    } else if (!brokerResult.success) {
+      console.warn(
+        `[entry-executor] ブローカー発注失敗: ${ticker}: ${brokerResult.error}`,
+      );
+      await notifySlack({
+        title: `ブローカー発注失敗: ${ticker}`,
+        message: brokerResult.error ?? "Unknown error",
+        color: "danger",
+      });
     }
+  } catch (brokerErr) {
+    console.error(`[entry-executor] ブローカーエラー ${ticker}:`, brokerErr);
   }
 
   // 8. Slack通知
@@ -268,7 +264,7 @@ export async function executeEntry(
  *
  * 先着順（createdAt ASC）で残高を割り当て、後発の注文から優先的に減株される。
  */
-export async function resizePendingOrders(brokerMode: string): Promise<void> {
+export async function resizePendingOrders(): Promise<void> {
   const pendingOrders = await prisma.tradingOrder.findMany({
     where: { side: "buy", status: "pending" },
     include: { stock: { select: { tickerCode: true } } },
@@ -320,7 +316,7 @@ export async function resizePendingOrders(brokerMode: string): Promise<void> {
 
     // 株数が0以下 → 注文キャンセル
     if (newQuantity <= 0) {
-      if (order.brokerOrderId && order.brokerBusinessDay && brokerMode !== "simulation") {
+      if (order.brokerOrderId && order.brokerBusinessDay) {
         const result = await cancelOrder(order.brokerOrderId, order.brokerBusinessDay);
         if (!result.success) {
           console.warn(
@@ -349,8 +345,8 @@ export async function resizePendingOrders(brokerMode: string): Promise<void> {
       continue;
     }
 
-    // ブローカー訂正（simulation以外）
-    if (order.brokerOrderId && order.brokerBusinessDay && brokerMode !== "simulation") {
+    // ブローカー訂正
+    if (order.brokerOrderId && order.brokerBusinessDay) {
       const result = await modifyOrder(order.brokerOrderId, order.brokerBusinessDay, {
         quantity: newQuantity,
       });
@@ -392,12 +388,10 @@ export async function resizePendingOrders(brokerMode: string): Promise<void> {
  *
  * @param quotes breakout-monitorが取得済みの時価データ
  * @param surgeRatios scannerのlastSurgeRatiosマップ
- * @param brokerMode ブローカーモード
  */
 export async function invalidateStalePendingOrders(
   quotes: QuoteData[],
   surgeRatios: ReadonlyMap<string, number>,
-  brokerMode: string,
 ): Promise<void> {
   const pendingOrders = await prisma.tradingOrder.findMany({
     where: { side: "buy", status: "pending", strategy: "breakout" },
@@ -437,7 +431,7 @@ export async function invalidateStalePendingOrders(
     if (reasons.length === 0) continue;
 
     // ブローカー注文がある場合は取消
-    if (order.brokerOrderId && order.brokerBusinessDay && brokerMode !== "simulation") {
+    if (order.brokerOrderId && order.brokerBusinessDay) {
       const result = await cancelOrder(order.brokerOrderId, order.brokerBusinessDay);
       if (!result.success) {
         console.warn(

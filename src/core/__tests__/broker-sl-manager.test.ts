@@ -18,10 +18,8 @@ vi.mock("../broker-orders", () => ({
     success: true,
     orderNumber: "SL-001",
     businessDay: "20260320",
-    isDryRun: false,
   }),
-  cancelOrder: vi.fn().mockResolvedValue({ success: true, isDryRun: false }),
-  getEffectiveBrokerMode: vi.fn().mockReturnValue("live"),
+  cancelOrder: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 vi.mock("../../lib/slack", () => ({
@@ -30,13 +28,12 @@ vi.mock("../../lib/slack", () => ({
 
 import { submitBrokerSL, cancelBrokerSL, updateBrokerSL } from "../broker-sl-manager";
 import { prisma } from "../../lib/prisma";
-import { submitOrder, cancelOrder, getEffectiveBrokerMode } from "../broker-orders";
+import { submitOrder, cancelOrder } from "../broker-orders";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any;
 const mockSubmitOrder = vi.mocked(submitOrder);
 const mockCancelOrder = vi.mocked(cancelOrder);
-const mockGetEffectiveBrokerMode = vi.mocked(getEffectiveBrokerMode);
 
 // ========================================
 // submitBrokerSL
@@ -45,7 +42,6 @@ const mockGetEffectiveBrokerMode = vi.mocked(getEffectiveBrokerMode);
 describe("submitBrokerSL", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetEffectiveBrokerMode.mockReturnValue("live");
   });
 
   it("SL注文を発注してポジションに紐付ける", async () => {
@@ -107,26 +103,10 @@ describe("submitBrokerSL", () => {
     expect(call.expireDay).toMatch(/^\d{8}$/); // YYYYMMDD
   });
 
-  it("simulationモードでは何もしない", async () => {
-    mockGetEffectiveBrokerMode.mockReturnValue("simulation");
-
-    await submitBrokerSL({
-      positionId: "pos-1",
-      ticker: "7203.T",
-      quantity: 100,
-      stopTriggerPrice: 970,
-      strategy: "swing",
-    });
-
-    expect(mockSubmitOrder).not.toHaveBeenCalled();
-    expect(mockPrisma.tradingPosition.update).not.toHaveBeenCalled();
-  });
-
   it("submitOrder失敗時もthrowしない", async () => {
     mockSubmitOrder.mockResolvedValue({
       success: false,
       error: "API error",
-      isDryRun: false,
     });
 
     await expect(
@@ -151,7 +131,6 @@ describe("submitBrokerSL", () => {
 describe("cancelBrokerSL", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetEffectiveBrokerMode.mockReturnValue("live");
   });
 
   it("SL注文を取消してフィールドをクリアする", async () => {
@@ -184,15 +163,6 @@ describe("cancelBrokerSL", () => {
     expect(mockPrisma.tradingPosition.update).not.toHaveBeenCalled();
   });
 
-  it("simulationモードでは何もしない", async () => {
-    mockGetEffectiveBrokerMode.mockReturnValue("simulation");
-
-    await cancelBrokerSL("pos-1");
-
-    expect(mockPrisma.tradingPosition.findUnique).not.toHaveBeenCalled();
-    expect(mockCancelOrder).not.toHaveBeenCalled();
-  });
-
   it("cancelOrder失敗時もフィールドをクリアする", async () => {
     mockPrisma.tradingPosition.findUnique.mockResolvedValue({
       slBrokerOrderId: "SL-001",
@@ -201,7 +171,6 @@ describe("cancelBrokerSL", () => {
     mockCancelOrder.mockResolvedValue({
       success: false,
       error: "Order already filled",
-      isDryRun: false,
     });
 
     await cancelBrokerSL("pos-1");
@@ -224,7 +193,6 @@ describe("cancelBrokerSL", () => {
 describe("updateBrokerSL", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetEffectiveBrokerMode.mockReturnValue("live");
   });
 
   it("cancel → resubmit の順序で実行する", async () => {
@@ -236,7 +204,7 @@ describe("updateBrokerSL", () => {
     const callOrder: string[] = [];
     mockCancelOrder.mockImplementation(async () => {
       callOrder.push("cancel");
-      return { success: true, isDryRun: false };
+      return { success: true };
     });
     mockSubmitOrder.mockImplementation(async () => {
       callOrder.push("submit");
@@ -244,7 +212,6 @@ describe("updateBrokerSL", () => {
         success: true,
         orderNumber: "SL-NEW",
         businessDay: "20260320",
-        isDryRun: false,
       };
     });
 
@@ -263,20 +230,5 @@ describe("updateBrokerSL", () => {
         stopTriggerPrice: 980,
       }),
     );
-  });
-
-  it("simulationモードでは何もしない", async () => {
-    mockGetEffectiveBrokerMode.mockReturnValue("simulation");
-
-    await updateBrokerSL({
-      positionId: "pos-1",
-      ticker: "7203.T",
-      quantity: 100,
-      newStopTriggerPrice: 980,
-      strategy: "swing",
-    });
-
-    expect(mockCancelOrder).not.toHaveBeenCalled();
-    expect(mockSubmitOrder).not.toHaveBeenCalled();
   });
 });

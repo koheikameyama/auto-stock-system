@@ -1,12 +1,12 @@
 /**
  * ブローカー注文操作モジュール
  *
- * brokerMode に応じて実際のAPI送信 / dry_runログ / 何もしない を切り替える。
- * Phase 1 ではブローカーエラーが既存シミュレーションを止めないことを保証する。
+ * brokerMode に応じてブローカーAPIに送信 / 何もしない を切り替える。
+ * デモ/本番の切替は TACHIBANA_ENV で行う。
  */
 
 import { prisma } from "../lib/prisma";
-import { getTachibanaClient, type TachibanaResponse } from "./broker-client";
+import { getTachibanaClient, type TachibanaRequestParams, type TachibanaResponse } from "./broker-client";
 import { tickerToBrokerCode, brokerCodeToTicker } from "../lib/ticker-utils";
 import {
   type BrokerMode,
@@ -16,7 +16,6 @@ import {
   TACHIBANA_ORDER_STATUS,
   TACHIBANA_ORDER_QUERY,
 } from "../lib/constants/broker";
-import { notifySlack } from "../lib/slack";
 
 // ========================================
 // 型定義
@@ -53,8 +52,6 @@ export interface BrokerOrderResult {
   commission?: number;
   /** エラーメッセージ */
   error?: string;
-  /** dry_run モードか */
-  isDryRun: boolean;
 }
 
 export interface BrokerHolding {
@@ -91,7 +88,7 @@ export async function submitOrder(
   const mode = getEffectiveBrokerMode();
 
   if (mode === "simulation") {
-    return { success: true, isDryRun: false };
+    return { success: true };
   }
 
   const brokerCode = tickerToBrokerCode(req.ticker);
@@ -101,14 +98,14 @@ export async function submitOrder(
   // 逆指値の有無で注文種別を決定
   const hasReverse = req.stopTriggerPrice != null;
   const hasLimit = req.limitPrice != null;
-  let gyakusasiOrderType = TACHIBANA_ORDER.REVERSE_ORDER_TYPE.NORMAL;
+  let gyakusasiOrderType: string = TACHIBANA_ORDER.REVERSE_ORDER_TYPE.NORMAL;
   if (hasLimit && hasReverse) {
     gyakusasiOrderType = TACHIBANA_ORDER.REVERSE_ORDER_TYPE.NORMAL_AND_REVERSE;
   } else if (hasReverse) {
     gyakusasiOrderType = TACHIBANA_ORDER.REVERSE_ORDER_TYPE.REVERSE_ONLY;
   }
 
-  const params: Record<string, string> = {
+  const params: TachibanaRequestParams = {
     sCLMID: TACHIBANA_CLMID.NEW_ORDER,
     sZyoutoekiKazeiC: req.taxType ?? TACHIBANA_ORDER.TAX_TYPE.SPECIFIC,
     sIssueCode: brokerCode,
@@ -132,11 +129,6 @@ export async function submitOrder(
         : TACHIBANA_ORDER.MARKET_PRICE;
   }
 
-  if (mode === "dry_run") {
-    return handleDryRun("submitOrder", params, req);
-  }
-
-  // live モード
   return executeLiveOrder(params);
 }
 
@@ -150,19 +142,15 @@ export async function cancelOrder(
   const mode = getEffectiveBrokerMode();
 
   if (mode === "simulation") {
-    return { success: true, isDryRun: false };
+    return { success: true };
   }
 
-  const params: Record<string, string> = {
+  const params: TachibanaRequestParams = {
     sCLMID: TACHIBANA_CLMID.CANCEL_ORDER,
     sOrderNumber: orderId,
     sEigyouDay: businessDay,
     sSecondPassword: process.env.TACHIBANA_SECOND_PASSWORD ?? "",
   };
-
-  if (mode === "dry_run") {
-    return handleDryRun("cancelOrder", params);
-  }
 
   return executeLiveRequest(params);
 }
@@ -182,10 +170,10 @@ export async function modifyOrder(
   const mode = getEffectiveBrokerMode();
 
   if (mode === "simulation") {
-    return { success: true, isDryRun: false };
+    return { success: true };
   }
 
-  const params: Record<string, string> = {
+  const params: TachibanaRequestParams = {
     sCLMID: TACHIBANA_CLMID.CORRECT_ORDER,
     sOrderNumber: orderId,
     sEigyouDay: businessDay,
@@ -194,10 +182,6 @@ export async function modifyOrder(
     sOrderExpireDay: changes.expireDay ?? "*",
     sSecondPassword: process.env.TACHIBANA_SECOND_PASSWORD ?? "",
   };
-
-  if (mode === "dry_run") {
-    return handleDryRun("modifyOrder", params);
-  }
 
   return executeLiveRequest(params);
 }
@@ -380,33 +364,8 @@ export async function syncBrokerOrderStatuses(): Promise<void> {
 // 内部ヘルパー
 // ========================================
 
-async function handleDryRun(
-  operation: string,
-  params: Record<string, string>,
-  req?: BrokerOrderRequest,
-): Promise<BrokerOrderResult> {
-  const info = req
-    ? `${req.side} ${req.ticker} x${req.quantity} @${req.limitPrice ?? "market"}`
-    : JSON.stringify(params);
-
-  console.log(`[broker-orders][DRY_RUN] ${operation}: ${info}`);
-
-  await notifySlack({
-    title: `[DRY_RUN] ${operation}`,
-    message: info,
-    color: "#36a64f",
-  });
-
-  return {
-    success: true,
-    orderNumber: `DRY_${Date.now()}`,
-    businessDay: new Date().toISOString().slice(0, 10).replace(/-/g, ""),
-    isDryRun: true,
-  };
-}
-
 async function executeLiveOrder(
-  params: Record<string, string>,
+  params: TachibanaRequestParams,
 ): Promise<BrokerOrderResult> {
   const client = getTachibanaClient();
 
@@ -417,7 +376,6 @@ async function executeLiveOrder(
       return {
         success: false,
         error: `[${res.sResultCode}] ${res.sResultText ?? "Unknown error"}`,
-        isDryRun: false,
       };
     }
 
@@ -426,19 +384,17 @@ async function executeLiveOrder(
       orderNumber: String(res.sOrderNumber ?? ""),
       businessDay: String(res.sEigyouDay ?? ""),
       commission: Number(res.sOrderTesuryou ?? 0),
-      isDryRun: false,
     };
   } catch (e) {
     return {
       success: false,
       error: e instanceof Error ? e.message : String(e),
-      isDryRun: false,
     };
   }
 }
 
 async function executeLiveRequest(
-  params: Record<string, string>,
+  params: TachibanaRequestParams,
 ): Promise<BrokerOrderResult> {
   const client = getTachibanaClient();
 
@@ -449,16 +405,14 @@ async function executeLiveRequest(
       return {
         success: false,
         error: `[${res.sResultCode}] ${res.sResultText ?? "Unknown error"}`,
-        isDryRun: false,
       };
     }
 
-    return { success: true, isDryRun: false };
+    return { success: true };
   } catch (e) {
     return {
       success: false,
       error: e instanceof Error ? e.message : String(e),
-      isDryRun: false,
     };
   }
 }

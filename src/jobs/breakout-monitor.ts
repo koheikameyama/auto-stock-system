@@ -15,7 +15,6 @@ import { getWatchlist } from "./watchlist-builder";
 import { tachibanaFetchQuotesBatch } from "../lib/tachibana-price-client";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
-import { getEffectiveBrokerMode } from "../core/broker-orders";
 import { notifySlack } from "../lib/slack";
 import { TIMEZONE } from "../lib/constants";
 import type { QuoteData } from "../core/breakout/breakout-scanner";
@@ -125,18 +124,14 @@ export async function main(): Promise<void> {
     `${tag} スキャン完了: WL=${watchlist.length} 時価=${quotes.length} 保有=${holdingTickers.size} トリガー=${triggers.length}`,
   );
 
-  // 6. ブローカーモード取得
-  const brokerMode = getEffectiveBrokerMode();
-
   if (triggers.length > 0) {
-    // 6.5 既存pending注文の株数チェック（資金変動対応）
-    await resizePendingOrders(brokerMode);
+    // 6. 既存pending注文の株数チェック（資金変動対応）
+    await resizePendingOrders();
 
-    // 6.6 ブレイクアウト前提崩壊チェック（出来高萎縮・高値割り込み）
+    // 6.5 ブレイクアウト前提崩壊チェック（出来高萎縮・高値割り込み）
     await invalidateStalePendingOrders(
       quotes,
       scanner.getState().lastSurgeRatios,
-      brokerMode,
     );
 
     // 7. 各トリガーに対してエントリー実行（優先順位順に直列）
@@ -147,7 +142,7 @@ export async function main(): Promise<void> {
         `[breakout-monitor] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
       );
       try {
-        const result = await executeEntry(trigger, brokerMode);
+        const result = await executeEntry(trigger);
         if (!result.success) {
           // 一時的な理由で却下 → 再トリガーを許可
           if (result.retryable && scanner) {
@@ -211,7 +206,7 @@ export async function main(): Promise<void> {
           `${tag} [gapup] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
         );
         try {
-          const result = await executeEntry(trigger, brokerMode, "gapup");
+          const result = await executeEntry(trigger, "gapup");
           if (!result.success) {
             await notifySlack({
               title: `[gapup] エントリー失敗: ${trigger.ticker}`,

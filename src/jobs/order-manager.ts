@@ -571,7 +571,7 @@ export async function main() {
               brokerBusinessDay: brokerResult.businessDay,
             },
           });
-        } else if (!brokerResult.success && !brokerResult.isDryRun) {
+        } else if (!brokerResult.success) {
           console.warn(
             `[order-manager] Broker order failed for ${tickerCode}: ${brokerResult.error}`,
           );

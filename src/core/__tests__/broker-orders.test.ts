@@ -64,22 +64,6 @@ describe("submitOrder", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.isDryRun).toBe(false);
-  });
-
-  it("dry_runモードではログ出力してモックレスポンスを返す", async () => {
-    vi.stubEnv("BROKER_MODE", "dry_run");
-
-    const result = await submitOrder({
-      ticker: "7203.T",
-      side: "buy",
-      quantity: 100,
-      limitPrice: 2500,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.isDryRun).toBe(true);
-    expect(result.orderNumber).toMatch(/^DRY_/);
   });
 });
 

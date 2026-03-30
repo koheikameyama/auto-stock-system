@@ -3,10 +3,10 @@
  */
 
 // ========================================
-// ブローカーモード
+// ブローカーモード（デモ/本番は TACHIBANA_ENV で切替）
 // ========================================
 
-export type BrokerMode = "simulation" | "dry_run" | "live";
+export type BrokerMode = "simulation" | "live";
 
 export const DEFAULT_BROKER_MODE: BrokerMode = "simulation";
 
