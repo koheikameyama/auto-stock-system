@@ -18,6 +18,7 @@ import {
   SECTOR_RISK,
   getSectorGroup,
   WEEKEND_RISK,
+  MARKET_REGIME,
 } from "../lib/constants";
 import { countNonTradingDaysAhead } from "../lib/market-calendar";
 import { SECTOR_MOMENTUM_SCORING } from "../lib/constants/scoring";
@@ -100,7 +101,7 @@ async function restoreContextFromDB(): Promise<MarketAssessmentContext> {
       const levelOrder: Record<string, number> = { normal: 0, elevated: 1, high: 2, crisis: 3 };
       if (levelOrder[preMarket.minLevel] > levelOrder[regime.level]) {
         if (preMarket.minLevel === "crisis") {
-          regime = { ...regime, level: "crisis", maxPositions: 0, minScore: null, shouldHaltTrading: true, reason: `${regime.reason} + ${preMarket.reason}` };
+          regime = { ...regime, level: "crisis", maxPositions: MARKET_REGIME.CRISIS.maxPositions, minScore: MARKET_REGIME.CRISIS.minScore, shouldHaltTrading: false, reason: `${regime.reason} + ${preMarket.reason}` };
         } else if (preMarket.minLevel === "elevated" && regime.level === "normal") {
           regime = { ...regime, level: "elevated", maxPositions: 2, minScore: 60, reason: `${regime.reason} + ${preMarket.reason}` };
         }
@@ -111,32 +112,10 @@ async function restoreContextFromDB(): Promise<MarketAssessmentContext> {
   // drawdown 再計算
   const drawdown = await calculateDrawdownStatus();
 
-  // newsSummary 再取得
-  const newsAnalysis = await prisma.newsAnalysis.findUnique({
-    where: { date: today },
-  });
-  let newsSummary: string | undefined;
-  if (newsAnalysis) {
-    const sectorText = (
-      newsAnalysis.sectorImpacts as Array<{ sector: string; impact: string; summary: string }>
-    )
-      .map((s) => `  - ${s.sector}: ${s.impact} — ${s.summary}`)
-      .join("\n");
-    newsSummary = `【ニュース分析】
-- 地政学リスクレベル: ${newsAnalysis.geopoliticalRiskLevel}/5
-- ${newsAnalysis.geopoliticalSummary}
-- 市場インパクト: ${newsAnalysis.marketImpact}
-- ${newsAnalysis.marketImpactSummary}
-- 主要イベント: ${newsAnalysis.keyEvents}
-【セクター別影響】
-${sectorText || "  特になし"}`;
-  }
-
   return {
     regime,
     isShadowMode: !record.shouldTrade,
     marketData: null as unknown as MarketAssessmentContext["marketData"], // 単独実行時は不使用
-    newsSummary,
     drawdown,
     strategyDecision: { strategy: (record.tradingStrategy ?? "swing") as TradingStrategy, reason: "DB復元" },
     cmeDivergencePct,
