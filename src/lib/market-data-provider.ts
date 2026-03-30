@@ -6,6 +6,8 @@
  */
 
 import {
+  yfFetchQuote,
+  yfFetchQuotesBatch,
   yfFetchHistorical,
   yfFetchHistoricalRange,
   yfFetchHistoricalBatch,
@@ -18,29 +20,25 @@ import {
   type YfCorporateEvents,
   type YfNewsItem,
 } from "./yfinance-client";
-import {
-  tachibanaFetchQuote,
-  tachibanaFetchQuotesBatch,
-} from "./tachibana-price-client";
 
 // ========================================
 // 公開 API
 // ========================================
 
 /**
- * 個別銘柄のクォートを取得（立花証券API）
+ * 個別銘柄のクォートを取得（yfinance）
  */
 export async function providerFetchQuote(symbol: string): Promise<YfQuoteResult> {
-  return tachibanaFetchQuote(symbol);
+  return yfFetchQuote(symbol);
 }
 
 /**
- * 複数銘柄のクォートをバッチ取得（立花証券API）
+ * 複数銘柄のクォートをバッチ取得（yfinance）
  */
 export async function providerFetchQuotesBatch(
   symbols: string[],
 ): Promise<(YfQuoteResult | null)[]> {
-  return tachibanaFetchQuotesBatch(symbols);
+  return yfFetchQuotesBatch(symbols);
 }
 
 /**
