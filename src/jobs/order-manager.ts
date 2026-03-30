@@ -527,7 +527,7 @@ export async function main() {
           takeProfitPrice: finalCondition.takeProfitPrice,
           stopLossPrice: finalCondition.stopLossPrice,
           quantity: finalCondition.quantity,
-          reasoning: review.reasoning,
+          reasoning: `${result.strategy}戦略エントリー`,
           expiresAt,
           entrySnapshot: entrySnapshot as object,
         },
@@ -546,7 +546,7 @@ export async function main() {
           stopLossPrice: finalCondition.stopLossPrice,
           quantity: finalCondition.quantity,
           status: "pending",
-          reasoning: review.reasoning,
+          reasoning: `${result.strategy}戦略エントリー`,
           expiresAt,
           entrySnapshot: entrySnapshot as object,
         },
@@ -599,7 +599,7 @@ export async function main() {
       takeProfitPrice: finalCondition.takeProfitPrice,
       stopLossPrice: finalCondition.stopLossPrice,
       quantity: finalCondition.quantity,
-      reasoning: review.reasoning,
+      reasoning: `${result.strategy}戦略エントリー`,
     });
   }
 
@@ -639,7 +639,6 @@ if (isDirectRun) {
       process.exit(1);
     })
     .finally(async () => {
-      await flushLangfuse();
       await prisma.$disconnect();
     });
 }

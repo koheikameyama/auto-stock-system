@@ -256,14 +256,3 @@ export function calculateCmeDivergence(
   // NKD=F は円建てなので USD/JPY 換算は不要
   return ((cmeFuturesPrice / nikkeiPreviousClose) - 1) * 100;
 }
-
-/**
- * VIX水準からセンチメントを機械的に判定する（AI代替）
- */
-export function vixToSentiment(vix: number): Sentiment {
-  if (vix > 40) return "crisis";
-  if (vix > 25) return "bearish";
-  if (vix > 20) return "cautious";
-  if (vix > 15) return "neutral";
-  return "bullish";
-}
