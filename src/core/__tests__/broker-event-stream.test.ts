@@ -3,6 +3,8 @@ import {
   parseEventMessage,
   BrokerEventStream,
   resetBrokerEventStream,
+  isBrokerConnectionWindow,
+  msUntilNextConnectionWindow,
 } from "../broker-event-stream";
 import type { ExecutionEvent } from "../broker-event-stream";
 
@@ -45,6 +47,84 @@ describe("parseEventMessage", () => {
     const msg = "p_no\x01\x01p_cmd\x01KP";
     const result = parseEventMessage(msg);
     expect(result).toEqual({ p_no: "", p_cmd: "KP" });
+  });
+});
+
+// ========================================
+// isBrokerConnectionWindow
+// ========================================
+
+describe("isBrokerConnectionWindow", () => {
+  it("平日10:00 JSTはtrue", () => {
+    // 2026-03-31 10:00 JST = 2026-03-31 01:00 UTC (火曜)
+    const tue10am = new Date("2026-03-31T01:00:00Z");
+    expect(isBrokerConnectionWindow(tue10am)).toBe(true);
+  });
+
+  it("平日07:00 JSTはtrue（境界）", () => {
+    // 2026-03-30 07:00 JST = 2026-03-29 22:00 UTC (月曜)
+    const mon7am = new Date("2026-03-29T22:00:00Z");
+    expect(isBrokerConnectionWindow(mon7am)).toBe(true);
+  });
+
+  it("平日06:59 JSTはfalse（境界）", () => {
+    // 2026-03-30 06:59 JST = 2026-03-29 21:59 UTC (月曜)
+    const mon659am = new Date("2026-03-29T21:59:00Z");
+    expect(isBrokerConnectionWindow(mon659am)).toBe(false);
+  });
+
+  it("平日18:00 JSTはfalse（境界）", () => {
+    // 2026-03-31 18:00 JST = 2026-03-31 09:00 UTC (火曜)
+    const tue6pm = new Date("2026-03-31T09:00:00Z");
+    expect(isBrokerConnectionWindow(tue6pm)).toBe(false);
+  });
+
+  it("平日22:00 JSTはfalse", () => {
+    // 2026-03-31 22:00 JST = 2026-03-31 13:00 UTC (火曜)
+    const tue10pm = new Date("2026-03-31T13:00:00Z");
+    expect(isBrokerConnectionWindow(tue10pm)).toBe(false);
+  });
+
+  it("土曜日はfalse", () => {
+    // 2026-03-28 10:00 JST = 2026-03-28 01:00 UTC (土曜)
+    const sat10am = new Date("2026-03-28T01:00:00Z");
+    expect(isBrokerConnectionWindow(sat10am)).toBe(false);
+  });
+
+  it("日曜日はfalse", () => {
+    // 2026-03-29 10:00 JST = 2026-03-29 01:00 UTC (日曜)
+    const sun10am = new Date("2026-03-29T01:00:00Z");
+    expect(isBrokerConnectionWindow(sun10am)).toBe(false);
+  });
+});
+
+// ========================================
+// msUntilNextConnectionWindow
+// ========================================
+
+describe("msUntilNextConnectionWindow", () => {
+  it("平日の早朝なら同日07:00までの時間を返す", () => {
+    // 2026-03-31 05:00 JST = 2026-03-30 20:00 UTC (火曜)
+    const tue5am = new Date("2026-03-30T20:00:00Z");
+    const ms = msUntilNextConnectionWindow(tue5am);
+    // 05:00 → 07:00 = 2時間
+    expect(ms).toBe(2 * 60 * 60 * 1000);
+  });
+
+  it("平日18:00以降なら翌営業日07:00までの時間を返す", () => {
+    // 2026-03-31 19:00 JST = 2026-03-31 10:00 UTC (火曜)
+    const tue7pm = new Date("2026-03-31T10:00:00Z");
+    const ms = msUntilNextConnectionWindow(tue7pm);
+    // 火曜19:00 → 水曜07:00 = 12時間
+    expect(ms).toBe(12 * 60 * 60 * 1000);
+  });
+
+  it("金曜18:00以降なら翌月曜07:00までの時間を返す", () => {
+    // 2026-03-27 19:00 JST = 2026-03-27 10:00 UTC (金曜)
+    const fri7pm = new Date("2026-03-27T10:00:00Z");
+    const ms = msUntilNextConnectionWindow(fri7pm);
+    // 金曜19:00 → 月曜07:00 = 60時間
+    expect(ms).toBe(60 * 60 * 60 * 1000);
   });
 });
 

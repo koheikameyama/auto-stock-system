@@ -27,7 +27,7 @@ import { TIMEZONE } from "./lib/constants";
 import { cronControl } from "./lib/cron-control";
 import { getTachibanaClient, resetTachibanaClient } from "./core/broker-client";
 import { getEffectiveBrokerMode } from "./core/broker-orders";
-import { getBrokerEventStream, resetBrokerEventStream } from "./core/broker-event-stream";
+import { getBrokerEventStream, resetBrokerEventStream, isBrokerConnectionWindow } from "./core/broker-event-stream";
 import { handleBrokerFill } from "./core/broker-fill-handler";
 
 // ジョブ状態（ダッシュボード・cronルートから参照可能）
@@ -203,6 +203,9 @@ serve({ fetch: app.fetch, port }, (info) => {
       stream.on("error", (err) => {
         console.error("[worker] EventStream error:", err);
       });
+      if (!isBrokerConnectionWindow()) {
+        console.log("  WebSocket: 営業時間外 — 次の営業時間に自動接続します");
+      }
       stream.connect(session.urlEventWebSocket);
 
       // セッション更新時にWebSocket再接続

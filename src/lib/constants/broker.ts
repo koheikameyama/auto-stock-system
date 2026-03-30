@@ -176,3 +176,16 @@ export const TACHIBANA_ORDER_QUERY = {
   CORRECTABLE: "4",
   UNFILLED_AND_PARTIAL: "5",
 } as const;
+
+// ========================================
+// WebSocket 接続時間帯
+// ========================================
+
+/** WebSocket接続を許可する時間帯（JST） */
+export const BROKER_WS_HOURS = {
+  START_HOUR: 7, // 07:00 JST（注文受付開始前の余裕）
+  END_HOUR: 18, // 18:00 JST（閉局後の余裕）
+} as const;
+
+/** 503等サーバーエラー時の再接続間隔（ms）— 5分 */
+export const SERVER_ERROR_RECONNECT_MS = 5 * 60 * 1000;

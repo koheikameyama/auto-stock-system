@@ -10,6 +10,18 @@
 
 import { EventEmitter } from "events";
 import WebSocket from "ws";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import tz from "dayjs/plugin/timezone.js";
+import { isMarketDay } from "../lib/market-calendar";
+import { TIMEZONE } from "../lib/constants";
+import {
+  BROKER_WS_HOURS,
+  SERVER_ERROR_RECONNECT_MS,
+} from "../lib/constants/broker";
+
+dayjs.extend(utc);
+dayjs.extend(tz);
 
 // ========================================
 // 定数
@@ -53,6 +65,53 @@ export interface ExecutionEvent {
 }
 
 // ========================================
+// 営業時間判定
+// ========================================
+
+/**
+ * 現在がWebSocket接続を許可する時間帯かどうかを判定
+ *
+ * 条件: 東証営業日 かつ JST 07:00〜18:00
+ */
+export function isBrokerConnectionWindow(now?: Date): boolean {
+  const d = dayjs(now).tz(TIMEZONE);
+  const hour = d.hour();
+
+  if (!isMarketDay(now)) return false;
+  if (hour < BROKER_WS_HOURS.START_HOUR || hour >= BROKER_WS_HOURS.END_HOUR) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * 次の接続ウィンドウ開始までのミリ秒を計算
+ */
+export function msUntilNextConnectionWindow(now?: Date): number {
+  const d = dayjs(now).tz(TIMEZONE);
+  const hour = d.hour();
+
+  // 今日の営業日でまだ START_HOUR 前 → 今日の START_HOUR まで
+  if (isMarketDay(now) && hour < BROKER_WS_HOURS.START_HOUR) {
+    const target = d.hour(BROKER_WS_HOURS.START_HOUR).minute(0).second(0).millisecond(0);
+    return target.diff(d);
+  }
+
+  // それ以外 → 翌営業日の START_HOUR まで探索
+  let check = d.add(1, "day").hour(BROKER_WS_HOURS.START_HOUR).minute(0).second(0).millisecond(0);
+  for (let i = 0; i < 10; i++) {
+    if (isMarketDay(check.toDate())) {
+      return check.diff(d);
+    }
+    check = check.add(1, "day");
+  }
+
+  // フォールバック: 1時間後に再チェック
+  return 60 * 60 * 1000;
+}
+
+// ========================================
 // メッセージパーサー
 // ========================================
 
@@ -85,6 +144,7 @@ export class BrokerEventStream extends EventEmitter {
   private wsUrl: string | null = null;
   private options: BrokerEventStreamOptions = {};
   private kpTimer: ReturnType<typeof setTimeout> | null = null;
+  private windowTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
   private intentionalClose = false;
 
@@ -117,6 +177,7 @@ export class BrokerEventStream extends EventEmitter {
   disconnect(): void {
     this.intentionalClose = true;
     this.clearKpTimer();
+    this.clearWindowTimer();
     this.closeWs();
     this.wsUrl = null;
   }
@@ -134,6 +195,12 @@ export class BrokerEventStream extends EventEmitter {
 
   private doConnect(): void {
     if (!this.wsUrl) return;
+
+    // 営業時間外は接続しない — 次のウィンドウ開始時に自動再接続
+    if (!isBrokerConnectionWindow()) {
+      this.scheduleWindowOpen();
+      return;
+    }
 
     const eventTypes =
       this.options.eventTypes ?? DEFAULT_EVENT_TYPES;
@@ -172,7 +239,15 @@ export class BrokerEventStream extends EventEmitter {
     });
 
     this.ws.on("error", (err: Error) => {
-      console.error("[BrokerEventStream] WebSocket error:", err.message);
+      // 503等サーバーエラーは再接続間隔を拡大
+      if (err.message.includes("503")) {
+        console.warn(
+          `[BrokerEventStream] Server unavailable (503) — next retry in ${SERVER_ERROR_RECONNECT_MS / 1000}s`,
+        );
+        this.reconnectDelay = SERVER_ERROR_RECONNECT_MS;
+      } else {
+        console.error("[BrokerEventStream] WebSocket error:", err.message);
+      }
       this.emit("error", err);
     });
 
@@ -264,6 +339,12 @@ export class BrokerEventStream extends EventEmitter {
   private scheduleReconnect(): void {
     if (this.intentionalClose || !this.wsUrl) return;
 
+    // 営業時間外ならウィンドウ開始まで待機
+    if (!isBrokerConnectionWindow()) {
+      this.scheduleWindowOpen();
+      return;
+    }
+
     console.log(
       `[BrokerEventStream] Reconnecting in ${this.reconnectDelay}ms...`,
     );
@@ -279,6 +360,36 @@ export class BrokerEventStream extends EventEmitter {
       this.reconnectDelay * 2,
       MAX_RECONNECT_DELAY_MS,
     );
+  }
+
+  /**
+   * 次の営業時間ウィンドウ開始時に自動接続をスケジュール
+   */
+  private scheduleWindowOpen(): void {
+    if (this.intentionalClose || !this.wsUrl) return;
+
+    this.clearWindowTimer();
+    const waitMs = msUntilNextConnectionWindow();
+    const waitMin = Math.round(waitMs / 60_000);
+
+    console.log(
+      `[BrokerEventStream] Outside connection window — waiting ${waitMin}min until next window`,
+    );
+
+    this.windowTimer = setTimeout(() => {
+      this.windowTimer = null;
+      if (!this.intentionalClose && this.wsUrl) {
+        this.reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
+        this.doConnect();
+      }
+    }, waitMs);
+  }
+
+  private clearWindowTimer(): void {
+    if (this.windowTimer) {
+      clearTimeout(this.windowTimer);
+      this.windowTimer = null;
+    }
   }
 
   private closeWs(): void {
