@@ -50,6 +50,7 @@ function buildMarketFields(marketData: Awaited<ReturnType<typeof fetchMarketData
 export async function main(): Promise<MarketAssessmentContext> {
   console.log("=== Market Assessment 開始 ===");
   let isShadowMode = false;
+  let shadowAlert: { type: string; message: string } | null = null;
 
   // 1. 市場指標データ取得
   console.log("[1/2] 市場指標データ取得中...");
@@ -96,10 +97,7 @@ export async function main(): Promise<MarketAssessmentContext> {
     const preMarket = determinePreMarketRegime(cmeDivergencePct);
     if (preMarket.minLevel === "crisis") {
       console.log(`  → ${preMarket.reason}`);
-      await notifyRiskAlert({
-        type: "CME先物乖離率キルスイッチ",
-        message: preMarket.reason!,
-      });
+      shadowAlert = { type: "CME先物乖離率キルスイッチ", message: preMarket.reason! };
       const assessmentData = {
         ...buildMarketFields(marketData),
         sentiment: "crisis" as const,
@@ -169,10 +167,7 @@ export async function main(): Promise<MarketAssessmentContext> {
   ) {
     const reason = `日経平均 ${marketData.nikkei.changePercent.toFixed(2)}% ≤ ${MARKET_INDEX.NIKKEI_CRISIS_THRESHOLD}%: 急落キルスイッチ発動。全取引停止`;
     console.log(`[1.8.5/2] ${reason}`);
-    await notifyRiskAlert({
-      type: "日経平均キルスイッチ",
-      message: reason,
-    });
+    shadowAlert = { type: "日経平均キルスイッチ", message: reason };
     const assessmentData = {
       ...buildMarketFields(marketData),
       sentiment: "crisis" as const,
@@ -228,10 +223,7 @@ export async function main(): Promise<MarketAssessmentContext> {
       if (!filterOn) {
         const reason = `N225 SMAヒステリシスフィルター OFF: ¥${recentClose.toLocaleString()} (SMA50 ¥${Math.round(currentSma).toLocaleString()}, OFF閾値 -${(OFF_BUFFER_PCT * 100).toFixed(1)}%, ON閾値 +${(ON_BUFFER_PCT * 100).toFixed(1)}%)`;
         console.log(`  → ${reason}`);
-        await notifyRiskAlert({
-          type: "N225 SMA50フィルター OFF",
-          message: reason,
-        });
+        shadowAlert = { type: "N225 SMA50フィルター OFF", message: reason };
         const assessmentData = {
           ...buildMarketFields(marketData),
           sentiment: "bullish" as const,
@@ -263,10 +255,7 @@ export async function main(): Promise<MarketAssessmentContext> {
 
   if (drawdown.shouldHaltTrading) {
     console.log(`ドローダウンにより取引停止: ${drawdown.reason}`);
-    await notifyRiskAlert({
-      type: "ドローダウン停止",
-      message: drawdown.reason,
-    });
+    shadowAlert = { type: "ドローダウン停止", message: drawdown.reason };
     const latestAssessment = await prisma.marketAssessment.findFirst({
       orderBy: { createdAt: "desc" },
       select: { sentiment: true },
@@ -310,15 +299,6 @@ export async function main(): Promise<MarketAssessmentContext> {
       `  → shouldTrade: ${assessment.shouldTrade}, sentiment: ${assessment.sentiment}`,
     );
 
-    // Slack通知
-    await notifyMarketAssessment({
-      shouldTrade: assessment.shouldTrade,
-      sentiment: assessment.sentiment,
-      reasoning: assessment.reasoning,
-      nikkeiChange: marketData.nikkei.changePercent,
-      vix: marketData.vix.price,
-    });
-
     const assessmentData = {
       ...buildMarketFields(marketData),
       sentiment: assessment.sentiment,
@@ -339,6 +319,19 @@ export async function main(): Promise<MarketAssessmentContext> {
     }
   } else {
     console.log("[2/2] VIXベース市場評価: スキップ（シャドウモード）");
+  }
+
+  // Slack通知（1箇所で送信）
+  if (shadowAlert) {
+    await notifyRiskAlert(shadowAlert);
+  } else if (assessment) {
+    await notifyMarketAssessment({
+      shouldTrade: assessment.shouldTrade,
+      sentiment: assessment.sentiment,
+      reasoning: assessment.reasoning,
+      nikkeiChange: marketData.nikkei.changePercent,
+      vix: marketData.vix.price,
+    });
   }
 
   console.log("=== Market Assessment 完了 ===");
