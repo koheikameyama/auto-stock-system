@@ -278,6 +278,10 @@ export class BrokerEventStream extends EventEmitter {
       case "SS":
       case "US":
         this.resetKpTimer();
+        console.log(
+          `[BrokerEventStream] ${cmd} message:`,
+          JSON.stringify(fields),
+        );
         this.emit("status", { type: cmd, fields });
         break;
 

@@ -15,7 +15,11 @@
       "Bash(set:*)",
       "Bash(kill:*)",
       "Bash(BACKFILL_CONFIRM=y python3:*)",
-      "Bash(yes:*)"
+      "Bash(yes:*)",
+      "Bash(CRONJOB_API_KEY='mO9ECfWLtL/IMtr9zVvOO0W+vRpe5FvBT+SPjciHfvA=' curl -s -H \"Authorization: Bearer $CRONJOB_API_KEY\" \"https://api.cron-job.org/jobs\")",
+      "Bash(CRONJOB_API_KEY='mO9ECfWLtL/IMtr9zVvOO0W+vRpe5FvBT+SPjciHfvA=':*)",
+      "Bash(railway logs:*)",
+      "Bash(git log:*)"
     ],
     "additionalDirectories": [
       "/tmp",
