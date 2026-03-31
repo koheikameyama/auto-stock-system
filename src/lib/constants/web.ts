@@ -20,6 +20,7 @@ export const QUERY_LIMITS = {
   HISTORY_SUMMARIES: 30,
   WEEKLY_SUMMARIES: 12,
   WATCHLIST_PER_PAGE: 50,
+  UNFILLED_FOLLOWUP: 50,
 } as const;
 
 // 日経225チャートの期間→インターバルマッピング
