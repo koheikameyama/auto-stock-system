@@ -21,6 +21,7 @@ import type { QuoteData } from "../core/breakout/breakout-scanner";
 import { GapUpScanner } from "../core/gapup/gapup-scanner";
 import type { GapUpQuoteData } from "../core/gapup/gapup-scanner";
 import { GAPUP } from "../lib/constants/gapup";
+import { getContrarianHistoryBatch, calculateContrarianBonus } from "../core/contrarian-analyzer";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -125,6 +126,30 @@ export async function main(): Promise<void> {
   );
 
   if (triggers.length > 0) {
+    // 5.5 逆行ボーナスによるトリガー優先順位調整
+    const triggerTickers = triggers.map((t) => t.ticker);
+    const contrarianMap = await getContrarianHistoryBatch(triggerTickers);
+    const bonusMap = new Map<string, number>();
+    for (const [ticker, history] of contrarianMap) {
+      const bonus = calculateContrarianBonus(history.wins, history.totalNoTradeDays);
+      if (bonus > 0) bonusMap.set(ticker, bonus);
+    }
+
+    if (bonusMap.size > 0) {
+      triggers.sort((a, b) => {
+        const aBonus = bonusMap.get(a.ticker) ?? 0;
+        const bBonus = bonusMap.get(b.ticker) ?? 0;
+        // 出来高サージが近い場合（差0.5未満）、逆行ボーナスで優先
+        if (Math.abs(a.volumeSurgeRatio - b.volumeSurgeRatio) < 0.5) {
+          if (aBonus !== bBonus) return bBonus - aBonus;
+        }
+        return b.volumeSurgeRatio - a.volumeSurgeRatio;
+      });
+      for (const [ticker, bonus] of bonusMap) {
+        console.log(`${tag} 逆行ボーナス: ${ticker} +${bonus}点`);
+      }
+    }
+
     // 6. 既存pending注文の株数チェック（資金変動対応）
     await resizePendingOrders();
 
@@ -135,7 +160,7 @@ export async function main(): Promise<void> {
     );
 
     // 7. 各トリガーに対してエントリー実行（優先順位順に直列）
-    // scanner が volumeSurgeRatio 降順でソート済み。
+    // volumeSurgeRatio 降順 + 逆行ボーナスによる優先度調整済み。
     // 直列実行により各 executeEntry が最新の残高を参照し、レースコンディションを防ぐ。
     for (const trigger of triggers) {
       console.log(
