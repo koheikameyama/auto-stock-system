@@ -150,7 +150,7 @@ function buildSystemPrompt(timing: Timing): string {
 
 分析のポイント:
 - VIXの水準とトレンド（20未満=安定、20-25=やや不安定、25-30=高ボラ、30超=パニック）
-- 日経225とSMA50の位置関係（上なら上昇トレンド、下なら下落トレンド）
+- 日経225とSMA50の位置関係（参考情報。トレード可否の判断には使わない）
 - 米国市場の前日の動き（翌日の日本市場に影響）
 - CME先物の水準（ギャップの示唆）
 - USD/JPYの動向（円安→輸出株に追い風、円高→逆風）
@@ -179,7 +179,8 @@ function buildUserPrompt(
     lines.push(`日経225: ¥${snapshot.nikkei.price.toLocaleString()} (${snapshot.nikkei.change >= 0 ? "+" : ""}${snapshot.nikkei.change.toFixed(2)}%)`);
   }
   if (snapshot.n225Sma50) {
-    lines.push(`N225 SMA50: ¥${snapshot.n225Sma50.sma.toLocaleString()} / フィルター: ${snapshot.n225Sma50.filterOn ? "ON（上昇トレンド）" : "OFF（下落トレンド）"}`);
+    const smaRelation = snapshot.n225Sma50.close > snapshot.n225Sma50.sma ? "上" : "下";
+    lines.push(`N225 SMA50: ¥${snapshot.n225Sma50.sma.toLocaleString()}（現値は SMA50 の${smaRelation}）`);
   }
   if (snapshot.vix) {
     lines.push(`VIX: ${snapshot.vix.price.toFixed(1)}`);

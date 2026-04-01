@@ -341,10 +341,10 @@ interface SmaVariant {
 }
 
 const SMA_VARIANTS: SmaVariant[] = [
+  { label: "No SMA50", indexTrendFilter: false, indexTrendSmaPeriod: 50, indexTrendOffBufferPct: 0, indexTrendOnBufferPct: 0 },
   { label: "SMA50", indexTrendFilter: true, indexTrendSmaPeriod: 50, indexTrendOffBufferPct: 0, indexTrendOnBufferPct: 0 },
-  { label: "SMA20", indexTrendFilter: true, indexTrendSmaPeriod: 20, indexTrendOffBufferPct: 0, indexTrendOnBufferPct: 0 },
-  { label: "SMA50+5%buf", indexTrendFilter: true, indexTrendSmaPeriod: 50, indexTrendOffBufferPct: 0.05, indexTrendOnBufferPct: 0 },
-  { label: "No filter", indexTrendFilter: false, indexTrendSmaPeriod: 50, indexTrendOffBufferPct: 0, indexTrendOnBufferPct: 0 },
+  { label: "SMA50-off3%", indexTrendFilter: true, indexTrendSmaPeriod: 50, indexTrendOffBufferPct: 0.03, indexTrendOnBufferPct: 0 },
+  { label: "SMA50-off5%", indexTrendFilter: true, indexTrendSmaPeriod: 50, indexTrendOffBufferPct: 0.05, indexTrendOnBufferPct: 0 },
 ];
 
 async function runSmaComparison(

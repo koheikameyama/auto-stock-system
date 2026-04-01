@@ -119,6 +119,8 @@ interface EntryFilterRow {
   confirmationVolumeFilter?: boolean;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
+  indexTrendOffBufferPct?: number;
+  indexTrendOnBufferPct?: number;
   indexMomentumFilter?: boolean;
   indexMomentumDays?: number;
 }
@@ -135,6 +137,10 @@ const ENTRY_FILTER_GRID: EntryFilterRow[] = [
   { label: "C: N225 SMA50",     marketTrendFilter: false,                            confirmationEntry: false, indexTrendFilter: true, indexTrendSmaPeriod: 50 },
   { label: "C+confirm",         marketTrendFilter: false,                            confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50 },
   { label: "B70%+C+confirm",    marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50 },
+  { label: "B73%+confirm",      marketTrendFilter: true,  marketTrendThreshold: 0.73, confirmationEntry: true },
+  { label: "B73%+C+confirm",    marketTrendFilter: true,  marketTrendThreshold: 0.73, confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50 },
+  { label: "B73%+C(buf2%)",     marketTrendFilter: true,  marketTrendThreshold: 0.73, confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50, indexTrendOnBufferPct: 0.02 },
+  { label: "B73%+C(buf3%)",     marketTrendFilter: true,  marketTrendThreshold: 0.73, confirmationEntry: true,  indexTrendFilter: true, indexTrendSmaPeriod: 50, indexTrendOnBufferPct: 0.03 },
   { label: "D: N225 mom60",     marketTrendFilter: false,                            confirmationEntry: false, indexMomentumFilter: true, indexMomentumDays: 60 },
   { label: "D+confirm",         marketTrendFilter: false,                            confirmationEntry: true,  indexMomentumFilter: true, indexMomentumDays: 60 },
   { label: "B70%+D+confirm",    marketTrendFilter: true,  marketTrendThreshold: 0.7, confirmationEntry: true,  indexMomentumFilter: true, indexMomentumDays: 60 },
@@ -161,6 +167,8 @@ function runEntryFilterComparison(
       confirmationVolumeFilter: row.confirmationVolumeFilter,
       indexTrendFilter: row.indexTrendFilter,
       indexTrendSmaPeriod: row.indexTrendSmaPeriod,
+      indexTrendOffBufferPct: row.indexTrendOffBufferPct,
+      indexTrendOnBufferPct: row.indexTrendOnBufferPct,
       indexMomentumFilter: row.indexMomentumFilter,
       indexMomentumDays: row.indexMomentumDays,
       verbose: false,

@@ -46,10 +46,10 @@ export const BREAKOUT_BACKTEST_DEFAULTS: Omit<BreakoutBacktestConfig, "startDate
   marketTrendFilter: true,
   marketTrendThreshold: 0.73, // breadth 73%以上の強い上昇相場のみエントリー
   confirmationEntry: true,
-  indexTrendFilter: true,
-  indexTrendSmaPeriod: 50, // N225がSMA50以上の時のみエントリー
-  indexTrendOffBufferPct: 0, // ヒステリシスOFFバッファ（デフォルト: バッファなし）
-  indexTrendOnBufferPct: 0,  // ヒステリシスONバッファ（デフォルト: バッファなし）
+  indexTrendFilter: false, // WF検証でbreadth73%で十分と判定（PF 1.40 堅牢）。SMA50は遅行指標でリバウンド初期を逃す
+  indexTrendSmaPeriod: 50,
+  indexTrendOffBufferPct: 0,
+  indexTrendOnBufferPct: 0,
   indexMomentumFilter: false,
   indexMomentumDays: 60,
   minBreakoutAtr: 0,
