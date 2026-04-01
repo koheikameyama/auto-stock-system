@@ -8,6 +8,7 @@
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
 import { MARKET_INDEX, MARKET_REGIME, STRATEGY_SWITCHING } from "../lib/constants";
+import { getCMEStatus } from "../lib/market-hours";
 import { fetchMarketData } from "../core/market-data";
 import { notifyMarketAssessment, notifyRiskAlert } from "../lib/slack";
 import {
@@ -86,34 +87,41 @@ export async function main(): Promise<MarketAssessmentContext> {
 
   // 1.7. CME先物ナイトセッション乖離率チェック
   let cmeDivergencePct: number | null = null;
+  const cmeStatus = getCMEStatus();
   if (marketData.cmeFutures && marketData.usdjpy && marketData.nikkei.previousClose > 0) {
     cmeDivergencePct = calculateCmeDivergence(
       marketData.cmeFutures.price,
       marketData.usdjpy.price,
       marketData.nikkei.previousClose,
     );
-    console.log(`[1.7/2] CME先物乖離率: ${cmeDivergencePct.toFixed(2)}%`);
+    const staleNote = cmeStatus === "closed" ? "（CME休場中 — データは前セッション終値）" : "";
+    console.log(`[1.7/2] CME先物乖離率: ${cmeDivergencePct.toFixed(2)}%${staleNote}`);
 
-    const preMarket = determinePreMarketRegime(cmeDivergencePct);
-    if (preMarket.minLevel === "crisis") {
-      console.log(`  → ${preMarket.reason}`);
-      shadowAlert = { type: "CME先物乖離率キルスイッチ", message: preMarket.reason! };
-      const assessmentData = {
-        ...buildMarketFields(marketData),
-        sentiment: "crisis" as const,
-        shouldTrade: false,
-        reasoning: `[CME先物乖離率キルスイッチ] ${preMarket.reason}`,
-        selectedStocks: [],
-        tradingStrategy: "day_trade",
-      };
-      await prisma.marketAssessment.upsert({
-        where: { date: getTodayForDB() },
-        update: assessmentData,
-        create: { date: getTodayForDB(), ...assessmentData },
-      });
-      isShadowMode = true;
-    } else if (preMarket.minLevel) {
-      console.log(`  → ${preMarket.reason}（レジーム下限を${preMarket.minLevel}に引き上げ）`);
+    // CME休場中はデータが古いためレジーム引き上げをスキップ
+    if (cmeStatus === "closed") {
+      console.log("  → CME休場中: 乖離率は参考値として記録のみ（レジーム判定には使用しない）");
+    } else {
+      const preMarket = determinePreMarketRegime(cmeDivergencePct);
+      if (preMarket.minLevel === "crisis") {
+        console.log(`  → ${preMarket.reason}`);
+        shadowAlert = { type: "CME先物乖離率キルスイッチ", message: preMarket.reason! };
+        const assessmentData = {
+          ...buildMarketFields(marketData),
+          sentiment: "crisis" as const,
+          shouldTrade: false,
+          reasoning: `[CME先物乖離率キルスイッチ] ${preMarket.reason}`,
+          selectedStocks: [],
+          tradingStrategy: "day_trade",
+        };
+        await prisma.marketAssessment.upsert({
+          where: { date: getTodayForDB() },
+          update: assessmentData,
+          create: { date: getTodayForDB(), ...assessmentData },
+        });
+        isShadowMode = true;
+      } else if (preMarket.minLevel) {
+        console.log(`  → ${preMarket.reason}（レジーム下限を${preMarket.minLevel}に引き上げ）`);
+      }
     }
   } else {
     console.log("[1.7/2] CME先物乖離率: データ不足のためスキップ");
@@ -123,8 +131,8 @@ export async function main(): Promise<MarketAssessmentContext> {
   console.log("[1.8/2] VIXレジーム判定...");
   let regime: MarketRegime = determineMarketRegime(marketData.vix.price);
 
-  // CME乖離率によるレジーム引き上げ
-  if (cmeDivergencePct != null) {
+  // CME乖離率によるレジーム引き上げ（CME休場中はスキップ — データが古い）
+  if (cmeDivergencePct != null && cmeStatus !== "closed") {
     const preMarket = determinePreMarketRegime(cmeDivergencePct);
     if (preMarket.minLevel && !regime.shouldHaltTrading) {
       const levelOrder: Record<string, number> = { normal: 0, elevated: 1, high: 2, crisis: 3 };
@@ -141,10 +149,10 @@ export async function main(): Promise<MarketAssessmentContext> {
 
   console.log(`  → レジーム: ${regime.level}（${regime.reason}）`);
 
-  // 1.8.1. 戦略決定
+  // 1.8.1. 戦略決定（CME休場中は乖離率を無視 — 古いデータでデイトレ判定するのを防止）
   const strategyDecision: StrategyDecision = determineTradingStrategy(
     marketData.vix.price,
-    cmeDivergencePct,
+    cmeStatus !== "closed" ? cmeDivergencePct : null,
   );
   console.log(`[1.8.1/2] 戦略決定: ${strategyDecision.strategy}（${strategyDecision.reason}）`);
 
