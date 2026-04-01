@@ -541,3 +541,18 @@ model MarketForecast {
   @@unique([date])
   @@index([date(sort: Desc)])
 }
+
+// ニュース記事（生データ）
+model NewsArticle {
+  id          String   @id @default(cuid())
+  source      String   // "google_rss"
+  title       String
+  url         String
+  publishedAt DateTime
+  category    String   // "geopolitical" | "sector" | "stock"
+  contentHash String   @unique // SHA-256(title|url)
+  createdAt   DateTime @default(now())
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([category])
+}

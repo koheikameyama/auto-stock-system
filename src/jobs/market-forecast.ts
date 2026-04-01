@@ -14,7 +14,7 @@ import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
 import { fetchMarketData } from "../core/market-data";
-import { fetchMarketNews } from "../core/news-fetcher";
+import { fetchMarketNews, saveNewsToDb, getNewsFromDb } from "../core/news-fetcher";
 import { chatCompletion } from "../lib/openai";
 import { notifyMarketForecast } from "../lib/slack";
 import { getNextTradingDay } from "../lib/market-calendar";
@@ -196,9 +196,11 @@ export async function main(): Promise<void> {
   console.log("[1/4] 市場データ収集中...");
   const snapshot = await buildMarketSnapshot();
 
-  // 2. ニュース取得
-  console.log("[2/4] ニュースヘッドライン取得中...");
-  const newsHeadlines = await fetchMarketNews(15);
+  // 2. ニュース取得 → DB保存 → DB読み込み
+  console.log("[2/4] ニュースヘッドライン取得・保存中...");
+  const freshNews = await fetchMarketNews(15);
+  await saveNewsToDb(freshNews);
+  const newsHeadlines = await getNewsFromDb(24);
 
   // 3. AI予想生成
   console.log("[3/4] AI予想生成中...");

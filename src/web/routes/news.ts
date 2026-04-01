@@ -1,8 +1,7 @@
 /**
  * ニュースページ（GET /news）
  *
- * Google News RSSからリアルタイム取得して表示。DB保存なし。
- * 以前の /news ページを簡略化して復活。
+ * DBに保存されたニュース記事を表示。
  */
 
 import { Hono } from "hono";
@@ -11,7 +10,7 @@ import dayjs from "dayjs";
 import { layout } from "../views/layout";
 import { emptyState } from "../views/components";
 import { COLORS } from "../views/styles";
-import { fetchMarketNews } from "../../core/news-fetcher";
+import { getNewsFromDb } from "../../core/news-fetcher";
 
 const app = new Hono();
 
@@ -28,7 +27,7 @@ function categoryColor(category: string): string {
 }
 
 app.get("/", async (c) => {
-  const headlines = await fetchMarketNews(30);
+  const headlines = await getNewsFromDb(48);
 
   const content = html`
     <p class="section-title">最新ニュース（${headlines.length}件）</p>
@@ -68,7 +67,7 @@ app.get("/", async (c) => {
       : html`<div class="card">${emptyState("ニュースを取得できませんでした")}</div>`}
 
     <div style="margin-top:12px;font-size:11px;color:${COLORS.textDim};text-align:center">
-      Google News RSS からリアルタイム取得
+      直近48時間のニュース（DBから取得）
     </div>
   `;
 

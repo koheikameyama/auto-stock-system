@@ -7,6 +7,8 @@
  */
 
 import * as cheerio from "cheerio";
+import crypto from "crypto";
+import { prisma } from "../lib/prisma";
 
 const RSS_BASE_URL = "https://news.google.com/rss/search";
 
@@ -88,4 +90,56 @@ export async function fetchMarketNews(
     console.error("[news-fetcher] ニュース取得失敗:", error);
     return [];
   }
+}
+
+/**
+ * 取得したニュースをDBに保存（contentHashで重複スキップ）
+ */
+export async function saveNewsToDb(headlines: NewsHeadline[]): Promise<number> {
+  let saved = 0;
+  for (const h of headlines) {
+    const contentHash = crypto
+      .createHash("sha256")
+      .update(`${h.title}|${h.url}`)
+      .digest("hex");
+
+    try {
+      await prisma.newsArticle.upsert({
+        where: { contentHash },
+        update: {},
+        create: {
+          source: "google_rss",
+          title: h.title,
+          url: h.url,
+          publishedAt: h.pubDate ? new Date(h.pubDate) : new Date(),
+          category: h.category,
+          contentHash,
+        },
+      });
+      saved++;
+    } catch {
+      // unique制約違反等は無視
+    }
+  }
+  console.log(`[news-fetcher] ${saved}/${headlines.length}件をDBに保存`);
+  return saved;
+}
+
+/**
+ * DBから指定時間以内のニュースを取得
+ */
+export async function getNewsFromDb(hours: number): Promise<NewsHeadline[]> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const articles = await prisma.newsArticle.findMany({
+    where: { publishedAt: { gte: since } },
+    orderBy: { publishedAt: "desc" },
+  });
+
+  return articles.map((a) => ({
+    title: a.title,
+    pubDate: a.publishedAt.toISOString(),
+    source: a.source,
+    url: a.url,
+    category: a.category as NewsHeadline["category"],
+  }));
 }
