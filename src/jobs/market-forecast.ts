@@ -7,7 +7,7 @@
  * 1. 市場指標データ取得（fetchMarketData）
  * 2. 当日のMarketAssessment読み込み
  * 3. N225 SMA50計算（StockDailyBarから）
- * 4. ニュースヘッドライン取得・DB保存
+ * 4. DBからニュースヘッドライン読み込み（news-collectで事前保存済み）
  * 5. OpenAI gpt-4o-miniで市場予想を生成
  * 6. MarketForecast テーブルにupsert
  * 7. Slack通知
@@ -19,7 +19,7 @@ import { resolve } from "path";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
 import { fetchMarketData } from "../core/market-data";
-import { fetchMarketNews, saveNewsToDb, getNewsFromDb } from "../core/news-fetcher";
+import { getNewsFromDb } from "../core/news-fetcher";
 import { chatCompletion } from "../lib/openai";
 import { notifyMarketForecast } from "../lib/slack";
 import { getNextTradingDay } from "../lib/market-calendar";
@@ -237,10 +237,8 @@ export async function main(timing: Timing = "evening"): Promise<void> {
   console.log("[1/4] 市場データ収集中...");
   const snapshot = await buildMarketSnapshot();
 
-  // 2. ニュース取得 → DB保存 → DB読み込み
-  console.log("[2/4] ニュースヘッドライン取得・保存中...");
-  const freshNews = await fetchMarketNews(15);
-  await saveNewsToDb(freshNews);
+  // 2. DBからニュース読み込み（news-collectで事前保存済み）
+  console.log("[2/4] ニュースヘッドライン読み込み中...");
   const newsHeadlines = await getNewsFromDb(24);
 
   // 3. AI予想生成
