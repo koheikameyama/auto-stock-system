@@ -406,11 +406,12 @@ export function runCombinedSimulation(
     processDefensive(boPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, boConfigLocal.costModelEnabled, verbose);
     processDefensive(guPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, guConfigLocal.costModelEnabled, verbose);
 
-    // ── 1.6 ドローダウンハルト判定 ──
+    // ── 1.6 ドローダウンハルト判定（両戦略に適用） ──
     const ddHalt = checkDrawdownHalt(today, dayIdx, tradingDays, equityCurve, budget);
-    let shouldTrade = ddHalt.shouldTrade;
+    let boShouldTrade = ddHalt.shouldTrade;
+    const guShouldTrade = ddHalt.shouldTrade;
     const { weeklyDDPct, monthlyDDPct } = ddHalt;
-    if (!shouldTrade) {
+    if (!ddHalt.shouldTrade) {
       haltDays++;
       if (verbose) {
         const reasons: string[] = [];
@@ -420,12 +421,12 @@ export function runCombinedSimulation(
       }
     }
 
-    // ── 1.7 エクイティカーブフィルター ──
-    if (shouldTrade && !checkEquityCurveFilter(dayIdx, equityCurve, equityCurveSmaPeriod)) {
-      shouldTrade = false;
-      haltDays++;
+    // ── 1.7 エクイティカーブフィルター（Breakoutのみ停止、GapUpは継続） ──
+    if (boShouldTrade && !checkEquityCurveFilter(dayIdx, equityCurve, equityCurveSmaPeriod)) {
+      boShouldTrade = false;
+      if (ddHalt.shouldTrade) haltDays++; // DDハルトと重複カウントしない
       if (verbose) {
-        console.log(`  [${today}] エクイティフィルター: SMA${equityCurveSmaPeriod}下回り`);
+        console.log(`  [${today}] エクイティフィルター: SMA${equityCurveSmaPeriod}下回り（BO停止/GU継続）`);
       }
     }
 
@@ -436,7 +437,7 @@ export function runCombinedSimulation(
     ]);
 
     // ── 2a. Breakout エントリー ──
-    if (shouldTrade && todayRegime !== "crisis" && boPositions.length < boConfigLocal.maxPositions && cash > 0) {
+    if (boShouldTrade && todayRegime !== "crisis" && boPositions.length < boConfigLocal.maxPositions && cash > 0) {
       const rawSignals = breakoutSignals.get(today) ?? [];
       for (const signal of rawSignals) {
         if (boPositions.length >= boConfigLocal.maxPositions) break;
@@ -476,7 +477,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2b. GapUp エントリー ──
-    if (shouldTrade && todayRegime !== "crisis" && guPositions.length < guConfigLocal.maxPositions && cash > 0) {
+    if (guShouldTrade && todayRegime !== "crisis" && guPositions.length < guConfigLocal.maxPositions && cash > 0) {
       const signals = gapupSignals.get(today) ?? [];
       for (const signal of signals) {
         if (guPositions.length >= guConfigLocal.maxPositions) break;
