@@ -14,9 +14,11 @@ on:
         default: all
         options:
           - all
+          - news
           - assess
           # - holding  # [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
           - watchlist
+          - forecast
           # - scan  # [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
       skip_market_day_check:
         description: "休場日チェックをスキップ"
@@ -67,10 +69,29 @@ jobs:
             echo "should_run=$CHECK" >> "$GITHUB_OUTPUT"
           fi
 
-  market-assessment:
+  news-collect:
     needs: check-market-day
     if: |
       needs.check-market-day.outputs.should_run == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'news')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: ".tool-versions"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run news-collect
+
+  market-assessment:
+    needs: [check-market-day, news-collect]
+    if: |
+      always() &&
+      needs.check-market-day.outputs.should_run == 'true' &&
+      needs.news-collect.result != 'failure' &&
       (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'assess')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -107,6 +128,29 @@ jobs:
   #     - name: Start yfinance sidecar
   #       uses: ./.github/actions/start-yfinance
   #     - run: npm run holding-score
+
+  market-forecast:
+    needs: [check-market-day, market-assessment]
+    if: |
+      always() &&
+      needs.check-market-day.outputs.should_run == 'true' &&
+      needs.market-assessment.result != 'failure' &&
+      (github.event_name != 'workflow_dispatch' || inputs.job == 'all' || inputs.job == 'forecast')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: ".tool-versions"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Start yfinance sidecar
+        uses: ./.github/actions/start-yfinance
+      - run: npm run forecast:morning
 
   watchlist-builder:
     needs: [check-market-day, market-assessment]
@@ -150,7 +194,7 @@ jobs:
   #     - run: npm run stock-scan
 
   notify-failure:
-    needs: [market-assessment, watchlist-builder]
+    needs: [news-collect, market-assessment, market-forecast, watchlist-builder]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:

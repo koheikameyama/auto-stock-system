@@ -72,8 +72,22 @@ jobs:
         uses: ./.github/actions/start-yfinance
       - run: npm run eod
 
-  trigger-market-forecast:
+  news-collect:
     needs: end-of-day
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: ".tool-versions"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run news-collect
+
+  trigger-market-forecast:
+    needs: news-collect
     runs-on: ubuntu-latest
     steps:
       - name: Trigger market-forecast workflow
@@ -83,7 +97,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
 
   notify-failure:
-    needs: [end-of-day, trigger-market-forecast]
+    needs: [end-of-day, news-collect, trigger-market-forecast]
     if: failure()
     runs-on: ubuntu-latest
     steps:

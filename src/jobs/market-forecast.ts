@@ -1,16 +1,21 @@
 /**
- * 市場予想ジョブ（大引け後 16:00 JST、平日のみ）
+ * 市場予想ジョブ
+ *
+ * - morning: 寄付前（8:00 JST）に当日の予測を生成
+ * - evening: 大引け後（15:50 JST）に翌営業日の予測を生成
  *
  * 1. 市場指標データ取得（fetchMarketData）
  * 2. 当日のMarketAssessment読み込み
  * 3. N225 SMA50計算（StockDailyBarから）
- * 4. Google Newsヘッドライン取得
- * 5. OpenAI gpt-4o-miniで翌営業日の市場予想を生成
+ * 4. ニュースヘッドライン取得・DB保存
+ * 5. OpenAI gpt-4o-miniで市場予想を生成
  * 6. MarketForecast テーブルにupsert
  * 7. Slack通知
  */
 
 import dayjs from "dayjs";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
 import { fetchMarketData } from "../core/market-data";
@@ -96,12 +101,42 @@ async function buildMarketSnapshot(): Promise<MarketSnapshot> {
 }
 
 // ========================================
+// 仕様書読み込み
+// ========================================
+
+function loadStrategySpecs(): string {
+  const specFiles = [
+    "docs/specs/backtest-breakout.md",
+    "docs/specs/backtest-gapup.md",
+  ];
+
+  const specs: string[] = [];
+  for (const file of specFiles) {
+    try {
+      const content = readFileSync(resolve(process.cwd(), file), "utf-8");
+      specs.push(content);
+    } catch {
+      // ファイルが見つからない場合はスキップ
+    }
+  }
+  return specs.join("\n\n---\n\n");
+}
+
+// ========================================
 // プロンプト構築
 // ========================================
 
-function buildSystemPrompt(): string {
+type Timing = "morning" | "evening";
+
+function buildSystemPrompt(timing: Timing): string {
+  const target = timing === "morning"
+    ? "本日の日本株市場（寄付前の予測）"
+    : "翌営業日の日本株市場の見通し";
+
+  const strategySpecs = loadStrategySpecs();
+
   return `あなたはプロの日本株トレーダーです。
-提供された市場データとニュースヘッドラインに基づき、翌営業日の日本株市場の見通しを分析してください。
+提供された市場データとニュースヘッドラインに基づき、${target}を分析してください。
 
 以下のJSON形式で回答してください:
 {
@@ -120,7 +155,13 @@ function buildSystemPrompt(): string {
 - CME先物の水準（ギャップの示唆）
 - USD/JPYの動向（円安→輸出株に追い風、円高→逆風）
 - ニュースヘッドラインから読み取れるイベントリスク
-- 当日の市場評価（shouldTrade、sentiment）の文脈`;
+- 当日の市場評価（shouldTrade、sentiment）の文脈
+
+=== 当システムの自動売買ルール（参考） ===
+以下はシステムが自動的に適用するフィルター・ルールです。tradingHintsではこれらの自動化済みルールを繰り返さず、市場環境やニュースから読み取れる「自動化されていない」洞察を提供してください。
+例: セクター別の注目点、特定イベントの影響、ボラティリティ環境での立ち回り方など。
+
+${strategySpecs}`;
 }
 
 function buildUserPrompt(
@@ -189,8 +230,8 @@ interface ForecastResult {
   tradingHints?: string;
 }
 
-export async function main(): Promise<void> {
-  console.log("=== Market Forecast 開始 ===");
+export async function main(timing: Timing = "evening"): Promise<void> {
+  console.log(`=== Market Forecast 開始 (${timing}) ===`);
 
   // 1. 市場データスナップショット構築
   console.log("[1/4] 市場データ収集中...");
@@ -204,10 +245,10 @@ export async function main(): Promise<void> {
 
   // 3. AI予想生成
   console.log("[3/4] AI予想生成中...");
-  const forecastTargetDate = getNextTradingDay();
+  const forecastTargetDate = timing === "morning" ? getTodayForDB() : getNextTradingDay();
   const targetDateStr = dayjs(forecastTargetDate).format("YYYY-MM-DD");
 
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(timing);
   const userPrompt = buildUserPrompt(
     snapshot,
     newsHeadlines.map((n) => ({ title: n.title, source: n.source })),
@@ -282,7 +323,8 @@ export async function main(): Promise<void> {
 
 const isDirectRun = process.argv[1]?.includes("market-forecast");
 if (isDirectRun) {
-  main()
+  const timing: Timing = process.argv.includes("--morning") ? "morning" : "evening";
+  main(timing)
     .catch((error) => {
       console.error("Market Forecast エラー:", error);
       process.exit(1);
