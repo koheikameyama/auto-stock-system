@@ -5,6 +5,7 @@
  * CLI (combined-run.ts) と ジョブ (run-backtest.ts) から共用。
  */
 
+import dayjs from "dayjs";
 import { RISK_PER_TRADE_PCT } from "./breakout-config";
 import { GAPUP_RISK_PER_TRADE_PCT } from "./gapup-config";
 import { type PrecomputedSimData, precomputeDailySignals } from "./breakout-simulation";
@@ -13,7 +14,7 @@ import { checkPositionExit } from "../core/exit-checker";
 import { calculateCommission, calculateTax } from "../core/trading-costs";
 import { getLimitDownPrice } from "../lib/constants/price-limits";
 import { determineMarketRegime } from "../core/market-regime";
-import { UNIT_SHARES } from "../lib/constants/trading";
+import { UNIT_SHARES, DRAWDOWN } from "../lib/constants/trading";
 import { DEFENSIVE_MODE } from "../lib/constants";
 import { calculateMetrics } from "./metrics";
 import type {
@@ -51,6 +52,8 @@ export interface SimResult {
   allTrades: SimulatedPosition[];
   /** 累計入金額（初期資金 + 月次追加の合計） */
   totalCapitalAdded: number;
+  /** ドローダウンハルトが発動した営業日数 */
+  haltDays: number;
 }
 
 // ──────────────────────────────────────────
@@ -250,6 +253,69 @@ function processDefensive(
 }
 
 // ──────────────────────────────────────────
+// ドローダウンハルト判定
+// ──────────────────────────────────────────
+
+/**
+ * 週次/月次ドローダウンが閾値を超えた場合、新規エントリーを禁止する。
+ * ライブシステム（drawdown-manager.ts）と同じロジック。
+ *
+ * - 週次: カレンダー上の月曜日を週の起点とし、前営業日のエクイティからの下落率
+ * - 月次: カレンダー上の月初を起点とし、前営業日のエクイティからの下落率
+ */
+function checkDrawdownHalt(
+  today: string,
+  dayIdx: number,
+  tradingDays: string[],
+  equityCurve: DailyEquity[],
+  initialBudget: number,
+): { shouldTrade: boolean; weeklyDDPct: number; monthlyDDPct: number } {
+  if (dayIdx === 0) {
+    return { shouldTrade: true, weeklyDDPct: 0, monthlyDDPct: 0 };
+  }
+
+  const currentEquity = equityCurve[dayIdx - 1].totalEquity;
+
+  // 週初エクイティ: 今週月曜以降の最初の営業日の「前営業日」エクイティ
+  const todayDow = dayjs(today).day(); // 0=Sun, 1=Mon, ...
+  let weekStartEquity = currentEquity;
+  for (let i = dayIdx - 1; i >= 0; i--) {
+    const dow = dayjs(tradingDays[i]).day();
+    if (dow < todayDow || (todayDow === 1 && i === dayIdx - 1)) {
+      // 前の週に入った → i+1 が今週最初の営業日
+      weekStartEquity = i > 0 ? equityCurve[i - 1].totalEquity : initialBudget;
+      break;
+    }
+    if (i === 0) {
+      weekStartEquity = initialBudget;
+    }
+  }
+
+  // 月初エクイティ: 今月最初の営業日の「前営業日」エクイティ
+  const currentMonth = today.substring(0, 7);
+  let monthStartEquity = initialBudget;
+  for (let i = 0; i < dayIdx; i++) {
+    if (tradingDays[i].substring(0, 7) === currentMonth) {
+      monthStartEquity = i > 0 ? equityCurve[i - 1].totalEquity : initialBudget;
+      break;
+    }
+  }
+
+  const weeklyDDPct = weekStartEquity > 0
+    ? Math.max(0, ((weekStartEquity - currentEquity) / weekStartEquity) * 100)
+    : 0;
+  const monthlyDDPct = monthStartEquity > 0
+    ? Math.max(0, ((monthStartEquity - currentEquity) / monthStartEquity) * 100)
+    : 0;
+
+  const shouldTrade =
+    weeklyDDPct < DRAWDOWN.WEEKLY_HALT_PCT &&
+    monthlyDDPct < DRAWDOWN.MONTHLY_HALT_PCT;
+
+  return { shouldTrade, weeklyDDPct, monthlyDDPct };
+}
+
+// ──────────────────────────────────────────
 // シミュレーション本体
 // ──────────────────────────────────────────
 export function runCombinedSimulation(
@@ -265,6 +331,7 @@ export function runCombinedSimulation(
 
   let cash = budget;
   let totalCapitalAdded = budget;
+  let haltDays = 0;
   const pendingSettlement: { amount: number; availableDayIdx: number }[] = [];
   const boPositions: SimulatedPosition[] = [];
   const guPositions: SimulatedPosition[] = [];
@@ -312,6 +379,18 @@ export function runCombinedSimulation(
     processDefensive(boPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, boConfigLocal.costModelEnabled, verbose);
     processDefensive(guPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, guConfigLocal.costModelEnabled, verbose);
 
+    // ── 1.6 ドローダウンハルト判定 ──
+    const { shouldTrade, weeklyDDPct, monthlyDDPct } = checkDrawdownHalt(today, dayIdx, tradingDays, equityCurve, budget);
+    if (!shouldTrade) {
+      haltDays++;
+      if (verbose) {
+        const reasons: string[] = [];
+        if (weeklyDDPct >= DRAWDOWN.WEEKLY_HALT_PCT) reasons.push(`週次 ${weeklyDDPct.toFixed(1)}% ≥ ${DRAWDOWN.WEEKLY_HALT_PCT}%`);
+        if (monthlyDDPct >= DRAWDOWN.MONTHLY_HALT_PCT) reasons.push(`月次 ${monthlyDDPct.toFixed(1)}% ≥ ${DRAWDOWN.MONTHLY_HALT_PCT}%`);
+        console.log(`  [${today}] DDハルト: ${reasons.join(" / ")}`);
+      }
+    }
+
     // 全ポジションの銘柄リスト（重複排除用）
     const allOpenTickers = new Set([
       ...boPositions.map((p) => p.ticker),
@@ -319,7 +398,7 @@ export function runCombinedSimulation(
     ]);
 
     // ── 2a. Breakout エントリー ──
-    if (todayRegime !== "crisis" && boPositions.length < boConfigLocal.maxPositions && cash > 0) {
+    if (shouldTrade && todayRegime !== "crisis" && boPositions.length < boConfigLocal.maxPositions && cash > 0) {
       const rawSignals = breakoutSignals.get(today) ?? [];
       for (const signal of rawSignals) {
         if (boPositions.length >= boConfigLocal.maxPositions) break;
@@ -359,7 +438,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2b. GapUp エントリー ──
-    if (todayRegime !== "crisis" && guPositions.length < guConfigLocal.maxPositions && cash > 0) {
+    if (shouldTrade && todayRegime !== "crisis" && guPositions.length < guConfigLocal.maxPositions && cash > 0) {
       const signals = gapupSignals.get(today) ?? [];
       for (const signal of signals) {
         if (guPositions.length >= guConfigLocal.maxPositions) break;
@@ -430,5 +509,6 @@ export function runCombinedSimulation(
     equityCurve,
     allTrades,
     totalCapitalAdded,
+    haltDays,
   };
 }

@@ -219,6 +219,10 @@ async function main() {
     console.log(`  ${reason}: ${count}`);
   }
 
+  const totalDays = result.equityCurve.length;
+  console.log(`\n[ドローダウンハルト]`);
+  console.log(`  ハルト日数: ${result.haltDays} / ${totalDays}営業日 (${totalDays > 0 ? ((result.haltDays / totalDays) * 100).toFixed(1) : "0.0"}%)`);
+
   console.log("\n" + "=".repeat(60));
   const pfOk = result.totalMetrics.profitFactor >= 1.3;
   const expOk = result.totalMetrics.expectancy > 0;
