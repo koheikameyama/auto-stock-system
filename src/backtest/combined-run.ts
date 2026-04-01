@@ -111,9 +111,11 @@ async function main() {
   const monthlyAddAmount = Number(getArg(args, "--monthly-add") ?? 0);
   const verbose = args.includes("--verbose");
   const comparePositions = args.includes("--compare-positions");
+  const compareEquityFilter = args.includes("--compare-equity-filter");
 
-  const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, verbose: !comparePositions && verbose };
-  const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, verbose: !comparePositions && verbose };
+  const quietMode = comparePositions || compareEquityFilter;
+  const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, verbose: !quietMode && verbose };
+  const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, verbose: !quietMode && verbose };
 
   console.log("=".repeat(60));
   console.log("統合バックテスト（Breakout + GapUp）");
@@ -159,7 +161,7 @@ async function main() {
   const breakoutSignals = precomputeDailySignals(boConfig, allData, precomputed);
   const gapupSignals = precomputeGapUpDailySignals(guConfig, allData, precomputed);
 
-  const ctx = { boConfig, guConfig, budget, verbose: !comparePositions && verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount };
+  const ctx = { boConfig, guConfig, budget, verbose: !quietMode && verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount, equityCurveSmaPeriod: 20 };
 
   // ポジション比較モード
   if (comparePositions) {
@@ -184,6 +186,35 @@ async function main() {
       const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
       console.log(
         `${row.label.padEnd(14)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // エクイティカーブフィルター比較モード
+  if (compareEquityFilter) {
+    const grid = [0, 10, 20, 40];
+
+    console.log("\n=== エクイティカーブフィルター比較 ===");
+    console.log(
+      `${"SMA期間".padEnd(10)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"ハルト日".padStart(6)}`,
+    );
+    console.log("-".repeat(78));
+
+    for (const sma of grid) {
+      const result = runCombinedSimulation(
+        { ...ctx, equityCurveSmaPeriod: sma },
+        boConfig.maxPositions,
+        guConfig.maxPositions,
+      );
+      const m = result.totalMetrics;
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      const label = sma === 0 ? "なし" : `SMA${sma}`;
+      console.log(
+        `${label.padEnd(10)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${String(result.haltDays).padStart(6)}`,
       );
     }
     console.log("");

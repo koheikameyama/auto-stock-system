@@ -42,6 +42,8 @@ export interface SimContext {
   vixData?: Map<string, number>;
   /** 月次資金追加額（0 = 追加なし） */
   monthlyAddAmount: number;
+  /** エクイティカーブSMAフィルター期間（0 = 無効） */
+  equityCurveSmaPeriod: number;
 }
 
 export interface SimResult {
@@ -316,6 +318,31 @@ function checkDrawdownHalt(
 }
 
 // ──────────────────────────────────────────
+// エクイティカーブフィルター
+// ──────────────────────────────────────────
+
+/**
+ * エクイティカーブ・トレード判定。
+ * エクイティが自身のSMAを下回っていたらエントリー停止。
+ * 「戦略が機能していない期間」を自動検知する。
+ */
+function checkEquityCurveFilter(
+  dayIdx: number,
+  equityCurve: DailyEquity[],
+  smaPeriod: number,
+): boolean {
+  if (smaPeriod <= 0 || dayIdx < smaPeriod) return true;
+
+  let sum = 0;
+  for (let i = dayIdx - smaPeriod; i < dayIdx; i++) {
+    sum += equityCurve[i].totalEquity;
+  }
+  const sma = sum / smaPeriod;
+
+  return equityCurve[dayIdx - 1].totalEquity >= sma;
+}
+
+// ──────────────────────────────────────────
 // シミュレーション本体
 // ──────────────────────────────────────────
 export function runCombinedSimulation(
@@ -323,7 +350,7 @@ export function runCombinedSimulation(
   boMaxPositions: number,
   guMaxPositions: number,
 ): SimResult {
-  const { boConfig, guConfig, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData, monthlyAddAmount } = ctx;
+  const { boConfig, guConfig, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod } = ctx;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
 
   const boConfigLocal = { ...boConfig, maxPositions: boMaxPositions };
@@ -380,7 +407,9 @@ export function runCombinedSimulation(
     processDefensive(guPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, guConfigLocal.costModelEnabled, verbose);
 
     // ── 1.6 ドローダウンハルト判定 ──
-    const { shouldTrade, weeklyDDPct, monthlyDDPct } = checkDrawdownHalt(today, dayIdx, tradingDays, equityCurve, budget);
+    const ddHalt = checkDrawdownHalt(today, dayIdx, tradingDays, equityCurve, budget);
+    let shouldTrade = ddHalt.shouldTrade;
+    const { weeklyDDPct, monthlyDDPct } = ddHalt;
     if (!shouldTrade) {
       haltDays++;
       if (verbose) {
@@ -388,6 +417,15 @@ export function runCombinedSimulation(
         if (weeklyDDPct >= DRAWDOWN.WEEKLY_HALT_PCT) reasons.push(`週次 ${weeklyDDPct.toFixed(1)}% ≥ ${DRAWDOWN.WEEKLY_HALT_PCT}%`);
         if (monthlyDDPct >= DRAWDOWN.MONTHLY_HALT_PCT) reasons.push(`月次 ${monthlyDDPct.toFixed(1)}% ≥ ${DRAWDOWN.MONTHLY_HALT_PCT}%`);
         console.log(`  [${today}] DDハルト: ${reasons.join(" / ")}`);
+      }
+    }
+
+    // ── 1.7 エクイティカーブフィルター ──
+    if (shouldTrade && !checkEquityCurveFilter(dayIdx, equityCurve, equityCurveSmaPeriod)) {
+      shouldTrade = false;
+      haltDays++;
+      if (verbose) {
+        console.log(`  [${today}] エクイティフィルター: SMA${equityCurveSmaPeriod}下回り`);
       }
     }
 
