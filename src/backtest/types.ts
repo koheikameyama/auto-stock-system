@@ -133,6 +133,8 @@ export interface DailyEquity {
   positionsValue: number;
   totalEquity: number;
   openPositionCount: number;
+  /** その日に追加された資金額（月次追加シミュレーション用） */
+  capitalAdded?: number;
 }
 
 export interface BreakoutBacktestResult {

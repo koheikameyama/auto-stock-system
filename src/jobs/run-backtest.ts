@@ -71,7 +71,7 @@ export async function main(): Promise<void> {
 
   // シミュレーション実行
   const result = runCombinedSimulation(
-    { boConfig, guConfig, budget, verbose: false, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined },
+    { boConfig, guConfig, budget, verbose: false, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount: 0 },
     boConfig.maxPositions,
     guConfig.maxPositions,
   );

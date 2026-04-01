@@ -39,6 +39,8 @@ export interface SimContext {
   breakoutSignals: ReturnType<typeof precomputeDailySignals>;
   gapupSignals: ReturnType<typeof precomputeGapUpDailySignals>;
   vixData?: Map<string, number>;
+  /** 月次資金追加額（0 = 追加なし） */
+  monthlyAddAmount: number;
 }
 
 export interface SimResult {
@@ -47,6 +49,8 @@ export interface SimResult {
   guMetrics: PerformanceMetrics;
   equityCurve: DailyEquity[];
   allTrades: SimulatedPosition[];
+  /** 累計入金額（初期資金 + 月次追加の合計） */
+  totalCapitalAdded: number;
 }
 
 // ──────────────────────────────────────────
@@ -253,13 +257,14 @@ export function runCombinedSimulation(
   boMaxPositions: number,
   guMaxPositions: number,
 ): SimResult {
-  const { boConfig, guConfig, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData } = ctx;
+  const { boConfig, guConfig, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData, monthlyAddAmount } = ctx;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
 
   const boConfigLocal = { ...boConfig, maxPositions: boMaxPositions };
   const guConfigLocal = { ...guConfig, maxPositions: guMaxPositions };
 
   let cash = budget;
+  let totalCapitalAdded = budget;
   const pendingSettlement: { amount: number; availableDayIdx: number }[] = [];
   const boPositions: SimulatedPosition[] = [];
   const guPositions: SimulatedPosition[] = [];
@@ -276,6 +281,21 @@ export function runCombinedSimulation(
       if (pendingSettlement[i].availableDayIdx <= dayIdx) {
         cash += pendingSettlement[i].amount;
         pendingSettlement.splice(i, 1);
+      }
+    }
+
+    // 月初の資金追加
+    let capitalAddedToday = 0;
+    if (monthlyAddAmount > 0 && dayIdx > 0) {
+      const prevMonth = tradingDays[dayIdx - 1].substring(0, 7);
+      const currentMonth = today.substring(0, 7);
+      if (currentMonth !== prevMonth) {
+        cash += monthlyAddAmount;
+        totalCapitalAdded += monthlyAddAmount;
+        capitalAddedToday = monthlyAddAmount;
+        if (verbose) {
+          console.log(`  [${today}] 月次資金追加: +¥${monthlyAddAmount.toLocaleString()} (累計入金: ¥${totalCapitalAdded.toLocaleString()})`);
+        }
       }
     }
 
@@ -393,6 +413,7 @@ export function runCombinedSimulation(
       positionsValue: Math.round(positionsValue),
       totalEquity: Math.round(cash + positionsValue + pendingTotal),
       openPositionCount: boPositions.length + guPositions.length,
+      ...(capitalAddedToday > 0 ? { capitalAdded: capitalAddedToday } : {}),
     });
   }
 
@@ -408,5 +429,6 @@ export function runCombinedSimulation(
     guMetrics: calculateMetrics(guAllTrades, equityCurve, budget),
     equityCurve,
     allTrades,
+    totalCapitalAdded,
   };
 }

@@ -2,11 +2,11 @@
  * 統合バックテスト（Breakout + GapUp 共有資金プール）
  *
  * Usage:
- *   npm run backtest:combined
- *   npm run backtest:combined -- --start 2025-04-01 --end 2026-03-25
- *   npm run backtest:combined -- --budget 1000000
- *   npm run backtest:combined -- --verbose
- *   npm run backtest:combined -- --compare-positions
+ *   npm run backtest
+ *   npm run backtest -- --start 2025-04-01 --end 2026-03-25
+ *   npm run backtest -- --budget 1000000
+ *   npm run backtest -- --verbose
+ *   npm run backtest -- --compare-positions
  */
 
 import dayjs from "dayjs";
@@ -49,11 +49,66 @@ function printMetrics(m: PerformanceMetrics, label: string): void {
   }
 }
 
+function printMonthlyEquitySummary(
+  equityCurve: import("./types").DailyEquity[],
+  totalCapitalAdded: number,
+  initialBudget: number,
+): void {
+  // 月末エクイティを抽出
+  const monthlyData: { month: string; equity: number; cumulativeAdded: number }[] = [];
+  let cumulativeAdded = initialBudget;
+
+  for (let i = 0; i < equityCurve.length; i++) {
+    const day = equityCurve[i];
+    if (day.capitalAdded) {
+      cumulativeAdded += day.capitalAdded;
+    }
+    const isLastDayOfMonth =
+      i === equityCurve.length - 1 ||
+      equityCurve[i + 1].date.substring(0, 7) !== day.date.substring(0, 7);
+    if (isLastDayOfMonth) {
+      monthlyData.push({
+        month: day.date.substring(0, 7),
+        equity: day.totalEquity,
+        cumulativeAdded,
+      });
+    }
+  }
+
+  console.log("\n[月次エクイティ推移]");
+  console.log(
+    `  ${"月".padEnd(9)} | ${"累計入金".padStart(11)} | ${"月末エクイティ".padStart(12)} | ${"損益".padStart(12)} | ${"損益率".padStart(7)}`,
+  );
+  console.log("  " + "-".repeat(65));
+
+  for (const row of monthlyData) {
+    const pnl = row.equity - row.cumulativeAdded;
+    const pnlPct = row.cumulativeAdded > 0 ? (pnl / row.cumulativeAdded) * 100 : 0;
+    const sign = pnl >= 0 ? "+" : "";
+    console.log(
+      `  ${row.month.padEnd(9)} | ¥${row.cumulativeAdded.toLocaleString().padStart(10)} | ¥${row.equity.toLocaleString().padStart(11)} | ${sign}¥${pnl.toLocaleString().padStart(10)} | ${sign}${pnlPct.toFixed(1)}%`,
+    );
+  }
+
+  // 最終サマリー
+  const finalEquity = equityCurve[equityCurve.length - 1]?.totalEquity ?? 0;
+  const netProfit = finalEquity - totalCapitalAdded;
+  const growthPct = totalCapitalAdded > 0 ? (netProfit / totalCapitalAdded) * 100 : 0;
+  const sign = netProfit >= 0 ? "+" : "";
+
+  console.log("\n[資金追加サマリー]");
+  console.log(`  累計入金額: ¥${totalCapitalAdded.toLocaleString()}`);
+  console.log(`  最終エクイティ: ¥${finalEquity.toLocaleString()}`);
+  console.log(`  純利益: ${sign}¥${netProfit.toLocaleString()}`);
+  console.log(`  資金増加率: ${sign}${growthPct.toFixed(1)}%`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const endDate = getArg(args, "--end") ?? dayjs().format("YYYY-MM-DD");
   const startDate = getArg(args, "--start") ?? dayjs(endDate).subtract(12, "month").format("YYYY-MM-DD");
   const budget = Number(getArg(args, "--budget") ?? 500_000);
+  const monthlyAddAmount = Number(getArg(args, "--monthly-add") ?? 0);
   const verbose = args.includes("--verbose");
   const comparePositions = args.includes("--compare-positions");
 
@@ -65,6 +120,9 @@ async function main() {
   console.log("=".repeat(60));
   console.log(`期間: ${startDate} → ${endDate}`);
   console.log(`初期資金: ¥${budget.toLocaleString()}`);
+  if (monthlyAddAmount > 0) {
+    console.log(`月次追加: ¥${monthlyAddAmount.toLocaleString()}`);
+  }
 
   // データ取得
   const stocks = await prisma.stock.findMany({
@@ -101,7 +159,7 @@ async function main() {
   const breakoutSignals = precomputeDailySignals(boConfig, allData, precomputed);
   const gapupSignals = precomputeGapUpDailySignals(guConfig, allData, precomputed);
 
-  const ctx = { boConfig, guConfig, budget, verbose: !comparePositions && verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined };
+  const ctx = { boConfig, guConfig, budget, verbose: !comparePositions && verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount };
 
   // ポジション比較モード
   if (comparePositions) {
@@ -166,6 +224,11 @@ async function main() {
   const expOk = result.totalMetrics.expectancy > 0;
   const rrOk = result.totalMetrics.riskRewardRatio >= 1.5;
   console.log(`判定: PF >= 1.3 ${pfOk ? "✓" : "✗"} / 期待値 > 0 ${expOk ? "✓" : "✗"} / RR >= 1.5 ${rrOk ? "✓" : "✗"}`);
+
+  // 月次エクイティサマリー（月次追加時のみ）
+  if (monthlyAddAmount > 0) {
+    printMonthlyEquitySummary(result.equityCurve, result.totalCapitalAdded, budget);
+  }
 
   // DBに保存
   try {

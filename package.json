@@ -24,7 +24,6 @@
     "jpx-sync": "tsx src/jobs/jpx-csv-sync.ts",
     "delisting-sync": "tsx src/jobs/jpx-delisting-sync.ts",
     "backtest": "tsx src/backtest/combined-run.ts",
-    "backtest:combined": "tsx src/backtest/combined-run.ts",
     "walk-forward:breakout": "tsx scripts/walk-forward-breakout.ts",
     "walk-forward:gapup": "tsx scripts/walk-forward-gapup.ts",
     "data-cleanup": "tsx src/jobs/data-cleanup.ts",
