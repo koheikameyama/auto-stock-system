@@ -1,4 +1,4 @@
-name: "[Scheduled] Market Forecast"
+name: "[Reusable] Market Forecast"
 
 on:
   workflow_dispatch:
