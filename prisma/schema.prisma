@@ -517,3 +517,27 @@ model BacktestRun {
 
   @@index([strategy, runAt(sort: Desc)])
 }
+
+// 市場予想（大引け後にAI生成、翌営業日の見通し）
+model MarketForecast {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date // 予想対象日（翌営業日）
+  generatedAt DateTime @default(now())
+
+  // 入力データスナップショット
+  marketData    Json  // {nikkei, vix, sp500, nasdaq, dow, sox, usdjpy, cme, assessment}
+  newsHeadlines Json? // [{title, pubDate, source, url}]
+
+  // AI予想
+  outlook    String // bullish / neutral / bearish
+  confidence Int // 1-5
+  summary    String @db.Text
+  keyFactors Json // [{factor, impact}]
+  risks      Json // [{risk, severity}]
+
+  // 取引戦略示唆
+  tradingHints String? @db.Text
+
+  @@unique([date])
+  @@index([date(sort: Desc)])
+}

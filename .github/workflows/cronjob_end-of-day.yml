@@ -72,8 +72,18 @@ jobs:
         uses: ./.github/actions/start-yfinance
       - run: npm run eod
 
-  notify-failure:
+  trigger-market-forecast:
     needs: end-of-day
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger market-forecast workflow
+        run: gh workflow run reusable_market-forecast.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
+  notify-failure:
+    needs: [end-of-day, trigger-market-forecast]
     if: failure()
     runs-on: ubuntu-latest
     steps:

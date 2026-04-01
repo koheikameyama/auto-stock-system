@@ -1,5 +1,14 @@
 # GitHub Actions
 
+## ワークフローファイル命名規則
+
+| プレフィックス | 意味 | 例 |
+|---|---|---|
+| `cronjob_` | cron-job.org から直接トリガー | `cronjob_end-of-day.yml` |
+| `scheduled_` | GitHub Actions cron スケジュール | `scheduled_weekly-review.yml` |
+| `reusable_` | 他ワークフローから呼び出される | `reusable_backfill-stock-data.yml` |
+| `ci_` | CI（テスト・lint等） | `ci_test.yml` |
+
 ## スケジューラの使い分け
 
 **時間の正確性が重要なバッチ処理は cron-job.org を使用してください。**

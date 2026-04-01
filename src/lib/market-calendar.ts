@@ -67,3 +67,17 @@ export function countNonTradingDaysAhead(date?: Date): number {
 
   return count;
 }
+
+/**
+ * 次の営業日の日付を返す
+ *
+ * @param from 起点日（デフォルト: 現在のJST日付）
+ * @returns JST日付をUTC 00:00のDateとして返す（getTodayForDBと同じ形式）
+ */
+export function getNextTradingDay(from?: Date): Date {
+  let d = dayjs(from).tz(JST).add(1, "day");
+  while (!isMarketDay(d.toDate())) {
+    d = d.add(1, "day");
+  }
+  return new Date(Date.UTC(d.year(), d.month(), d.date()));
+}

@@ -1,0 +1,46 @@
+name: "[Scheduled] Market Forecast"
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: market-forecast
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  YFINANCE_PROXY: ${{ secrets.YFINANCE_PROXY }}
+
+jobs:
+  market-forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: ".tool-versions"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Start yfinance sidecar
+        uses: ./.github/actions/start-yfinance
+      - run: npm run forecast
+
+  notify-failure:
+    needs: market-forecast
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on failure
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_TITLE: "Market Forecast 失敗"
+          SLACK_MESSAGE: |
+            市場予想の生成に失敗しました。
+            詳細はGitHub Actionsログを確認してください。
+          SLACK_COLOR: danger
+          SLACK_FOOTER: "Stock Buddy"

@@ -119,6 +119,7 @@
 | [admin.md](docs/specs/admin.md) | 管理画面 |
 | [backtest-breakout.md](docs/specs/backtest-breakout.md) | ブレイクアウトバックテスト（日足シミュレーション・walk-forward検証） |
 | [backtest-gapup.md](docs/specs/backtest-gapup.md) | ギャップアップバックテスト（当日終値エントリー・短期決戦） |
+| [market-forecast.md](docs/specs/market-forecast.md) | 市場予想（AI翌営業日予想・ニュース） |
 | [broker-api-migration.md](docs/specs/broker-api-migration.md) | 立花証券API移行ガイド（シミュレーション → リアル取引） |
 
 詳細は `.claude/rules/` 配下を参照してください。
