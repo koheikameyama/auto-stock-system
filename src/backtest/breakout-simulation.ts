@@ -329,6 +329,7 @@ export function runBreakoutBacktest(
   const equityCurve: DailyEquity[] = [];
   const lastExitDayIdx = new Map<string, number>();
   let cash = config.initialBudget;
+  const pendingSettlement: { amount: number; availableDayIdx: number }[] = [];
 
   // 各銘柄の date→index ルックアップを事前構築（precomputed があれば再利用）
   let dateIndexMap: Map<string, Map<string, number>>;
@@ -469,6 +470,14 @@ export function runBreakoutBacktest(
   for (let dayIdx = 0; dayIdx < tradingDays.length; dayIdx++) {
     const today = tradingDays[dayIdx];
 
+    // T+2 受渡完了分をcashに解放
+    for (let i = pendingSettlement.length - 1; i >= 0; i--) {
+      if (pendingSettlement[i].availableDayIdx <= dayIdx) {
+        cash += pendingSettlement[i].amount;
+        pendingSettlement.splice(i, 1);
+      }
+    }
+
     // VIXレジーム判定
     const todayVix = vixData?.get(today);
     const todayRegime: RegimeLevel =
@@ -540,7 +549,8 @@ export function runBreakoutBacktest(
 
       if (exitPrice != null && exitReason != null) {
         closePosition(pos, exitPrice, exitReason, today, dayIdx, tradingDays, config);
-        cash += exitPrice * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
+        const proceeds = exitPrice * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
+        pendingSettlement.push({ amount: proceeds, availableDayIdx: dayIdx + 2 });
         toClose.push(i);
       }
     }
@@ -573,7 +583,8 @@ export function runBreakoutBacktest(
 
         if (shouldClose) {
           closePosition(pos, todayBar.close, "defensive_exit", today, dayIdx, tradingDays, config);
-          cash += todayBar.close * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
+          const proceeds = todayBar.close * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
+          pendingSettlement.push({ amount: proceeds, availableDayIdx: dayIdx + 2 });
           defensiveToClose.push(i);
         }
       }
@@ -718,11 +729,12 @@ export function runBreakoutBacktest(
       positionsValue += markPrice * pos.quantity;
     }
 
+    const pendingTotal = pendingSettlement.reduce((sum, s) => sum + s.amount, 0);
     equityCurve.push({
       date: today,
       cash: Math.round(cash),
       positionsValue: Math.round(positionsValue),
-      totalEquity: Math.round(cash + positionsValue),
+      totalEquity: Math.round(cash + positionsValue + pendingTotal),
       openPositionCount: openPositions.length,
     });
   }

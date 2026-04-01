@@ -153,6 +153,7 @@ export function runGapUpBacktest(
   const equityCurve: DailyEquity[] = [];
   const lastExitDayIdx = new Map<string, number>();
   let cash = config.initialBudget;
+  const pendingSettlement: { amount: number; availableDayIdx: number }[] = [];
 
   let dateIndexMap: Map<string, Map<string, number>>;
   let tradingDays: string[];
@@ -184,6 +185,14 @@ export function runGapUpBacktest(
 
   for (let dayIdx = 0; dayIdx < tradingDays.length; dayIdx++) {
     const today = tradingDays[dayIdx];
+
+    // T+2 受渡完了分をcashに解放
+    for (let i = pendingSettlement.length - 1; i >= 0; i--) {
+      if (pendingSettlement[i].availableDayIdx <= dayIdx) {
+        cash += pendingSettlement[i].amount;
+        pendingSettlement.splice(i, 1);
+      }
+    }
 
     // VIXレジーム判定
     const todayVix = vixData?.get(today);
@@ -262,7 +271,8 @@ export function runGapUpBacktest(
       if (exitPrice != null && exitReason != null) {
         closePosition(pos, exitPrice, exitReason, dayIdx, closedTrades, tradingDays, config);
         toClose.push(i);
-        cash += exitPrice * pos.quantity;
+        const proceeds = exitPrice * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
+        pendingSettlement.push({ amount: proceeds, availableDayIdx: dayIdx + 2 });
         lastExitDayIdx.set(pos.ticker, dayIdx);
       }
     }
@@ -282,7 +292,8 @@ export function runGapUpBacktest(
         const todayBar = allData.get(pos.ticker)![defBarIdx];
         closePosition(pos, todayBar.close, "defensive_exit", dayIdx, closedTrades, tradingDays, config);
         defClose.push(i);
-        cash += todayBar.close * pos.quantity;
+        const defProceeds = todayBar.close * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
+        pendingSettlement.push({ amount: defProceeds, availableDayIdx: dayIdx + 2 });
         lastExitDayIdx.set(pos.ticker, dayIdx);
       }
       for (let i = defClose.length - 1; i >= 0; i--) {
@@ -377,11 +388,12 @@ export function runGapUpBacktest(
       const markPrice = eqBarIdx != null ? allData.get(pos.ticker)![eqBarIdx].close : pos.entryPrice;
       positionsValue += markPrice * pos.quantity;
     }
+    const pendingTotal = pendingSettlement.reduce((sum, s) => sum + s.amount, 0);
     equityCurve.push({
       date: today,
       cash,
       positionsValue,
-      totalEquity: cash + positionsValue,
+      totalEquity: cash + positionsValue + pendingTotal,
       openPositionCount: openPositions.length,
     });
   }
