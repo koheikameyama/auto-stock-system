@@ -21,7 +21,7 @@ import type { QuoteData } from "../core/breakout/breakout-scanner";
 import { GapUpScanner } from "../core/gapup/gapup-scanner";
 import type { GapUpQuoteData } from "../core/gapup/gapup-scanner";
 import { GAPUP } from "../lib/constants/gapup";
-import { getContrarianHistoryBatch, calculateContrarianBonus } from "../core/contrarian-analyzer";
+import { getContrarianHistoryBatch, calculateContinuousContrarianBonus } from "../core/contrarian-analyzer";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -131,8 +131,8 @@ export async function main(): Promise<void> {
     const contrarianMap = await getContrarianHistoryBatch(triggerTickers);
     const bonusMap = new Map<string, number>();
     for (const [ticker, history] of contrarianMap) {
-      const bonus = calculateContrarianBonus(history.wins, history.totalNoTradeDays);
-      if (bonus > 0) bonusMap.set(ticker, bonus);
+      const bonus = calculateContinuousContrarianBonus(history.wins, history.totalNoTradeDays);
+      if (bonus !== 0) bonusMap.set(ticker, bonus);
     }
 
     if (bonusMap.size > 0) {
@@ -146,7 +146,7 @@ export async function main(): Promise<void> {
         return b.volumeSurgeRatio - a.volumeSurgeRatio;
       });
       for (const [ticker, bonus] of bonusMap) {
-        console.log(`${tag} 逆行ボーナス: ${ticker} +${bonus}点`);
+        console.log(`${tag} 逆行ボーナス: ${ticker} ${bonus > 0 ? "+" : ""}${bonus}`);
       }
     }
 

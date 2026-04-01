@@ -133,11 +133,13 @@ export const CONTRARIAN = {
   MIN_SAMPLE_DAYS: 4,
   /** Slackレポートの最大表示件数 */
   MAX_REPORT_WINNERS: 10,
-  /** ボーナスポイントの段階（勝率条件付き） */
+  /** ボーナスポイントの段階（勝率条件付き） — stock-scanner用（レガシー） */
   BONUS_TIERS: [
     { minWins: 4, minWinRate: 0.5, bonus: 4 },
     { minWins: 3, minWinRate: 0.4, bonus: 2 },
   ],
+  /** 連続ボーナスのスケール係数: bonus = (winRate - 0.5) × SCALE */
+  CONTINUOUS_SCALE: 4,
 } as const;
 
 export const SCORING_ACCURACY_REPORT = {

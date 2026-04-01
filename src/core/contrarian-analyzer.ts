@@ -139,7 +139,7 @@ export async function getContrarianHistoryBatch(
 }
 
 /**
- * 逆行実績からボーナスポイントを算出する。
+ * 逆行実績からボーナスポイントを算出する（ティア制、stock-scanner用レガシー）。
  * 勝数・勝率・最低サンプル数の全条件を満たす必要がある。
  */
 export function calculateContrarianBonus(
@@ -152,4 +152,23 @@ export function calculateContrarianBonus(
     if (wins >= tier.minWins && winRate >= tier.minWinRate) return tier.bonus;
   }
   return 0;
+}
+
+/**
+ * 逆行実績から連続ボーナスを算出する。
+ * 勝率50%を基準に、上回ればプラス・下回ればマイナスを返す。
+ *
+ * 例（SCALE=4）:
+ *   勝率70% → (0.7 - 0.5) × 4 = +0.8
+ *   勝率50% → 0（ニュートラル）
+ *   勝率30% → (0.3 - 0.5) × 4 = -0.8
+ *   勝率10% → (0.1 - 0.5) × 4 = -1.6
+ */
+export function calculateContinuousContrarianBonus(
+  wins: number,
+  totalDays: number,
+): number {
+  if (totalDays < CONTRARIAN.MIN_SAMPLE_DAYS) return 0;
+  const winRate = totalDays > 0 ? wins / totalDays : 0;
+  return Math.round((winRate - 0.5) * CONTRARIAN.CONTINUOUS_SCALE * 100) / 100;
 }
