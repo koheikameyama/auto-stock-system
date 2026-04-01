@@ -1,19 +1,12 @@
 import dayjs from "dayjs"
 import utc from "dayjs/plugin/utc"
 import timezone from "dayjs/plugin/timezone"
-import { CME_TRADING_HOURS, FUTURES_DIVERGENCE, TIMEZONE } from "./constants"
+import { CME_TRADING_HOURS, TIMEZONE } from "./constants"
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
 
 export type CMEStatus = "open" | "closed" | "break"
-export type DivergenceSignal =
-  | "strong_bullish"
-  | "bullish"
-  | "neutral"
-  | "bearish"
-  | "strong_bearish"
-
 /**
  * CME日経先物の取引ステータスを取得
  *
@@ -51,35 +44,3 @@ export function getCMEStatus(now?: Date): CMEStatus {
   return "open"
 }
 
-/**
- * 先物と現物の乖離率を計算
- *
- * 先物と現物それぞれの変化率の差分で乖離を算出。
- * 通貨の違い（NKD=FはUSD、N225はJPY）を回避しつつ、
- * 市場センチメントのシグナルを提供する。
- *
- * @param futuresChangePercent - 先物の前日比変化率（%）
- * @param spotChangePercent - 現物の前日比変化率（%）
- */
-export function calculateDivergence(
-  futuresChangePercent: number,
-  spotChangePercent: number,
-): { value: number; signal: DivergenceSignal } {
-  const value =
-    Math.round((futuresChangePercent - spotChangePercent) * 100) / 100
-
-  let signal: DivergenceSignal
-  if (value >= FUTURES_DIVERGENCE.STRONG_BULLISH_THRESHOLD) {
-    signal = "strong_bullish"
-  } else if (value >= FUTURES_DIVERGENCE.BULLISH_THRESHOLD) {
-    signal = "bullish"
-  } else if (value <= FUTURES_DIVERGENCE.STRONG_BEARISH_THRESHOLD) {
-    signal = "strong_bearish"
-  } else if (value <= FUTURES_DIVERGENCE.BEARISH_THRESHOLD) {
-    signal = "bearish"
-  } else {
-    signal = "neutral"
-  }
-
-  return { value, signal }
-}
