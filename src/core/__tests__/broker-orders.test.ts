@@ -58,8 +58,8 @@ describe("syncBrokerOrderStatuses", () => {
     };
 
     vi.mocked(prisma.tradingOrder.findMany)
-      .mockResolvedValueOnce([orphanOrder] as never) // orphan query
-      .mockResolvedValueOnce([]); // existing sync query
+      .mockResolvedValueOnce([]) // orders query (brokerOrderId not null, pending/filled)
+      .mockResolvedValueOnce([orphanOrder] as never); // orphan query
 
     await syncBrokerOrderStatuses();
 
