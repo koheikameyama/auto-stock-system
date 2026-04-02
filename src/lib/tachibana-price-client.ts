@@ -15,8 +15,8 @@ import {
 } from "./constants/broker";
 import type { YfQuoteResult } from "./yfinance-client";
 
-const CONCURRENCY = 20;
-const limit = pLimit(CONCURRENCY);
+// 立花証券APIはp_noの受信順を厳密にチェックするため並列送信不可
+const limit = pLimit(1);
 
 interface PriceData {
   pCurrentPrice: string;
