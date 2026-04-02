@@ -97,6 +97,8 @@ export async function submitOrder(
     sGenkinShinyouKubun: TACHIBANA_ORDER.MARGIN_TYPE.CASH,
     sOrderExpireDay: req.expireDay ?? TACHIBANA_ORDER.EXPIRE.TODAY,
     sGyakusasiOrderType: gyakusasiOrderType,
+    sTatebiType: "*",
+    sTategyokuZyoutoekiKazeiC: "*",
     sSecondPassword: process.env.TACHIBANA_SECOND_PASSWORD ?? "",
   };
 
