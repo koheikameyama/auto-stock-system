@@ -26,7 +26,13 @@ const NUMERIC_KEY_MAP: Record<string, string> = {
   "688": "sOrderResultCode",   // サブ結果コード（"0"以外はエラー）
   "689": "sOrderResultText",   // サブ結果テキスト
 
-  // 注文レスポンス
+  // 注文レスポンス（CLMKabuNewOrder - 実測キー）
+  "643": "sOrderNumber",        // 新規注文レスポンスで確認済み
+  "370": "sEigyouDay",          // 新規注文レスポンスで確認済み
+  "660": "sOrderTesuryou",      // 新規注文レスポンスで確認済み
+  "669": "sOrderSyouhizei",     // 新規注文レスポンスで確認済み
+
+  // 注文レスポンス（注文一覧・詳細 - APIドキュメント記載キー、実測未確認）
   "532": "sOrderNumber",
   "405": "sEigyouDay",
   "540": "sOrderSuryou",
