@@ -261,6 +261,11 @@ export async function syncBrokerOrderStatuses(): Promise<void> {
   const brokerOrders =
     (res.aOrderList as Record<string, unknown>[]) ?? [];
 
+  // 注文一覧の数値キー確認用ログ（最初の1件のみ）
+  if (brokerOrders.length > 0) {
+    console.log("[broker-orders] CLMOrderList item sample:", JSON.stringify(brokerOrders[0]));
+  }
+
   // brokerOrderIdが設定されている未完了注文を取得
   const orders = await prisma.tradingOrder.findMany({
     where: {
@@ -273,10 +278,14 @@ export async function syncBrokerOrderStatuses(): Promise<void> {
   if (orders.length === 0) return;
 
   // ブローカー注文をMapに変換
+  // CLMOrderListの注文番号フィールドは sOrderOrderNumber、執行日は sOrderSikkouDay
   const brokerMap = new Map<string, Record<string, unknown>>();
   for (const bo of brokerOrders) {
-    const key = `${bo.sOrderNumber}_${bo.sEigyouDay}`;
-    brokerMap.set(key, bo);
+    const orderNum = String(bo.sOrderOrderNumber ?? bo.sOrderNumber ?? "");
+    const sikkouDay = String(bo.sOrderSikkouDay ?? bo.sEigyouDay ?? "");
+    if (orderNum && sikkouDay) {
+      brokerMap.set(`${orderNum}_${sikkouDay}`, bo);
+    }
   }
 
   // DB注文とブローカーステータスを比較・更新
@@ -287,7 +296,8 @@ export async function syncBrokerOrderStatuses(): Promise<void> {
 
     if (!bo) continue;
 
-    const brokerStatus = String(bo.sOrderStatus ?? "");
+    // sOrderStatusCode（数値コード）を優先、なければ sOrderStatus（名称）を使用
+    const brokerStatus = String(bo.sOrderStatusCode ?? bo.sOrderStatus ?? "");
 
     if (order.brokerStatus !== brokerStatus) {
       // ブローカー側で失効・取消された注文はDB statusも更新
@@ -327,20 +337,13 @@ async function executeLiveOrder(
 ): Promise<BrokerOrderResult> {
   const client = getTachibanaClient();
 
-  // リクエストログ（パスワードを除外）
-  const logParams = { ...params, sSecondPassword: "***" };
-  console.log("[broker-orders] request:", JSON.stringify(logParams));
-
   try {
     const res = await client.request(params);
-
-    // レスポンスログ（常に出力）
-    console.log("[broker-orders] response:", JSON.stringify(res));
 
     if (res.sResultCode !== "0") {
       return {
         success: false,
-        error: `[${res.sResultCode}] ${res.sResultText ?? "Unknown error"} | response: ${JSON.stringify(res)}`,
+        error: `[${res.sResultCode}] ${res.sResultText ?? "Unknown error"}`,
       };
     }
 
@@ -349,7 +352,7 @@ async function executeLiveOrder(
     if (subCode !== "0") {
       return {
         success: false,
-        error: `[sub:${subCode}] ${res.sOrderResultText ?? "Unknown error"} | response: ${JSON.stringify(res)}`,
+        error: `[sub:${subCode}] ${res.sOrderResultText ?? "Unknown error"}`,
       };
     }
 
@@ -357,7 +360,7 @@ async function executeLiveOrder(
     if (!orderNumber) {
       return {
         success: false,
-        error: `注文は受け付けられましたが注文番号が返却されませんでした | response: ${JSON.stringify(res)}`,
+        error: `注文は受け付けられましたが注文番号が返却されませんでした`,
       };
     }
 
