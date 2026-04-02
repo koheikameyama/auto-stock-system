@@ -283,6 +283,32 @@ describe("BreakoutScanner", () => {
     expect(scanner.getState().hotSet.has(DEFAULT_TICKER)).toBe(true);
   });
 
+  // 13. removeFromTriggeredToday → クールダウンなしで即座に再トリガーできる
+  it("13. removeFromTriggeredToday: トリガー後に呼ぶとクールダウンなしで即座に再トリガーできる", () => {
+    // Promote to hot
+    scanner.scan([makeQuote(DEFAULT_TICKER, 1.5)], SCAN_TIME, NO_HOLDINGS);
+
+    // First trigger fires
+    const t2 = makeTime(9, 31);
+    const triggerQuote: QuoteData = {
+      ticker: DEFAULT_TICKER,
+      price: 1010,
+      volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)),
+    };
+    const first = scanner.scan([triggerQuote], t2, NO_HOLDINGS);
+    expect(first).toHaveLength(1);
+    expect(scanner.getState().triggeredToday.has(DEFAULT_TICKER)).toBe(true);
+
+    // retryable failure → removeFromTriggeredToday（クールダウンなし）
+    scanner.removeFromTriggeredToday(DEFAULT_TICKER);
+    expect(scanner.getState().triggeredToday.has(DEFAULT_TICKER)).toBe(false);
+
+    // 次スキャン（1分後）で即座に再トリガー
+    const t3 = makeTime(9, 32);
+    const second = scanner.scan([triggerQuote], t3, NO_HOLDINGS);
+    expect(second).toHaveLength(1);
+  });
+
   // 12. Multiple triggers → sorted by volumeSurgeRatio descending
   it("12. 複数トリガー発火時 → volumeSurgeRatio 降順でソートされる", () => {
     const tickerA = "1111";
