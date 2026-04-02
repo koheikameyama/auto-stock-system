@@ -159,18 +159,15 @@ describe("executeEntry", () => {
     expect(mockPrisma.tradingOrder.create).not.toHaveBeenCalled();
   });
 
-  // 3. SLが3%を超える → 3%にクランプされる
-  it("3. ATRベースSLが3%超 → 3%上限にクランプされる", async () => {
+  // 3. SLが3%を超える → スキップされる
+  it("3. ATRベースSLが3%超 → スキップされる", async () => {
     const trigger = makeTrigger({ currentPrice: 1000, atr14: 50 });
 
     const result = await executeEntry(trigger);
 
-    expect(result.success).toBe(true);
-
-    const createCall = mockPrisma.tradingOrder.create.mock.calls[0][0];
-    const stopLossPrice = createCall.data.stopLossPrice;
-    expect(stopLossPrice).toBe(970);
-    expect(createCall.data.entrySnapshot.slClamped).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.reason).toContain("クランプ");
+    expect(mockPrisma.tradingOrder.create).not.toHaveBeenCalled();
   });
 
   // 4. ポジションサイズが100株単位に丸められる

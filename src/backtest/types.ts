@@ -25,6 +25,8 @@ export interface BreakoutBacktestConfig {
   atrMultiplier: number;
   /** SLハードキャップ（%）— 0.03 = 3% */
   maxLossPct: number;
+  /** クランプ発生時にスキップ（true = 本番entry-executorと同じ挙動） */
+  skipIfClamped?: boolean;
 
   // トレーリングストップ
   /** ブレイクイーブン発動 ATR倍率 */

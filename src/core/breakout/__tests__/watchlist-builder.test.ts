@@ -51,7 +51,7 @@ function makeBars(
     override?: (i: number) => Partial<{ open: number; high: number; low: number; close: number; volume: number }>;
   } = {},
 ) {
-  const { close = 1000, high = 1050, volume = 100_000 } = opts;
+  const { close = 1000, high = 1022, volume = 100_000 } = opts;
 
   // 2026-03-21 (金曜) から遡って平日だけ数える
   // 週 5 日 × 20 週 = 100 日分のカレンダー日を生成
@@ -81,7 +81,7 @@ function makeBars(
       date: getWeekdayDate(i),
       open: close * 0.99,
       high,
-      low: close * 0.97,
+      low: close * 0.997,
       close,
       volume,
     };
@@ -138,12 +138,12 @@ describe("buildWatchlist", () => {
   });
 
   it("high20 は直近20日の日足 high の最大値", async () => {
-    // high はデフォルト 1050。バー i=5 だけ high=2000 にする（直近20本の中）
-    // バー i=25 は high=9999 だが 21 本目なので high20 に含まれない
+    // バー i=5 だけ high=1060 にする（直近20本の中、ATRスパイクを避ける適度な値）
+    // バー i=25 は high=1100 だが 21 本目なので high20 に含まれない
     const bars = makeBars(80, {
       override: (i) => {
-        if (i === 5) return { high: 2000 };
-        if (i === 25) return { high: 9999 };
+        if (i === 5) return { high: 1060 };
+        if (i === 25) return { high: 1100 };
         return {};
       },
     });
@@ -154,8 +154,8 @@ describe("buildWatchlist", () => {
     const { entries } = await buildWatchlist();
 
     expect(entries.length).toBe(1);
-    // high20 = 直近20本（i=0..19）の high の最大値 = 2000
-    expect(entries[0].high20).toBe(2000);
+    // high20 = 直近20本（i=0..19）の high の最大値 = 1060
+    expect(entries[0].high20).toBe(1060);
   });
 
   it("avgVolume25 は直近25日の出来高の平均", async () => {
@@ -196,23 +196,24 @@ describe("buildWatchlist", () => {
   });
 
   it("週足下降トレンドの銘柄（weeklyClose < weeklySma13）はゲート通過でも除外される", async () => {
-    // 直近8週（40本）を安値500、古い9週以上（40本）を高値2000にする。
-    // newest-first: i=0..39 → close=500 (最近), i=40..79 → close=2000 (古い)
-    // weekly SMA13 は高値寄りになり weeklyClose (≈500) < weeklySma13 (>> 500) となる
+    // 80本で緩やかに下落: newest(i=0)=500, oldest(i=79)≈994
+    // weeklyClose(≈500) < weeklySma13(≈688) となる（急落を避けてATRスパイクを防ぐ）
     const bars = makeBars(80, {
       override: (i) => {
-        const price = i < 40 ? 500 : 2000;
-        return { open: price * 0.99, high: price * 1.01, low: price * 0.97, close: price };
+        const price = Math.round(500 + i * 6.25);
+        return { open: price * 0.99, high: price * 1.02, low: price * 0.99, close: price };
       },
       volume: 100_000,
     });
 
-    mockStockFindMany.mockResolvedValue([makeStock("3333", { latestPrice: 500 })]);
+    // latestPrice=700: ATR(≈18) < 700*3%=21 → canAffordEntry通過
+    // weeklyClose(bar close≈500) < weeklySma13(≈688) → skipWeeklyTrend
+    mockStockFindMany.mockResolvedValue([makeStock("3333", { latestPrice: 700 })]);
     mockReadHistoricalFromDB.mockResolvedValue(new Map([["3333", bars]]));
 
     const { entries, stats } = await buildWatchlist();
 
-    // weeklyClose (≈500) < weeklySma13 (高値寄り) → 除外
+    // weeklyClose (≈500) < weeklySma13 (≈688) → 除外
     expect(entries.length).toBe(0);
     expect(stats.skipWeeklyTrend).toBe(1);
   });
@@ -222,9 +223,9 @@ describe("buildWatchlist", () => {
     // newest-first: i=0 が最新（高値）、i=79 が最古（安値）
     const bars = makeBars(80, {
       override: (i) => {
-        // i=0 → price=1400, i=79 → price=805 (緩やかに上昇)
+        // i=0 → price=1205, i=79 → price=810 (緩やかに上昇)
         const price = 800 + (80 - i) * 5 + 5;
-        return { open: price * 0.99, high: price * 1.02, low: price * 0.97, close: price };
+        return { open: price * 0.99, high: price * 1.02, low: price * 0.99, close: price };
       },
       volume: 100_000,
     });

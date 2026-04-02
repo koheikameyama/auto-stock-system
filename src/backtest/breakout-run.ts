@@ -184,6 +184,50 @@ function runEntryFilterComparison(
   console.log("");
 }
 
+interface SlCapRow {
+  label: string;
+  maxLossPct: number;
+  skipIfClamped: boolean;
+}
+
+const SL_CAP_GRID: SlCapRow[] = [
+  { label: "3% cap (real)",  maxLossPct: 0.03, skipIfClamped: true  }, // 現在の本番挙動
+  { label: "3% cap (bt)",    maxLossPct: 0.03, skipIfClamped: false }, // 現在のバックテスト挙動
+  { label: "5% cap (skip)",  maxLossPct: 0.05, skipIfClamped: true  },
+  { label: "10% cap (skip)", maxLossPct: 0.10, skipIfClamped: true  },
+  { label: "ATR-only",       maxLossPct: 1.00, skipIfClamped: false }, // 提案②: キャップなしATRベース
+];
+
+function runSlCapComparison(
+  baseConfig: BreakoutBacktestConfig,
+  allData: Map<string, OHLCVData[]>,
+  vixData: Map<string, number> | undefined,
+  indexData: Map<string, number> | undefined,
+): void {
+  console.log("\n=== SL Cap Comparison ===");
+  console.log(
+    `${"Config".padEnd(18)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"RR".padStart(5)} | ${"AvgHold".padStart(7)} | ${"Return".padStart(8)}`,
+  );
+  console.log("-".repeat(99));
+
+  for (const row of SL_CAP_GRID) {
+    const config: BreakoutBacktestConfig = {
+      ...baseConfig,
+      maxLossPct: row.maxLossPct,
+      skipIfClamped: row.skipIfClamped,
+      verbose: false,
+    };
+    const result = runBreakoutBacktest(config, allData, vixData, indexData);
+    const m = result.metrics;
+    const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+    const returnStr = (m.totalReturnPct >= 0 ? "+" : "") + m.totalReturnPct.toFixed(1) + "%";
+    console.log(
+      `${row.label.padEnd(18)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${m.profitFactor.toFixed(2).padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.riskRewardRatio.toFixed(1).padStart(5)} | ${m.avgHoldingDays.toFixed(1).padStart(6)}d | ${returnStr.padStart(8)}`,
+    );
+  }
+  console.log("");
+}
+
 interface ExitParamRow {
   label: string;
   atrMultiplier: number;
@@ -255,6 +299,7 @@ async function main() {
   const strategyCompare = args.includes("--strategy-compare");
   const entryCompare = args.includes("--entry-compare");
   const exitCompare = args.includes("--exit-compare");
+  const slCompare = args.includes("--sl-compare");
   const noCost = args.includes("--no-cost");
   const noPositionCap = args.includes("--no-position-cap");
   const monteCarlo = args.includes("--monte-carlo");
@@ -341,6 +386,15 @@ async function main() {
     const vix = vixData.size > 0 ? vixData : undefined;
     const idx = indexData.size > 0 ? indexData : undefined;
     runExitParamComparison(config, allData, vix, idx);
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 4e. SLキャップ比較モード
+  if (slCompare) {
+    const vix = vixData.size > 0 ? vixData : undefined;
+    const idx = indexData.size > 0 ? indexData : undefined;
+    runSlCapComparison(config, allData, vix, idx);
     await prisma.$disconnect();
     return;
   }

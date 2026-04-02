@@ -648,6 +648,7 @@ export function runBreakoutBacktest(
 
             const rawSL = signal.entryPrice - signal.atr14 * config.atrMultiplier;
             const maxSL = signal.entryPrice * (1 - config.maxLossPct);
+            if (config.skipIfClamped && rawSL < maxSL) continue;
             const stopLossPrice = Math.round(Math.max(rawSL, maxSL));
             if (stopLossPrice >= signal.entryPrice) continue;
             entries.push({
@@ -882,6 +883,7 @@ function detectBreakoutEntries(
     // SL: ATRベース、ハードキャップ適用
     const rawSL = entryPrice - atr14 * config.atrMultiplier;
     const maxSL = entryPrice * (1 - config.maxLossPct);
+    if (config.skipIfClamped && rawSL < maxSL) continue;
     const stopLossPrice = Math.round(Math.max(rawSL, maxSL));
 
     // TP: 実質無効（TSに委ねる）
