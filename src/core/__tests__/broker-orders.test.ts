@@ -34,44 +34,23 @@ describe("syncBrokerOrderStatuses", () => {
     vi.clearAllMocks();
   });
 
-  it("brokerOrderIdが未設定のpending買い注文を自動キャンセルしSlackに通知する", async () => {
+  it("brokerOrderIdが設定されている注文がない場合は早期リターンする", async () => {
     const { prisma } = await import("../../lib/prisma");
-    const { notifySlack } = await import("../../lib/slack");
     const { getTachibanaClient } = await import("../broker-client");
 
     vi.mocked(getTachibanaClient).mockReturnValue({
       isLoggedIn: vi.fn().mockReturnValue(true),
       request: vi.fn().mockResolvedValue({
         sResultCode: "0",
+        sCLMID: "CLMOrderList",
         aOrderList: [],
       }),
     } as unknown as ReturnType<typeof getTachibanaClient>);
 
-    const orphanOrder = {
-      id: "order-orphan-1",
-      brokerOrderId: null,
-      brokerBusinessDay: null,
-      brokerStatus: null,
-      status: "pending",
-      side: "buy",
-      createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5分前
-      stock: { tickerCode: "7203.T" },
-    };
-
-    vi.mocked(prisma.tradingOrder.findMany)
-      .mockResolvedValueOnce([]) // orders query (brokerOrderId not null, pending/filled)
-      .mockResolvedValueOnce([orphanOrder] as never); // orphan query
+    vi.mocked(prisma.tradingOrder.findMany).mockResolvedValueOnce([]);
 
     await syncBrokerOrderStatuses();
 
-    expect(prisma.tradingOrder.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "order-orphan-1" },
-        data: { status: "cancelled" },
-      }),
-    );
-    expect(notifySlack).toHaveBeenCalledWith(
-      expect.objectContaining({ color: "danger" }),
-    );
+    expect(prisma.tradingOrder.update).not.toHaveBeenCalled();
   });
 });
