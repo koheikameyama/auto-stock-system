@@ -126,7 +126,11 @@ export async function main(): Promise<void> {
     quotes,
     scanner.getState().lastSurgeRatios,
   );
-  await reactivateCancelledTriggers(scanner, premiseCollapsedTickers);
+  // 前提崩壊銘柄をScannerの永続Setに記録（当日中は再エントリー禁止）
+  for (const ticker of premiseCollapsedTickers) {
+    scanner.addPremiseCollapsed(ticker);
+  }
+  await reactivateCancelledTriggers(scanner);
 
   // 5. スキャン実行
   const now = dayjs().tz(TIMEZONE).toDate();
@@ -364,9 +368,9 @@ async function calculateLiveBreadth(
  */
 export async function reactivateCancelledTriggers(
   scanner: BreakoutScanner,
-  premiseCollapsedTickers: Set<string> = new Set(),
 ): Promise<void> {
-  const triggeredTickers = [...scanner.getState().triggeredToday];
+  const { triggeredToday, premiseCollapsedToday } = scanner.getState();
+  const triggeredTickers = [...triggeredToday];
   if (!triggeredTickers.length) return;
 
   const orders = await prisma.tradingOrder.findMany({
@@ -392,8 +396,8 @@ export async function reactivateCancelledTriggers(
 
   for (const ticker of triggeredTickers) {
     const statuses = ordersByTicker.get(ticker) ?? [];
-    // 前提崩壊キャンセルは当日再エントリー禁止
-    if (premiseCollapsedTickers.has(ticker)) continue;
+    // 前提崩壊キャンセルは当日再エントリー禁止（Scannerの永続Setで判定）
+    if (premiseCollapsedToday.has(ticker)) continue;
     // 本日注文が存在し、全てキャンセル済みなら再アクティベート
     if (statuses.length > 0 && statuses.every((s) => s === "cancelled")) {
       scanner.removeFromTriggeredToday(ticker);

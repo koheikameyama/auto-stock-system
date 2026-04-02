@@ -40,6 +40,8 @@ export interface ScannerState {
   lastColdScanTime: Map<string, number>;
   /** 直近スキャン時の出来高サージ比率（ティッカー → 比率） */
   lastSurgeRatios: Map<string, number>;
+  /** 本日前提崩壊でキャンセルされた銘柄（当日中は再エントリー禁止） */
+  premiseCollapsedToday: Set<string>;
 }
 
 /** ウォッチリスト構築のフィルター統計 */

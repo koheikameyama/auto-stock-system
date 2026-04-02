@@ -33,6 +33,7 @@ export class BreakoutScanner {
       triggeredToday: new Set<string>(),
       lastColdScanTime: new Map<string, number>(),
       lastSurgeRatios: new Map<string, number>(),
+      premiseCollapsedToday: new Set<string>(),
     };
     this.watchlistMap = new Map(watchlist.map((e) => [e.ticker, e]));
   }
@@ -185,6 +186,7 @@ export class BreakoutScanner {
       triggeredToday: new Set<string>(),
       lastColdScanTime: new Map<string, number>(),
       lastSurgeRatios: new Map<string, number>(),
+      premiseCollapsedToday: new Set<string>(),
     };
     this.watchlistMap = new Map(newWatchlist.map((e) => [e.ticker, e]));
   }
@@ -199,6 +201,13 @@ export class BreakoutScanner {
    */
   removeFromTriggeredToday(ticker: string): void {
     this.state.triggeredToday.delete(ticker);
+  }
+
+  /**
+   * 前提崩壊でキャンセルされた銘柄を記録する（当日中は再エントリー禁止）
+   */
+  addPremiseCollapsed(ticker: string): void {
+    this.state.premiseCollapsedToday.add(ticker);
   }
 
   // ----------------------------------------------------------------
