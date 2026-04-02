@@ -123,6 +123,7 @@ function closePosition(
 function processExits(
   positions: SimulatedPosition[],
   config: { beActivationMultiplier: number; tsActivationMultiplier: number; trailMultiplier: number; maxExtendedHoldingDays: number; maxHoldingDays: number; priceLimitEnabled: boolean; costModelEnabled: boolean },
+  strategy: "breakout" | "gapup",
   dayIdx: number,
   today: string,
   tradingDays: string[],
@@ -159,12 +160,13 @@ function processExits(
         entryAtr: pos.entryAtr,
         maxHighDuringHold: pos.maxHighDuringHold,
         currentTrailingStop: pos.trailingStopPrice,
-        strategy: "swing",
+        strategy,
         holdingBusinessDays: holdingDays,
         beActivationMultiplierOverride: config.beActivationMultiplier,
         activationMultiplierOverride: config.tsActivationMultiplier,
         trailMultiplierOverride: config.trailMultiplier,
         maxHoldingDaysOverride: config.maxExtendedHoldingDays,
+        baseLimitHoldingDaysOverride: config.maxHoldingDays,
       },
       { open: todayBar.open, high: todayBar.high, low: todayBar.low, close: todayBar.close },
     );
@@ -413,8 +415,8 @@ export function runCombinedSimulation(
       todayVix != null ? determineMarketRegime(todayVix).level : "normal";
 
     // ── 1. 出口判定 ──
-    processExits(boPositions, boConfigLocal, dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, verbose);
-    processExits(guPositions, guConfigLocal, dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, verbose);
+    processExits(boPositions, boConfigLocal, "breakout", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, verbose);
+    processExits(guPositions, guConfigLocal, "gapup", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, verbose);
 
     // ── 1.5 ディフェンシブモード ──
     processDefensive(boPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, boConfigLocal.costModelEnabled, verbose);
