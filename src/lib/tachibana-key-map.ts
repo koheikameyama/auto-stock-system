@@ -22,6 +22,10 @@ const NUMERIC_KEY_MAP: Record<string, string> = {
   "549": "sLastLoginDate",
   "552": "sKinsyouhouMidokuFlg",
 
+  // 注文レスポンス（共通）
+  "688": "sOrderResultCode",   // サブ結果コード（"0"以外はエラー）
+  "689": "sOrderResultText",   // サブ結果テキスト
+
   // 注文レスポンス
   "532": "sOrderNumber",
   "405": "sEigyouDay",

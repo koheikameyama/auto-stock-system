@@ -335,6 +335,15 @@ async function executeLiveOrder(
       };
     }
 
+    // sResultCode=0 でもサブコード(688)にエラーが入る場合がある
+    const subCode = String(res.sOrderResultCode ?? "0");
+    if (subCode !== "0") {
+      return {
+        success: false,
+        error: `[sub:${subCode}] ${res.sOrderResultText ?? "Unknown error"}`,
+      };
+    }
+
     return {
       success: true,
       orderNumber: String(res.sOrderNumber ?? ""),
