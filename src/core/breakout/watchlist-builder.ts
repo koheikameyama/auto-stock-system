@@ -56,7 +56,9 @@ function canAffordEntry(
   // SL計算（entry-executorと同じ）
   const rawStopLoss = latestPrice - atr14 * BREAKOUT.STOP_LOSS.ATR_MULTIPLIER;
   const maxStopLoss = latestPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
-  const stopLossPrice = Math.max(rawStopLoss, maxStopLoss);
+  if (rawStopLoss < maxStopLoss) return false; // SLがATRより3%上限でクランプされる銘柄は除外
+
+  const stopLossPrice = rawStopLoss;
   const riskPerShare = latestPrice - stopLossPrice;
 
   if (riskPerShare <= 0) return false;

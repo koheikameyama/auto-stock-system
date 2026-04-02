@@ -91,12 +91,11 @@ export async function executeEntry(
   const maxStopLoss = currentPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
   const stopLossPrice = Math.round(Math.max(rawStopLoss, maxStopLoss));
 
-  const slRiskPct = (currentPrice - stopLossPrice) / currentPrice;
   const isSLClamped = rawStopLoss < maxStopLoss;
   if (isSLClamped) {
-    console.log(
-      `[entry-executor] ${ticker} SL: ATRベース ¥${Math.round(rawStopLoss)} → 3%上限に制限 ¥${stopLossPrice}（${(slRiskPct * 100).toFixed(2)}%）`,
-    );
+    const reason = `SLがATRベース（¥${Math.round(rawStopLoss)}）より3%上限（¥${stopLossPrice}）でクランプされました — ノイズに狩られるリスクが高いためスキップ`;
+    console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
+    return { success: false, reason, retryable: false };
   }
 
   // 4. ポジションサイズ計算（RRに応じたリスク%傾斜）
