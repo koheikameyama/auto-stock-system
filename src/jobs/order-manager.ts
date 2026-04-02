@@ -565,6 +565,7 @@ export async function main() {
           limitPrice: finalCondition.limitPrice,
           stopTriggerPrice: finalCondition.stopLossPrice,
           stopOrderPrice: undefined, // SL成行
+          expireDay: finalCondition.strategy === "day_trade" ? undefined : dayjs(expiresAt).format("YYYYMMDD"),
         });
         if (brokerResult.success && brokerResult.orderNumber) {
           await prisma.tradingOrder.update({
