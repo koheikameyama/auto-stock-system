@@ -246,18 +246,21 @@ export async function executeEntry(
         message: errorMsg,
         color: "danger",
       });
+      return { success: false, reason: errorMsg, retryable: false };
     }
   } catch (brokerErr) {
     console.error(`[entry-executor] ブローカーエラー ${ticker}:`, brokerErr);
+    const errorMsg = brokerErr instanceof Error ? brokerErr.message : String(brokerErr);
     await prisma.tradingOrder.update({
       where: { id: newOrder.id },
       data: { status: "cancelled" },
     });
     await notifySlack({
       title: `ブローカー発注失敗: ${ticker}`,
-      message: brokerErr instanceof Error ? brokerErr.message : String(brokerErr),
+      message: errorMsg,
       color: "danger",
     });
+    return { success: false, reason: errorMsg, retryable: false };
   }
 
   // 8. Slack通知
