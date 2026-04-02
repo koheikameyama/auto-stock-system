@@ -6,6 +6,7 @@
  * /news ページでもリアルタイム取得に利用。
  */
 
+import dayjs from "dayjs";
 import * as cheerio from "cheerio";
 import crypto from "crypto";
 import { prisma } from "../lib/prisma";
@@ -129,7 +130,7 @@ export async function saveNewsToDb(headlines: NewsHeadline[]): Promise<number> {
  * DBから指定時間以内のニュースを取得
  */
 export async function getNewsFromDb(hours: number): Promise<NewsHeadline[]> {
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const since = dayjs().subtract(hours, "hour").toDate();
   const articles = await prisma.newsArticle.findMany({
     where: { publishedAt: { gte: since } },
     orderBy: { publishedAt: "desc" },

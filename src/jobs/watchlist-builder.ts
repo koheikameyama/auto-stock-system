@@ -5,6 +5,7 @@
  * 結果はDBに永続化し、breakout-monitorジョブ・Web UIから参照される。
  */
 
+import dayjs from "dayjs";
 import { buildWatchlist } from "../core/breakout/watchlist-builder";
 import { notifySlack } from "../lib/slack";
 import { prisma } from "../lib/prisma";
@@ -20,7 +21,7 @@ let cacheExpiry = 0;
  * 現在のウォッチリストを取得する（DB読み込み + インメモリキャッシュ）
  */
 export async function getWatchlist(): Promise<WatchlistEntry[]> {
-  const now = Date.now();
+  const now = dayjs().valueOf();
   if (cachedWatchlist !== null && now < cacheExpiry) {
     return cachedWatchlist;
   }
@@ -66,7 +67,7 @@ async function saveWatchlistToDB(entries: WatchlistEntry[]): Promise<void> {
 
   // キャッシュを即時更新
   cachedWatchlist = entries;
-  cacheExpiry = Date.now() + BREAKOUT.WATCHLIST_CACHE_TTL_MS;
+  cacheExpiry = dayjs().add(BREAKOUT.WATCHLIST_CACHE_TTL_MS, "millisecond").valueOf();
 }
 
 export async function main(): Promise<void> {

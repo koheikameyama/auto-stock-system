@@ -14,13 +14,15 @@
 - ユーザーが「今日のおすすめ」と言ったらJSTの今日を期待する
 - 市場の営業日もJST基準
 
-## 日付操作ライブラリ
+## 日付・時刻操作ライブラリ
 
-**日付操作には必ず dayjs を使用してください。**
+**日付・時刻の処理は必ず dayjs を使用してください（TypeScript）。**
 
 - TypeScript: `dayjs` + `dayjs/plugin/utc` + `dayjs/plugin/timezone`
 - Python: `datetime` + `zoneinfo`
 - 生の `Date` コンストラクタやタイムゾーン手動計算は使わない
+- `new Date()` は現在時刻の取得（createdAt等）のみ許可。それ以外の日時操作は dayjs を使う
+- `Date.now()` / `new Date(timestamp)` を直接使った比較・加減算は禁止
 
 ## 共通ユーティリティ
 
@@ -48,7 +50,7 @@ seven_days_ago = get_days_ago_for_db(7)
 
 `@db.Date` カラムにJSTの日付を正しく保存するため、JST日付をそのまま UTC 00:00 の Date オブジェクトとして作成する。
 
-```
+```text
 JST 2/19 → new Date("2026-02-19T00:00:00Z") → PostgreSQL date型: 2026-02-19
 ```
 
