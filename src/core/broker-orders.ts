@@ -327,13 +327,20 @@ async function executeLiveOrder(
 ): Promise<BrokerOrderResult> {
   const client = getTachibanaClient();
 
+  // リクエストログ（パスワードを除外）
+  const logParams = { ...params, sSecondPassword: "***" };
+  console.log("[broker-orders] request:", JSON.stringify(logParams));
+
   try {
     const res = await client.request(params);
+
+    // レスポンスログ（常に出力）
+    console.log("[broker-orders] response:", JSON.stringify(res));
 
     if (res.sResultCode !== "0") {
       return {
         success: false,
-        error: `[${res.sResultCode}] ${res.sResultText ?? "Unknown error"}`,
+        error: `[${res.sResultCode}] ${res.sResultText ?? "Unknown error"} | response: ${JSON.stringify(res)}`,
       };
     }
 
@@ -342,13 +349,21 @@ async function executeLiveOrder(
     if (subCode !== "0") {
       return {
         success: false,
-        error: `[sub:${subCode}] ${res.sOrderResultText ?? "Unknown error"}`,
+        error: `[sub:${subCode}] ${res.sOrderResultText ?? "Unknown error"} | response: ${JSON.stringify(res)}`,
+      };
+    }
+
+    const orderNumber = String(res.sOrderNumber ?? "");
+    if (!orderNumber) {
+      return {
+        success: false,
+        error: `注文は受け付けられましたが注文番号が返却されませんでした | response: ${JSON.stringify(res)}`,
       };
     }
 
     return {
       success: true,
-      orderNumber: String(res.sOrderNumber ?? ""),
+      orderNumber,
       businessDay: String(res.sEigyouDay ?? ""),
       commission: Number(res.sOrderTesuryou ?? 0),
     };
