@@ -29,6 +29,19 @@ import { getContrarianHistoryBatch, calculateContinuousContrarianBonus } from ".
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+/**
+ * 現在時刻からクールダウンを設定すべきか判定する
+ *
+ * 最遅エントリー時刻（15:25）までの残り時間がクールダウン時間未満の場合、
+ * クールダウンを設定しても再発火前に取引終了するため設定不要と判断する。
+ */
+export function shouldSetRetryCooldown(now: Date): boolean {
+  const jst = dayjs(now).tz(TIMEZONE);
+  const latestEntry = jst.clone().hour(15).minute(25).second(0).millisecond(0);
+  const remainingMs = latestEntry.valueOf() - jst.valueOf();
+  return remainingMs >= BREAKOUT.GUARD.RETRY_COOLDOWN_MS;
+}
+
 let scanner: BreakoutScanner | null = null;
 let lastScanDate: string | null = null;
 /** 保有中ティッカー（直近スキャン時のスナップショット） */
@@ -211,11 +224,17 @@ export async function main(): Promise<void> {
         const result = await executeEntry(trigger);
         if (!result.success) {
           if (result.retryable && scanner) {
-            // 一時的な理由（残高不足等）→ 30分クールダウン後に再トリガー可能
-            scanner.setRetryCooldown(trigger.ticker);
-            console.log(
-              `[breakout-monitor] ${trigger.ticker} クールダウン設定（${BREAKOUT.GUARD.RETRY_COOLDOWN_MS / 60000}分後に再トリガー可能, 理由: ${result.reason}）`,
-            );
+            if (shouldSetRetryCooldown(new Date())) {
+              // 一時的な理由（残高不足等）→ クールダウン後に再トリガー可能
+              scanner.setRetryCooldown(trigger.ticker);
+              console.log(
+                `[breakout-monitor] ${trigger.ticker} クールダウン設定（${BREAKOUT.GUARD.RETRY_COOLDOWN_MS / 60000}分後に再トリガー可能, 理由: ${result.reason}）`,
+              );
+            } else {
+              console.log(
+                `[breakout-monitor] ${trigger.ticker} 残り時間不足のためクールダウンスキップ（理由: ${result.reason}）`,
+              );
+            }
           } else {
             // 恒久的な理由 → Slack通知
             await notifySlack({
