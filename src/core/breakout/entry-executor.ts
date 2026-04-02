@@ -232,18 +232,32 @@ export async function executeEntry(
       console.log(
         `[entry-executor] ${ticker} ブローカー発注成功: orderNumber=${brokerResult.orderNumber}`,
       );
-    } else if (!brokerResult.success) {
-      console.warn(
-        `[entry-executor] ブローカー発注失敗: ${ticker}: ${brokerResult.error}`,
-      );
+    } else {
+      const errorMsg = brokerResult.success
+        ? "注文番号が取得できませんでした"
+        : (brokerResult.error ?? "Unknown error");
+      console.warn(`[entry-executor] ブローカー発注失敗: ${ticker}: ${errorMsg}`);
+      await prisma.tradingOrder.update({
+        where: { id: newOrder.id },
+        data: { status: "cancelled" },
+      });
       await notifySlack({
         title: `ブローカー発注失敗: ${ticker}`,
-        message: brokerResult.error ?? "Unknown error",
+        message: errorMsg,
         color: "danger",
       });
     }
   } catch (brokerErr) {
     console.error(`[entry-executor] ブローカーエラー ${ticker}:`, brokerErr);
+    await prisma.tradingOrder.update({
+      where: { id: newOrder.id },
+      data: { status: "cancelled" },
+    });
+    await notifySlack({
+      title: `ブローカー発注失敗: ${ticker}`,
+      message: brokerErr instanceof Error ? brokerErr.message : String(brokerErr),
+      color: "danger",
+    });
   }
 
   // 8. Slack通知
