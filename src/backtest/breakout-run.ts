@@ -256,6 +256,7 @@ async function main() {
   const entryCompare = args.includes("--entry-compare");
   const exitCompare = args.includes("--exit-compare");
   const noCost = args.includes("--no-cost");
+  const noPositionCap = args.includes("--no-position-cap");
   const monteCarlo = args.includes("--monte-carlo");
   const compound = args.includes("--compound");
   const mcIterationsStr = getArg(args, "--mc-iterations");
@@ -269,6 +270,7 @@ async function main() {
   };
   if (budgetStr) config.initialBudget = Number(budgetStr);
   if (noCost) config.costModelEnabled = false;
+  if (noPositionCap) config.positionCapEnabled = false;
 
   console.log("=".repeat(60));
   console.log("ブレイクアウトバックテスト");
@@ -280,6 +282,7 @@ async function main() {
   console.log(`高値ルックバック: ${config.highLookbackDays}日`);
   console.log(`SL ATR倍率: ${config.atrMultiplier}`);
   console.log(`TS発動: ATR×${config.tsActivationMultiplier}, トレール: ATR×${config.trailMultiplier}`);
+  console.log(`資金上限キャップ: ${config.positionCapEnabled !== false ? "有効 (getDynamicMaxPositionPct)" : "無効 (--no-position-cap)"}`);
   console.log("");
 
   // 1. 候補銘柄の取得

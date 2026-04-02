@@ -83,6 +83,9 @@ export interface BreakoutBacktestConfig {
   volumeTrendThreshold?: number;
 
   verbose: boolean;
+
+  /** 1銘柄あたりの資金上限（getDynamicMaxPositionPct）を適用するか。デフォルト: true */
+  positionCapEnabled?: boolean;
 }
 
 // ──────────────────────────────────────────
@@ -243,6 +246,9 @@ export interface GapUpBacktestConfig {
   indexTrendOnBufferPct?: number;
 
   verbose: boolean;
+
+  /** 1銘柄あたりの資金上限（getDynamicMaxPositionPct）を適用するか。デフォルト: true */
+  positionCapEnabled?: boolean;
 }
 
 export interface GapUpBacktestResult {

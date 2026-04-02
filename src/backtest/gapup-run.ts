@@ -98,6 +98,7 @@ async function main() {
   const budget = Number(getArg(args, "--budget") ?? GAPUP_BACKTEST_DEFAULTS.initialBudget);
   const verbose = args.includes("--verbose");
   const compareEntry = args.includes("--compare-entry");
+  const noPositionCap = args.includes("--no-position-cap");
 
   console.log("=".repeat(60));
   console.log("ギャップアップ バックテスト");
@@ -134,6 +135,7 @@ async function main() {
     endDate,
     initialBudget: budget,
     verbose,
+    positionCapEnabled: !noPositionCap,
   };
 
   const vixArg = vixData.size > 0 ? vixData : undefined;

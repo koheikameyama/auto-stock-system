@@ -56,6 +56,7 @@ export const BREAKOUT_BACKTEST_DEFAULTS: Omit<BreakoutBacktestConfig, "startDate
   volumeTrendThreshold: 1.0,
 
   verbose: false,
+  positionCapEnabled: true,
 };
 
 /** 1トレードあたりリスク（%） */

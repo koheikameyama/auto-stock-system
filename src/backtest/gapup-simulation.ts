@@ -12,6 +12,7 @@ import { calculateCommission, calculateTax } from "../core/trading-costs";
 import { getLimitDownPrice } from "../lib/constants/price-limits";
 import { determineMarketRegime } from "../core/market-regime";
 import { UNIT_SHARES } from "../lib/constants/trading";
+import { getDynamicMaxPositionPct } from "../core/risk-manager";
 import { TECHNICAL_MIN_DATA } from "../lib/constants";
 import { calculateMetrics } from "./metrics";
 import { GAPUP_RISK_PER_TRADE_PCT } from "./gapup-config";
@@ -324,12 +325,14 @@ export function runGapUpBacktest(
         // TP（実質無効、TSに委ねる）
         const takeProfitPrice = Math.round(signal.entryPrice + signal.atr14 * 5);
 
-        // ポジションサイジング（リスクベース）
+        // ポジションサイジング（リスクベース + 資金上限キャップ）
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
         const riskAmount = cash * (GAPUP_RISK_PER_TRADE_PCT / 100);
-        const rawQuantity = Math.floor(riskAmount / riskPerShare);
-        const quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
+        const riskBasedShares = Math.floor(riskAmount / riskPerShare);
+        const maxPositionPct = config.positionCapEnabled !== false ? getDynamicMaxPositionPct(cash) : 100;
+        const budgetBasedShares = Math.floor(cash * (maxPositionPct / 100) / signal.entryPrice);
+        const quantity = Math.floor(Math.min(riskBasedShares, budgetBasedShares) / UNIT_SHARES) * UNIT_SHARES;
         if (quantity <= 0) continue;
         if (signal.entryPrice * quantity > cash) continue;
 

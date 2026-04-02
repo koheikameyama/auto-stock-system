@@ -49,6 +49,7 @@ export const GAPUP_BACKTEST_DEFAULTS: Omit<GapUpBacktestConfig, "startDate" | "e
   indexTrendOnBufferPct: 0,
 
   verbose: false,
+  positionCapEnabled: true,
 };
 
 /** 1トレードあたりリスク（%） */
