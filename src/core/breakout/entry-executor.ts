@@ -390,13 +390,15 @@ export async function resizePendingOrders(): Promise<void> {
 export async function invalidateStalePendingOrders(
   quotes: QuoteData[],
   surgeRatios: ReadonlyMap<string, number>,
-): Promise<void> {
+): Promise<Set<string>> {
+  const cancelledTickers = new Set<string>();
+
   const pendingOrders = await prisma.tradingOrder.findMany({
     where: { side: "buy", status: "pending", strategy: "breakout" },
     include: { stock: { select: { tickerCode: true } } },
   });
 
-  if (pendingOrders.length === 0) return;
+  if (pendingOrders.length === 0) return cancelledTickers;
 
   const quoteMap = new Map(quotes.map((q) => [q.ticker, q]));
 
@@ -444,6 +446,8 @@ export async function invalidateStalePendingOrders(
       data: { status: "cancelled" },
     });
 
+    cancelledTickers.add(ticker);
+
     const reasonText = reasons.join(" / ");
     console.log(`[invalidate-pending] ${ticker} 前提崩壊キャンセル: ${reasonText}`);
 
@@ -453,4 +457,6 @@ export async function invalidateStalePendingOrders(
       color: "warning",
     });
   }
+
+  return cancelledTickers;
 }

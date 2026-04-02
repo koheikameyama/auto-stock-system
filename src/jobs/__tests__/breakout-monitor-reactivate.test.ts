@@ -115,4 +115,28 @@ describe("reactivateCancelledTriggers", () => {
 
     expect(prisma.tradingOrder.findMany).not.toHaveBeenCalled();
   });
+
+  it("premiseCollapsedTickers に含まれる銘柄はキャンセル済みでも triggeredToday に残す", async () => {
+    const { prisma } = await import("../../lib/prisma");
+    vi.mocked(prisma.tradingOrder.findMany).mockResolvedValue([
+      { status: "cancelled", stock: { tickerCode: "7203" } } as never,
+    ]);
+
+    const scanner = makeScanner(["7203"]);
+    await reactivateCancelledTriggers(scanner, new Set(["7203"]));
+
+    expect(scanner.getState().triggeredToday.has("7203")).toBe(true); // 前提崩壊済み → 当日ブロック継続
+  });
+
+  it("premiseCollapsedTickers が空なら通常通りキャンセル済み銘柄を除去する", async () => {
+    const { prisma } = await import("../../lib/prisma");
+    vi.mocked(prisma.tradingOrder.findMany).mockResolvedValue([
+      { status: "cancelled", stock: { tickerCode: "7203" } } as never,
+    ]);
+
+    const scanner = makeScanner(["7203"]);
+    await reactivateCancelledTriggers(scanner, new Set());
+
+    expect(scanner.getState().triggeredToday.has("7203")).toBe(false);
+  });
 });

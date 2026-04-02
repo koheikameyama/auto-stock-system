@@ -24,6 +24,8 @@ export interface HotListEntry {
   promotedAt: Date;
   /** クールダウンカウント（0-2） */
   coolDownCount: number;
+  /** ブレイクアウト条件を連続して満たした回数（フェイクアウト除去用） */
+  confirmCount: number;
 }
 
 /** スキャナーの状態管理 */

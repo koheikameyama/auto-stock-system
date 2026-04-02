@@ -91,30 +91,43 @@ export class BreakoutScanner {
           atr14: watchEntry.atr14,
           triggerThreshold: BREAKOUT.ENTRY.TRIGGER_THRESHOLD,
           maxChaseAtr: BREAKOUT.ENTRY.MAX_CHASE_ATR,
-        }) &&
-        this.canFireTrigger(ticker, hour, minute, holdingTickers)
+        })
       ) {
-        // Trigger 発火
-        this.state.triggeredToday.add(ticker);
-        triggers.push({
-          ticker,
-          currentPrice: quote.price,
-          cumulativeVolume: quote.volume,
-          volumeSurgeRatio: surgeRatio,
-          high20: watchEntry.high20,
-          atr14: watchEntry.atr14,
-          triggeredAt: now,
-        });
-      } else if (surgeRatio < BREAKOUT.VOLUME_SURGE.COOL_DOWN_THRESHOLD) {
-        // クールダウン
-        hotEntry.coolDownCount += 1;
-        if (hotEntry.coolDownCount >= BREAKOUT.VOLUME_SURGE.COOL_DOWN_COUNT) {
-          // Hot → Cold 降格
-          this.state.hotSet.delete(ticker);
+        // ブレイクアウト条件を満たした → 連続確認カウントを加算
+        hotEntry.confirmCount += 1;
+        hotEntry.coolDownCount = 0;
+
+        if (
+          hotEntry.confirmCount >= BREAKOUT.VOLUME_SURGE.CONFIRM_COUNT &&
+          this.canFireTrigger(ticker, hour, minute, holdingTickers)
+        ) {
+          // Trigger 発火
+          this.state.triggeredToday.add(ticker);
+          triggers.push({
+            ticker,
+            currentPrice: quote.price,
+            cumulativeVolume: quote.volume,
+            volumeSurgeRatio: surgeRatio,
+            high20: watchEntry.high20,
+            atr14: watchEntry.atr14,
+            triggeredAt: now,
+          });
         }
       } else {
-        // サージが維持されている → クールダウンカウントをリセット
-        hotEntry.coolDownCount = 0;
+        // ブレイクアウト条件が途切れた → confirmCountをリセット
+        hotEntry.confirmCount = 0;
+
+        if (surgeRatio < BREAKOUT.VOLUME_SURGE.COOL_DOWN_THRESHOLD) {
+          // クールダウン
+          hotEntry.coolDownCount += 1;
+          if (hotEntry.coolDownCount >= BREAKOUT.VOLUME_SURGE.COOL_DOWN_COUNT) {
+            // Hot → Cold 降格
+            this.state.hotSet.delete(ticker);
+          }
+        } else {
+          // サージが維持されている → クールダウンカウントをリセット
+          hotEntry.coolDownCount = 0;
+        }
       }
     }
 
@@ -153,6 +166,7 @@ export class BreakoutScanner {
           ticker,
           promotedAt: now,
           coolDownCount: 0,
+          confirmCount: 0,
         });
       }
     }

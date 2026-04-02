@@ -157,39 +157,92 @@ describe("BreakoutScanner", () => {
     expect(scanner.getState().hotSet.get(DEFAULT_TICKER)!.coolDownCount).toBe(0);
   });
 
-  // 5. volumeSurgeRatio >= 2.0 AND price > high20 → trigger fires
-  it("5. surgeRatio >= 2.0 かつ price > high20 → トリガーが発火する", () => {
+  // 5. volumeSurgeRatio >= 2.0 AND price > high20 → 2回連続でトリガーが発火する
+  it("5. surgeRatio >= 2.0 かつ price > high20 が2回連続 → トリガーが発火する", () => {
     // Promote to hot
     scanner.scan([makeQuote(DEFAULT_TICKER, 1.5)], SCAN_TIME, NO_HOLDINGS);
 
-    // Trigger condition: ratio >= 2.0, price > high20 (1000)
-    const time2 = makeTime(9, 31);
     const triggerQuote: QuoteData = {
       ticker: DEFAULT_TICKER,
       price: 1010, // > high20 (1000)
       volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)),
     };
-    const triggers = scanner.scan([triggerQuote], time2, NO_HOLDINGS);
 
-    expect(triggers).toHaveLength(1);
-    expect(triggers[0].ticker).toBe(DEFAULT_TICKER);
-    expect(triggers[0].volumeSurgeRatio).toBeGreaterThanOrEqual(2.0);
-    expect(triggers[0].currentPrice).toBe(1010);
-    expect(triggers[0].high20).toBe(1000);
+    // 1回目: confirmCount=1 → まだ発火しない
+    const time2 = makeTime(9, 31);
+    const first = scanner.scan([triggerQuote], time2, NO_HOLDINGS);
+    expect(first).toHaveLength(0);
+
+    // 2回目: confirmCount=2 → 発火
+    const time3 = makeTime(9, 32);
+    const second = scanner.scan([triggerQuote], time3, NO_HOLDINGS);
+    expect(second).toHaveLength(1);
+    expect(second[0].ticker).toBe(DEFAULT_TICKER);
+    expect(second[0].volumeSurgeRatio).toBeGreaterThanOrEqual(2.0);
+    expect(second[0].currentPrice).toBe(1010);
+    expect(second[0].high20).toBe(1000);
     expect(scanner.getState().triggeredToday.has(DEFAULT_TICKER)).toBe(true);
   });
 
-  // 6. Same ticker 2nd trigger → blocked (triggeredToday)
-  it("6. 同一ティッカーの2回目トリガー → triggeredToday でブロックされる", () => {
-    // Promote to hot then trigger
+  // 14. ブレイクアウト条件を1回だけ満たしてもトリガーは発火しない
+  it("14. ブレイクアウト条件を1回だけ満たしてもトリガーは発火しない（2回連続確認が必要）", () => {
+    // Hot昇格
     scanner.scan([makeQuote(DEFAULT_TICKER, 1.5)], SCAN_TIME, NO_HOLDINGS);
+
+    // 1回目のブレイクアウト条件
     const time2 = makeTime(9, 31);
     const triggerQuote: QuoteData = {
       ticker: DEFAULT_TICKER,
       price: 1010,
       volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)),
     };
-    const firstTriggers = scanner.scan([triggerQuote], time2, NO_HOLDINGS);
+    const triggers = scanner.scan([triggerQuote], time2, NO_HOLDINGS);
+
+    expect(triggers).toHaveLength(0);
+    expect(scanner.getState().hotSet.get(DEFAULT_TICKER)!.confirmCount).toBe(1);
+  });
+
+  // 15. ブレイクアウト条件が途切れるとconfirmCountがリセットされ、再度2回確認が必要
+  it("15. ブレイクアウト条件が途切れるとconfirmCountがリセットされ、再度2回確認が必要", () => {
+    // Hot昇格
+    scanner.scan([makeQuote(DEFAULT_TICKER, 1.5)], SCAN_TIME, NO_HOLDINGS);
+
+    const breakoutQuote: QuoteData = {
+      ticker: DEFAULT_TICKER,
+      price: 1010,
+      volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)),
+    };
+    const belowHigh20Quote: QuoteData = {
+      ticker: DEFAULT_TICKER,
+      price: 999, // <= high20 → シグナル途切れ
+      volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 32)),
+    };
+
+    // 1回目のブレイクアウト条件（confirmCount=1）
+    scanner.scan([breakoutQuote], makeTime(9, 31), NO_HOLDINGS);
+    expect(scanner.getState().hotSet.get(DEFAULT_TICKER)!.confirmCount).toBe(1);
+
+    // 条件途切れ（price <= high20）→ confirmCount=0 にリセット
+    scanner.scan([belowHigh20Quote], makeTime(9, 32), NO_HOLDINGS);
+    expect(scanner.getState().hotSet.get(DEFAULT_TICKER)!.confirmCount).toBe(0);
+
+    // 再度1回のブレイクアウト条件 → まだ発火しない（confirmCount=1）
+    const triggers = scanner.scan([breakoutQuote], makeTime(9, 33), NO_HOLDINGS);
+    expect(triggers).toHaveLength(0);
+    expect(scanner.getState().hotSet.get(DEFAULT_TICKER)!.confirmCount).toBe(1);
+  });
+
+  // 6. Same ticker 2nd trigger → blocked (triggeredToday)
+  it("6. 同一ティッカーの2回目トリガー → triggeredToday でブロックされる", () => {
+    // Promote to hot then trigger（2回連続確認で発火）
+    scanner.scan([makeQuote(DEFAULT_TICKER, 1.5)], SCAN_TIME, NO_HOLDINGS);
+    const triggerQuote: QuoteData = {
+      ticker: DEFAULT_TICKER,
+      price: 1010,
+      volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)),
+    };
+    scanner.scan([triggerQuote], makeTime(9, 31), NO_HOLDINGS); // confirmCount=1
+    const firstTriggers = scanner.scan([triggerQuote], makeTime(9, 32), NO_HOLDINGS); // confirmCount=2 → 発火
     expect(firstTriggers).toHaveLength(1);
 
     // Re-promote (simulate another cold→hot cycle for same ticker)
@@ -199,8 +252,9 @@ describe("BreakoutScanner", () => {
     };
     state.hotSet.set(DEFAULT_TICKER, {
       ticker: DEFAULT_TICKER,
-      promotedAt: time2,
+      promotedAt: makeTime(9, 32),
       coolDownCount: 0,
+      confirmCount: 0,
     });
 
     // Attempt 2nd trigger
@@ -288,23 +342,24 @@ describe("BreakoutScanner", () => {
     // Promote to hot
     scanner.scan([makeQuote(DEFAULT_TICKER, 1.5)], SCAN_TIME, NO_HOLDINGS);
 
-    // First trigger fires
-    const t2 = makeTime(9, 31);
     const triggerQuote: QuoteData = {
       ticker: DEFAULT_TICKER,
       price: 1010,
       volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)),
     };
-    const first = scanner.scan([triggerQuote], t2, NO_HOLDINGS);
+
+    // First trigger fires（2回連続確認）
+    scanner.scan([triggerQuote], makeTime(9, 31), NO_HOLDINGS); // confirmCount=1
+    const first = scanner.scan([triggerQuote], makeTime(9, 32), NO_HOLDINGS); // confirmCount=2 → 発火
     expect(first).toHaveLength(1);
     expect(scanner.getState().triggeredToday.has(DEFAULT_TICKER)).toBe(true);
 
-    // retryable failure → removeFromTriggeredToday（クールダウンなし）
+    // retryable failure → removeFromTriggeredToday（confirmCountは2のまま）
     scanner.removeFromTriggeredToday(DEFAULT_TICKER);
     expect(scanner.getState().triggeredToday.has(DEFAULT_TICKER)).toBe(false);
 
-    // 次スキャン（1分後）で即座に再トリガー
-    const t3 = makeTime(9, 32);
+    // 次スキャン1回で即座に再トリガー（confirmCountが既に2以上のため）
+    const t3 = makeTime(9, 33);
     const second = scanner.scan([triggerQuote], t3, NO_HOLDINGS);
     expect(second).toHaveLength(1);
   });
@@ -329,14 +384,16 @@ describe("BreakoutScanner", () => {
     ];
     multiScanner.scan(hotQuotes, SCAN_TIME, NO_HOLDINGS);
 
-    // Step 2: 異なるサージ比率でトリガー発火（A=2.5x, B=3.0x, C=2.0x）
-    const time2 = makeTime(9, 31);
+    // Step 2: 1回目のブレイクアウト条件（confirmCount=1 → まだ発火しない）
     const triggerQuotes: QuoteData[] = [
       { ticker: tickerA, price: 1010, volume: Math.ceil(volumeForRatio(2.5, 100_000, 9, 31)) },
       { ticker: tickerB, price: 1010, volume: Math.ceil(volumeForRatio(3.0, 100_000, 9, 31)) },
       { ticker: tickerC, price: 1010, volume: Math.ceil(volumeForRatio(2.0, 100_000, 9, 31)) },
     ];
-    const triggers = multiScanner.scan(triggerQuotes, time2, NO_HOLDINGS);
+    multiScanner.scan(triggerQuotes, makeTime(9, 31), NO_HOLDINGS);
+
+    // Step 3: 2回目のブレイクアウト条件（confirmCount=2 → 発火）
+    const triggers = multiScanner.scan(triggerQuotes, makeTime(9, 32), NO_HOLDINGS);
 
     expect(triggers).toHaveLength(3);
     // B(3.0x) > A(2.5x) > C(2.0x) の順

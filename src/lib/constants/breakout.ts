@@ -19,6 +19,8 @@ export const BREAKOUT = {
     COOL_DOWN_THRESHOLD: 1.2,
     /** クールダウンカウント（N回連続で体積サージが低下したら完全リセット） */
     COOL_DOWN_COUNT: 2,
+    /** ブレイクアウトトリガー発火に必要な連続確認回数（フェイクアウト除去） */
+    CONFIRM_COUNT: 2,
   },
 
   /** 価格ブレイクアウト条件 */

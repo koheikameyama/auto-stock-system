@@ -388,4 +388,34 @@ describe("invalidateStalePendingOrders", () => {
       data: { status: "cancelled" },
     });
   });
+
+  it("キャンセルした ticker の Set を返す", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 1000), // 高値割り込み → キャンセル
+      makePendingOrder("9984", 990),  // 条件満たしている → キャンセルなし
+    ]);
+
+    const result = await invalidateStalePendingOrders(
+      makeQuotes([{ ticker: "7203", price: 995 }, { ticker: "9984", price: 1000 }]),
+      makeSurgeRatios([{ ticker: "7203", ratio: 2.5 }, { ticker: "9984", ratio: 2.5 }]),
+    );
+
+    expect(result).toBeInstanceOf(Set);
+    expect(result.has("7203")).toBe(true);
+    expect(result.has("9984")).toBe(false);
+  });
+
+  it("キャンセルなしの場合は空の Set を返す", async () => {
+    mockPrisma.tradingOrder.findMany.mockResolvedValue([
+      makePendingOrder("7203", 990),
+    ]);
+
+    const result = await invalidateStalePendingOrders(
+      makeQuotes([{ ticker: "7203", price: 1000 }]),
+      makeSurgeRatios([{ ticker: "7203", ratio: 2.5 }]),
+    );
+
+    expect(result).toBeInstanceOf(Set);
+    expect(result.size).toBe(0);
+  });
 });

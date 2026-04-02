@@ -121,8 +121,12 @@ export async function main(): Promise<void> {
     return;
   }
 
-  // 4.5 キャンセル済み注文の triggeredToday を解除（再エントリー可能にする）
-  await reactivateCancelledTriggers(scanner);
+  // 4.5 前提崩壊チェック → キャンセル済み注文の triggeredToday を解除（前提崩壊は除外）
+  const premiseCollapsedTickers = await invalidateStalePendingOrders(
+    quotes,
+    scanner.getState().lastSurgeRatios,
+  );
+  await reactivateCancelledTriggers(scanner, premiseCollapsedTickers);
 
   // 5. スキャン実行
   const now = dayjs().tz(TIMEZONE).toDate();
@@ -188,12 +192,6 @@ export async function main(): Promise<void> {
 
     // 6. 既存pending注文の株数チェック（資金変動対応）
     await resizePendingOrders();
-
-    // 6.5 ブレイクアウト前提崩壊チェック（出来高萎縮・高値割り込み）
-    await invalidateStalePendingOrders(
-      quotes,
-      scanner.getState().lastSurgeRatios,
-    );
 
     // 6.7 残高プリチェック: 残高0以下なら全トリガーをスキップ（無駄なDB操作・通知を防止）
     const preCash = await getCashBalance();
@@ -366,6 +364,7 @@ async function calculateLiveBreadth(
  */
 export async function reactivateCancelledTriggers(
   scanner: BreakoutScanner,
+  premiseCollapsedTickers: Set<string> = new Set(),
 ): Promise<void> {
   const triggeredTickers = [...scanner.getState().triggeredToday];
   if (!triggeredTickers.length) return;
@@ -393,6 +392,8 @@ export async function reactivateCancelledTriggers(
 
   for (const ticker of triggeredTickers) {
     const statuses = ordersByTicker.get(ticker) ?? [];
+    // 前提崩壊キャンセルは当日再エントリー禁止
+    if (premiseCollapsedTickers.has(ticker)) continue;
     // 本日注文が存在し、全てキャンセル済みなら再アクティベート
     if (statuses.length > 0 && statuses.every((s) => s === "cancelled")) {
       scanner.removeFromTriggeredToday(ticker);
