@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "../lib/prisma";
+import { notifySlack } from "../lib/slack";
 import { getTachibanaClient, type TachibanaRequestParams, type TachibanaResponse } from "./broker-client";
 import { tickerToBrokerCode, brokerCodeToTicker } from "../lib/ticker-utils";
 import {
@@ -283,6 +284,27 @@ export async function getBuyingPower(): Promise<number | null> {
 export async function syncBrokerOrderStatuses(): Promise<void> {
   const mode = getEffectiveBrokerMode();
   if (mode === "simulation") return;
+
+  // brokerOrderIdが未設定のpending買い注文（発注失敗の孤立注文）を自動キャンセル
+  const orphanOrders = await prisma.tradingOrder.findMany({
+    where: { brokerOrderId: null, status: "pending", side: "buy" },
+    include: { stock: { select: { tickerCode: true } } },
+  });
+
+  for (const order of orphanOrders) {
+    await prisma.tradingOrder.update({
+      where: { id: order.id },
+      data: { status: "cancelled" },
+    });
+    console.warn(
+      `[broker-orders] ${order.stock.tickerCode}: 発注失敗のためキャンセル id=${order.id}`,
+    );
+    await notifySlack({
+      title: `発注漏れ検出: ${order.stock.tickerCode}`,
+      message: `ブローカー発注が失敗したpending注文を自動キャンセルしました (id: ${order.id})`,
+      color: "danger",
+    });
+  }
 
   const client = getTachibanaClient();
 
