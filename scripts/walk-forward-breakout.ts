@@ -51,7 +51,7 @@ interface ComboResult {
 }
 
 function paramComboKey(params: Partial<BreakoutBacktestConfig>): string {
-  return `${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}_${params.tsActivationMultiplier}`;
+  return `${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}`;
 }
 
 function calcMedian(values: number[]): number {
@@ -80,7 +80,6 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
     [...PARAMETER_GRID.atrMultiplier],
     [...PARAMETER_GRID.beActivationMultiplier],
     [...PARAMETER_GRID.trailMultiplier],
-    [...PARAMETER_GRID.tsActivationMultiplier],
   ];
   const gridSizes = gridArrays.map((a) => a.length);
 
@@ -93,7 +92,6 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
       gridArrays[0].indexOf(p.atrMultiplier!),
       gridArrays[1].indexOf(p.beActivationMultiplier!),
       gridArrays[2].indexOf(p.trailMultiplier!),
-      gridArrays[3].indexOf(p.tsActivationMultiplier!),
     ];
 
     // 近傍 (±1 grid step in each dimension) のPFを収集
@@ -106,7 +104,7 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
       return vals;
     });
 
-    // 4次元の近傍を再帰的に列挙
+    // 3次元の近傍を再帰的に列挙
     function collectNeighbors(dim: number, current: number[]): void {
       if (dim === ranges.length) {
         const nKey = current.map((i, d) => gridArrays[d][i]).join("_");
@@ -264,7 +262,7 @@ async function runScoreFilterComparison(
       const p = bestParams;
       console.log(
         `  [${variant.label}] IS PF: ${formatPF(bestIsMetrics.profitFactor)} → OOS PF: ${formatPF(oosResult.metrics.profitFactor)} ` +
-        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}]`,
+        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier}]`,
       );
     }
     console.log("");
@@ -477,7 +475,7 @@ async function runSmaComparison(
       const p = bestParams;
       console.log(
         `  [${variant.label}] IS PF: ${formatPF(bestIsMetrics.profitFactor)} → OOS PF: ${formatPF(oosResult.metrics.profitFactor)} ` +
-        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}]`,
+        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier}]`,
       );
     }
     console.log("");
@@ -640,7 +638,7 @@ async function runPositionComparison(
       const p = bestParams;
       console.log(
         `  [${variant.label}] IS PF: ${formatPF(bestIsMetrics.profitFactor)} → OOS PF: ${formatPF(oosResult.metrics.profitFactor)} ` +
-        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}]`,
+        `(${oosResult.metrics.totalTrades}tr) [atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier}]`,
       );
     }
     console.log("");
@@ -814,7 +812,7 @@ async function main() {
     if (bestIsMetrics.profitFactor < MIN_IS_PF) {
       console.log(`  IS  最適PF: ${formatPF(bestIsMetrics.profitFactor)} (${bestIsMetrics.totalTrades}トレード, 勝率${bestIsMetrics.winRate}%)`);
       console.log(`  ⏸ IS最適PF < ${MIN_IS_PF} → OOS期間は休止（トレードしない）`);
-      console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}, ts=${bestParams.tsActivationMultiplier}`);
+      console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}`);
       console.log("");
       results.push({
         windowIdx: w,
@@ -867,7 +865,7 @@ async function main() {
 
     console.log(`  IS  最適PF: ${formatPF(bestIsMetrics.profitFactor)} (${bestIsMetrics.totalTrades}トレード, 勝率${bestIsMetrics.winRate}%)`);
     console.log(`  OOS PF:     ${formatPF(oosResult.metrics.profitFactor)} (${oosResult.metrics.totalTrades}トレード, 勝率${oosResult.metrics.winRate}%)`);
-    console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}, ts=${bestParams.tsActivationMultiplier}`);
+    console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}`);
     console.log("");
   }
 
@@ -952,7 +950,7 @@ function printSummary(results: WindowResult[]): void {
   console.log("-".repeat(90));
   for (const r of results) {
     const p = r.bestIsParams;
-    const paramStr = `atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}`;
+    const paramStr = `atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier}`;
     if (r.oosMetrics === null) {
       console.log(
         `  ${r.windowIdx + 1}    | ${padPF(r.isMetrics.profitFactor)} |    休止 |      -  |           - | ${paramStr}`,
@@ -967,7 +965,7 @@ function printSummary(results: WindowResult[]): void {
 
   // パラメータ安定性分析（アクティブウィンドウのみ）
   console.log("\n[パラメータ安定性]");
-  const paramKeys = ["atrMultiplier", "beActivationMultiplier", "trailMultiplier", "tsActivationMultiplier"] as const;
+  const paramKeys = ["atrMultiplier", "beActivationMultiplier", "trailMultiplier"] as const;
   for (const key of paramKeys) {
     const values = activeResults.map((r) => r.bestIsParams[key]);
     const uniqueValues = [...new Set(values)];

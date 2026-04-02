@@ -21,7 +21,6 @@ export const GAPUP_BACKTEST_DEFAULTS: Omit<GapUpBacktestConfig, "startDate" | "e
 
   // トレーリングストップ（短期向けにタイト設定）
   beActivationMultiplier: 0.5,
-  tsActivationMultiplier: 1.0,
   trailMultiplier: 0.5,
 
   // タイムストップ（短期決戦）
@@ -55,12 +54,11 @@ export const GAPUP_BACKTEST_DEFAULTS: Omit<GapUpBacktestConfig, "startDate" | "e
 /** 1トレードあたりリスク（%） */
 export const GAPUP_RISK_PER_TRADE_PCT = POSITION_SIZING.RISK_PER_TRADE_PCT; // 2
 
-/** walk-forward パラメータグリッド（エグジット系のみ、81通り） */
+/** walk-forward パラメータグリッド（エグジット系のみ、27通り） */
 export const GAPUP_PARAMETER_GRID = {
   atrMultiplier: [0.8, 1.0, 1.2],
   beActivationMultiplier: [0.3, 0.5, 0.8],
   trailMultiplier: [0.3, 0.5, 0.8],
-  tsActivationMultiplier: [0.5, 1.0, 1.5],
 } as const;
 
 /** パラメータグリッドの全組み合わせを生成 */
@@ -70,14 +68,11 @@ export function generateGapUpParameterCombinations(): Array<Partial<GapUpBacktes
   for (const atrMultiplier of GAPUP_PARAMETER_GRID.atrMultiplier) {
     for (const beActivationMultiplier of GAPUP_PARAMETER_GRID.beActivationMultiplier) {
       for (const trailMultiplier of GAPUP_PARAMETER_GRID.trailMultiplier) {
-        for (const tsActivationMultiplier of GAPUP_PARAMETER_GRID.tsActivationMultiplier) {
-          combos.push({
-            atrMultiplier,
-            beActivationMultiplier,
-            trailMultiplier,
-            tsActivationMultiplier,
-          });
-        }
+        combos.push({
+          atrMultiplier,
+          beActivationMultiplier,
+          trailMultiplier,
+        });
       }
     }
   }

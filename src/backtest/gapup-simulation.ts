@@ -230,7 +230,6 @@ export function runGapUpBacktest(
           strategy: "gapup",
           holdingBusinessDays: holdingDays,
           beActivationMultiplierOverride: config.beActivationMultiplier,
-          activationMultiplierOverride: config.tsActivationMultiplier,
           trailMultiplierOverride: config.trailMultiplier,
           maxHoldingDaysOverride: config.maxExtendedHoldingDays,
           baseLimitHoldingDaysOverride: config.maxHoldingDays,

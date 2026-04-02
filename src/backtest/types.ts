@@ -31,8 +31,6 @@ export interface BreakoutBacktestConfig {
   // トレーリングストップ
   /** ブレイクイーブン発動 ATR倍率 */
   beActivationMultiplier: number;
-  /** トレーリングストップ発動 ATR倍率 */
-  tsActivationMultiplier: number;
   /** トレール幅 ATR倍率 */
   trailMultiplier: number;
 
@@ -225,7 +223,6 @@ export interface GapUpBacktestConfig {
   maxLossPct: number;
 
   beActivationMultiplier: number;
-  tsActivationMultiplier: number;
   trailMultiplier: number;
 
   maxHoldingDays: number;

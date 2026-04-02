@@ -80,8 +80,8 @@ export function stockModal(
 /** ポジション情報バナー（モーダル上部に表示） */
 function positionBanner(pos: ModalPositionInfo): HtmlContent {
   const strategyLabels: Record<string, string> = {
-    day_trade: "デイ",
-    swing: "スイング",
+    breakout: "ブレイクアウト",
+    gapup: "ギャップアップ",
   };
   const pnlColor = (pos.unrealizedPnl ?? 0) >= 0 ? "#22c55e" : "#ef4444";
   const pnlSign = (pos.unrealizedPnl ?? 0) >= 0 ? "+" : "";

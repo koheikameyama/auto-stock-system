@@ -176,30 +176,15 @@ describe("calculateTrailingStop", () => {
       expect(result.trailingStopPrice).toBe(2076);
     });
 
-    it("swing: BE=ATR*1.5, trail=ATR*1.5", () => {
-      // BE = 2000 + 80*1.5 = 2120
-      // maxHigh=2130 >= 2120 → 発動
-      // trailWidth = 80*1.5 = 120
-      // raw = 2130 - 120 = 2010
-      const result = calculateTrailingStop(
-        makeInput({ strategy: "swing", maxHighDuringHold: 2130 }),
+    it("breakoutとgapupでBE/trail閾値が異なることを確認", () => {
+      const breakoutResult = calculateTrailingStop(
+        makeInput({ strategy: "breakout", maxHighDuringHold: 2100 }),
       );
-      expect(result.isActivated).toBe(true);
-      expect(result.beActivationPrice).toBe(2120);
-      expect(result.trailingStopPrice).toBe(2010);
-    });
-
-    it("day_trade: BE=ATR*0.8, trail=ATR*0.8", () => {
-      // BE = 2000 + 80*0.8 = 2064
-      // maxHigh=2100 >= 2064 → 発動
-      // trailWidth = 80*0.8 = 64
-      // raw = 2100 - 64 = 2036
-      const result = calculateTrailingStop(
-        makeInput({ strategy: "day_trade", maxHighDuringHold: 2100 }),
+      const gapupResult = calculateTrailingStop(
+        makeInput({ strategy: "gapup", maxHighDuringHold: 2100 }),
       );
-      expect(result.isActivated).toBe(true);
-      expect(result.beActivationPrice).toBe(2064);
-      expect(result.trailingStopPrice).toBe(2036);
+      // breakout BE=2080 vs gapup BE=2024 → 異なる
+      expect(breakoutResult.beActivationPrice).not.toBe(gapupResult.beActivationPrice);
     });
   });
 
@@ -217,17 +202,6 @@ describe("calculateTrailingStop", () => {
       );
       expect(result.isActivated).toBe(true);
       expect(result.beActivationPrice).toBe(2040);
-    });
-
-    it("activationMultiplierOverride（tsActivationPriceに反映）", () => {
-      // override TS mult to 2.0 → tsActivation = 2000 + 80*2.0 = 2160
-      const result = calculateTrailingStop(
-        makeInput({
-          maxHighDuringHold: 2200,
-          activationMultiplierOverride: 2.0,
-        }),
-      );
-      expect(result.tsActivationPrice).toBe(2160);
     });
 
     it("trailMultiplierOverride", () => {

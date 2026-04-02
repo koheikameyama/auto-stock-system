@@ -32,13 +32,10 @@ export async function submitBrokerSL(params: {
   strategy: string;
 }): Promise<void> {
   try {
-    // SL注文の期限: swing はタイムストップ上限分、day_trade は当日
-    const expireDay =
-      params.strategy === "day_trade"
-        ? undefined
-        : dayjs()
-            .add(TIME_STOP.MAX_EXTENDED_HOLDING_DAYS + 1, "day")
-            .format("YYYYMMDD");
+    // SL注文の期限: タイムストップ上限+1日
+    const expireDay = dayjs()
+      .add(TIME_STOP.MAX_EXTENDED_HOLDING_DAYS + 1, "day")
+      .format("YYYYMMDD");
 
     const result = await submitOrder({
       ticker: params.ticker,

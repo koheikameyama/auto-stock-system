@@ -81,7 +81,7 @@ function makeOrder(overrides?: Record<string, unknown>) {
   return {
     id: "order-1",
     stockId: "stock-1",
-    strategy: "swing",
+    strategy: "breakout",
     side: "buy",
     quantity: 100,
     status: "pending",
@@ -186,7 +186,7 @@ describe("handleBrokerFill", () => {
       expect(mockFillOrder).toHaveBeenCalledWith("order-1", 1000);
       expect(mockOpenPosition).toHaveBeenCalledWith(
         "stock-1",
-        "swing",
+        "breakout",
         1000,
         100,
         expect.any(Number), // takeProfitPrice
@@ -217,7 +217,7 @@ describe("handleBrokerFill", () => {
           positionId: "pos-123",
           ticker: "7203.T",
           quantity: 100,
-          strategy: "swing",
+          strategy: "breakout",
         }),
       );
     });

@@ -140,15 +140,15 @@ interface MarketData {
 ```typescript
 {
   tickerCode: string;
-  strategy: "day_trade" | "swing";
+  strategy: "breakout" | "gapup";
   score: number;                  // 0-100（50以上のみ採用）
   reasoning: string;
 }[]
 ```
 
 **選定基準**:
-- day_trade: 高ボラティリティ、高出来高、日中モメンタム
-- swing: 明確なトレンド、MA整列、ブレイクアウトサポート
+- breakout: 出来高サージ + 高値ブレイクでエントリー
+- gapup: ギャップアップ + 出来高サージで当日終値エントリー
 
 ### decideTrade（売買判断）
 
@@ -162,7 +162,7 @@ interface MarketData {
   takeProfitPrice: number | null; // 利確ライン
   stopLossPrice: number | null;   // 損切ライン
   quantity: number;               // 数量（100株単位）
-  strategy: "day_trade" | "swing";
+  strategy: "breakout" | "gapup";
   reasoning: string;
 }
 ```

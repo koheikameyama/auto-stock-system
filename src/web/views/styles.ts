@@ -110,8 +110,8 @@ export const CSS = `
   .badge-neutral { background: rgba(148,163,184,0.15); color: ${COLORS.neutral}; }
   .badge-cautious { background: rgba(245,158,11,0.15); color: ${COLORS.cautious}; }
   .badge-crisis { background: rgba(220,38,38,0.15); color: ${COLORS.crisis}; }
-  .badge-day_trade { background: rgba(59,130,246,0.15); color: ${COLORS.accent}; }
-  .badge-swing { background: rgba(168,85,247,0.15); color: #a855f7; }
+  .badge-breakout { background: rgba(59,130,246,0.15); color: ${COLORS.accent}; }
+  .badge-gapup { background: rgba(168,85,247,0.15); color: #a855f7; }
   .badge-hot { background: rgba(245,158,11,0.15); color: #f59e0b; }
   .badge-triggered { background: rgba(59,130,246,0.15); color: ${COLORS.accent}; }
   .badge-rejected { background: rgba(239,68,68,0.15); color: ${COLORS.loss}; }

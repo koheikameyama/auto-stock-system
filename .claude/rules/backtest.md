@@ -26,7 +26,7 @@ npm run walk-forward:breakout
 - IS（In-Sample）: 6ヶ月 / OOS（Out-of-Sample）: 3ヶ月
 - スライド: 3ヶ月 × 6ウィンドウ = 24ヶ月
 
-#### パラメータグリッド（81通り、エグジット系のみ）
+#### パラメータグリッド（27通り、エグジット系のみ）
 
 エントリー系パラメータはデフォルト固定（グリッド探索しない）。
 
@@ -35,7 +35,6 @@ npm run walk-forward:breakout
 | atrMultiplier | 0.8, 1.0, 1.2 |
 | beActivationMultiplier | 0.3, 0.5, 0.8 |
 | trailMultiplier | 0.3, 0.5, 0.8 |
-| tsActivationMultiplier | 1.0, 1.5, 2.0 |
 
 #### IS最低PFゲート
 
@@ -80,14 +79,13 @@ npm run walk-forward:gapup
 
 ブレイクアウトと同じウィンドウ構成（IS 6ヶ月 / OOS 3ヶ月 × 6ウィンドウ）。
 
-#### パラメータグリッド（81通り、エグジット系のみ）
+#### パラメータグリッド（27通り、エグジット系のみ）
 
 | パラメータ | 値 |
 |-----------|-----|
 | atrMultiplier | 0.8, 1.0, 1.2 |
 | beActivationMultiplier | 0.3, 0.5, 0.8 |
 | trailMultiplier | 0.3, 0.5, 0.8 |
-| tsActivationMultiplier | 0.5, 1.0, 1.5 |
 
 #### 最新WF結果（2026-03-29実施）
 

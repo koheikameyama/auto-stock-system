@@ -232,29 +232,28 @@ interface ExitParamRow {
   label: string;
   atrMultiplier: number;
   beActivationMultiplier: number;
-  tsActivationMultiplier: number;
   trailMultiplier: number;
 }
 
 const EXIT_PARAM_GRID: ExitParamRow[] = [
   // 現行デフォルト
-  { label: "default", atrMultiplier: 1.0, beActivationMultiplier: 1.5, tsActivationMultiplier: 2.5, trailMultiplier: 1.5 },
-  // --- trail幅の細かい探索 (BE=0.5, TS=1.0) ---
-  { label: "t0.3", atrMultiplier: 1.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.3 },
-  { label: "t0.4", atrMultiplier: 1.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.4 },
-  { label: "t0.5", atrMultiplier: 1.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.5 },
-  { label: "t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.6 },
-  { label: "t0.7", atrMultiplier: 1.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.7 },
-  { label: "t0.8", atrMultiplier: 1.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.8 },
+  { label: "default", atrMultiplier: 1.0, beActivationMultiplier: 1.5, trailMultiplier: 1.5 },
+  // --- trail幅の細かい探索 (BE=0.5) ---
+  { label: "t0.3", atrMultiplier: 1.0, beActivationMultiplier: 0.5, trailMultiplier: 0.3 },
+  { label: "t0.4", atrMultiplier: 1.0, beActivationMultiplier: 0.5, trailMultiplier: 0.4 },
+  { label: "t0.5", atrMultiplier: 1.0, beActivationMultiplier: 0.5, trailMultiplier: 0.5 },
+  { label: "t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.5, trailMultiplier: 0.6 },
+  { label: "t0.7", atrMultiplier: 1.0, beActivationMultiplier: 0.5, trailMultiplier: 0.7 },
+  { label: "t0.8", atrMultiplier: 1.0, beActivationMultiplier: 0.5, trailMultiplier: 0.8 },
   // --- BE発動タイミング変化 (trail=0.6固定) ---
-  { label: "BE0.3 t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.3, tsActivationMultiplier: 1.0, trailMultiplier: 0.6 },
-  { label: "BE0.5 t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.6 },
-  { label: "BE0.8 t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.8, tsActivationMultiplier: 1.0, trailMultiplier: 0.6 },
+  { label: "BE0.3 t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.3, trailMultiplier: 0.6 },
+  { label: "BE0.5 t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.5, trailMultiplier: 0.6 },
+  { label: "BE0.8 t0.6", atrMultiplier: 1.0, beActivationMultiplier: 0.8, trailMultiplier: 0.6 },
   // --- ベストtrail + SL広め ---
-  { label: "SL1.5 t0.5", atrMultiplier: 1.5, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.5 },
-  { label: "SL1.5 t0.6", atrMultiplier: 1.5, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.6 },
-  { label: "SL2.0 t0.5", atrMultiplier: 2.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.5 },
-  { label: "SL2.0 t0.6", atrMultiplier: 2.0, beActivationMultiplier: 0.5, tsActivationMultiplier: 1.0, trailMultiplier: 0.6 },
+  { label: "SL1.5 t0.5", atrMultiplier: 1.5, beActivationMultiplier: 0.5, trailMultiplier: 0.5 },
+  { label: "SL1.5 t0.6", atrMultiplier: 1.5, beActivationMultiplier: 0.5, trailMultiplier: 0.6 },
+  { label: "SL2.0 t0.5", atrMultiplier: 2.0, beActivationMultiplier: 0.5, trailMultiplier: 0.5 },
+  { label: "SL2.0 t0.6", atrMultiplier: 2.0, beActivationMultiplier: 0.5, trailMultiplier: 0.6 },
 ];
 
 function runExitParamComparison(
@@ -274,7 +273,6 @@ function runExitParamComparison(
       ...baseConfig,
       atrMultiplier: row.atrMultiplier,
       beActivationMultiplier: row.beActivationMultiplier,
-      tsActivationMultiplier: row.tsActivationMultiplier,
       trailMultiplier: row.trailMultiplier,
       verbose: false,
     };
@@ -326,7 +324,7 @@ async function main() {
   console.log(`出来高サージ閾値: ${config.triggerThreshold}x`);
   console.log(`高値ルックバック: ${config.highLookbackDays}日`);
   console.log(`SL ATR倍率: ${config.atrMultiplier}`);
-  console.log(`TS発動: ATR×${config.tsActivationMultiplier}, トレール: ATR×${config.trailMultiplier}`);
+  console.log(`トレール: ATR×${config.trailMultiplier}`);
   console.log(`資金上限キャップ: ${config.positionCapEnabled !== false ? "有効 (getDynamicMaxPositionPct)" : "無効 (--no-position-cap)"}`);
   console.log("");
 

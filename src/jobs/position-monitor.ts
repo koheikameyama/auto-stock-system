@@ -11,7 +11,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import {
-  TRADING_SCHEDULE,
   POSITION_DEFAULTS,
   DEFENSIVE_MODE,
   WEEKEND_RISK,
@@ -310,9 +309,9 @@ export async function main() {
   const nonTradingDays = countNonTradingDaysAhead();
   const isPreLongHoliday = nonTradingDays >= WEEKEND_RISK.TRAILING_TIGHTEN_THRESHOLD;
   if (isPreLongHoliday) {
-    const tightenedMultiplier = TRAILING_STOP.TRAIL_ATR_MULTIPLIER.swing * WEEKEND_RISK.TRAILING_TIGHTEN_MULTIPLIER;
+    const tightenedMultiplier = TRAILING_STOP.TRAIL_ATR_MULTIPLIER.breakout * WEEKEND_RISK.TRAILING_TIGHTEN_MULTIPLIER;
     console.log(
-      `  連休前リスク管理: トレーリングストップ引き締め（ATR倍率 ${TRAILING_STOP.TRAIL_ATR_MULTIPLIER.swing} → ${tightenedMultiplier.toFixed(1)}、非営業日: ${nonTradingDays}日）`,
+      `  連休前リスク管理: トレーリングストップ引き締め（ATR倍率 ${TRAILING_STOP.TRAIL_ATR_MULTIPLIER.breakout} → ${tightenedMultiplier.toFixed(1)}、非営業日: ${nonTradingDays}日）`,
     );
   }
 
@@ -391,19 +390,19 @@ export async function main() {
       );
     }
 
-    // swing/breakout/gapupポジションの連休前引き締め（デイトレは当日決済のため不要）
+    // breakout/gapupポジションの連休前引き締め
     let trailOverride: number | undefined;
-    if (position.strategy === "swing" || position.strategy === "breakout" || position.strategy === "gapup") {
+    if (position.strategy === "breakout" || position.strategy === "gapup") {
       const normalTrail = position.strategy === "gapup"
         ? TRAILING_STOP.TRAIL_ATR_MULTIPLIER.gapup
-        : TRAILING_STOP.TRAIL_ATR_MULTIPLIER.swing;
+        : TRAILING_STOP.TRAIL_ATR_MULTIPLIER.breakout;
       if (isPreLongHoliday) {
         trailOverride = normalTrail * WEEKEND_RISK.TRAILING_TIGHTEN_MULTIPLIER;
       }
     }
 
     // 保有スコアによる引き締め（最も保守的な値を採用）
-    if ((position.strategy === "swing" || position.strategy === "breakout") && position.holdingScoreTrailOverride) {
+    if (position.strategy === "breakout" && position.holdingScoreTrailOverride) {
       const holdingOverride = Number(position.holdingScoreTrailOverride);
       trailOverride = trailOverride
         ? Math.min(trailOverride, holdingOverride)
@@ -806,86 +805,6 @@ export async function main() {
   if (!(await isSystemActive())) {
     console.log("  → システム停止中のため終了");
     return;
-  }
-
-  // 4. デイトレ強制決済チェック
-  console.log("[3/3] デイトレ強制決済チェック...");
-  const now = dayjs();
-  const forceExitHour = TRADING_SCHEDULE.DAY_TRADE_FORCE_EXIT.hour;
-  const forceExitMinute = TRADING_SCHEDULE.DAY_TRADE_FORCE_EXIT.minute;
-
-  if (
-    now.hour() > forceExitHour ||
-    (now.hour() === forceExitHour && now.minute() >= forceExitMinute)
-  ) {
-    const dayTradePositions = openPositions.filter(
-      (p) => p.strategy === "day_trade",
-    );
-
-    for (const position of dayTradePositions) {
-      const quote = await fetchStockQuote(position.stock.tickerCode);
-      if (!quote) continue;
-
-      console.log(
-        `  → ${position.stock.tickerCode}: デイトレ強制決済 @ ¥${quote.price.toLocaleString()}`,
-      );
-
-      // exitSnapshot構築
-      const entryPriceNum = Number(position.entryPrice);
-      const maxHigh = position.maxHighDuringHold
-        ? Math.max(Number(position.maxHighDuringHold), quote.high)
-        : quote.high;
-      const minLow = position.minLowDuringHold
-        ? Math.min(Number(position.minLowDuringHold), quote.low)
-        : quote.low;
-
-      const exitSnapshot: ExitSnapshot = {
-        exitReason: "デイトレ強制決済",
-        exitPrice: quote.price,
-        priceJourney: {
-          maxHigh,
-          minLow,
-          maxFavorableExcursion:
-            ((maxHigh - entryPriceNum) / entryPriceNum) * 100,
-          maxAdverseExcursion:
-            ((entryPriceNum - minLow) / entryPriceNum) * 100,
-        },
-        marketContext: null,
-      };
-
-      // ブローカー連携: SL注文取消 + 成行売り発注
-      await cancelBrokerSL(position.id);
-      await submitOrder({
-        ticker: position.stock.tickerCode,
-        side: "sell",
-        quantity: position.quantity,
-        limitPrice: null,
-      }).catch((err) =>
-        console.error(`[position-monitor] sell order error: ${err}`),
-      );
-
-      const closed = await closePosition(
-        position.id,
-        quote.price,
-        exitSnapshot as object,
-      );
-
-      await notifyOrderFilled({
-        tickerCode: position.stock.tickerCode,
-        name: position.stock.name,
-        side: "sell",
-        filledPrice: quote.price,
-        quantity: position.quantity,
-        pnl: closed.realizedPnl ? Number(closed.realizedPnl) : 0,
-      });
-    }
-
-    if (dayTradePositions.length > 0) {
-      await notifyRiskAlert({
-        type: "デイトレ強制決済",
-        message: `${dayTradePositions.length}件のデイトレポジションを強制決済しました`,
-      });
-    }
   }
 
   console.log("=== Position Monitor 終了 ===");

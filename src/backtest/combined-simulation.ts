@@ -122,7 +122,7 @@ function closePosition(
 // ──────────────────────────────────────────
 function processExits(
   positions: SimulatedPosition[],
-  config: { beActivationMultiplier: number; tsActivationMultiplier: number; trailMultiplier: number; maxExtendedHoldingDays: number; maxHoldingDays: number; priceLimitEnabled: boolean; costModelEnabled: boolean },
+  config: { beActivationMultiplier: number; trailMultiplier: number; maxExtendedHoldingDays: number; maxHoldingDays: number; priceLimitEnabled: boolean; costModelEnabled: boolean },
   strategy: "breakout" | "gapup",
   dayIdx: number,
   today: string,
@@ -163,7 +163,6 @@ function processExits(
         strategy,
         holdingBusinessDays: holdingDays,
         beActivationMultiplierOverride: config.beActivationMultiplier,
-        activationMultiplierOverride: config.tsActivationMultiplier,
         trailMultiplierOverride: config.trailMultiplier,
         maxHoldingDaysOverride: config.maxExtendedHoldingDays,
         baseLimitHoldingDaysOverride: config.maxHoldingDays,

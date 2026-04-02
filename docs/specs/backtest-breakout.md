@@ -28,7 +28,7 @@ breakout戦略（出来高サージ + 高値ブレイク）のパラメータ妥
 | 出口 | 条件 |
 |------|------|
 | ストップロス | SL = max(entry - ATR × atrMultiplier, entry × (1 - maxLossPct)) |
-| トレーリングストップ | BE発動: ATR × beActivationMultiplier、TS発動: ATR × tsActivationMultiplier、トレール幅: ATR × trailMultiplier |
+| トレーリングストップ | BE発動: ATR × beActivationMultiplier、トレール幅: ATR × trailMultiplier |
 | タイムストップ | maxHoldingDays（5日）、含み益時 maxExtendedHoldingDays（10日）まで延長 |
 | ディフェンシブ | VIX crisis/high時 |
 
@@ -51,7 +51,6 @@ quantity = floor(riskAmount / riskPerShare / 100) × 100  // 100株単位
 | atrMultiplier | 1.0 | SL ATR倍率 |
 | maxLossPct | 0.03 | SLハードキャップ（3%） |
 | beActivationMultiplier | 1.5 | BE発動 ATR倍率 |
-| tsActivationMultiplier | 2.5 | TS発動 ATR倍率 |
 | trailMultiplier | 1.5 | トレール幅 ATR倍率 |
 | maxHoldingDays | 5 | ベース保有日数 |
 | maxExtendedHoldingDays | 10 | 延長上限 |

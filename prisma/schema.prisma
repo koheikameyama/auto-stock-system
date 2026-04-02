@@ -101,7 +101,7 @@ model MarketAssessment {
   shouldTrade     Boolean // 今日取引すべきか
   reasoning       String  @db.Text // 判断理由
 
-  tradingStrategy String? // day_trade / swing
+  tradingStrategy String? // breakout / gapup
 
   // 選定銘柄（JSON配列）
   selectedStocks Json? // [{ tickerCode, strategy, score, reasoning }]
@@ -171,7 +171,7 @@ model TradingOrder {
   stock      Stock  @relation(fields: [stockId], references: [id])
   side       String // buy / sell
   orderType  String // limit / stop_limit / market
-  strategy   String // day_trade / swing
+  strategy   String // breakout / gapup
   limitPrice      Decimal? @db.Decimal(10, 2) // 指値
   stopPrice       Decimal? @db.Decimal(10, 2) // 逆指値トリガー
   takeProfitPrice Decimal? @db.Decimal(10, 2) // 利確価格
@@ -209,7 +209,7 @@ model TradingPosition {
   id              String  @id @default(cuid())
   stockId         String
   stock           Stock   @relation(fields: [stockId], references: [id])
-  strategy        String // day_trade / swing
+  strategy        String // breakout / gapup
   entryPrice      Decimal @db.Decimal(10, 2)
   quantity        Int
   takeProfitPrice Decimal? @db.Decimal(10, 2)
@@ -422,7 +422,7 @@ model UnfilledOrderFollowUp {
   orderId    String   @unique
   order      TradingOrder @relation(fields: [orderId], references: [id])
   tickerCode String
-  strategy   String   // day_trade / swing
+  strategy   String   // breakout / gapup
 
   // 注文コンテキスト
   orderDate   DateTime @db.Date

@@ -25,7 +25,6 @@ export interface PositionForExit {
   strategy: TradingStrategy;
   holdingBusinessDays: number;
   beActivationMultiplierOverride?: number;
-  activationMultiplierOverride?: number;
   trailMultiplierOverride?: number;
   maxHoldingDaysOverride?: number;
   baseLimitHoldingDaysOverride?: number; // 含み損時の早期カット日数（gapup: 3日）
@@ -75,7 +74,6 @@ export function checkPositionExit(
     entryAtr: position.entryAtr,
     strategy: position.strategy,
     beActivationMultiplierOverride: position.beActivationMultiplierOverride,
-    activationMultiplierOverride: position.activationMultiplierOverride,
     trailMultiplierOverride: position.trailMultiplierOverride,
   });
 
@@ -99,10 +97,10 @@ export function checkPositionExit(
     exitReason = trailingResult.isActivated ? "trailing_profit" : "stop_loss";
   }
 
-  // 4. タイムストップ（スイングのみ — デイトレは別途強制決済）
+  // 4. タイムストップ
   //    トレーリングストップ発動中は利益を伸ばすためタイムストップを適用しない
   //    含み益がある場合は延長し、ハードキャップ（MAX_EXTENDED_HOLDING_DAYS）まで待つ
-  if (exitPrice === null && position.strategy !== "day_trade" && !trailingResult.isActivated) {
+  if (exitPrice === null && !trailingResult.isActivated) {
     const hardCap = position.maxHoldingDaysOverride ?? TIME_STOP.MAX_EXTENDED_HOLDING_DAYS;
     const baseLimit = position.baseLimitHoldingDaysOverride ?? TIME_STOP.MAX_HOLDING_DAYS;
     const inProfit = bar.close > position.entryPrice;

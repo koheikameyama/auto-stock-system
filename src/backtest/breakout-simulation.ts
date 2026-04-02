@@ -516,7 +516,6 @@ export function runBreakoutBacktest(
           strategy: "breakout",
           holdingBusinessDays: holdingDays,
           beActivationMultiplierOverride: config.beActivationMultiplier,
-          activationMultiplierOverride: config.tsActivationMultiplier,
           trailMultiplierOverride: config.trailMultiplier,
           maxHoldingDaysOverride: config.maxExtendedHoldingDays,
           baseLimitHoldingDaysOverride: config.maxHoldingDays,

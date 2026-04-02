@@ -50,7 +50,7 @@ describe("submitBrokerSL", () => {
       ticker: "7203.T",
       quantity: 100,
       stopTriggerPrice: 970,
-      strategy: "swing",
+      strategy: "breakout",
     });
 
     expect(mockSubmitOrder).toHaveBeenCalledWith(
@@ -73,29 +73,13 @@ describe("submitBrokerSL", () => {
     });
   });
 
-  it("day_tradeの場合はexpireDayを設定しない", async () => {
+  it("expireDayが設定される（YYYYMMDD形式）", async () => {
     await submitBrokerSL({
       positionId: "pos-1",
       ticker: "7203.T",
       quantity: 100,
       stopTriggerPrice: 970,
-      strategy: "day_trade",
-    });
-
-    expect(mockSubmitOrder).toHaveBeenCalledWith(
-      expect.objectContaining({
-        expireDay: undefined,
-      }),
-    );
-  });
-
-  it("swingの場合はexpireDayを設定する", async () => {
-    await submitBrokerSL({
-      positionId: "pos-1",
-      ticker: "7203.T",
-      quantity: 100,
-      stopTriggerPrice: 970,
-      strategy: "swing",
+      strategy: "breakout",
     });
 
     const call = mockSubmitOrder.mock.calls[0][0];
@@ -115,7 +99,7 @@ describe("submitBrokerSL", () => {
         ticker: "7203.T",
         quantity: 100,
         stopTriggerPrice: 970,
-        strategy: "swing",
+        strategy: "breakout",
       }),
     ).resolves.not.toThrow();
 
@@ -220,7 +204,7 @@ describe("updateBrokerSL", () => {
       ticker: "7203.T",
       quantity: 100,
       newStopTriggerPrice: 980,
-      strategy: "swing",
+      strategy: "breakout",
     });
 
     expect(callOrder).toEqual(["cancel", "submit"]);

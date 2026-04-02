@@ -188,14 +188,6 @@ describe("checkPositionExit", () => {
       expect(result.exitPrice).toBeNull();
     });
 
-    it("day_trade → タイムストップ適用なし", () => {
-      const result = checkPositionExit(
-        makePosition({ strategy: "day_trade", holdingBusinessDays: 15 }),
-        makeBar({ open: 1990, high: 1995, low: 1980, close: 1990 }),
-      );
-      expect(result.exitReason).toBeNull();
-    });
-
     it("トレーリング発動中 → タイムストップ適用なし", () => {
       const result = checkPositionExit(
         makePosition({ maxHighDuringHold: 2200, holdingBusinessDays: 12 }),

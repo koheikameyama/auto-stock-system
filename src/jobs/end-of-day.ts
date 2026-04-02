@@ -1,8 +1,8 @@
 /**
  * 日次締め処理（15:50 JST / 平日）
  *
- * 1a. デイトレ未決済ポジションの強制決済
- * 1b. VIX高騰時（≥30）のスイングポジション強制決済（オーバーナイトリスク回避）
+ * 1a. VIX高騰時（≥30）のポジション強制決済（オーバーナイトリスク回避）
+ * 1b. crisis時のポジション強制決済
  * 2. 期限切れ注文のキャンセル
  * 3. TradingDailySummary 作成
  * 4. 日次サマリー生成
@@ -82,49 +82,39 @@ export async function main() {
   });
   const _todayStrategy = (todayAssessmentForStrategy as Record<string, unknown> | null)?.tradingStrategy as string | null;
 
-  // 1a. デイトレ未決済ポジションの強制決済
-  console.log("[1a/5] デイトレ未決済ポジション強制決済...");
-  const dayTradePositions = await prisma.tradingPosition.findMany({
-    where: { status: "open", strategy: "day_trade" },
-    include: { stock: true },
-  });
-  await forceClosePositions(dayTradePositions, "EOD強制決済");
-
-  // 1b. VIX高騰時のswing/breakoutポジション強制決済（オーバーナイトリスク回避）
-  // VIX 25-30: 新規エントリーのみデイトレ化、既存ポジションはSLに委ねて保持
-  // VIX ≥ 30: 既存swing/breakoutも強制決済（ギャップダウンでSLが機能しないリスク）
+  // 1a. VIX高騰時のポジション強制決済（オーバーナイトリスク回避）
+  // VIX ≥ 30: 全ポジション強制決済（ギャップダウンでSLが機能しないリスク）
   const todayVix = todayAssessmentForStrategy?.vix != null
     ? Number(todayAssessmentForStrategy.vix)
     : null;
 
-  if (todayVix != null && todayVix >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
-    console.log(`[1b/5] VIX ${todayVix.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: swing/breakoutポジション強制決済...`);
+  if (todayVix != null && todayVix >= STRATEGY_SWITCHING.VIX_FORCE_CLOSE_THRESHOLD) {
+    console.log(`[1a/5] VIX ${todayVix.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_FORCE_CLOSE_THRESHOLD}: 全ポジション強制決済...`);
     const overnightPositions = await prisma.tradingPosition.findMany({
-      where: { status: "open", strategy: { in: ["swing", "breakout"] } },
+      where: { status: "open", strategy: { in: ["breakout", "gapup"] } },
       include: { stock: true },
     });
     if (overnightPositions.length > 0) {
-      console.log(`  ${overnightPositions.length}件のswing/breakoutポジションを決済`);
+      console.log(`  ${overnightPositions.length}件のポジションを決済`);
       await forceClosePositions(overnightPositions, "VIX高騰オーバーナイトリスク回避");
     } else {
       console.log("  対象なし");
     }
   } else {
-    console.log(`[1b/5] VIX ${todayVix?.toFixed(1) ?? "N/A"}: swing/breakoutポジション保持`);
+    console.log(`[1a/5] VIX ${todayVix?.toFixed(1) ?? "N/A"}: ポジション保持`);
   }
 
-  // 1c. crisis時のbreakoutポジション強制決済
-  // swingはday_tradeに変換済みで1aで決済されるが、breakoutはstrategyを変えないためここで決済
+  // 1b. crisis時のポジション強制決済
   const todaySentiment = todayAssessmentForStrategy?.sentiment as string | null;
   if (todaySentiment === "crisis") {
-    console.log(`[1c/5] センチメント「${todaySentiment}」: breakoutポジション強制決済...`);
-    const breakoutPositions = await prisma.tradingPosition.findMany({
-      where: { status: "open", strategy: "breakout" },
+    console.log(`[1b/5] センチメント「${todaySentiment}」: 全ポジション強制決済...`);
+    const crisisPositions = await prisma.tradingPosition.findMany({
+      where: { status: "open", strategy: { in: ["breakout", "gapup"] } },
       include: { stock: true },
     });
-    if (breakoutPositions.length > 0) {
-      console.log(`  ${breakoutPositions.length}件のbreakoutポジションを決済`);
-      await forceClosePositions(breakoutPositions, `${todaySentiment}環境オーバーナイトリスク回避`);
+    if (crisisPositions.length > 0) {
+      console.log(`  ${crisisPositions.length}件のポジションを決済`);
+      await forceClosePositions(crisisPositions, `${todaySentiment}環境オーバーナイトリスク回避`);
     } else {
       console.log("  対象なし");
     }

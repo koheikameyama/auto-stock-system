@@ -7,7 +7,7 @@
 
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/date-utils";
-import { MARKET_INDEX, MARKET_REGIME, STRATEGY_SWITCHING } from "../lib/constants";
+import { MARKET_INDEX, MARKET_REGIME } from "../lib/constants";
 import { getCMEStatus } from "../lib/market-hours";
 import { fetchMarketData } from "../core/market-data";
 import { notifyMarketAssessment, notifyRiskAlert } from "../lib/slack";
@@ -111,7 +111,7 @@ export async function main(): Promise<MarketAssessmentContext> {
           shouldTrade: false,
           reasoning: `[CME先物乖離率キルスイッチ] ${preMarket.reason}`,
           selectedStocks: [],
-          tradingStrategy: "day_trade",
+          tradingStrategy: "breakout",
         };
         await prisma.marketAssessment.upsert({
           where: { date: getTodayForDB() },
@@ -156,17 +156,7 @@ export async function main(): Promise<MarketAssessmentContext> {
   );
   console.log(`[1.8.1/2] 戦略決定: ${strategyDecision.strategy}（${strategyDecision.reason}）`);
 
-  // VIX ≥ 30: 既存swingポジションの戦略をday_tradeに切替
-  // breakoutはstrategyを変えず、EODで強制決済（TSパラメータ・戦略情報を保持）
-  if (marketData.vix.price >= STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD) {
-    const updated = await prisma.tradingPosition.updateMany({
-      where: { status: "open", strategy: "swing" },
-      data: { strategy: "day_trade" },
-    });
-    if (updated.count > 0) {
-      console.log(`  → VIX ${marketData.vix.price.toFixed(1)} ≥ ${STRATEGY_SWITCHING.VIX_SWING_FORCE_CLOSE_THRESHOLD}: ${updated.count}件のswingポジションをday_tradeに切替`);
-    }
-  }
+  // VIX ≥ 30: EODで強制決済される（end-of-day.tsで処理）
 
   // 1.8.5. 日経平均キルスイッチ
   if (

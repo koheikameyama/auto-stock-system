@@ -112,7 +112,7 @@ async function restoreContextFromDB(): Promise<MarketAssessmentContext> {
     isShadowMode: !record.shouldTrade,
     marketData: null as unknown as MarketAssessmentContext["marketData"], // 単独実行時は不使用
     drawdown,
-    strategyDecision: { strategy: (record.tradingStrategy ?? "swing") as TradingStrategy, reason: "DB復元" },
+    strategyDecision: { strategy: (record.tradingStrategy ?? "breakout") as TradingStrategy, reason: "DB復元" },
     cmeDivergencePct,
     assessment: {
       shouldTrade: record.shouldTrade,
@@ -188,15 +188,6 @@ export async function main(context?: MarketAssessmentContext) {
     console.log(`  既存ポジション除外: ${openPositionStockIds.length}銘柄`);
   }
 
-  // pending swing銘柄のticker取得（強制スキャン用）
-  const pendingSwingForScan = await prisma.tradingOrder.findMany({
-    where: { side: "buy", status: "pending", strategy: "swing" },
-    select: { stock: { select: { tickerCode: true } } },
-  });
-  const swingTickerSet = new Set(
-    pendingSwingForScan.map((o) => o.stock.tickerCode),
-  );
-
   // スクリーニング条件に合う銘柄を取得（既存ポジション・廃止予定銘柄は除外）
   const candidates = await prisma.stock.findMany({
     where: {
@@ -216,21 +207,6 @@ export async function main(context?: MarketAssessmentContext) {
         : {}),
     },
   });
-
-  // swing銘柄がスクリーニングで漏れた場合、強制追加
-  if (swingTickerSet.size > 0) {
-    const existingTickerSet = new Set(candidates.map((c) => c.tickerCode));
-    const missingSwingTickers = [...swingTickerSet].filter(
-      (t) => !existingTickerSet.has(t),
-    );
-    if (missingSwingTickers.length > 0) {
-      const swingStocks = await prisma.stock.findMany({
-        where: { tickerCode: { in: missingSwingTickers }, isDelisted: false },
-      });
-      candidates.push(...swingStocks);
-      console.log(`  swing強制追加: ${swingStocks.length}銘柄`);
-    }
-  }
 
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 
@@ -352,18 +328,6 @@ export async function main(context?: MarketAssessmentContext) {
       console.log(
         `  レジーム制限: スコア${regime.minScore}点以上に絞り込み（${beforeCount} → ${filtered.length}銘柄）`,
       );
-    }
-  }
-
-  // swing銘柄を強制追加
-  if (swingTickerSet.size > 0) {
-    const filteredSwingSet = new Set(filtered.map((c) => c.tickerCode));
-    const missingSwing = scoredCandidates.filter(
-      (c) => swingTickerSet.has(c.tickerCode) && !filteredSwingSet.has(c.tickerCode),
-    );
-    if (missingSwing.length > 0) {
-      filtered = [...filtered, ...missingSwing];
-      console.log(`  swing銘柄を追加: ${missingSwing.length}銘柄`);
     }
   }
 

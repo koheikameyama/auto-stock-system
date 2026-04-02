@@ -86,7 +86,7 @@ export async function canOpenPosition(
       };
     }
   } else {
-    // breakout/swing/day_trade は従来通り（gapupポジションを除外してカウント）
+    // breakout は従来通り（gapupポジションを除外してカウント）
     const nonGapupCount = openPositions.filter(
       (pos) => pos.strategy !== "gapup",
     ).length;

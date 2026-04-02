@@ -101,11 +101,10 @@ app.get("/", async (c) => {
                         } else if (effectiveSL >= entryPrice) {
                           statusLabel = `BE ¥${formatYen(effectiveSL)}`;
                           statusColor = "#22c55e";
-                          activationInfo = `TS ¥${formatYen(tsResult.tsActivationPrice)}`;
                         } else {
                           statusLabel = `SL ¥${formatYen(effectiveSL)}`;
                           statusColor = "#94a3b8";
-                          activationInfo = `BE ¥${formatYen(tsResult.beActivationPrice)} / TS ¥${formatYen(tsResult.tsActivationPrice)}`;
+                          activationInfo = `BE ¥${formatYen(tsResult.beActivationPrice)}`;
                         }
 
                         return html`

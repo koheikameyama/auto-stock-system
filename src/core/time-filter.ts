@@ -2,8 +2,8 @@
  * エントリー時間帯フィルタ
  *
  * 時間帯に応じたエントリー可否判定を行う。
- * - デイトレ: 14:30以降の新規エントリーをブロック
- * - 全戦略: 9:00-9:30の寄付き直後はリスクフラグを付与（ブロックはしない）
+ * - breakout: 9:00-9:30の寄付き直後はブロック（乱高下回避）
+ * - gapup: 14:50-15:00のみエントリー可能
  */
 
 import { TIME_WINDOW, TIMEZONE } from "../lib/constants";
@@ -24,7 +24,7 @@ export interface TimeWindowCheck {
 /**
  * 現在時刻に基づいてエントリー可否を判定する
  *
- * @param strategy - トレード戦略（day_trade / swing）
+ * @param strategy - トレード戦略（breakout / gapup）
  * @param now - 判定時刻（デフォルト: 現在のJST）
  */
 export function checkTimeWindow(
@@ -45,8 +45,8 @@ export function checkTimeWindow(
     TIME_WINDOW.OPENING_VOLATILITY.end.minute;
   const isOpeningVolatility = timeMinutes >= openStart && timeMinutes < openEnd;
 
-  // スイング: 寄付き30分は新規エントリー不可（乱高下回避）
-  if (strategy === "swing" && isOpeningVolatility) {
+  // breakout: 寄付き30分は新規エントリー不可（乱高下回避）
+  if (strategy === "breakout" && isOpeningVolatility) {
     return {
       canTrade: false,
       reason: "寄付き30分の乱高下回避（09:30以降にエントリー）",
@@ -70,21 +70,6 @@ export function checkTimeWindow(
       reason: "OK",
       isOpeningVolatility: false,
     };
-  }
-
-  // デイトレ: 14:30以降は新規エントリー不可
-  if (strategy === "day_trade") {
-    const cutoff =
-      TIME_WINDOW.DAY_TRADE_ENTRY_CUTOFF.hour * 60 +
-      TIME_WINDOW.DAY_TRADE_ENTRY_CUTOFF.minute;
-
-    if (timeMinutes >= cutoff) {
-      return {
-        canTrade: false,
-        reason: `デイトレ新規エントリー締切（${TIME_WINDOW.DAY_TRADE_ENTRY_CUTOFF.hour}:${String(TIME_WINDOW.DAY_TRADE_ENTRY_CUTOFF.minute).padStart(2, "0")}以降）`,
-        isOpeningVolatility,
-      };
-    }
   }
 
   return {

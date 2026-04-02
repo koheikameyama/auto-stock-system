@@ -45,7 +45,7 @@ interface ComboResult {
 }
 
 function paramComboKey(params: Partial<GapUpBacktestConfig>): string {
-  return `${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}_${params.tsActivationMultiplier}`;
+  return `${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}`;
 }
 
 function calcMedian(values: number[]): number {
@@ -72,7 +72,6 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
     [...GAPUP_PARAMETER_GRID.atrMultiplier],
     [...GAPUP_PARAMETER_GRID.beActivationMultiplier],
     [...GAPUP_PARAMETER_GRID.trailMultiplier],
-    [...GAPUP_PARAMETER_GRID.tsActivationMultiplier],
   ];
   const gridSizes = gridArrays.map((a) => a.length);
 
@@ -85,7 +84,6 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
       gridArrays[0].indexOf(p.atrMultiplier!),
       gridArrays[1].indexOf(p.beActivationMultiplier!),
       gridArrays[2].indexOf(p.trailMultiplier!),
-      gridArrays[3].indexOf(p.tsActivationMultiplier!),
     ];
 
     const neighborPFs: number[] = [];
@@ -286,7 +284,7 @@ async function main() {
 
     console.log(`  IS  最適PF: ${formatPF(bestIsMetrics.profitFactor)} (${bestIsMetrics.totalTrades}tr, 勝率${bestIsMetrics.winRate}%)`);
     console.log(`  OOS PF:     ${formatPF(oosResult.metrics.profitFactor)} (${oosResult.metrics.totalTrades}tr, 勝率${oosResult.metrics.winRate}%)`);
-    console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}, ts=${bestParams.tsActivationMultiplier}`);
+    console.log(`  最適パラメータ: atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}`);
     console.log("");
   }
 
@@ -350,7 +348,7 @@ function printSummary(results: WindowResult[]): void {
   console.log("-".repeat(90));
   for (const r of results) {
     const p = r.bestIsParams;
-    const paramStr = `atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier} ts=${p.tsActivationMultiplier}`;
+    const paramStr = `atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier}`;
     if (r.oosMetrics === null) {
       console.log(
         `  ${r.windowIdx + 1}    | ${padPF(r.isMetrics.profitFactor)} |    休止 |      -  |           - | ${paramStr}`,
@@ -365,7 +363,7 @@ function printSummary(results: WindowResult[]): void {
 
   // パラメータ安定性
   console.log("\n[パラメータ安定性]");
-  const paramKeys = ["atrMultiplier", "beActivationMultiplier", "trailMultiplier", "tsActivationMultiplier"] as const;
+  const paramKeys = ["atrMultiplier", "beActivationMultiplier", "trailMultiplier"] as const;
   for (const key of paramKeys) {
     const values = activeResults.map((r) => r.bestIsParams[key]);
     const uniqueValues = [...new Set(values)];

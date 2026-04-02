@@ -128,8 +128,6 @@ export const TRADING_SCHEDULE = {
   MORNING_CLOSE: { hour: 11, minute: 30 },
   AFTERNOON_OPEN: { hour: 12, minute: 30 },
   MARKET_CLOSE: { hour: 15, minute: 30 },
-  // デイトレの強制決済時刻（15:20 — クロージングオークション15:25前に決済）
-  DAY_TRADE_FORCE_EXIT: { hour: 15, minute: 20 },
 } as const;
 
 // ========================================
@@ -299,24 +297,13 @@ export const MARKET_REGIME = {
 } as const;
 
 // ========================================
-// 戦略切り替え（市場環境ベース）
+// VIX高騰時のポジション強制決済
 // ========================================
 
-// VIX・CME乖離率に基づいてday_trade/swingを日単位で決定する
-// オーバーナイトリスクが高い環境ではデイトレに切り替え、持ち越しを回避
 export const STRATEGY_SWITCHING = {
-  // VIXがこの値以上 → 新規エントリーをday_tradeに切替（オーバーナイトリスク回避）
-  // VIX_THRESHOLDS.ELEVATED（25）と一致 = highレジーム（最大1ポジ・Sランクのみ）で取引する場合はデイトレ
-  VIX_DAY_TRADE_THRESHOLD: VIX_THRESHOLDS.ELEVATED,
-  // VIXがこの値以上 → 既存スイングポジションも強制決済（危機水準）
-  // VIX 25-30: 新規はデイトレ、既存スイングはストップロスに委ねて保持
-  // VIX ≥ 30: 既存スイングも強制決済（ギャップダウンでSLが機能しないリスク）
-  VIX_SWING_FORCE_CLOSE_THRESHOLD: VIX_THRESHOLDS.HIGH,
-  // CME先物乖離率がこの値以下 → day_trade（翌朝ギャップリスク回避）
-  // CME_NIGHT_DIVERGENCE.WARNING（-1.5%）と一致 = レジームelevated引き上げと連動
-  CME_DIVERGENCE_DAY_TRADE_THRESHOLD: CME_NIGHT_DIVERGENCE.WARNING,
-  // デフォルト戦略（上記条件に該当しない場合）
-  DEFAULT_STRATEGY: "swing" as const,
+  // VIXがこの値以上 → 既存breakout/gapupポジションも強制決済（危機水準）
+  // ギャップダウンでSLが機能しないリスクを回避
+  VIX_FORCE_CLOSE_THRESHOLD: VIX_THRESHOLDS.HIGH,
 } as const;
 
 // ========================================

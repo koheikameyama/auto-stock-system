@@ -31,13 +31,11 @@ export const JOB_CONCURRENCY = {
 // トレーリングストップ発動までの空白期間で「最悪でもトントン」を確保
 export const BREAK_EVEN_STOP = {
   ACTIVATION_ATR_MULTIPLIER: {
-    day_trade: 0.8,  // ATR×0.8の含み益でBE発動（トレーリング発動=1.2より手前）
-    swing: 1.5,      // ATR×1.5の含み益でBE発動（トレーリング発動=2.5より手前）
     breakout: 1.0,   // ATR×1.0で早めに建値ロック（ブレイクアウト初動の利益を守る）
     gapup: 0.3,      // ATR×0.3の含み益でBE発動（短期戦略のためタイト）
   },
   // ATR不明時のフォールバック（%ベース）
-  ACTIVATION_PCT: { day_trade: 0.01, swing: 0.03, breakout: 0.02, gapup: 0.005 },
+  ACTIVATION_PCT: { breakout: 0.02, gapup: 0.005 },
 } as const;
 
 // トレーリングストップ
@@ -45,21 +43,17 @@ export const BREAK_EVEN_STOP = {
 export const TRAILING_STOP = {
   // アクティベーション閾値（エントリー価格からATR×N上昇で発動）
   ACTIVATION_ATR_MULTIPLIER: {
-    day_trade: 1.2,  // trail=0.8より大きく設定しBE保証不要に
-    swing: 2.5,      // ATR×2.5上昇で発動（BE=1.5との連携でPF改善）
     breakout: 1.5,   // ATR×1.5で初動の利益をTSで捕捉（BE=1.0との連携）
     gapup: 0.5,      // ATR×0.5上昇でTS発動（BE=0.3との連携で素早くロック）
   },
   // トレール幅（最高値 - ATR×N がストップライン）
   TRAIL_ATR_MULTIPLIER: {
-    day_trade: 0.8,  // activation=1.2に対して十分小さく
-    swing: 1.5,      // activation=2.5に対してtrail=1.5→発動時ATR×1.0の含み益確保
     breakout: 1.0,   // activation=1.5に対してtrail=1.0→タイトに追従して利益を逃さない
     gapup: 0.3,      // ATR×0.3のタイトなトレール（短期利確優先）
   },
   // ATR不明時のフォールバック（%ベース）— 同じ制約: ACTIVATION >= TRAIL
-  ACTIVATION_PCT: { day_trade: 0.015, swing: 0.04, breakout: 0.03, gapup: 0.008 },
-  TRAIL_PCT: { day_trade: 0.01, swing: 0.04, breakout: 0.02, gapup: 0.005 },
+  ACTIVATION_PCT: { breakout: 0.03, gapup: 0.008 },
+  TRAIL_PCT: { breakout: 0.02, gapup: 0.005 },
 } as const;
 
 // ディフェンシブモード（市場環境悪化時のポジション防衛）
@@ -72,12 +66,8 @@ export const DEFENSIVE_MODE = {
 } as const;
 
 // cautiousモード（市場環境が徐々に悪化している場合のリスク制限）
-// neutral → bearish の中間段階。day_tradeに強制切替して保有期間を短縮
-// day_tradeは15:10に強制決済されるため、オーバーナイトリスクを回避
-export const CAUTIOUS_MODE = {
-  // day_tradeに強制切替する（既存swingもday_tradeに変換）
-  FORCE_DAY_TRADE: true,
-} as const;
+// neutral → bearish の中間段階
+export const CAUTIOUS_MODE = {} as const;
 
 // 昼休み再評価
 export const MIDDAY_REASSESSMENT = {

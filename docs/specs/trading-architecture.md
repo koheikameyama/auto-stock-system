@@ -674,9 +674,8 @@ checkPositionExit(position, bar)
   │     ※ TPより後に判定 → SLが最終優先（TPを上書き）
   │     ※ トレーリング発動中は exitReason = "trailing_profit"
   │
-  └─ 5. タイムストップ: 以下3条件すべて満たす場合のみ判定
+  └─ 5. タイムストップ: 以下2条件すべて満たす場合のみ判定
         ├─ exit未決定（TP/SLどちらも非該当）
-        ├─ strategy != "day_trade"
         └─ トレーリング未発動
         条件:
         ├─ 保有日数 >= ハードキャップ → time_stop（bar.closeで決済）
@@ -741,7 +740,7 @@ checkPositionExit(position, bar)
 | TS発動% | 3.0% | 0.8% | 表示用 |
 | トレール% | 2.0% | 0.5% | maxHighDuringHold × % |
 
-> **注**: BE発動閾値が実際の発動ゲート。TS発動閾値は`tsActivationPrice`として返されるが、発動判定には使用しない。元々はBE→TSの2段階だったが、「BE発動時点からトレーリング開始」に統一してデッドゾーンを解消した。
+> **注**: BE発動閾値がトレーリング開始のゲート。BE発動時点からトレーリング開始する。
 
 ### ラチェット（下がらない）
 
