@@ -81,6 +81,12 @@ async function reconcileHoldings(): Promise<void> {
 
   if (!openPositions.length) return;
 
+  // APIエラー時（null）は照合をスキップ（誤爆による全ポジション自動クローズを防止）
+  if (brokerHoldings === null) {
+    console.warn("[broker-reconciliation] 保有一覧取得失敗 → 照合スキップ");
+    return;
+  }
+
   const holdingMap = new Map(brokerHoldings.map((h) => [h.ticker, h]));
 
   const now = Date.now();

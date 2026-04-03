@@ -195,8 +195,11 @@ export async function getOrderDetail(
 
 /**
  * 現物保有銘柄一覧取得
+ *
+ * APIエラー時は null を返す（空配列との区別のため）。
+ * 呼び出し側は null の場合は照合をスキップすること。
  */
-export async function getHoldings(): Promise<BrokerHolding[]> {
+export async function getHoldings(): Promise<BrokerHolding[] | null> {
   const client = getTachibanaClient();
 
   const res = await client.request({
@@ -204,7 +207,7 @@ export async function getHoldings(): Promise<BrokerHolding[]> {
     sIssueCode: "",
   });
 
-  if (res.sResultCode !== "0") return [];
+  if (res.sResultCode !== "0") return null;
 
   const list = (res.aGenbutuKabuList as Record<string, unknown>[]) ?? [];
   return list.map((item) => ({
