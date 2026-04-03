@@ -15,7 +15,7 @@ import { prisma } from "../lib/prisma";
 import { notifySlack } from "../lib/slack";
 import { syncBrokerOrderStatuses, getHoldings, getOrderDetail, getOrders, cancelOrder } from "../core/broker-orders";
 import { recoverMissedFills } from "../core/broker-fill-handler";
-import { TACHIBANA_ORDER, TACHIBANA_ORDER_STATUS, isTachibanaProduction } from "../lib/constants/broker";
+import { TACHIBANA_ORDER, TACHIBANA_ORDER_STATUS } from "../lib/constants/broker";
 import { closePosition } from "../core/position-manager";
 import { submitBrokerSL } from "../core/broker-sl-manager";
 import { fetchStockQuote } from "../core/market-data";
@@ -40,15 +40,11 @@ export async function main(): Promise<void> {
     console.warn("[broker-reconciliation] recoverMissedFills error (ignored):", e);
   }
 
-  // Phase 3: 保有株数照合（本番のみ: デモサーバーは保有管理をサポートしない）
-  if (isTachibanaProduction) {
-    try {
-      await reconcileHoldings();
-    } catch (e) {
-      console.warn("[broker-reconciliation] reconcileHoldings error (ignored):", e);
-    }
-  } else {
-    console.log("[broker-reconciliation] デモ環境のため Phase 3 をスキップ");
+  // Phase 3: 保有株数照合
+  try {
+    await reconcileHoldings();
+  } catch (e) {
+    console.warn("[broker-reconciliation] reconcileHoldings error (ignored):", e);
   }
 
   // Phase 4: SL注文照合
