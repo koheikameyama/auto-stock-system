@@ -78,6 +78,18 @@ export function strategyBadge(strategy: string): HtmlContent {
   >`;
 }
 
+/** ブローカーステータスコードを日本語ラベルに変換 */
+export function brokerStatusLabel(brokerStatus: string | null | undefined): string {
+  switch (brokerStatus) {
+    case "13": return "逆指値待機中";
+    case "15": return "逆指値切替中";
+    case "16": return "逆指値約定待ち";
+    case "1":  return "通常待機中";
+    case "9":  return "一部約定";
+    default:   return "-";
+  }
+}
+
 /** Order status バッジ */
 export function orderStatusBadge(status: string): HtmlContent {
   const colors: Record<string, string> = {
