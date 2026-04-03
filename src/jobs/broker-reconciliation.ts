@@ -38,25 +38,31 @@ export async function main(): Promise<void> {
     console.warn("[broker-reconciliation] recoverMissedFills error (ignored):", e);
   }
 
-  // Phase 3: 保有株数照合
-  try {
-    await reconcileHoldings();
-  } catch (e) {
-    console.warn("[broker-reconciliation] reconcileHoldings error (ignored):", e);
-  }
+  // Phase 3〜5: 本番環境のみ実行
+  // デモサーバーは毎日リセットされるため保有・注文照合が誤動作する
+  if (process.env.TACHIBANA_ENV === "production") {
+    // Phase 3: 保有株数照合
+    try {
+      await reconcileHoldings();
+    } catch (e) {
+      console.warn("[broker-reconciliation] reconcileHoldings error (ignored):", e);
+    }
 
-  // Phase 4: SL注文照合
-  try {
-    await reconcileSLOrders();
-  } catch (e) {
-    console.warn("[broker-reconciliation] reconcileSLOrders error (ignored):", e);
-  }
+    // Phase 4: SL注文照合
+    try {
+      await reconcileSLOrders();
+    } catch (e) {
+      console.warn("[broker-reconciliation] reconcileSLOrders error (ignored):", e);
+    }
 
-  // Phase 5: 孤立買い注文キャンセル
-  try {
-    await cancelOrphanedBuyOrders();
-  } catch (e) {
-    console.warn("[broker-reconciliation] cancelOrphanedBuyOrders error (ignored):", e);
+    // Phase 5: 孤立買い注文キャンセル
+    try {
+      await cancelOrphanedBuyOrders();
+    } catch (e) {
+      console.warn("[broker-reconciliation] cancelOrphanedBuyOrders error (ignored):", e);
+    }
+  } else {
+    console.log("[broker-reconciliation] デモ環境のため Phase 3〜5 をスキップ");
   }
 
   console.log("=== Broker Reconciliation 完了 ===");
