@@ -77,10 +77,18 @@ export async function main(): Promise<void> {
 
 const isDirectRun = process.argv[1]?.includes("morning-sl-sync");
 if (isDirectRun) {
-  main()
-    .catch((error) => {
-      console.error("Morning SL Sync エラー:", error);
-      process.exit(1);
-    })
-    .finally(() => prisma.$disconnect());
+  import("../core/broker-client").then(({ getTachibanaClient }) => {
+    const client = getTachibanaClient();
+    client
+      .login()
+      .then(() => main())
+      .catch((error) => {
+        console.error("Morning SL Sync エラー:", error);
+        process.exit(1);
+      })
+      .finally(async () => {
+        await client.logout().catch(() => {});
+        await prisma.$disconnect();
+      });
+  });
 }
