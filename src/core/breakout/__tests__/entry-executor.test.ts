@@ -380,7 +380,7 @@ describe("invalidateStalePendingOrders", () => {
       makeSurgeRatios([{ ticker: "7203", ratio: 2.5 }]),
     );
 
-    expect(mockCancelOrder).toHaveBeenCalledWith("B001", "20260326");
+    expect(mockCancelOrder).toHaveBeenCalledWith("B001", "20260326", expect.any(String));
     expect(mockPrisma.tradingOrder.update).toHaveBeenCalledWith({
       where: { id: "order-7203" },
       data: { status: "cancelled" },

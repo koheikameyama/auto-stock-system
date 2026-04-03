@@ -121,11 +121,12 @@ describe("cancelBrokerSL", () => {
     mockPrisma.tradingPosition.findUnique.mockResolvedValue({
       slBrokerOrderId: "SL-001",
       slBrokerBusinessDay: "20260320",
+      stock: { tickerCode: "7203.T" },
     });
 
     await cancelBrokerSL("pos-1");
 
-    expect(mockCancelOrder).toHaveBeenCalledWith("SL-001", "20260320");
+    expect(mockCancelOrder).toHaveBeenCalledWith("SL-001", "20260320", expect.any(String));
     expect(mockPrisma.tradingPosition.update).toHaveBeenCalledWith({
       where: { id: "pos-1" },
       data: {
@@ -151,6 +152,7 @@ describe("cancelBrokerSL", () => {
     mockPrisma.tradingPosition.findUnique.mockResolvedValue({
       slBrokerOrderId: "SL-001",
       slBrokerBusinessDay: "20260320",
+      stock: { tickerCode: "7203.T" },
     });
     mockCancelOrder.mockResolvedValue({
       success: false,
@@ -183,6 +185,7 @@ describe("updateBrokerSL", () => {
     mockPrisma.tradingPosition.findUnique.mockResolvedValue({
       slBrokerOrderId: "SL-OLD",
       slBrokerBusinessDay: "20260320",
+      stock: { tickerCode: "7203.T" },
     });
 
     const callOrder: string[] = [];
@@ -208,7 +211,7 @@ describe("updateBrokerSL", () => {
     });
 
     expect(callOrder).toEqual(["cancel", "submit"]);
-    expect(mockCancelOrder).toHaveBeenCalledWith("SL-OLD", "20260320");
+    expect(mockCancelOrder).toHaveBeenCalledWith("SL-OLD", "20260320", expect.any(String));
     expect(mockSubmitOrder).toHaveBeenCalledWith(
       expect.objectContaining({
         stopTriggerPrice: 980,
