@@ -74,3 +74,13 @@ export async function main(): Promise<void> {
     color: failCount > 0 ? "warning" : "good",
   }).catch(() => {});
 }
+
+const isDirectRun = process.argv[1]?.includes("morning-sl-sync");
+if (isDirectRun) {
+  main()
+    .catch((error) => {
+      console.error("Morning SL Sync エラー:", error);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}
