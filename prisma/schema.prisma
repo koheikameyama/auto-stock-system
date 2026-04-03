@@ -111,7 +111,7 @@ model DefensiveExitFollowUp {
   isComplete      Boolean         @default(false)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime
-  TradingPosition TradingPosition @relation(fields: [positionId], references: [id])
+  position        TradingPosition @relation(fields: [positionId], references: [id])
 
   @@index([exitDate(sort: Desc)])
   @@index([isComplete])
@@ -136,7 +136,7 @@ model HoldingScoreRecord {
   holdingDays           Int
   actionTaken           String?
   createdAt             DateTime        @default(now())
-  TradingPosition       TradingPosition @relation(fields: [positionId], references: [id])
+  position              TradingPosition @relation(fields: [positionId], references: [id])
 
   @@unique([date, positionId])
   @@index([positionId])
@@ -267,8 +267,8 @@ model Stock {
   nextEarningsDate DateTime?         @db.Date
   exDividendDate   DateTime?         @db.Date
   dividendPerShare Decimal?          @db.Decimal(10, 2)
-  TradingOrder     TradingOrder[]
-  TradingPosition  TradingPosition[]
+  orders     TradingOrder[]
+  positions  TradingPosition[]
 
   @@index([isActive])
   @@index([isRestricted])
@@ -352,9 +352,9 @@ model TradingOrder {
   brokerBusinessDay     String?
   brokerOrderId         String?
   brokerStatus          String?
-  TradingPosition       TradingPosition?       @relation(fields: [positionId], references: [id])
-  Stock                 Stock                  @relation(fields: [stockId], references: [id])
-  UnfilledOrderFollowUp UnfilledOrderFollowUp?
+  position              TradingPosition?       @relation(fields: [positionId], references: [id])
+  stock                 Stock                  @relation(fields: [stockId], references: [id])
+  unfilledFollowUp      UnfilledOrderFollowUp?
 
   @@index([brokerOrderId, brokerBusinessDay])
   @@index([createdAt(sort: Desc)])
@@ -387,10 +387,10 @@ model TradingPosition {
   holdingScoreTrailOverride Decimal?               @db.Decimal(5, 2)
   slBrokerBusinessDay       String?
   slBrokerOrderId           String?
-  DefensiveExitFollowUp     DefensiveExitFollowUp?
-  HoldingScoreRecord        HoldingScoreRecord[]
-  TradingOrder              TradingOrder[]
-  Stock                     Stock                  @relation(fields: [stockId], references: [id])
+  defensiveFollowUp         DefensiveExitFollowUp?
+  holdingScores             HoldingScoreRecord[]
+  orders                    TradingOrder[]
+  stock                     Stock                  @relation(fields: [stockId], references: [id])
 
   @@index([createdAt(sort: Desc)])
   @@index([status])
@@ -436,7 +436,7 @@ model UnfilledOrderFollowUp {
   isComplete       Boolean      @default(false)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime
-  TradingOrder     TradingOrder @relation(fields: [orderId], references: [id])
+  order            TradingOrder @relation(fields: [orderId], references: [id])
 
   @@index([isComplete])
   @@index([orderDate(sort: Desc)])
