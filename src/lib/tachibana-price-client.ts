@@ -5,7 +5,6 @@
  * レスポンスを YfQuoteResult 形式に変換し、既存のプロバイダー層と互換性を保つ。
  */
 
-import pLimit from "p-limit";
 import { getTachibanaClient } from "../core/broker-client";
 import { tickerToBrokerCode, brokerCodeToTicker } from "./ticker-utils";
 import {
@@ -14,9 +13,6 @@ import {
   TACHIBANA_ORDER,
 } from "./constants/broker";
 import type { YfQuoteResult } from "./yfinance-client";
-
-// 立花証券APIはp_noの受信順を厳密にチェックするため並列送信不可
-const limit = pLimit(1);
 
 interface PriceData {
   pCurrentPrice: string;
@@ -76,20 +72,17 @@ export async function tachibanaFetchQuotesBatch(
 ): Promise<(YfQuoteResult | null)[]> {
   const errors: string[] = [];
 
-  const tasks = symbols.map((symbol) =>
-    limit(async (): Promise<YfQuoteResult | null> => {
-      try {
-        return await tachibanaFetchQuote(symbol);
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.warn(`[tachibana-price] Batch: failed for ${symbol}:`, msg);
-        errors.push(`${symbol}: ${msg}`);
-        return null;
-      }
-    }),
-  );
-
-  const results = await Promise.all(tasks);
+  const results: (YfQuoteResult | null)[] = [];
+  for (const symbol of symbols) {
+    try {
+      results.push(await tachibanaFetchQuote(symbol));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn(`[tachibana-price] Batch: failed for ${symbol}:`, msg);
+      errors.push(`${symbol}: ${msg}`);
+      results.push(null);
+    }
+  }
 
   // 全銘柄失敗 → throw して上位（worker.ts runJob）で通知させる
   if (symbols.length > 0 && errors.length === symbols.length) {

@@ -63,6 +63,12 @@ export class TachibanaClient {
   private baseUrl: string;
   /** 再ログイン中の Promise（同時多発再ログインを防ぐ） */
   private reLoginPromise: Promise<void> | null = null;
+  /**
+   * リクエストのシリアライズ用ミューテックス
+   * p_no採番〜HTTPレスポンス受信までをアトミックにし、
+   * 複数ジョブからの並行呼び出しによるp_no順序エラーを防ぐ。
+   */
+  private requestMutex: Promise<void> = Promise.resolve();
 
   constructor(env?: TachibanaEnv) {
     this.env = env ?? ((process.env.TACHIBANA_ENV as TachibanaEnv) || "demo");
@@ -175,27 +181,38 @@ export class TachibanaClient {
     virtualUrl: string,
     params: TachibanaRequestParams,
   ): Promise<TachibanaResponse> {
-    const fullParams = {
-      ...params,
-      p_no: this.nextRequestNo(),
-      p_sd_date: this.formatTimestamp(),
-    };
+    let resolve!: () => void;
+    const next = new Promise<void>((r) => { resolve = r; });
+    const prev = this.requestMutex;
+    this.requestMutex = next;
 
-    const url = `${virtualUrl}?${this.encodeParams(fullParams)}`;
-    const res = await this.fetchWithDecode(url);
+    await prev;
 
-    if (!["0", "2"].includes(res.sResultCode)) {
-      const logParams = fullParams.sSecondPassword
-        ? { ...fullParams, sSecondPassword: "***" }
-        : fullParams;
-      console.error(
-        `[TachibanaClient] error response:`,
-        JSON.stringify(res),
-        "request:",
-        JSON.stringify(logParams),
-      );
+    try {
+      const fullParams = {
+        ...params,
+        p_no: this.nextRequestNo(),
+        p_sd_date: this.formatTimestamp(),
+      };
+
+      const url = `${virtualUrl}?${this.encodeParams(fullParams)}`;
+      const res = await this.fetchWithDecode(url);
+
+      if (!["0", "2"].includes(res.sResultCode)) {
+        const logParams = (fullParams as Record<string, string>).sSecondPassword
+          ? { ...fullParams, sSecondPassword: "***" }
+          : fullParams;
+        console.error(
+          `[TachibanaClient] error response:`,
+          JSON.stringify(res),
+          "request:",
+          JSON.stringify(logParams),
+        );
+      }
+      return res;
+    } finally {
+      resolve();
     }
-    return res;
   }
 
   /**
