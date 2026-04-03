@@ -15,11 +15,13 @@ import { prisma } from "../lib/prisma";
 import { notifySlack } from "../lib/slack";
 import { syncBrokerOrderStatuses, getHoldings, getOrderDetail, getOrders, cancelOrder } from "../core/broker-orders";
 import { recoverMissedFills } from "../core/broker-fill-handler";
-import { TACHIBANA_ORDER } from "../lib/constants/broker";
+import { TACHIBANA_ORDER, TACHIBANA_ORDER_STATUS, isTachibanaProduction } from "../lib/constants/broker";
 import { closePosition } from "../core/position-manager";
 import { submitBrokerSL } from "../core/broker-sl-manager";
 import { fetchStockQuote } from "../core/market-data";
-import { TACHIBANA_ORDER_STATUS, isTachibanaProduction } from "../lib/constants/broker";
+
+// 約定直後はブローカーの保有反映が遅れるためスキップする猶予期間
+const HOLDINGS_GRACE_PERIOD_MS = 5 * 60 * 1000; // 5分
 
 export async function main(): Promise<void> {
   console.log("=== Broker Reconciliation 開始 ===");
@@ -38,31 +40,29 @@ export async function main(): Promise<void> {
     console.warn("[broker-reconciliation] recoverMissedFills error (ignored):", e);
   }
 
-  // Phase 3〜5: 本番環境のみ実行
-  // デモサーバーは保有管理をサポートしないため保有・注文照合が誤動作する
+  // Phase 3: 保有株数照合（本番のみ: デモサーバーは保有管理をサポートしない）
   if (isTachibanaProduction) {
-    // Phase 3: 保有株数照合
     try {
       await reconcileHoldings();
     } catch (e) {
       console.warn("[broker-reconciliation] reconcileHoldings error (ignored):", e);
     }
-
-    // Phase 4: SL注文照合
-    try {
-      await reconcileSLOrders();
-    } catch (e) {
-      console.warn("[broker-reconciliation] reconcileSLOrders error (ignored):", e);
-    }
-
-    // Phase 5: 孤立買い注文キャンセル
-    try {
-      await cancelOrphanedBuyOrders();
-    } catch (e) {
-      console.warn("[broker-reconciliation] cancelOrphanedBuyOrders error (ignored):", e);
-    }
   } else {
-    console.log("[broker-reconciliation] デモ環境のため Phase 3〜5 をスキップ");
+    console.log("[broker-reconciliation] デモ環境のため Phase 3 をスキップ");
+  }
+
+  // Phase 4: SL注文照合
+  try {
+    await reconcileSLOrders();
+  } catch (e) {
+    console.warn("[broker-reconciliation] reconcileSLOrders error (ignored):", e);
+  }
+
+  // Phase 5: 孤立買い注文キャンセル
+  try {
+    await cancelOrphanedBuyOrders();
+  } catch (e) {
+    console.warn("[broker-reconciliation] cancelOrphanedBuyOrders error (ignored):", e);
   }
 
   console.log("=== Broker Reconciliation 完了 ===");
@@ -87,8 +87,17 @@ async function reconcileHoldings(): Promise<void> {
 
   const holdingMap = new Map(brokerHoldings.map((h) => [h.ticker, h]));
 
+  const now = Date.now();
+
   for (const position of openPositions) {
     const ticker = position.stock.tickerCode;
+
+    // 約定直後はブローカーの保有反映が遅れるためスキップ
+    if (now - position.createdAt.getTime() < HOLDINGS_GRACE_PERIOD_MS) {
+      console.log(`[broker-reconciliation] ${ticker}: 開設直後のためスキップ（猶予期間中）`);
+      continue;
+    }
+
     const holding = holdingMap.get(ticker);
 
     if (!holding) {
