@@ -127,6 +127,12 @@ export async function main() {
       continue;
     }
 
+    // gapup: 引け注文（CONDITION.CLOSE）のため intraday 疑似約定は不要。
+    // broker-fill-handler が 15:30 の約定通知を受けてポジションをオープンする。
+    if (order.strategy === "gapup" && order.side === "buy") {
+      continue;
+    }
+
     const quote = await fetchStockQuote(order.stock.tickerCode);
     if (!quote) {
       console.log(`  → ${order.stock.tickerCode}: 株価取得失敗`);
@@ -844,6 +850,7 @@ async function applyCorporateEventAdjustments(
 
         await prisma.corporateEventLog.create({
           data: {
+            id: crypto.randomUUID(),
             tickerCode: stock.tickerCode,
             eventType: "ex_dividend",
             eventDate: stock.exDividendDate,
@@ -915,6 +922,7 @@ async function applyCorporateEventAdjustments(
 
           await prisma.corporateEventLog.create({
             data: {
+              id: crypto.randomUUID(),
               tickerCode: stock.tickerCode,
               eventType: "stock_split",
               eventDate: events.lastSplitDate,
