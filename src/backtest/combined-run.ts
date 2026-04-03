@@ -109,14 +109,20 @@ async function main() {
   const startDate = getArg(args, "--start") ?? dayjs(endDate).subtract(12, "month").format("YYYY-MM-DD");
   const budget = Number(getArg(args, "--budget") ?? 500_000);
   const monthlyAddAmount = Number(getArg(args, "--monthly-add") ?? 0);
+  const maxPriceOverride = getArg(args, "--max-price");
   const verbose = args.includes("--verbose");
   const comparePositions = args.includes("--compare-positions");
   const compareEquityFilter = args.includes("--compare-equity-filter");
   const compareVixFilter = args.includes("--compare-vix-filter");
+  const compareBudget = args.includes("--budget-compare");
 
-  const quietMode = comparePositions || compareEquityFilter || compareVixFilter;
+  const quietMode = comparePositions || compareEquityFilter || compareVixFilter || compareBudget;
   const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, verbose: !quietMode && verbose };
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, verbose: !quietMode && verbose };
+  if (maxPriceOverride) {
+    boConfig.maxPrice = Number(maxPriceOverride);
+    guConfig.maxPrice = Number(maxPriceOverride);
+  }
 
   console.log("=".repeat(60));
   console.log("統合バックテスト（Breakout + GapUp）");
@@ -163,6 +169,45 @@ async function main() {
   const gapupSignals = precomputeGapUpDailySignals(guConfig, allData, precomputed);
 
   const ctx = { boConfig, guConfig, budget, verbose: !quietMode && verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount, equityCurveSmaPeriod: 20 };
+
+  // 資金比較モード
+  if (compareBudget) {
+    const budgetGrid = [
+      { label: "500K (現状)", budget: 500_000 },
+      { label: "750K", budget: 750_000 },
+      { label: "1M", budget: 1_000_000 },
+      { label: "1.5M", budget: 1_500_000 },
+      { label: "2M", budget: 2_000_000 },
+      { label: "3M", budget: 3_000_000 },
+      { label: "5M", budget: 5_000_000 },
+    ];
+
+    console.log("\n=== 資金規模比較 ===");
+    console.log(
+      `${"資金".padEnd(14)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
+    );
+    console.log("-".repeat(84));
+
+    for (const row of budgetGrid) {
+      const bc: BreakoutBacktestConfig = { ...boConfig, initialBudget: row.budget };
+      const gc: GapUpBacktestConfig = { ...guConfig, initialBudget: row.budget };
+      const result = runCombinedSimulation(
+        { ...ctx, boConfig: bc, guConfig: gc, budget: row.budget },
+        bc.maxPositions,
+        gc.maxPositions,
+      );
+      const m = result.totalMetrics;
+      const util = calculateCapitalUtilization(result.equityCurve);
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      console.log(
+        `${row.label.padEnd(14)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
 
   // ポジション比較モード
   if (comparePositions) {

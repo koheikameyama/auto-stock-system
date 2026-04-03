@@ -198,6 +198,45 @@ const SL_CAP_GRID: SlCapRow[] = [
   { label: "ATR-only",       maxLossPct: 1.00, skipIfClamped: false }, // 提案②: キャップなしATRベース
 ];
 
+const BUDGET_GRID = [
+  { label: "500K (現状)", budget: 500_000 },
+  { label: "750K", budget: 750_000 },
+  { label: "1M", budget: 1_000_000 },
+  { label: "1.5M", budget: 1_500_000 },
+  { label: "2M", budget: 2_000_000 },
+  { label: "3M", budget: 3_000_000 },
+  { label: "5M", budget: 5_000_000 },
+];
+
+function runBudgetComparison(
+  baseConfig: BreakoutBacktestConfig,
+  allData: Map<string, OHLCVData[]>,
+  vixData: Map<string, number> | undefined,
+  indexData: Map<string, number> | undefined,
+): void {
+  console.log("\n=== Budget Comparison ===");
+  console.log(
+    `${"Budget".padEnd(14)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"RR".padStart(5)} | ${"Return".padStart(8)}`,
+  );
+  console.log("-".repeat(78));
+
+  for (const row of BUDGET_GRID) {
+    const config: BreakoutBacktestConfig = {
+      ...baseConfig,
+      initialBudget: row.budget,
+      verbose: false,
+    };
+    const result = runBreakoutBacktest(config, allData, vixData, indexData);
+    const m = result.metrics;
+    const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+    const returnStr = (m.totalReturnPct >= 0 ? "+" : "") + m.totalReturnPct.toFixed(1) + "%";
+    console.log(
+      `${row.label.padEnd(14)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${m.profitFactor.toFixed(2).padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.riskRewardRatio.toFixed(1).padStart(5)} | ${returnStr.padStart(8)}`,
+    );
+  }
+  console.log("");
+}
+
 function runSlCapComparison(
   baseConfig: BreakoutBacktestConfig,
   allData: Map<string, OHLCVData[]>,
@@ -300,6 +339,8 @@ async function main() {
   const slCompare = args.includes("--sl-compare");
   const noCost = args.includes("--no-cost");
   const noPositionCap = args.includes("--no-position-cap");
+  const budgetCompare = args.includes("--budget-compare");
+  const maxPriceStr = getArg(args, "--max-price");
   const monteCarlo = args.includes("--monte-carlo");
   const compound = args.includes("--compound");
   const mcIterationsStr = getArg(args, "--mc-iterations");
@@ -314,6 +355,7 @@ async function main() {
   if (budgetStr) config.initialBudget = Number(budgetStr);
   if (noCost) config.costModelEnabled = false;
   if (noPositionCap) config.positionCapEnabled = false;
+  if (maxPriceStr) config.maxPrice = Number(maxPriceStr);
 
   console.log("=".repeat(60));
   console.log("ブレイクアウトバックテスト");
@@ -350,6 +392,15 @@ async function main() {
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
   if (indexData.size > 0) {
     console.log(`[data] 日経225: ${indexData.size}日`);
+  }
+
+  // 4a-0. 資金比較モード
+  if (budgetCompare) {
+    const vix = vixData.size > 0 ? vixData : undefined;
+    const idx = indexData.size > 0 ? indexData : undefined;
+    runBudgetComparison(config, allData, vix, idx);
+    await prisma.$disconnect();
+    return;
   }
 
   // 4a. スコア比較モード
