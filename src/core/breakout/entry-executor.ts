@@ -17,7 +17,7 @@ import timezone from "dayjs/plugin/timezone.js";
 import { prisma } from "../../lib/prisma";
 import { getTodayForDB } from "../../lib/date-utils";
 import { getCashBalance, getEffectiveCapital } from "../position-manager";
-import { canOpenPosition } from "../risk-manager";
+import { canOpenPosition, getDynamicMaxPositionPct } from "../risk-manager";
 import { submitOrder as submitBrokerOrder, modifyOrder, cancelOrder } from "../broker-orders";
 import { notifyOrderPlaced, notifySlack } from "../../lib/slack";
 import { STOP_LOSS, UNIT_SHARES } from "../../lib/constants";
@@ -116,7 +116,7 @@ export async function executeEntry(
   const riskAmount = effectiveCapital * (riskPct / 100);
 
   const rawQuantity = Math.floor(riskAmount / riskPerShare);
-  const quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
+  let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
 
   if (quantity === 0) {
     const reason = `予算不足でポジションサイズが0（余力: ¥${cashBalance.toLocaleString()}, リスク額: ¥${riskAmount.toLocaleString()}, RR: ${riskRewardRatio.toFixed(1)}, リスク%: ${riskPct}%）`;
@@ -124,12 +124,33 @@ export async function executeEntry(
     return { success: false, reason, retryable: true };
   }
 
-  // 残高チェック
-  const requiredAmount = currentPrice * quantity;
-  if (cashBalance < requiredAmount) {
-    const reason = `残高不足（必要: ¥${requiredAmount.toLocaleString()}, 残高: ¥${cashBalance.toLocaleString()}）`;
-    console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
-    return { success: false, reason, retryable: true };
+  // 残高上限で切り下げ: 買える最大100株単位に縮小
+  const maxByBalance = Math.floor(cashBalance / currentPrice / UNIT_SHARES) * UNIT_SHARES;
+  if (quantity > maxByBalance) {
+    if (maxByBalance === 0) {
+      const reason = `残高不足（必要: ¥${(currentPrice * quantity).toLocaleString()}, 残高: ¥${cashBalance.toLocaleString()}）`;
+      console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
+      return { success: false, reason, retryable: true };
+    }
+    console.log(`[entry-executor] ${ticker} 残高上限で縮小: ${quantity}株 → ${maxByBalance}株（残高: ¥${cashBalance.toLocaleString()}）`);
+    quantity = maxByBalance;
+  }
+
+  // 集中率上限で切り下げ: maxPositionPct 以内に収まる最大100株単位に縮小
+  const maxPositionPct = getDynamicMaxPositionPct(effectiveCapital);
+  const existingAmountForStock = openPositions
+    .filter((pos) => pos.stockId === stock.id)
+    .reduce((sum, pos) => sum + Number(pos.entryPrice) * pos.quantity, 0);
+  const maxAmountByConcentration = (effectiveCapital * maxPositionPct) / 100 - existingAmountForStock;
+  const maxByConcentration = Math.floor(maxAmountByConcentration / currentPrice / UNIT_SHARES) * UNIT_SHARES;
+  if (quantity > maxByConcentration) {
+    if (maxByConcentration <= 0) {
+      const reason = `集中率上限（${maxPositionPct}%）を超えるためスキップ（既存投資額: ¥${existingAmountForStock.toLocaleString()}）`;
+      console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
+      return { success: false, reason, retryable: false };
+    }
+    console.log(`[entry-executor] ${ticker} 集中率上限で縮小: ${quantity}株 → ${maxByConcentration}株（上限: ${maxPositionPct}%）`);
+    quantity = maxByConcentration;
   }
 
   // 5. canOpenPosition でセクター集中・ドローダウン・ポジション数を確認（プリフェッチデータを渡す）
