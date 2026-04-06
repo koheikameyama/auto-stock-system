@@ -315,7 +315,7 @@ export function estimateGapRisk(
  */
 export function getDynamicMaxPositionPct(effectiveCapital: number, stockPrice: number): number {
   const minUnitCost = UNIT_SHARES * stockPrice;
-  const MIN_PCT = Math.round(100 / TRADING_DEFAULTS.MAX_POSITIONS); // 33%
+  const MIN_PCT = 33; // 固定値（MAX_POSITIONSに依存しない）
   const MAX_PCT = 50;
   const minRequired = Math.ceil((minUnitCost / effectiveCapital) * 100);
   return Math.min(MAX_PCT, Math.max(MIN_PCT, minRequired));
