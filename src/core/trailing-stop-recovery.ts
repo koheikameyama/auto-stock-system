@@ -37,7 +37,7 @@ export function computeRecoveredStop(
     maxHighDuringHold: newMaxHigh,
     currentTrailingStop: position.currentTrailingStop,
     originalStopLoss: position.stopLossPrice,
-    originalTakeProfit: Infinity,
+    originalTakeProfit: Infinity, // 利確上限なし（回復計算ではTPは不要）
     entryAtr: position.entryAtr,
     strategy: position.strategy,
   });
