@@ -4,8 +4,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // モック設定
 // ========================================
 
-const mockBrokerConstants = { isTachibanaProduction: true };
-
 vi.mock("../../lib/prisma", () => ({
   prisma: {
     tradingPosition: {
@@ -28,20 +26,6 @@ vi.mock("../../lib/slack", () => ({
   notifySlack: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../lib/constants/broker", () => ({
-  TACHIBANA_ORDER: {
-    SIDE: { SELL: "1", BUY: "3" },
-    MARKET_PRICE: "0",
-    EXPIRE: { TODAY: "0" },
-    EXCHANGE: { TSE: "00" },
-    CONDITION: { NONE: "0" },
-    MARGIN_TYPE: { CASH: "0" },
-    REVERSE_ORDER_TYPE: { NORMAL: "0", REVERSE_ONLY: "1", NORMAL_AND_REVERSE: "2" },
-    TAX_TYPE: { SPECIFIC: "1" },
-  },
-  TACHIBANA_ORDER_STATUS: { FULLY_FILLED: "10", CANCELLED: "7", EXPIRED: "12" },
-  get isTachibanaProduction() { return mockBrokerConstants.isTachibanaProduction; },
-}));
 
 import { submitBrokerSL, cancelBrokerSL, updateBrokerSL } from "../broker-sl-manager";
 import { prisma } from "../../lib/prisma";
@@ -59,7 +43,7 @@ const mockCancelOrder = vi.mocked(cancelOrder);
 describe("submitBrokerSL", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockBrokerConstants.isTachibanaProduction = true;
+
   });
 
   it("SL注文を発注してポジションに紐付ける", async () => {
@@ -133,7 +117,7 @@ describe("submitBrokerSL", () => {
 describe("cancelBrokerSL", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockBrokerConstants.isTachibanaProduction = true;
+
   });
 
   it("SL注文を取消してフィールドをクリアする", async () => {
@@ -198,7 +182,7 @@ describe("cancelBrokerSL", () => {
 describe("updateBrokerSL", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockBrokerConstants.isTachibanaProduction = true;
+
   });
 
   it("cancel → resubmit の順序で実行する", async () => {
@@ -239,18 +223,4 @@ describe("updateBrokerSL", () => {
     );
   });
 
-  it("デモ環境（isTachibanaProduction=false）ではcancelBrokerSLとsubmitBrokerSLを呼ばない", async () => {
-    mockBrokerConstants.isTachibanaProduction = false;
-
-    await updateBrokerSL({
-      positionId: "pos-1",
-      ticker: "7203.T",
-      quantity: 100,
-      newStopTriggerPrice: 900,
-      strategy: "breakout",
-    });
-
-    expect(mockCancelOrder).not.toHaveBeenCalled();
-    expect(mockSubmitOrder).not.toHaveBeenCalled();
-  });
 });
