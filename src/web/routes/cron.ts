@@ -25,7 +25,6 @@ import { main as runUnfilledOrderFollowup } from "../../jobs/unfilled-order-foll
 import { main as runDataCleanup } from "../../jobs/data-cleanup";
 import { main as runBacktestCombined } from "../../jobs/run-backtest";
 import { main as runMarketForecast } from "../../jobs/market-forecast";
-import { main as runMorningSLSync } from "../../jobs/morning-sl-sync";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -50,7 +49,6 @@ const JOBS: Record<string, JobDef> = {
   "data-cleanup": { fn: runDataCleanup, requiresMarketDay: false },
   "run-backtest": { fn: runBacktestCombined, requiresMarketDay: false },
   "market-forecast": { fn: runMarketForecast, requiresMarketDay: true },
-  "morning-sl-sync": { fn: runMorningSLSync, requiresMarketDay: true },
 };
 
 function nowJST(): string {
