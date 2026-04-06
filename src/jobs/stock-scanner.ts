@@ -7,7 +7,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB, countNonTradingDaysAhead } from "../lib/market-date";
 import {
   SCREENING,
   TECHNICAL_MIN_DATA,
@@ -19,7 +19,6 @@ import {
   WEEKEND_RISK,
   MARKET_REGIME,
 } from "../lib/constants";
-import { countNonTradingDaysAhead } from "../lib/market-calendar";
 import { SECTOR_MOMENTUM_SCORING } from "../lib/constants/scoring";
 import {
   readHistoricalFromDB,

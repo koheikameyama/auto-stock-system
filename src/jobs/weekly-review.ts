@@ -10,7 +10,7 @@
 import { prisma } from "../lib/prisma";
 import { WEEKLY_REVIEW } from "../lib/constants";
 import { notifySlack } from "../lib/slack";
-import { jstDateAsUTC } from "../lib/date-utils";
+import { jstDateAsUTC } from "../lib/market-date";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";

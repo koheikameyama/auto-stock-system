@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB } from "../lib/market-date";
 import { MARKET_INDEX, MARKET_REGIME } from "../lib/constants";
 import { getCMEStatus } from "../lib/market-hours";
 import { fetchMarketData } from "../core/market-data";

@@ -9,7 +9,7 @@ import dayjs from "dayjs";
 import { buildWatchlist } from "../core/breakout/watchlist-builder";
 import { notifySlack } from "../lib/slack";
 import { prisma } from "../lib/prisma";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB } from "../lib/market-date";
 import { BREAKOUT } from "../lib/constants/breakout";
 import type { WatchlistEntry } from "../core/breakout/types";
 

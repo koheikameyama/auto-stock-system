@@ -1,4 +1,4 @@
-import { isMarketDay } from "../src/lib/market-calendar.js";
+import { isMarketDay } from "../src/lib/market-date.js";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();

@@ -13,7 +13,7 @@
 import { prisma } from "../lib/prisma";
 import { JPX_CSV } from "../lib/constants";
 import { normalizeTickerCode } from "../lib/ticker-utils";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB } from "../lib/market-date";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 

@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getDaysAgoForDB } from "../lib/date-utils";
+import { getDaysAgoForDB } from "../lib/market-date";
 import { DATA_RETENTION } from "../lib/constants";
 
 interface DataCleanupResult {

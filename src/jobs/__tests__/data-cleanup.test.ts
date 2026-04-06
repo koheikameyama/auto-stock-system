@@ -41,7 +41,7 @@ const allMocks = [
 ];
 
 // getDaysAgoForDB をモック
-vi.mock("../../lib/date-utils", () => ({
+vi.mock("../../lib/market-date", () => ({
   getDaysAgoForDB: vi.fn((_days: number) => new Date(`2026-01-01T00:00:00Z`)),
 }));
 

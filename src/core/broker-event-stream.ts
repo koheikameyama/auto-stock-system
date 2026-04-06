@@ -13,7 +13,7 @@ import WebSocket from "ws";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import tz from "dayjs/plugin/timezone.js";
-import { isMarketDay } from "../lib/market-calendar";
+import { isMarketDay } from "../lib/market-date";
 import { TIMEZONE } from "../lib/constants";
 import { BROKER_WS_HOURS } from "../lib/constants/broker";
 

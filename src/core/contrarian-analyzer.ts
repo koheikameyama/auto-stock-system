@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getTodayForDB, getDaysAgoForDB } from "../lib/date-utils";
+import { getTodayForDB, getDaysAgoForDB } from "../lib/market-date";
 import { CONTRARIAN } from "../lib/constants";
 
 // ========================================

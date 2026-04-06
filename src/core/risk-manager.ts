@@ -5,7 +5,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getStartOfDayJST, getEndOfDayJST } from "../lib/date-utils";
+import { getStartOfDayJST, getEndOfDayJST } from "../lib/market-date";
 import {
   UNIT_SHARES,
   STOP_LOSS,

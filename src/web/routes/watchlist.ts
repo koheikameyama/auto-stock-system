@@ -14,7 +14,7 @@ import { layout } from "../views/layout";
 import { formatYen, tickerLink, emptyState, tt } from "../views/components";
 import { getWatchlist } from "../../jobs/watchlist-builder";
 import { getScannerState } from "../../jobs/breakout-monitor";
-import { getTodayForDB } from "../../lib/date-utils";
+import { getTodayForDB } from "../../lib/market-date";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);

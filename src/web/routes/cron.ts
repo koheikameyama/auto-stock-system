@@ -11,7 +11,7 @@ import timezone from "dayjs/plugin/timezone.js";
 import utc from "dayjs/plugin/utc.js";
 import { cronAuthMiddleware } from "../middleware/cron-auth";
 import { jobState } from "./dashboard";
-import { isMarketDay } from "../../lib/market-calendar";
+import { isMarketDay } from "../../lib/market-date";
 import { prisma } from "../../lib/prisma";
 import { TIMEZONE } from "../../lib/constants";
 
