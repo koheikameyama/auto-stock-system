@@ -5,12 +5,15 @@
  * 市場オープン前にDBのオープンポジション全件のSL注文を再発注して状態を同期する。
  *
  * 本番環境でも実行可能（既存SL注文がある場合は上書き）。
+ * StockDailyBar から入場日以降の高値を取得し、computeRecoveredStop() でトレーリングを回復する。
  */
 
 import { prisma } from "../lib/prisma";
 import { notifySlack } from "../lib/slack";
 import { submitBrokerSL } from "../core/broker-sl-manager";
 import { isTachibanaProduction } from "../lib/constants/broker";
+import { computeRecoveredStop } from "../core/trailing-stop-recovery";
+import type { TradingStrategy } from "../core/market-regime";
 
 export async function main(): Promise<void> {
   console.log("=== Morning SL Sync 開始 ===");
@@ -46,10 +49,29 @@ export async function main(): Promise<void> {
       console.log(`[morning-sl-sync] ${ticker}: 旧SL注文IDをクリア (${position.slBrokerOrderId})`);
     }
 
-    const stopPrice =
-      position.trailingStopPrice != null
-        ? Number(position.trailingStopPrice)
-        : Number(position.stopLossPrice ?? 0);
+    // StockDailyBar から入場日以降の高値を取得してトレーリングを回復
+    const bars = await prisma.stockDailyBar.findMany({
+      where: {
+        tickerCode: ticker,
+        date: { gte: position.createdAt },
+      },
+      select: { high: true },
+    });
+
+    const barHighs = bars.map((b) => b.high);
+    const recovery = computeRecoveredStop(
+      {
+        entryPrice: Number(position.entryPrice),
+        maxHighDuringHold: Number(position.maxHighDuringHold ?? position.entryPrice),
+        currentTrailingStop: position.trailingStopPrice != null ? Number(position.trailingStopPrice) : null,
+        stopLossPrice: Number(position.stopLossPrice ?? 0),
+        entryAtr: position.entryAtr != null ? Number(position.entryAtr) : null,
+        strategy: position.strategy as TradingStrategy,
+      },
+      barHighs,
+    );
+
+    const stopPrice = recovery.newStopPrice > 0 ? recovery.newStopPrice : Number(position.stopLossPrice ?? 0);
 
     if (stopPrice <= 0) {
       console.warn(`[morning-sl-sync] ${ticker}: SL価格が不明 → スキップ`);
@@ -66,6 +88,20 @@ export async function main(): Promise<void> {
         strategy: position.strategy,
       });
       successCount++;
+
+      // SL発注成功後にDBを更新（発注失敗時はDB更新しない）
+      if (recovery.improved) {
+        await prisma.tradingPosition.update({
+          where: { id: position.id },
+          data: {
+            maxHighDuringHold: recovery.newMaxHigh,
+            trailingStopPrice: recovery.newStopPrice,
+          },
+        });
+        console.log(
+          `[morning-sl-sync] ${ticker}: トレーリング回復 maxHigh=${recovery.newMaxHigh} stop=${recovery.newStopPrice}`,
+        );
+      }
     } catch (err) {
       console.error(`[morning-sl-sync] ${ticker}: SL再発注失敗:`, err);
       failCount++;

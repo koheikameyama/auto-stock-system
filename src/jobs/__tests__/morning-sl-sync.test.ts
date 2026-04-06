@@ -1,13 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockPositionFindMany, mockPositionUpdate, mockSubmitBrokerSL, mockNotifySlack, mockBrokerConstants } =
-  vi.hoisted(() => ({
-    mockPositionFindMany: vi.fn(),
-    mockPositionUpdate: vi.fn().mockResolvedValue({}),
-    mockSubmitBrokerSL: vi.fn().mockResolvedValue(undefined),
-    mockNotifySlack: vi.fn().mockResolvedValue(undefined),
-    mockBrokerConstants: { isTachibanaProduction: true },
-  }));
+const {
+  mockPositionFindMany,
+  mockPositionUpdate,
+  mockStockDailyBarFindMany,
+  mockSubmitBrokerSL,
+  mockNotifySlack,
+  mockBrokerConstants,
+  mockComputeRecoveredStop,
+} = vi.hoisted(() => ({
+  mockPositionFindMany: vi.fn(),
+  mockPositionUpdate: vi.fn().mockResolvedValue({}),
+  mockStockDailyBarFindMany: vi.fn().mockResolvedValue([]),
+  mockSubmitBrokerSL: vi.fn().mockResolvedValue(undefined),
+  mockNotifySlack: vi.fn().mockResolvedValue(undefined),
+  mockBrokerConstants: { isTachibanaProduction: true },
+  mockComputeRecoveredStop: vi.fn(),
+}));
 
 vi.mock("../../lib/constants/broker", () => ({
   TACHIBANA_ORDER: {
@@ -30,7 +39,14 @@ vi.mock("../../lib/prisma", () => ({
       findMany: mockPositionFindMany,
       update: mockPositionUpdate,
     },
+    stockDailyBar: {
+      findMany: mockStockDailyBarFindMany,
+    },
   },
+}));
+
+vi.mock("../../core/trailing-stop-recovery", () => ({
+  computeRecoveredStop: mockComputeRecoveredStop,
 }));
 
 vi.mock("../../core/broker-sl-manager", () => ({
@@ -57,6 +73,9 @@ function makePosition(overrides: {
   stopLossPrice?: number | null;
   quantity?: number;
   strategy?: string;
+  entryPrice?: number;
+  maxHighDuringHold?: number | null;
+  entryAtr?: number | null;
 }) {
   return {
     id: overrides.id ?? "pos-1",
@@ -66,6 +85,10 @@ function makePosition(overrides: {
     slBrokerBusinessDay: overrides.slBrokerOrderId ? "20260403" : null,
     trailingStopPrice: overrides.trailingStopPrice ?? null,
     stopLossPrice: overrides.stopLossPrice ?? 900,
+    entryPrice: overrides.entryPrice ?? 1000,
+    maxHighDuringHold: overrides.maxHighDuringHold ?? null,
+    entryAtr: overrides.entryAtr ?? null,
+    createdAt: new Date("2026-03-01T00:00:00Z"),
     stock: {
       tickerCode: overrides.ticker ?? "7203.T",
       name: "トヨタ自動車",
@@ -77,6 +100,13 @@ describe("morning-sl-sync: main()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockBrokerConstants.isTachibanaProduction = true;
+    mockStockDailyBarFindMany.mockResolvedValue([]);
+    // デフォルト: 改善なし（stopLossPrice をそのまま返す）
+    mockComputeRecoveredStop.mockReturnValue({
+      newMaxHigh: 1000,
+      newStopPrice: 900,
+      improved: false,
+    });
   });
 
   // ────────────────────────────────────────────────────────────
@@ -98,6 +128,11 @@ describe("morning-sl-sync: main()", () => {
     mockPositionFindMany.mockResolvedValue([
       makePosition({ slBrokerOrderId: "SL-OLD-001", stopLossPrice: 900 }),
     ]);
+    mockComputeRecoveredStop.mockReturnValue({
+      newMaxHigh: 1000,
+      newStopPrice: 900,
+      improved: false,
+    });
 
     const callOrder: string[] = [];
     mockPositionUpdate.mockImplementation(async () => {
@@ -118,12 +153,17 @@ describe("morning-sl-sync: main()", () => {
   });
 
   // ────────────────────────────────────────────────────────────
-  // 3. trailingStopPrice が設定されている場合 → その価格で発注
+  // 3. computeRecoveredStop が trailingStopPrice を回復する場合
   // ────────────────────────────────────────────────────────────
-  it("trailingStopPriceがある場合、stopLossPriceではなくtrailingStopPriceで発注する", async () => {
+  it("computeRecoveredStopのnewStopPriceで発注する", async () => {
     mockPositionFindMany.mockResolvedValue([
       makePosition({ trailingStopPrice: 980, stopLossPrice: 900 }),
     ]);
+    mockComputeRecoveredStop.mockReturnValue({
+      newMaxHigh: 1050,
+      newStopPrice: 980,
+      improved: false,
+    });
 
     await main();
 
@@ -133,12 +173,17 @@ describe("morning-sl-sync: main()", () => {
   });
 
   // ────────────────────────────────────────────────────────────
-  // 4. trailingStopPrice が null → stopLossPrice にフォールバック
+  // 4. computeRecoveredStop が stopLossPrice を返す場合
   // ────────────────────────────────────────────────────────────
-  it("trailingStopPriceがnullの場合、stopLossPriceで発注する", async () => {
+  it("computeRecoveredStopがstopLossPriceを返す場合、その価格で発注する", async () => {
     mockPositionFindMany.mockResolvedValue([
       makePosition({ trailingStopPrice: null, stopLossPrice: 850 }),
     ]);
+    mockComputeRecoveredStop.mockReturnValue({
+      newMaxHigh: 1000,
+      newStopPrice: 850,
+      improved: false,
+    });
 
     await main();
 
@@ -154,6 +199,11 @@ describe("morning-sl-sync: main()", () => {
     mockPositionFindMany.mockResolvedValue([
       makePosition({ trailingStopPrice: null, stopLossPrice: 0 }),
     ]);
+    mockComputeRecoveredStop.mockReturnValue({
+      newMaxHigh: 1000,
+      newStopPrice: 0,
+      improved: false,
+    });
 
     await main();
 
@@ -170,6 +220,9 @@ describe("morning-sl-sync: main()", () => {
       makePosition({ id: "pos-1", ticker: "7203.T", stopLossPrice: 900 }),
       makePosition({ id: "pos-2", ticker: "6758.T", stopLossPrice: 800 }),
     ]);
+    mockComputeRecoveredStop
+      .mockReturnValueOnce({ newMaxHigh: 1000, newStopPrice: 900, improved: false })
+      .mockReturnValueOnce({ newMaxHigh: 1000, newStopPrice: 800, improved: false });
 
     mockSubmitBrokerSL
       .mockRejectedValueOnce(new Error("API timeout"))
@@ -188,6 +241,9 @@ describe("morning-sl-sync: main()", () => {
       makePosition({ id: "pos-1", stopLossPrice: 900 }),        // 成功
       makePosition({ id: "pos-2", stopLossPrice: 0 }),           // 失敗（SL価格なし）
     ]);
+    mockComputeRecoveredStop
+      .mockReturnValueOnce({ newMaxHigh: 1000, newStopPrice: 900, improved: false })
+      .mockReturnValueOnce({ newMaxHigh: 1000, newStopPrice: 0, improved: false });
 
     await main();
 
