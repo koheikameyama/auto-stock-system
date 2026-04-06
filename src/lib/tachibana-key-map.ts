@@ -45,6 +45,14 @@ const NUMERIC_KEY_MAP: Record<string, string> = {
   "533": "sOrderBaibaiKubun",
   "541": "sOrderSizyouC",
 
+  // 注文一覧・詳細 - 実測キー (CLMOrderList / CLMOrderListDetail)
+  "378": "sOrderOrderNumber",    // 注文番号
+  "656": "sOrderStatus",         // 注文状態テキスト（"全部約定" 等）※"542" はドキュメント記載
+  "657": "sOrderStatusCode",     // 注文状態コード（"10" = FULLY_FILLED）
+  "96":  "aYakuzyouSikkouList",  // 約定執行リスト
+  "878": "sYakuzyouPrice",       // 約定価格
+  "879": "sYakuzyouSuryou",      // 約定株数
+
   // 現物保有銘柄
   "859": "sUriOrderIssueCode",
   "863": "sUriOrderZanKabuSuryou",

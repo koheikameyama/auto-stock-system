@@ -122,8 +122,8 @@ export async function handleBrokerFill(
       return;
     }
 
-    // 注文ステータスを確認
-    const brokerStatus = String(detail.sOrderStatus ?? "");
+    // 注文ステータスを確認（コード優先、テキストはフォールバック）
+    const brokerStatus = String(detail.sOrderStatusCode ?? detail.sOrderStatus ?? "");
 
     // DB の brokerStatus を即座に更新（position-monitor の二重処理防止）
     await prisma.tradingOrder.update({
