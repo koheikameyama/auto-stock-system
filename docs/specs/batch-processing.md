@@ -222,7 +222,9 @@ checkOrderFill(order, currentHigh, currentLow):
 
 1. **DBのオープンポジション全件を取得**
 2. **旧SL注文IDをクリア**（デモリセット後は無効なIDのため）
-3. **SL注文を再発注**: `trailingStopPrice` または `stopLossPrice` を使用して逆指値注文を発行
+3. **トレーリングストップ回復**: SL再発注前に `StockDailyBar` から入場日以降の高値を取得し、`computeRecoveredStop()` でトレーリングストップを計算し直す。サーバーダウン中に取り逃がした追従分を毎朝自動で回復する。
+4. **SL注文を再発注**: 回復後のトレーリングストップ価格（または `stopLossPrice`）を使用して逆指値注文を発行
+5. **DB更新**: 発注成功後のみ DB（`maxHighDuringHold`, `trailingStopPrice`）を更新する
 
 ### 動作モード
 
@@ -238,8 +240,8 @@ checkOrderFill(order, currentHigh, currentLow):
 
 ### DB操作
 
-- **Read**: `TradingPosition`（open）
-- **Write**: `TradingPosition`（slOrderId更新）, `TradingOrder`（SL注文作成）
+- **Read**: `TradingPosition`（open）, `StockDailyBar`（入場日以降の高値取得）
+- **Write**: `TradingPosition`（slOrderId, maxHighDuringHold, trailingStopPrice 更新）, `TradingOrder`（SL注文作成）
 
 ---
 
