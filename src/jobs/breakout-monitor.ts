@@ -12,7 +12,7 @@ import { getCashBalance } from "../core/position-manager";
 import { getWatchlist } from "./watchlist-builder";
 import { tachibanaFetchQuotesBatch } from "../lib/tachibana-price-client";
 import { prisma } from "../lib/prisma";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB } from "../lib/market-date";
 import { notifySlack } from "../lib/slack";
 import { TIMEZONE } from "../lib/constants";
 import { BREAKOUT } from "../lib/constants/breakout";

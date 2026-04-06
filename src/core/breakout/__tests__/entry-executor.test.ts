@@ -47,7 +47,7 @@ vi.mock("../../../lib/slack", () => ({
   notifySlack: vi.fn(),
 }));
 
-vi.mock("../../../lib/date-utils", () => ({
+vi.mock("../../../lib/market-date", () => ({
   getTodayForDB: vi.fn().mockReturnValue(new Date("2026-03-24T00:00:00Z")),
 }));
 

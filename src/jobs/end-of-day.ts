@@ -10,7 +10,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getTodayForDB, getStartOfDayJST, getEndOfDayJST } from "../lib/date-utils";
+import { getTodayForDB, getStartOfDayJST, getEndOfDayJST } from "../lib/market-date";
 import { STRATEGY_SWITCHING } from "../lib/constants";
 import { fetchStockQuote } from "../core/market-data";
 import { closePosition, getCashBalance, getTotalPortfolioValue } from "../core/position-manager";

@@ -19,7 +19,7 @@ import { nikkeiChartBody } from "../views/components";
 import { NIKKEI_CHART_PERIODS, TIMEZONE } from "../../lib/constants";
 import { BREAKOUT } from "../../lib/constants/breakout";
 import { getScannerState } from "../../jobs/breakout-monitor";
-import { getTodayForDB } from "../../lib/date-utils";
+import { getTodayForDB } from "../../lib/market-date";
 import dayjs from "dayjs";
 import utcPlugin from "dayjs/plugin/utc.js";
 import timezonePlugin from "dayjs/plugin/timezone.js";

@@ -17,12 +17,11 @@ import dayjs from "dayjs";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { prisma } from "../lib/prisma";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB, getNextTradingDay } from "../lib/market-date";
 import { fetchMarketData } from "../core/market-data";
 import { getNewsFromDb } from "../core/news-fetcher";
 import { chatCompletion } from "../lib/openai";
 import { notifyMarketForecast } from "../lib/slack";
-import { getNextTradingDay } from "../lib/market-calendar";
 import { INDEX_TREND_HYSTERESIS } from "../lib/constants";
 
 // ========================================

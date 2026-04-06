@@ -11,7 +11,7 @@ vi.mock("../../lib/prisma", () => ({
   },
 }));
 
-vi.mock("../../lib/date-utils", () => ({
+vi.mock("../../lib/market-date", () => ({
   getTodayForDB: vi.fn().mockReturnValue(new Date("2026-04-02T00:00:00Z")),
 }));
 

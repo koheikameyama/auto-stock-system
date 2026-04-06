@@ -11,7 +11,7 @@
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { TIME_STOP } from "../lib/constants";
-import { adjustToTradingDay } from "../lib/market-calendar";
+import { adjustToTradingDay } from "../lib/market-date";
 import {
   submitOrder,
   cancelOrder,

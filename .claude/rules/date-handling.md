@@ -6,7 +6,7 @@
 
 - **DBにはUTC形式で保存**される
 - **日付の境界はJST 00:00:00**（日本時間の深夜0時で日付が変わる）
-- 共通ユーティリティ `lib/date-utils.ts` を使用する
+- 共通ユーティリティ `lib/market-date.ts` を使用する（日付変換＋営業日判定を統合）
 
 ## なぜJST基準か
 
@@ -27,8 +27,8 @@
 ## 共通ユーティリティ
 
 ```typescript
-// lib/date-utils.ts
-import { getTodayForDB, getDaysAgoForDB } from "@/lib/date-utils";
+// lib/market-date.ts
+import { getTodayForDB, getDaysAgoForDB } from "@/lib/market-date";
 
 // 今日の日付（JST基準、UTC 00:00として保存）
 const today = getTodayForDB();
@@ -57,7 +57,7 @@ JST 2/19 → new Date("2026-02-19T00:00:00Z") → PostgreSQL date型: 2026-02-19
 ## ✅ 良い例
 
 ```typescript
-import { getTodayForDB, getDaysAgoForDB } from "@/lib/date-utils";
+import { getTodayForDB, getDaysAgoForDB } from "@/lib/market-date";
 
 // DB保存
 await prisma.dailyFeaturedStock.create({

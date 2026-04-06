@@ -23,7 +23,7 @@ import { app } from "./web/app";
 import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
 import { notifySlack, notifyBrokerError } from "./lib/slack";
-import { isMarketDay } from "./lib/market-calendar";
+import { isMarketDay } from "./lib/market-date";
 import { TIMEZONE } from "./lib/constants";
 import { cronControl } from "./lib/cron-control";
 import { getTachibanaClient, resetTachibanaClient } from "./core/broker-client";

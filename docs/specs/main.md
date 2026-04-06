@@ -47,7 +47,7 @@ src/
     prisma.ts            # Prismaクライアント
     slack.ts             # Slack通知
     ticker-utils.ts      # ティッカー変換
-    date-utils.ts        # 日付ユーティリティ
+    market-date.ts       # 日付ユーティリティ + 営業日判定
 prisma/
   schema.prisma          # DBスキーマ
 Dockerfile               # Railwayデプロイ用

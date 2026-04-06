@@ -14,7 +14,7 @@
 import { prisma } from "../lib/prisma";
 import { JPX_DELISTING } from "../lib/constants";
 import { normalizeTickerCode } from "../lib/ticker-utils";
-import { getTodayForDB } from "../lib/date-utils";
+import { getTodayForDB } from "../lib/market-date";
 import { notifySlack } from "../lib/slack";
 import * as cheerio from "cheerio";
 import dayjs from "dayjs";
@@ -81,7 +81,7 @@ async function fetchDelistingSchedule(): Promise<DelistingEntry[]> {
     const parsed = dayjs(normalized, "YYYY/M/D");
     if (!parsed.isValid()) return;
 
-    // JST日付をUTC 00:00として保存（date-utils.tsパターン）
+    // JST日付をUTC 00:00として保存（market-date.tsパターン）
     const delistingDate = new Date(
       Date.UTC(parsed.year(), parsed.month(), parsed.date()),
     );

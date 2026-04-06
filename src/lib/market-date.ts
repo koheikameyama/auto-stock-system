@@ -1,15 +1,23 @@
 /**
- * 東証（TSE）の営業日判定
+ * 日付ユーティリティ + 東証営業日判定
  *
- * 休場条件:
+ * 全ての日付計算はJST（日本時間）基準で統一する。
+ * @db.Date カラムにはJSTの日付がそのまま保存されるように、
+ * UTC 00:00:00 としてDateオブジェクトを作成する。
+ *
+ * 例: 2024-06-10 10:00 JST に実行した場合
+ * - getTodayForDB() → 2024-06-10T00:00:00.000Z（PostgreSQL date型で 2024-06-10 として保存）
+ * - getDaysAgoForDB(7) → 2024-06-03T00:00:00.000Z（PostgreSQL date型で 2024-06-03 として保存）
+ *
+ * 営業日判定の休場条件:
  * 1. 土日
  * 2. 日本の祝日（国民の祝日・振替休日含む）
  * 3. 年末年始（12/31〜1/3）
  */
 
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc.js";
-import timezone from "dayjs/plugin/timezone.js";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import holiday_jp from "@holiday-jp/holiday_jp";
 import { TIMEZONE } from "./constants";
 
@@ -17,6 +25,58 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const JST = TIMEZONE;
+
+// ─── 日付変換ユーティリティ ───
+
+/**
+ * JSTの日付をそのままUTC 00:00のDateオブジェクトとして返す
+ * PostgreSQLの date 型に正しいJST日付が保存される
+ */
+export function jstDateAsUTC(d: dayjs.Dayjs): Date {
+  return new Date(Date.UTC(d.year(), d.month(), d.date()));
+}
+
+/**
+ * 今日の日付（JST基準）
+ * DB保存・検索用
+ */
+export function getTodayForDB(): Date {
+  return jstDateAsUTC(dayjs().tz(JST).startOf("day"));
+}
+
+/**
+ * N日前の日付（JST基準）
+ * DB検索用（範囲検索など）
+ */
+export function getDaysAgoForDB(days: number): Date {
+  return jstDateAsUTC(dayjs().tz(JST).subtract(days, "day").startOf("day"));
+}
+
+/**
+ * 指定日時をJST基準の日付に変換
+ */
+export function toJSTDateForDB(date: Date | string): Date {
+  return jstDateAsUTC(dayjs(date).tz(JST).startOf("day"));
+}
+
+/**
+ * JST基準の今日の開始時刻（タイムスタンプ列クエリ用）
+ * getTodayForDB() とは異なり、UTCに正しく変換された時刻を返す
+ * 例: JST 2024-06-10 00:00:00 → UTC 2024-06-09 15:00:00
+ */
+export function getStartOfDayJST(date?: Date): Date {
+  return dayjs(date).tz(JST).startOf("day").toDate();
+}
+
+/**
+ * JST基準の今日の終了時刻（タイムスタンプ列クエリ用）
+ * 例: JST 2024-06-10 23:59:59.999 → UTC 2024-06-10 14:59:59.999
+ */
+export function getEndOfDayJST(date?: Date): Date {
+  return dayjs(date).tz(JST).endOf("day").toDate();
+}
+
+// ─── 東証営業日判定 ───
 
 /**
  * 指定日が東証の営業日かどうかを判定

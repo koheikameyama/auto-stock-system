@@ -20,7 +20,7 @@ import {
   tt,
   nikkeiChartShell,
 } from "../views/components";
-import { isMarketDay } from "../../lib/market-calendar";
+import { isMarketDay } from "../../lib/market-date";
 import { determineMarketRegime } from "../../core/market-regime";
 import { calculateDrawdownStatus } from "../../core/drawdown-manager";
 

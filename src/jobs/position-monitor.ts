@@ -21,7 +21,7 @@ import {
 } from "../lib/constants";
 import { validateStopLoss } from "../core/risk-manager";
 import { fetchStockQuote } from "../core/market-data";
-import { countNonTradingDaysAhead } from "../lib/market-calendar";
+import { countNonTradingDaysAhead } from "../lib/market-date";
 import {
   checkOrderFill,
   fillOrder,
