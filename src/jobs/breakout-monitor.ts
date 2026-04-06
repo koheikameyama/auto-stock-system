@@ -284,6 +284,18 @@ export async function main(): Promise<void> {
         `${tag} [gapup] スキャン完了: 時価=${gapupQuotes.length} トリガー=${gapupTriggers.length}`,
       );
 
+      const triggerLines =
+        gapupTriggers.length > 0
+          ? gapupTriggers
+              .map((t) => `• ${t.ticker} ¥${t.currentPrice.toLocaleString()} 出来高サージ ${t.volumeSurgeRatio.toFixed(2)}x`)
+              .join("\n")
+          : "シグナルなし";
+      await notifySlack({
+        title: `[gapup] スキャン完了: ${gapupTriggers.length}件`,
+        message: `スキャン対象: ${gapupQuotes.length}銘柄 / breadth: ${(breadth * 100).toFixed(1)}%\n${triggerLines}`,
+        color: gapupTriggers.length > 0 ? "good" : undefined,
+      });
+
       for (const trigger of gapupTriggers) {
         console.log(
           `${tag} [gapup] トリガー発火: ${trigger.ticker} 価格=¥${trigger.currentPrice} 出来高サージ=${trigger.volumeSurgeRatio.toFixed(2)}x`,
