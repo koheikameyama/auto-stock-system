@@ -92,4 +92,9 @@ export interface BreakoutTrigger {
   atr14: number;
   /** トリガー発生日時（JST） */
   triggeredAt: Date;
+  /** 板情報（スキャン時のスナップショット。立花APIから取得できた場合のみ） */
+  askPrice?: number;
+  bidPrice?: number;
+  askSize?: number;
+  bidSize?: number;
 }

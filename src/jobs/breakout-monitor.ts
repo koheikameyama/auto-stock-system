@@ -105,13 +105,15 @@ export async function main(): Promise<void> {
   const quotesRaw = await tachibanaFetchQuotesBatch(tickers);
 
   // YfQuoteResult[] を QuoteData[] に変換（nullはスキップ）
-  const quotes: QuoteData[] = quotesRaw
-    .filter((q): q is NonNullable<typeof q> => q !== null)
-    .map((q) => ({
-      ticker: q.tickerCode,
-      price: q.price,
-      volume: q.volume,
-    }));
+  const quotesNonNull = quotesRaw.filter((q): q is NonNullable<typeof q> => q !== null);
+  const quotes: QuoteData[] = quotesNonNull.map((q) => ({
+    ticker: q.tickerCode,
+    price: q.price,
+    volume: q.volume,
+  }));
+
+  // 板情報付きの raw quote を ticker でルックアップ（トリガーに板情報を載せる用）
+  const rawQuoteMap = new Map(quotesNonNull.map((q) => [q.tickerCode, q]));
 
   if (quotes.length === 0) {
     console.log(`${tag} スキップ: 時価取得0件（対象: ${tickers.length}銘柄）`);
@@ -132,6 +134,17 @@ export async function main(): Promise<void> {
   // 5. スキャン実行
   const now = dayjs().tz(TIMEZONE).toDate();
   const triggers = scanner.scan(quotes, now, holdingTickers);
+
+  // トリガーに板情報を付与（スキャン時の raw quote から転写）
+  for (const t of triggers) {
+    const raw = rawQuoteMap.get(t.ticker);
+    if (raw) {
+      t.askPrice = raw.askPrice;
+      t.bidPrice = raw.bidPrice;
+      t.askSize = raw.askSize;
+      t.bidSize = raw.bidSize;
+    }
+  }
 
   console.log(
     `${tag} スキャン完了: WL=${watchlist.length} 時価=${quotes.length} 保有=${holdingTickers.size} トリガー=${triggers.length}`,
@@ -280,6 +293,18 @@ export async function main(): Promise<void> {
 
     if (gapupQuotes.length > 0) {
       const gapupTriggers = gapupScanner.scan(gapupQuotes, holdingTickers);
+
+      // トリガーに板情報を付与
+      for (const t of gapupTriggers) {
+        const raw = rawQuoteMap.get(t.ticker);
+        if (raw) {
+          t.askPrice = raw.askPrice;
+          t.bidPrice = raw.bidPrice;
+          t.askSize = raw.askSize;
+          t.bidSize = raw.bidSize;
+        }
+      }
+
       console.log(
         `${tag} [gapup] スキャン完了: 時価=${gapupQuotes.length} トリガー=${gapupTriggers.length}`,
       );
