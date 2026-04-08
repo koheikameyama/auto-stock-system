@@ -356,10 +356,23 @@ function checkEquityCurveFilter(
 // ──────────────────────────────────────────
 // シミュレーション本体
 // ──────────────────────────────────────────
+export interface PositionLimits {
+  /** ブレイクアウト戦略の最大ポジション数 */
+  boMax: number;
+  /** ギャップアップ戦略の最大ポジション数 */
+  guMax: number;
+  /** 全戦略合算の最大ポジション数（undefined = 制限なし） */
+  totalMax?: number;
+}
+
 export function runCombinedSimulation(
   ctx: SimContext,
-  maxPositions: number,
+  maxPositions: number | PositionLimits,
 ): SimResult {
+  const limits: PositionLimits =
+    typeof maxPositions === "number"
+      ? { boMax: maxPositions, guMax: maxPositions, totalMax: maxPositions }
+      : maxPositions;
   const { boConfig, guConfig, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel } = ctx;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
 
@@ -448,10 +461,11 @@ export function runCombinedSimulation(
 
     // ── 2a. Breakout エントリー ──
     const totalPositions = () => boPositions.length + guPositions.length;
-    if (boShouldTrade && !shouldSkipByVixRegime(todayRegime, boVixSkipLevel) && totalPositions() < maxPositions && cash > 0) {
+    const totalUnderLimit = () => limits.totalMax === undefined || totalPositions() < limits.totalMax;
+    if (boShouldTrade && !shouldSkipByVixRegime(todayRegime, boVixSkipLevel) && boPositions.length < limits.boMax && totalUnderLimit() && cash > 0) {
       const rawSignals = breakoutSignals.get(today) ?? [];
       for (const signal of rawSignals) {
-        if (totalPositions() >= maxPositions) break;
+        if (boPositions.length >= limits.boMax || !totalUnderLimit()) break;
         if (allOpenTickers.has(signal.ticker)) continue;
 
         const lastExit = lastExitDayIdx.get(signal.ticker);
@@ -488,10 +502,10 @@ export function runCombinedSimulation(
     }
 
     // ── 2b. GapUp エントリー ──
-    if (guShouldTrade && !shouldSkipByVixRegime(todayRegime, guVixSkipLevel) && totalPositions() < maxPositions && cash > 0) {
+    if (guShouldTrade && !shouldSkipByVixRegime(todayRegime, guVixSkipLevel) && guPositions.length < limits.guMax && totalUnderLimit() && cash > 0) {
       const signals = gapupSignals.get(today) ?? [];
       for (const signal of signals) {
-        if (totalPositions() >= maxPositions) break;
+        if (guPositions.length >= limits.guMax || !totalUnderLimit()) break;
         if (allOpenTickers.has(signal.ticker)) continue;
 
         const lastExit = lastExitDayIdx.get(signal.ticker);

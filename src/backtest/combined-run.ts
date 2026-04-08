@@ -7,6 +7,7 @@
  *   npm run backtest -- --budget 1000000
  *   npm run backtest -- --verbose
  *   npm run backtest -- --compare-positions
+ *   npm run backtest -- --compare-split-positions
  */
 
 import dayjs from "dayjs";
@@ -22,7 +23,7 @@ import { precomputeGapUpDailySignals } from "./gapup-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import { saveBacktestResult } from "./db-saver";
-import { runCombinedSimulation } from "./combined-simulation";
+import { runCombinedSimulation, type PositionLimits } from "./combined-simulation";
 import type {
   BreakoutBacktestConfig,
   GapUpBacktestConfig,
@@ -113,6 +114,7 @@ async function main() {
   const maxPriceOverride = getArg(args, "--max-price");
   const verbose = args.includes("--verbose");
   const comparePositions = args.includes("--compare-positions");
+  const compareSplitPositions = args.includes("--compare-split-positions");
   const compareEquityFilter = args.includes("--compare-equity-filter");
   const compareVixFilter = args.includes("--compare-vix-filter");
   const compareBudget = args.includes("--budget-compare");
@@ -123,7 +125,7 @@ async function main() {
   const minPriceOverride = getArg(args, "--min-price");
   const minTurnoverOverride = getArg(args, "--min-turnover");
 
-  const quietMode = comparePositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover || comparePrice || comparePriceTurnover;
+  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover || comparePrice || comparePriceTurnover;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
@@ -247,6 +249,46 @@ async function main() {
       const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
       console.log(
         `${row.label.padEnd(14)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 戦略別ポジション分離比較モード
+  if (compareSplitPositions) {
+    const grid: { label: string; limits: PositionLimits }[] = [
+      { label: "合算3（現状）",      limits: { boMax: 3, guMax: 3, totalMax: 3 } },
+      { label: "独立3+3",           limits: { boMax: 3, guMax: 3 } },
+      { label: "独立3+3・合算5",     limits: { boMax: 3, guMax: 3, totalMax: 5 } },
+      { label: "独立2+2",           limits: { boMax: 2, guMax: 2 } },
+      { label: "独立2+2・合算3",     limits: { boMax: 2, guMax: 2, totalMax: 3 } },
+      { label: "独立5+3・合算6",     limits: { boMax: 5, guMax: 3, totalMax: 6 } },
+    ];
+
+    console.log("\n=== 戦略別ポジション分離比較 ===");
+    console.log(
+      `${"パターン".padEnd(20)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
+    );
+    console.log("-".repeat(88));
+
+    for (const row of grid) {
+      const result = runCombinedSimulation(ctx, row.limits);
+      const m = result.totalMetrics;
+      const util = calculateCapitalUtilization(result.equityCurve);
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      const bm = result.boMetrics;
+      const gm = result.guMetrics;
+      console.log(
+        `${row.label.padEnd(20)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+      console.log(
+        `${"  BO".padEnd(20)}| ${String(bm.totalTrades).padStart(6)} | ${bm.winRate.toFixed(1).padStart(6)}% | ${(bm.profitFactor === Infinity ? "∞" : bm.profitFactor.toFixed(2)).padStart(5)} | ${((bm.expectancy >= 0 ? "+" : "") + bm.expectancy.toFixed(2) + "%").padStart(8)}`,
+      );
+      console.log(
+        `${"  GU".padEnd(20)}| ${String(gm.totalTrades).padStart(6)} | ${gm.winRate.toFixed(1).padStart(6)}% | ${(gm.profitFactor === Infinity ? "∞" : gm.profitFactor.toFixed(2)).padStart(5)} | ${((gm.expectancy >= 0 ? "+" : "") + gm.expectancy.toFixed(2) + "%").padStart(8)}`,
       );
     }
     console.log("");

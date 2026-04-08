@@ -49,7 +49,7 @@ export async function canOpenPosition(
   quantity: number,
   price: number,
   prefetch?: RiskCheckPrefetch,
-  _strategy?: string,
+  strategy?: string,
 ): Promise<{ allowed: boolean; reason: string; retryable?: boolean }> {
   const config = prefetch?.config ?? await prisma.tradingConfig.findFirst({
     orderBy: { createdAt: "desc" },
@@ -64,7 +64,6 @@ export async function canOpenPosition(
   }
 
   const effectiveCap = prefetch?.effectiveCapital ?? await getEffectiveCapital(config);
-  const maxPositions = TRADING_DEFAULTS.MAX_POSITIONS;
   const maxPositionPct = getDynamicMaxPositionPct(effectiveCap, price);
   const requiredAmount = price * quantity;
 
@@ -73,11 +72,14 @@ export async function canOpenPosition(
     include: { stock: { select: { id: true, jpxSectorName: true } } },
   });
 
-  // 1. オープンポジション数チェック（全戦略合計）
-  if (openPositions.length >= maxPositions) {
+  // 1. オープンポジション数チェック（戦略別独立）
+  const strategyKey = strategy === "gapup" ? "gapup" : "breakout";
+  const maxPositions = strategyKey === "gapup" ? TRADING_DEFAULTS.MAX_POSITIONS_GU : TRADING_DEFAULTS.MAX_POSITIONS_BO;
+  const strategyPositions = openPositions.filter((p) => (p.strategy ?? "breakout") === strategyKey);
+  if (strategyPositions.length >= maxPositions) {
     return {
       allowed: false,
-      reason: `最大同時保有数（${maxPositions}）に達しています（現在: ${openPositions.length}）`,
+      reason: `${strategyKey} 戦略の最大同時保有数（${maxPositions}）に達しています（現在: ${strategyPositions.length}）`,
       retryable: true,
     };
   }
