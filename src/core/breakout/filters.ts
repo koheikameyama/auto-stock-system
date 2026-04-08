@@ -34,6 +34,10 @@ export function checkGates(input: GateInput): { passed: boolean; reason?: string
     return { passed: false, reason: "price_low" };
   }
 
+  if (avgVolume25 && latestPrice * avgVolume25 < SCREENING.MIN_TURNOVER) {
+    return { passed: false, reason: "turnover" };
+  }
+
   if (latestPrice > maxPrice) {
     return { passed: false, reason: "price" };
   }
