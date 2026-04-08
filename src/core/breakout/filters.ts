@@ -6,6 +6,7 @@
 
 import type { OHLCVData } from "../technical-analysis";
 import { SCORING } from "../../lib/constants/scoring";
+import { SCREENING } from "../../lib/constants";
 
 interface GateInput {
   latestPrice: number;
@@ -27,6 +28,10 @@ export function checkGates(input: GateInput): { passed: boolean; reason?: string
 
   if (!avgVolume25 || avgVolume25 < SCORING.GATES.MIN_AVG_VOLUME_25) {
     return { passed: false, reason: "volume" };
+  }
+
+  if (latestPrice < SCREENING.MIN_PRICE) {
+    return { passed: false, reason: "price_low" };
   }
 
   if (latestPrice > maxPrice) {

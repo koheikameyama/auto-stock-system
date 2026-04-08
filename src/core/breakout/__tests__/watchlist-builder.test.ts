@@ -198,6 +198,17 @@ describe("buildWatchlist", () => {
     expect(stats.skipGate).toBe(1);
   });
 
+  it("株価が MIN_PRICE (300円) を下回ると低位株ゲート失敗で除外される", async () => {
+    const bars = makeBars(80, { close: 200, high: 210 });
+    mockStockFindMany.mockResolvedValue([makeStock("1111", { latestPrice: 200 })]);
+    mockReadHistoricalFromDB.mockResolvedValue(new Map([["1111", bars]]));
+
+    const { entries, stats } = await buildWatchlist();
+
+    expect(entries.length).toBe(0);
+    expect(stats.skipGate).toBe(1);
+  });
+
   it("avgVolume25 が MIN_AVG_VOLUME_25 (50_000) を下回ると流動性ゲート失敗で除外される", async () => {
     const bars = makeBars(80, { volume: 10_000 });
     mockStockFindMany.mockResolvedValue([makeStock("2222", { latestVolume: 10_000 })]);
