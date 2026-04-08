@@ -22,6 +22,7 @@ import { submitOrder as submitBrokerOrder, modifyOrder, cancelOrder } from "../b
 import { notifyOrderPlaced, notifySlack } from "../../lib/slack";
 import { STOP_LOSS, UNIT_SHARES } from "../../lib/constants";
 import { getRiskPctByRR } from "../risk-manager";
+import { checkLiquidity } from "../market-data";
 import { TIMEZONE } from "../../lib/constants/timezone";
 import { BREAKOUT } from "../../lib/constants/breakout";
 import { GAPUP } from "../../lib/constants/gapup";
@@ -170,6 +171,22 @@ export async function executeEntry(
     return { success: false, reason: riskCheck.reason, retryable: riskCheck.retryable ?? false };
   }
 
+  // 5.5 流動性チェック（板情報フィルター）
+  // monitor がバッチ取得済みの板情報をトリガー経由で受け取り、追加API呼び出しなしで検証する
+  const liquidityCheck = checkLiquidity(
+    { price: currentPrice, askPrice: trigger.askPrice, bidPrice: trigger.bidPrice, askSize: trigger.askSize, bidSize: trigger.bidSize },
+    quantity,
+  );
+  if (!liquidityCheck.isLiquid) {
+    console.log(`[entry-executor] ${ticker} 流動性不足: ${liquidityCheck.reason}`);
+    return { success: false, reason: liquidityCheck.reason, retryable: true };
+  }
+  if (liquidityCheck.riskFlags.length > 0) {
+    console.log(
+      `[entry-executor] ${ticker} 流動性リスクフラグ: ${liquidityCheck.riskFlags.join(", ")}（スプレッド: ${liquidityCheck.spreadPct?.toFixed(2) ?? "-"}%）`,
+    );
+  }
+
   // 6. 変数の準備
   const isGapUp = strategy === "gapup";
   const expiresAt = isGapUp
@@ -247,6 +264,15 @@ export async function executeEntry(
         slClamped: isSLClamped,
         riskRewardRatio: Math.round(riskRewardRatio * 100) / 100,
         riskPct,
+        ...(trigger.askPrice ? {
+          liquidity: {
+            askPrice: trigger.askPrice,
+            bidPrice: trigger.bidPrice,
+            askSize: trigger.askSize,
+            bidSize: trigger.bidSize,
+            spreadPct: liquidityCheck.spreadPct,
+          },
+        } : {}),
       },
     },
   });

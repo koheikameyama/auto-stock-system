@@ -29,6 +29,11 @@ export interface GapUpTrigger {
   atr14: number;
   prevClose: number;
   triggeredAt: Date;
+  /** 板情報（スキャン時のスナップショット。立花APIから取得できた場合のみ） */
+  askPrice?: number;
+  bidPrice?: number;
+  askSize?: number;
+  bidSize?: number;
 }
 
 export class GapUpScanner {
