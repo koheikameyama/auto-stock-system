@@ -187,7 +187,7 @@ export async function main(context?: MarketAssessmentContext) {
   }
 
   // スクリーニング条件に合う銘柄を取得（既存ポジション・廃止予定銘柄は除外）
-  const candidates = await prisma.stock.findMany({
+  let candidates = await prisma.stock.findMany({
     where: {
       isDelisted: false,
       isActive: true,
@@ -205,6 +205,16 @@ export async function main(context?: MarketAssessmentContext) {
         : {}),
     },
   });
+
+  // 売買代金フィルター（latestPrice × latestVolume ≥ MIN_TURNOVER）
+  const preTurnoverCount = candidates.length;
+  candidates = candidates.filter((c) => {
+    if (c.latestPrice == null || c.latestVolume == null) return false;
+    return Number(c.latestPrice) * Number(c.latestVolume) >= SCREENING.MIN_TURNOVER;
+  });
+  if (candidates.length < preTurnoverCount) {
+    console.log(`  売買代金フィルター: ${preTurnoverCount} → ${candidates.length}銘柄`);
+  }
 
   console.log(`  スクリーニング通過: ${candidates.length}銘柄`);
 

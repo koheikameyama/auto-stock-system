@@ -305,6 +305,18 @@ describe("buildWatchlist", () => {
     expect(stats.totalStocks).toBe(0);
   });
 
+  it("売買代金が MIN_TURNOVER (5000万円) を下回るとゲート失敗で除外される", async () => {
+    // 株価400円 × 出来高100,000株 = 売買代金4,000万円 < 5,000万円
+    const bars = makeBars(80, { close: 400, high: 410 });
+    mockStockFindMany.mockResolvedValue([makeStock("1111", { latestPrice: 400 })]);
+    mockReadHistoricalFromDB.mockResolvedValue(new Map([["1111", bars]]));
+
+    const { entries, stats } = await buildWatchlist();
+
+    expect(entries.length).toBe(0);
+    expect(stats.skipGate).toBe(1);
+  });
+
   it("複数銘柄のうちゲートを通過したものだけが返される", async () => {
     const goodBars = makeBars(80);
     // effectiveCapital=10M → maxBuyablePrice=50,000なので60,000は除外される
