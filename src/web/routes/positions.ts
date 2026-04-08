@@ -135,6 +135,7 @@ app.get("/", async (c) => {
                   <th>銘柄</th>
                   <th>戦略</th>
                   <th>${tt("建値", "エントリー時の購入価格")}</th>
+                  <th>数量</th>
                   <th>${tt("決済", "ポジションを閉じた時の価格")}</th>
                   <th>${tt("損益", "実現損益（税引前）")}</th>
                   <th>${tt("決済理由", "損切り・利確・トレーリング・タイムストップ等")}</th>
@@ -148,6 +149,7 @@ app.get("/", async (c) => {
                       <td>${tickerLink(p.stock?.tickerCode ?? p.stockId, p.stock?.name ?? p.stockId)}</td>
                       <td>${strategyBadge(p.strategy)}</td>
                       <td>¥${formatYen(Number(p.entryPrice))}</td>
+                      <td>${p.quantity}</td>
                       <td>
                         ${p.exitPrice
                           ? `¥${formatYen(Number(p.exitPrice))}`
