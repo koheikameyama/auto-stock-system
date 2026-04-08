@@ -118,14 +118,26 @@ async function main() {
   const compareBudget = args.includes("--budget-compare");
   const compareHolding = args.includes("--compare-holding");
   const compareTurnover = args.includes("--compare-turnover");
+  const comparePrice = args.includes("--compare-price");
+  const comparePriceTurnover = args.includes("--compare-price-turnover");
+  const minPriceOverride = getArg(args, "--min-price");
+  const minTurnoverOverride = getArg(args, "--min-turnover");
 
-  const quietMode = comparePositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover;
+  const quietMode = comparePositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover || comparePrice || comparePriceTurnover;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   if (maxPriceOverride) {
     boConfig.maxPrice = Number(maxPriceOverride);
     guConfig.maxPrice = Number(maxPriceOverride);
+  }
+  if (minPriceOverride !== undefined) {
+    boConfig.minPrice = Number(minPriceOverride);
+    guConfig.minPrice = Number(minPriceOverride);
+  }
+  if (minTurnoverOverride !== undefined) {
+    boConfig.minTurnover = Number(minTurnoverOverride);
+    guConfig.minTurnover = Number(minTurnoverOverride);
   }
 
   console.log("=".repeat(60));
@@ -387,6 +399,87 @@ async function main() {
       console.log(
         `${row.label.padEnd(18)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${utilResult.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
       );
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 最低株価フィルター比較モード
+  if (comparePrice) {
+    const priceGrid = [
+      { label: "なし (0)", value: 0 },
+      { label: "100円", value: 100 },
+      { label: "200円", value: 200 },
+      { label: "300円 (現状)", value: 300 },
+      { label: "500円", value: 500 },
+      { label: "1000円", value: 1_000 },
+    ];
+
+    console.log("\n=== 最低株価フィルター比較 ===");
+    console.log(
+      `${"最低株価".padEnd(18)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
+    );
+    console.log("-".repeat(84));
+
+    for (const row of priceGrid) {
+      const bc: BreakoutBacktestConfig = { ...boConfig, minPrice: row.value };
+      const gc: GapUpBacktestConfig = { ...guConfig, minPrice: row.value };
+      // シグナル再計算（minPrice が変わるとユニバースが変わる）
+      const boSig = precomputeDailySignals(bc, allData, precomputed);
+      const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+      const result = runCombinedSimulation(
+        { ...ctx, boConfig: bc, guConfig: gc, breakoutSignals: boSig, gapupSignals: guSig },
+        boConfig.maxPositions,
+      );
+      const m = result.totalMetrics;
+      const utilResult = calculateCapitalUtilization(result.equityCurve);
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      console.log(
+        `${row.label.padEnd(18)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${utilResult.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 最低株価 × 売買代金 組み合わせ比較モード
+  if (comparePriceTurnover) {
+    const priceRows = [
+      { label: "0円", value: 0 },
+      { label: "100円", value: 100 },
+      { label: "300円(現状)", value: 300 },
+    ];
+    const turnoverCols = [
+      { label: "5000万(現状)", value: 50_000_000 },
+      { label: "1億円", value: 100_000_000 },
+      { label: "2億円", value: 200_000_000 },
+    ];
+
+    console.log("\n=== 最低株価 × 売買代金 組み合わせ比較 ===");
+    const header = `${"最低株価".padEnd(14)}` + turnoverCols.map((c) => ` | ${c.label.padStart(18)}`).join("");
+    console.log(header);
+    console.log("-".repeat(14 + turnoverCols.length * 21));
+
+    for (const pr of priceRows) {
+      const cols: string[] = [];
+      for (const tr of turnoverCols) {
+        const bc: BreakoutBacktestConfig = { ...boConfig, minPrice: pr.value, minTurnover: tr.value };
+        const gc: GapUpBacktestConfig = { ...guConfig, minPrice: pr.value, minTurnover: tr.value };
+        const boSig = precomputeDailySignals(bc, allData, precomputed);
+        const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+        const result = runCombinedSimulation(
+          { ...ctx, boConfig: bc, guConfig: gc, breakoutSignals: boSig, gapupSignals: guSig },
+          boConfig.maxPositions,
+        );
+        const m = result.totalMetrics;
+        const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+        const retStr = (m.netReturnPct >= 0 ? "+" : "") + m.netReturnPct.toFixed(1) + "%";
+        cols.push(`PF${pfStr} Ret${retStr} (${m.totalTrades}件)`.padStart(18));
+      }
+      console.log(`${pr.label.padEnd(14)}` + cols.map((c) => ` | ${c}`).join(""));
     }
     console.log("");
     await prisma.$disconnect();

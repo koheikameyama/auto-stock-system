@@ -46,6 +46,8 @@ export interface BreakoutBacktestConfig {
   minAtrPct: number;
   /** 最低売買代金（円）。price × avgVolume25 >= this。0=無効 */
   minTurnover: number;
+  /** 最低株価（円）。0=無効 */
+  minPrice: number;
 
   // コスト・リスク
   costModelEnabled: boolean;
@@ -235,6 +237,8 @@ export interface GapUpBacktestConfig {
   minAtrPct: number;
   /** 最低売買代金（円）。price × avgVolume25 >= this。0=無効 */
   minTurnover: number;
+  /** 最低株価（円）。0=無効 */
+  minPrice: number;
 
   costModelEnabled: boolean;
   priceLimitEnabled: boolean;

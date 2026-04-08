@@ -40,11 +40,13 @@ export function passesUniverseGates(params: {
   minAvgVolume25: number;
   minAtrPct: number;
   minTurnover?: number;
+  minPrice?: number;
 }): boolean {
-  const { price, avgVolume25, atrPct, maxPrice, minAvgVolume25, minAtrPct, minTurnover } = params;
+  const { price, avgVolume25, atrPct, maxPrice, minAvgVolume25, minAtrPct, minTurnover, minPrice } = params;
 
   if (price <= 0) return false;
   if (price > maxPrice) return false;
+  if (minPrice && price < minPrice) return false;
   if (avgVolume25 < minAvgVolume25) return false;
   if (atrPct < minAtrPct) return false;
   if (minTurnover && price * avgVolume25 < minTurnover) return false;

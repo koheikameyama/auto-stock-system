@@ -34,7 +34,8 @@ export const BREAKOUT_BACKTEST_DEFAULTS: Omit<BreakoutBacktestConfig, "startDate
   maxPrice: getMaxBuyablePrice(500_000),                       // 資金連動（50万→2500）
   minAvgVolume25: BREAKOUT.ENTRY.MIN_AVG_VOLUME_25,           // 100_000
   minAtrPct: BREAKOUT.ENTRY.MIN_ATR_PCT,                      // 1.5
-  minTurnover: SCREENING.MIN_TURNOVER,                         // 50_000_000
+  minTurnover: SCREENING.MIN_TURNOVER,                         // 100_000_000
+  minPrice: SCREENING.MIN_PRICE,                               // 100
 
   // コスト・リスク
   costModelEnabled: true,

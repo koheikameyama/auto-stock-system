@@ -204,7 +204,7 @@ export type PrecomputedSignals = Map<string, PrecomputedSignal[]>;
  */
 export function precomputeDailySignals(
   config: Pick<BreakoutBacktestConfig,
-    | "maxPrice" | "minAtrPct" | "minAvgVolume25" | "minTurnover" | "triggerThreshold"
+    | "maxPrice" | "minAtrPct" | "minAvgVolume25" | "minTurnover" | "minPrice" | "triggerThreshold"
     | "highLookbackDays" | "maxChaseAtr" | "confirmationEntry" | "confirmationVolumeFilter"
     | "marketTrendFilter" | "marketTrendThreshold" | "indexTrendFilter"
     | "indexMomentumFilter" | "maxLossPct"
@@ -256,7 +256,7 @@ export function precomputeDailySignals(
       if (!passesUniverseGates({
         price: signalBar.close, avgVolume25, atrPct,
         maxPrice: config.maxPrice, minAvgVolume25: config.minAvgVolume25, minAtrPct: config.minAtrPct,
-        minTurnover: config.minTurnover,
+        minTurnover: config.minTurnover, minPrice: config.minPrice,
       })) continue;
 
       // 出来高トレンド: avgVolume5 / avgVolume25
