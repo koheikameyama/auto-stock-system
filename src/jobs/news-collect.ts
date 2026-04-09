@@ -2,7 +2,6 @@
  * ニュース取得ジョブ
  *
  * Google News RSSからニュースを取得してDBに保存する軽量ジョブ。
- * market-forecast の前に実行して最新ニュースを確保する。
  */
 
 import { fetchMarketNews, saveNewsToDb } from "../core/news-fetcher";

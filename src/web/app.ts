@@ -14,7 +14,6 @@ import riskRoute from "./routes/risk";
 import weeklyRoute from "./routes/weekly";
 import backtestRoute from "./routes/backtest";
 import unfilledOrdersRoute from "./routes/unfilled-orders";
-import forecastRoute from "./routes/forecast";
 import newsRoute from "./routes/news";
 import apiRoute from "./routes/api";
 import cronRoute from "./routes/cron";
@@ -135,7 +134,6 @@ app.route("/risk", riskRoute);
 app.route("/weekly", weeklyRoute);
 app.route("/backtest", backtestRoute);
 app.route("/unfilled-orders", unfilledOrdersRoute);
-app.route("/forecast", forecastRoute);
 app.route("/news", newsRoute);
 
 // API routes (authenticated)

@@ -18,7 +18,6 @@ on:
           - assess
           # - holding  # [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
           - watchlist
-          # - forecast  # [DISABLED] 夜のみ実行に変更（2026-04-02）
           # - scan  # [DISABLED] breakout戦略に一本化のため無効化（2026-03-25）
       skip_market_day_check:
         description: "休場日チェックをスキップ"
@@ -129,10 +128,6 @@ jobs:
   #       uses: ./.github/actions/start-yfinance
   #     - run: npm run holding-score
 
-  # [DISABLED] 夜のみ実行に変更（2026-04-02）
-  # market-forecast:
-  #   needs: [check-market-day, market-assessment]
-  #   ...
 
   watchlist-builder:
     needs: [check-market-day, market-assessment]

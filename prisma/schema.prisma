@@ -167,22 +167,6 @@ model MarketAssessment {
   @@index([date(sort: Desc)])
 }
 
-model MarketForecast {
-  id            String   @id @default(cuid())
-  date          DateTime @unique @db.Date
-  generatedAt   DateTime @default(now())
-  marketData    Json
-  newsHeadlines Json?
-  outlook       String
-  confidence    Int
-  summary       String
-  keyFactors    Json
-  risks         Json
-  tradingHints  String?
-
-  @@index([date(sort: Desc)])
-}
-
 model NewsArticle {
   id          String   @id @default(cuid())
   source      String

@@ -24,7 +24,6 @@ import { main as runDefensiveExitFollowup } from "../../jobs/defensive-exit-foll
 import { main as runUnfilledOrderFollowup } from "../../jobs/unfilled-order-followup";
 import { main as runDataCleanup } from "../../jobs/data-cleanup";
 import { main as runBacktestCombined } from "../../jobs/run-backtest";
-import { main as runMarketForecast } from "../../jobs/market-forecast";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -48,7 +47,6 @@ const JOBS: Record<string, JobDef> = {
   "jpx-delisting-sync": { fn: runDelistingSync, requiresMarketDay: false },
   "data-cleanup": { fn: runDataCleanup, requiresMarketDay: false },
   "run-backtest": { fn: runBacktestCombined, requiresMarketDay: false },
-  "market-forecast": { fn: runMarketForecast, requiresMarketDay: true },
 };
 
 function nowJST(): string {
