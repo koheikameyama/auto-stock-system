@@ -129,6 +129,13 @@ app.get("/", async (c) => {
   const overallLabel = canTrade ? "トレード可" : "取引見送り";
   const overallColor = canTrade ? "#22c55e" : "#ef4444";
 
+  // Market sentiment from 4 signals: ok=+1, warning=0, danger=-1
+  const sentimentScore = [breadthStatus, vixStatus, cmeStatus, ddStatus]
+    .reduce((sum, s) => sum + (s === "ok" ? 1 : s === "danger" ? -1 : 0), 0);
+  const sentimentLabel = sentimentScore >= 2 ? "強気" : sentimentScore <= -2 ? "弱気" : "中立";
+  const sentimentColor = sentimentScore >= 2 ? "#22c55e" : sentimentScore <= -2 ? "#ef4444" : "#f59e0b";
+  const sentimentEmoji = sentimentScore >= 2 ? "\u{1F7E2}" : sentimentScore <= -2 ? "\u{1F534}" : "\u{1F7E1}";
+
   const content = html`
     <!-- System status -->
     <div class="card">
@@ -189,6 +196,7 @@ app.get("/", async (c) => {
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:16px;font-weight:700">
               <span>${overallEmoji}</span>
               <span style="color:${overallColor}">総合判定: ${overallLabel}</span>
+              <span style="margin-left:auto;font-size:13px;color:${sentimentColor}">${sentimentEmoji} ${sentimentLabel}</span>
             </div>
 
             ${signalRow(tt("Breadth", "SMA25超の銘柄比率。73%以上でエントリー許可"), breadthText, breadthStatus)}
