@@ -9,7 +9,7 @@
 > **2026-04-10: breakout戦略のエントリーを無効化し、gapup単独運用に移行。**
 > WF検証でbreakout戦略のエッジ消失を確認（OOS集計PF=0.27、6ウィンドウ中4休止）。
 > gapupは堅牢（OOS集計PF=2.80、全6ウィンドウアクティブ）。
-> `BREAKOUT.ENTRY_ENABLED = false` で制御。既存breakoutポジションのイグジット管理は継続。
+> breakout-monitor の cron を停止して制御。既存breakoutポジションのイグジット管理は継続。
 
 ### 設計思想
 

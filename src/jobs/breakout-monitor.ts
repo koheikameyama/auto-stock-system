@@ -121,12 +121,9 @@ export async function main(): Promise<void> {
   }
   await reactivateCancelledTriggers(scanner);
 
-  // 5. スキャン実行（breakoutエントリーが無効の場合はスキップ）
-  if (!BREAKOUT.ENTRY_ENABLED) {
-    console.log(`${tag} breakoutエントリー無効（ENTRY_ENABLED=false）→ スキャンスキップ`);
-  }
+  // 5. スキャン実行
   const now = dayjs().tz(TIMEZONE).toDate();
-  const triggers = BREAKOUT.ENTRY_ENABLED ? scanner.scan(quotes, now, holdingTickers) : [];
+  const triggers = scanner.scan(quotes, now, holdingTickers);
 
   // トリガーに板情報を付与（スキャン時の raw quote から転写）
   for (const t of triggers) {
