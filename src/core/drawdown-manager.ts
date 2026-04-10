@@ -7,7 +7,7 @@
 
 import { prisma } from "../lib/prisma";
 import { DRAWDOWN, TIMEZONE } from "../lib/constants";
-import { getEffectiveCapital } from "./position-manager";
+import { getEffectiveCapital, getPositionPnl } from "./position-manager";
 import type { TradingConfig } from "@prisma/client";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
@@ -144,7 +144,7 @@ export async function calculateDrawdownStatus(
 /**
  * 直近のクローズ済みポジションから連敗数を動的計算する
  *
- * exitedAt降順で並べて、連続する負けトレード（realizedPnl < 0）の数を返す。
+ * exitedAt降順で並べて、連続する負けトレード（損益 < 0）の数を返す。
  * 1つでも勝ちがあればそこでリセットされる。
  */
 export async function getLosingStreak(): Promise<number> {
@@ -152,12 +152,12 @@ export async function getLosingStreak(): Promise<number> {
     where: { status: "closed", exitedAt: { not: null } },
     orderBy: { exitedAt: "desc" },
     take: 10,
-    select: { realizedPnl: true },
+    select: { entryPrice: true, exitPrice: true, quantity: true },
   });
 
   let streak = 0;
   for (const pos of recentPositions) {
-    if (Number(pos.realizedPnl) < 0) {
+    if (getPositionPnl(pos) < 0) {
       streak++;
     } else {
       break;

@@ -13,7 +13,7 @@ import { prisma } from "../lib/prisma";
 import { getTodayForDB, getStartOfDayJST, getEndOfDayJST } from "../lib/market-date";
 import { STRATEGY_SWITCHING } from "../lib/constants";
 import { fetchStockQuote } from "../core/market-data";
-import { closePosition, getCashBalance, getTotalPortfolioValue } from "../core/position-manager";
+import { closePosition, getCashBalance, getTotalPortfolioValue, getPositionPnl } from "../core/position-manager";
 import type { ExitSnapshot } from "../types/snapshots";
 import { expireOrders } from "../core/order-executor";
 import { getDailyPnl } from "../core/risk-manager";
@@ -69,7 +69,7 @@ async function forceClosePositions(
       side: "sell",
       filledPrice: exitPrice,
       quantity: position.quantity,
-      pnl: closed.realizedPnl ? Number(closed.realizedPnl) : 0,
+      pnl: getPositionPnl(closed),
     });
   }
 }
@@ -89,7 +89,7 @@ async function generateDailyReview(params: {
   totalPnl: number;
   portfolioValue: number;
   cashBalance: number;
-  closedToday: { exitSnapshot: unknown; realizedPnl: unknown; strategy: string | null; stock: { tickerCode: string; name: string }; entryPrice: unknown; exitPrice: unknown }[];
+  closedToday: { exitSnapshot: unknown; strategy: string | null; stock: { tickerCode: string; name: string }; entryPrice: number | { toNumber?: () => number }; exitPrice: number | { toNumber?: () => number } | null; quantity: number }[];
   filledBuyOrders: { stock: { tickerCode: string; name: string } }[];
   openPositions: { stock: { tickerCode: string; name: string }; stockId: string; entryPrice: unknown; quantity: number; strategy: string | null }[];
   priceMap: Map<string, number>;
@@ -140,19 +140,14 @@ async function generateDailyReview(params: {
       .map((o) => `${o.stock.tickerCode}(${o.stock.name})`)
       .join(", ");
 
-    const grossProfit = closedToday
-      .filter((p) => p.realizedPnl && Number(p.realizedPnl) > 0)
-      .reduce((s, p) => s + Number(p.realizedPnl), 0);
-    const grossLoss = Math.abs(
-      closedToday
-        .filter((p) => p.realizedPnl && Number(p.realizedPnl) <= 0)
-        .reduce((s, p) => s + Number(p.realizedPnl), 0),
-    );
+    const closedPnls = closedToday.map((p) => getPositionPnl(p));
+    const grossProfit = closedPnls.filter((v) => v > 0).reduce((s, v) => s + v, 0);
+    const grossLoss = Math.abs(closedPnls.filter((v) => v <= 0).reduce((s, v) => s + v, 0));
     const pf = grossLoss > 0 ? (grossProfit / grossLoss).toFixed(2) : grossProfit > 0 ? "∞" : "-";
 
     // 決済銘柄の詳細
     const closedDetails = closedToday.map((p) => {
-      const pnl = Number(p.realizedPnl ?? 0);
+      const pnl = getPositionPnl(p);
       const entry = Number(p.entryPrice);
       const exit = Number(p.exitPrice);
       const pnlPct = entry > 0 ? ((exit - entry) / entry * 100).toFixed(1) : "?";
@@ -310,10 +305,10 @@ export async function main() {
 
   const totalTrades = closedToday.length;
   const wins = closedToday.filter(
-    (p) => p.realizedPnl && Number(p.realizedPnl) > 0,
+    (p) => getPositionPnl(p) > 0,
   ).length;
   const losses = closedToday.filter(
-    (p) => p.realizedPnl && Number(p.realizedPnl) < 0,
+    (p) => getPositionPnl(p) < 0,
   ).length;
   const totalPnl = await getDailyPnl(new Date());
 

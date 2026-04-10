@@ -31,7 +31,7 @@ const {
   mockGetOrderDetail: vi.fn(),
   mockGetOrders: vi.fn(),
   mockCancelOrder: vi.fn().mockResolvedValue({ success: true }),
-  mockClosePosition: vi.fn().mockResolvedValue({ realizedPnl: -1000 }),
+  mockClosePosition: vi.fn().mockResolvedValue({ entryPrice: 1000, exitPrice: 990, quantity: 100 }),
   mockVoidPosition: vi.fn().mockResolvedValue({}),
   mockFetchStockQuote: vi.fn().mockResolvedValue({ price: 950 }),
   mockNotifySlack: vi.fn().mockResolvedValue(undefined),

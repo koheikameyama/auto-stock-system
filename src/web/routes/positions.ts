@@ -8,6 +8,7 @@ import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
 import { QUERY_LIMITS, ROUTE_LOOKBACK_DAYS, POSITION_DEFAULTS } from "../../lib/constants";
 import { calculateTrailingStop } from "../../core/trailing-stop";
+import { getPositionPnl } from "../../core/position-manager";
 import { layout } from "../views/layout";
 import {
   formatYen,
@@ -164,8 +165,8 @@ app.get("/", async (c) => {
                           : "-"}
                       </td>
                       <td>
-                        ${p.realizedPnl
-                          ? pnlText(Number(p.realizedPnl))
+                        ${p.exitPrice
+                          ? pnlText(getPositionPnl(p))
                           : "-"}
                       </td>
                       <td style="white-space:nowrap">${(() => {

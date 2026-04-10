@@ -17,7 +17,7 @@ import {
 import { canAddToSector, canAddToMacroFactor } from "./sector-analyzer";
 import { calculateDrawdownStatus, getLosingStreak } from "./drawdown-manager";
 import { fetchStockQuotesBatch } from "./market-data";
-import { getEffectiveCapital } from "./position-manager";
+import { getEffectiveCapital, getPositionPnl } from "./position-manager";
 import type { TradingConfig, TradingPosition } from "@prisma/client";
 
 /** stock リレーション付きのオープンポジション */
@@ -221,7 +221,7 @@ export async function getDailyPnl(
   });
 
   const realizedPnl = closedPositions.reduce((sum, pos) => {
-    return sum + (pos.realizedPnl ? Number(pos.realizedPnl) : 0);
+    return sum + getPositionPnl(pos);
   }, 0);
 
   if (!options?.includeUnrealized) {

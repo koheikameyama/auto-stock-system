@@ -35,6 +35,7 @@ import {
   getOpenPositions,
   getUnrealizedPnl,
   getCashBalance,
+  getPositionPnl,
 } from "../core/position-manager";
 import { checkPositionExit } from "../core/exit-checker";
 import type { ExitReason } from "../core/exit-checker";
@@ -505,9 +506,7 @@ export async function main() {
         side: "sell",
         filledPrice: exitPrice,
         quantity: position.quantity,
-        pnl: closedPosition.realizedPnl
-          ? Number(closedPosition.realizedPnl)
-          : 0,
+        pnl: getPositionPnl(closedPosition),
         exitReason,
       });
     } else {
@@ -639,7 +638,7 @@ export async function main() {
       side: "sell",
       filledPrice: quote.price,
       quantity: position.quantity,
-      pnl: closed.realizedPnl ? Number(closed.realizedPnl) : 0,
+      pnl: getPositionPnl(closed),
       exitReason: earningsReason,
     });
 
@@ -743,7 +742,7 @@ export async function main() {
           side: "sell",
           filledPrice: quote.price,
           quantity: position.quantity,
-          pnl: closed.realizedPnl ? Number(closed.realizedPnl) : 0,
+          pnl: getPositionPnl(closed),
           exitReason: defensiveReason,
         });
 

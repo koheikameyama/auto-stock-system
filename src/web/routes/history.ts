@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 import dayjs from "dayjs";
 import { prisma } from "../../lib/prisma";
+import { getPositionPnl } from "../../core/position-manager";
 import { QUERY_LIMITS, ROUTE_LOOKBACK_DAYS } from "../../lib/constants";
 import { COLORS } from "../views/styles";
 import { layout } from "../views/layout";
@@ -70,11 +71,11 @@ app.get("/", async (c) => {
       where: { status: "closed", exitedAt: { gte: ninetyDaysAgo } },
       select: {
         exitSnapshot: true,
-        realizedPnl: true,
         exitedAt: true,
         strategy: true,
         entryPrice: true,
         exitPrice: true,
+        quantity: true,
       },
       orderBy: { exitedAt: "desc" },
     }),
@@ -104,14 +105,14 @@ app.get("/", async (c) => {
 
   // === Performance metrics ===
   const wins = closedPositions.filter(
-    (p) => p.realizedPnl && Number(p.realizedPnl) > 0,
+    (p) => getPositionPnl(p) > 0,
   );
   const losses = closedPositions.filter(
-    (p) => p.realizedPnl && Number(p.realizedPnl) <= 0,
+    (p) => getPositionPnl(p) <= 0,
   );
-  const grossProfit = wins.reduce((s, p) => s + Number(p.realizedPnl), 0);
+  const grossProfit = wins.reduce((s, p) => s + getPositionPnl(p), 0);
   const grossLoss = Math.abs(
-    losses.reduce((s, p) => s + Number(p.realizedPnl), 0),
+    losses.reduce((s, p) => s + getPositionPnl(p), 0),
   );
   const pf = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
   const winRate = totalClosed > 0 ? (wins.length / totalClosed) * 100 : 0;
@@ -166,7 +167,7 @@ app.get("/", async (c) => {
 
   // Average holding days (approximate from exitedAt - not precise but usable)
   const totalPnl = closedPositions.reduce(
-    (s, p) => s + Number(p.realizedPnl ?? 0),
+    (s, p) => s + getPositionPnl(p),
     0,
   );
 

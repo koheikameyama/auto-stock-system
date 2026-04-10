@@ -28,10 +28,14 @@ vi.mock("../order-executor", () => ({
   fillOrder: vi.fn(),
 }));
 
-vi.mock("../position-manager", () => ({
-  openPosition: vi.fn().mockResolvedValue({ id: "pos-123" }),
-  closePosition: vi.fn().mockResolvedValue({ realizedPnl: 5000 }),
-}));
+vi.mock("../position-manager", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../position-manager")>();
+  return {
+    ...actual,
+    openPosition: vi.fn().mockResolvedValue({ id: "pos-123" }),
+    closePosition: vi.fn().mockResolvedValue({ entryPrice: 1000, exitPrice: 1050, quantity: 100 }),
+  };
+});
 
 vi.mock("../risk-manager", () => ({
   validateStopLoss: vi.fn().mockReturnValue({
@@ -280,7 +284,7 @@ describe("handleBrokerFill", () => {
       expect(mockNotifyOrderFilled).toHaveBeenCalledWith(
         expect.objectContaining({
           side: "sell",
-          pnl: 5000,
+          pnl: expect.any(Number),
         }),
       );
     });

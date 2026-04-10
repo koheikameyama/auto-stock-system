@@ -11,14 +11,32 @@ import { getBuyingPower } from "./broker-orders";
 import { isTachibanaProduction } from "../lib/constants/broker";
 
 /**
+ * ポジション単体の確定損益を算出する（手数料・税込み）
+ *
+ * entryPrice, exitPrice, quantity から calculateTradeCosts で計算。
+ * exitPrice が null（void等）の場合は 0 を返す。
+ */
+export function getPositionPnl(pos: {
+  entryPrice: { toNumber?: () => number } | number;
+  exitPrice: { toNumber?: () => number } | number | null;
+  quantity: number;
+}): number {
+  if (!pos.exitPrice) return 0;
+  const entry = typeof pos.entryPrice === "number" ? pos.entryPrice : Number(pos.entryPrice);
+  const exit = typeof pos.exitPrice === "number" ? pos.exitPrice : Number(pos.exitPrice);
+  const costs = calculateTradeCosts(entry, exit, pos.quantity);
+  return costs.netPnl;
+}
+
+/**
  * 全クローズ済みポジションの確定損益を合計する
  */
 export async function computeRealizedPnl(): Promise<number> {
-  const result = await prisma.tradingPosition.aggregate({
-    where: { status: "closed" },
-    _sum: { realizedPnl: true },
+  const positions = await prisma.tradingPosition.findMany({
+    where: { status: "closed", exitPrice: { not: null } },
+    select: { entryPrice: true, exitPrice: true, quantity: true },
   });
-  return Number(result._sum.realizedPnl ?? 0);
+  return positions.reduce((sum, pos) => sum + getPositionPnl(pos), 0);
 }
 
 /**
@@ -95,9 +113,7 @@ export async function closePosition(
     where: { id: positionId },
   });
 
-  const entryPrice = Number(position.entryPrice);
-  const costs = calculateTradeCosts(entryPrice, exitPrice, position.quantity);
-  const realizedPnl = costs.netPnl;
+  const pnl = getPositionPnl({ entryPrice: position.entryPrice, exitPrice, quantity: position.quantity });
 
   return prisma.$transaction(async (tx) => {
     const closedPosition = await tx.tradingPosition.update({
@@ -106,7 +122,6 @@ export async function closePosition(
         status: "closed",
         exitPrice,
         exitedAt: new Date(),
-        realizedPnl,
         exitSnapshot: exitSnapshot ?? undefined,
       },
     });
@@ -123,7 +138,7 @@ export async function closePosition(
         status: "filled",
         filledPrice: exitPrice,
         filledAt: new Date(),
-        reasoning: `ポジション決済（損益: ${realizedPnl >= 0 ? "+" : ""}${realizedPnl.toFixed(0)}円）`,
+        reasoning: `ポジション決済（損益: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(0)}円）`,
         positionId,
         updatedAt: new Date(),
       },
@@ -137,7 +152,7 @@ export async function closePosition(
  * ポジションを無効化する（実取引が確認できない場合）
  *
  * ブローカーに保有が見つからず、約定も確認できないケースで使用する。
- * 損益は記録しない（realizedPnl = null）。
+ * 損益は計上しない（exitPrice = null のまま）。
  */
 export async function voidPosition(
   positionId: string,
@@ -148,7 +163,6 @@ export async function voidPosition(
     data: {
       status: "closed",
       exitedAt: new Date(),
-      realizedPnl: null,
       exitSnapshot: { exitReason: reason },
     },
   });

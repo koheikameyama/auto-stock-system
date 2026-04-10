@@ -11,7 +11,7 @@ import { prisma } from "../lib/prisma";
 import { TACHIBANA_ORDER_STATUS } from "../lib/constants/broker";
 import { getOrderDetail } from "./broker-orders";
 import { fillOrder } from "./order-executor";
-import { openPosition, closePosition } from "./position-manager";
+import { openPosition, closePosition, getPositionPnl } from "./position-manager";
 import { submitBrokerSL } from "./broker-sl-manager";
 import { validateStopLoss } from "./risk-manager";
 import { notifyOrderFilled, notifySlack } from "../lib/slack";
@@ -311,7 +311,7 @@ async function handleSellFill(
       filledPrice,
       exitSnapshot as object,
     );
-    pnl = closed.realizedPnl ? Number(closed.realizedPnl) : 0;
+    pnl = getPositionPnl(closed);
   }
 
   // Slack 通知
