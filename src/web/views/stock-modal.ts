@@ -21,6 +21,13 @@ export interface ModalAnalysis {
   patterns: PatternsResponse | null;
 }
 
+/** リアルタイム株価情報（モーダルヘッダー表示用） */
+export interface ModalQuoteInfo {
+  price: number;
+  change: number;
+  changePercent: number;
+}
+
 /** ポジション情報（モーダル表示用） */
 export interface ModalPositionInfo {
   entryPrice: number;
@@ -42,6 +49,7 @@ export function stockModal(
   stock: Stock,
   analysis: ModalAnalysis | null,
   position?: ModalPositionInfo | null,
+  quote?: ModalQuoteInfo | null,
 ): HtmlContent {
   return html`<div
     class="modal-overlay"
@@ -53,7 +61,10 @@ export function stockModal(
           <h2>${stock.tickerCode}</h2>
           <div class="modal-sub">${stock.name}</div>
         </div>
-        <button class="modal-close" onclick="closeStockModal()">✕</button>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${quote ? priceDisplay(quote) : ""}
+          <button class="modal-close" onclick="closeStockModal()">✕</button>
+        </div>
       </div>
       ${position ? positionBanner(position) : ""}
       <div class="modal-tabs">
@@ -74,6 +85,16 @@ export function stockModal(
         ${chartTab(analysis)} ${infoTab(stock)} ${financeTab(stock)}
       </div>
     </div>
+  </div>`;
+}
+
+/** リアルタイム株価表示（モーダルヘッダー右側） */
+function priceDisplay(q: ModalQuoteInfo): HtmlContent {
+  const color = q.change >= 0 ? "#22c55e" : "#ef4444";
+  const sign = q.change >= 0 ? "+" : "";
+  return html`<div style="text-align:right">
+    <div style="font-size:18px;font-weight:700">¥${q.price.toLocaleString("ja-JP")}</div>
+    <div style="font-size:12px;color:${color}">${sign}${q.change.toLocaleString("ja-JP")} (${sign}${q.changePercent.toFixed(2)}%)</div>
   </div>`;
 }
 

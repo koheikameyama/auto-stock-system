@@ -13,7 +13,7 @@ import { fetchHistoricalData, fetchStockQuote, fetchStockQuotesBatch } from "../
 import { analyzeTechnicals } from "../../core/technical-analysis";
 import { generatePatternsResponse } from "../../lib/candlestick-patterns";
 import { stockModal } from "../views/stock-modal";
-import type { ModalAnalysis, ModalPositionInfo } from "../views/stock-modal";
+import type { ModalAnalysis, ModalPositionInfo, ModalQuoteInfo } from "../views/stock-modal";
 import { yfFetchIndexChart } from "../../lib/yfinance-client";
 import { nikkeiChartBody } from "../views/components";
 import { NIKKEI_CHART_PERIODS, TIMEZONE } from "../../lib/constants";
@@ -212,6 +212,7 @@ app.get("/stock/:tickerCode/modal", async (c) => {
   // 分析データ・ポジション・リアルタイム価格を並列取得
   let analysis: ModalAnalysis | null = null;
   let positionInfo: ModalPositionInfo | null = null;
+  let quoteInfo: ModalQuoteInfo | null = null;
   try {
     const [ohlcv, openPosition, quote] = await Promise.all([
       fetchHistoricalData(tickerCode),
@@ -220,6 +221,14 @@ app.get("/stock/:tickerCode/modal", async (c) => {
       }),
       fetchStockQuote(tickerCode, { yfinanceFallback: true }),
     ]);
+
+    if (quote) {
+      quoteInfo = {
+        price: quote.price,
+        change: quote.change,
+        changePercent: quote.changePercent,
+      };
+    }
 
     if (ohlcv && ohlcv.length > 0) {
       const technical = analyzeTechnicals(ohlcv);
@@ -256,7 +265,7 @@ app.get("/stock/:tickerCode/modal", async (c) => {
     // 分析データ取得失敗 → analysis = null のままモーダル表示
   }
 
-  return c.html(stockModal(stock, analysis, positionInfo));
+  return c.html(stockModal(stock, analysis, positionInfo, quoteInfo));
 });
 
 /**
