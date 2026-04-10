@@ -19,4 +19,11 @@ export const WEEKLY_BREAK = {
   MARKET_FILTER: {
     BREADTH_THRESHOLD: 0.6,
   },
+  GUARD: {
+    /** スキャン実行時刻（JST） */
+    SCAN_HOUR: 15,
+    SCAN_MINUTE: 20,
+  },
+  /** 本番エントリー有効フラグ */
+  ENTRY_ENABLED: true,
 } as const;

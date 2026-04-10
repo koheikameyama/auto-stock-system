@@ -14,12 +14,14 @@ import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
 import { BREAKOUT_BACKTEST_DEFAULTS } from "./breakout-config";
 import { GAPUP_BACKTEST_DEFAULTS } from "./gapup-config";
+import { WEEKLY_BREAK_BACKTEST_DEFAULTS } from "./weekly-break-config";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import {
   precomputeSimData,
   precomputeDailySignals,
 } from "./breakout-simulation";
 import { precomputeGapUpDailySignals } from "./gapup-simulation";
+import { precomputeWeeklyBreakSignals } from "./weekly-break-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import { saveBacktestResult } from "./db-saver";
@@ -27,6 +29,7 @@ import { runCombinedSimulation, type PositionLimits } from "./combined-simulatio
 import type {
   BreakoutBacktestConfig,
   GapUpBacktestConfig,
+  WeeklyBreakBacktestConfig,
   PerformanceMetrics,
 } from "./types";
 
@@ -129,21 +132,25 @@ async function main() {
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
+  const wbConfig: WeeklyBreakBacktestConfig = { ...WEEKLY_BREAK_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   if (maxPriceOverride) {
     boConfig.maxPrice = Number(maxPriceOverride);
     guConfig.maxPrice = Number(maxPriceOverride);
+    wbConfig.maxPrice = Number(maxPriceOverride);
   }
   if (minPriceOverride !== undefined) {
     boConfig.minPrice = Number(minPriceOverride);
     guConfig.minPrice = Number(minPriceOverride);
+    wbConfig.minPrice = Number(minPriceOverride);
   }
   if (minTurnoverOverride !== undefined) {
     boConfig.minTurnover = Number(minTurnoverOverride);
     guConfig.minTurnover = Number(minTurnoverOverride);
+    wbConfig.minTurnover = Number(minTurnoverOverride);
   }
 
   console.log("=".repeat(60));
-  console.log("統合バックテスト（Breakout + GapUp）");
+  console.log("統合バックテスト（Breakout + GapUp + WeeklyBreak）");
   console.log("=".repeat(60));
   console.log(`期間: ${startDate} → ${endDate}`);
   console.log(`初期資金: ¥${budget.toLocaleString()}`);
@@ -185,8 +192,12 @@ async function main() {
 
   const breakoutSignals = precomputeDailySignals(boConfig, allData, precomputed);
   const gapupSignals = precomputeGapUpDailySignals(guConfig, allData, precomputed);
+  const weeklyBreakSignals = precomputeWeeklyBreakSignals(wbConfig, allData, precomputed);
 
-  const ctx = { boConfig, guConfig, budget, verbose: !quietMode && verbose, allData, precomputed, breakoutSignals, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount, equityCurveSmaPeriod: 20 };
+  const ctx = { boConfig, guConfig, wbConfig, budget, verbose: !quietMode && verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount, equityCurveSmaPeriod: 20 };
+
+  // デフォルトポジション制限（breakoutは無効化中）
+  const defaultLimits: PositionLimits = { boMax: 0, guMax: 3, wbMax: 3, totalMax: 3 };
 
   // 資金比較モード
   if (compareBudget) {
@@ -211,7 +222,7 @@ async function main() {
       const gc: GapUpBacktestConfig = { ...guConfig, initialBudget: row.budget };
       const result = runCombinedSimulation(
         { ...ctx, boConfig: bc, guConfig: gc, budget: row.budget },
-        boConfig.maxPositions,
+        defaultLimits,
       );
       const m = result.totalMetrics;
       const util = calculateCapitalUtilization(result.equityCurve);
@@ -259,19 +270,20 @@ async function main() {
   // 戦略別ポジション分離比較モード
   if (compareSplitPositions) {
     const grid: { label: string; limits: PositionLimits }[] = [
-      { label: "合算3（現状）",      limits: { boMax: 3, guMax: 3, totalMax: 3 } },
-      { label: "独立3+3",           limits: { boMax: 3, guMax: 3 } },
-      { label: "独立3+3・合算5",     limits: { boMax: 3, guMax: 3, totalMax: 5 } },
-      { label: "独立2+2",           limits: { boMax: 2, guMax: 2 } },
-      { label: "独立2+2・合算3",     limits: { boMax: 2, guMax: 2, totalMax: 3 } },
-      { label: "独立5+3・合算6",     limits: { boMax: 5, guMax: 3, totalMax: 6 } },
+      { label: "合算3（現状）",        limits: { boMax: 3, guMax: 3, wbMax: 3, totalMax: 3 } },
+      { label: "GU+WB 合算3",         limits: { boMax: 0, guMax: 3, wbMax: 3, totalMax: 3 } },
+      { label: "GU+WB 独立3+3",       limits: { boMax: 0, guMax: 3, wbMax: 3 } },
+      { label: "GU+WB 独立3+3・合算5", limits: { boMax: 0, guMax: 3, wbMax: 3, totalMax: 5 } },
+      { label: "GU+WB 独立2+2",       limits: { boMax: 0, guMax: 2, wbMax: 2 } },
+      { label: "GU+WB 独立2+2・合算3", limits: { boMax: 0, guMax: 2, wbMax: 2, totalMax: 3 } },
+      { label: "全戦略 独立3+3+3",     limits: { boMax: 3, guMax: 3, wbMax: 3 } },
     ];
 
     console.log("\n=== 戦略別ポジション分離比較 ===");
     console.log(
-      `${"パターン".padEnd(20)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
+      `${"パターン".padEnd(24)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
     );
-    console.log("-".repeat(88));
+    console.log("-".repeat(92));
 
     for (const row of grid) {
       const result = runCombinedSimulation(ctx, row.limits);
@@ -281,14 +293,20 @@ async function main() {
       const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
       const bm = result.boMetrics;
       const gm = result.guMetrics;
+      const wm = result.wbMetrics;
       console.log(
-        `${row.label.padEnd(20)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+        `${row.label.padEnd(24)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+      if (bm.totalTrades > 0) {
+        console.log(
+          `${"  BO".padEnd(24)}| ${String(bm.totalTrades).padStart(6)} | ${bm.winRate.toFixed(1).padStart(6)}% | ${(bm.profitFactor === Infinity ? "∞" : bm.profitFactor.toFixed(2)).padStart(5)} | ${((bm.expectancy >= 0 ? "+" : "") + bm.expectancy.toFixed(2) + "%").padStart(8)}`,
+        );
+      }
+      console.log(
+        `${"  GU".padEnd(24)}| ${String(gm.totalTrades).padStart(6)} | ${gm.winRate.toFixed(1).padStart(6)}% | ${(gm.profitFactor === Infinity ? "∞" : gm.profitFactor.toFixed(2)).padStart(5)} | ${((gm.expectancy >= 0 ? "+" : "") + gm.expectancy.toFixed(2) + "%").padStart(8)}`,
       );
       console.log(
-        `${"  BO".padEnd(20)}| ${String(bm.totalTrades).padStart(6)} | ${bm.winRate.toFixed(1).padStart(6)}% | ${(bm.profitFactor === Infinity ? "∞" : bm.profitFactor.toFixed(2)).padStart(5)} | ${((bm.expectancy >= 0 ? "+" : "") + bm.expectancy.toFixed(2) + "%").padStart(8)}`,
-      );
-      console.log(
-        `${"  GU".padEnd(20)}| ${String(gm.totalTrades).padStart(6)} | ${gm.winRate.toFixed(1).padStart(6)}% | ${(gm.profitFactor === Infinity ? "∞" : gm.profitFactor.toFixed(2)).padStart(5)} | ${((gm.expectancy >= 0 ? "+" : "") + gm.expectancy.toFixed(2) + "%").padStart(8)}`,
+        `${"  WB".padEnd(24)}| ${String(wm.totalTrades).padStart(6)} | ${wm.winRate.toFixed(1).padStart(6)}% | ${(wm.profitFactor === Infinity ? "∞" : wm.profitFactor.toFixed(2)).padStart(5)} | ${((wm.expectancy >= 0 ? "+" : "") + wm.expectancy.toFixed(2) + "%").padStart(8)}`,
       );
     }
     console.log("");
@@ -309,7 +327,7 @@ async function main() {
     for (const sma of grid) {
       const result = runCombinedSimulation(
         { ...ctx, equityCurveSmaPeriod: sma },
-        boConfig.maxPositions,
+        defaultLimits,
       );
       const m = result.totalMetrics;
       const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
@@ -344,7 +362,7 @@ async function main() {
     for (const row of grid) {
       const result = runCombinedSimulation(
         { ...ctx, boVixSkipLevel: row.boSkip, guVixSkipLevel: row.guSkip },
-        boConfig.maxPositions,
+        defaultLimits,
       );
       const m = result.totalMetrics;
       const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
@@ -393,7 +411,7 @@ async function main() {
       };
       const result = runCombinedSimulation(
         { ...ctx, boConfig: bc },
-        boConfig.maxPositions,
+        defaultLimits,
       );
       const tm = result.totalMetrics;
       const bm = result.boMetrics;
@@ -430,9 +448,11 @@ async function main() {
       // シグナル再計算（minTurnover が変わるとユニバースが変わる）
       const boSig = precomputeDailySignals(bc, allData, precomputed);
       const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+      const wbC: WeeklyBreakBacktestConfig = { ...wbConfig, minTurnover: row.value };
+      const wbSig = precomputeWeeklyBreakSignals(wbC, allData, precomputed);
       const result = runCombinedSimulation(
-        { ...ctx, boConfig: bc, guConfig: gc, breakoutSignals: boSig, gapupSignals: guSig },
-        boConfig.maxPositions,
+        { ...ctx, boConfig: bc, guConfig: gc, wbConfig: wbC, breakoutSignals: boSig, gapupSignals: guSig, weeklyBreakSignals: wbSig },
+        defaultLimits,
       );
       const m = result.totalMetrics;
       const utilResult = calculateCapitalUtilization(result.equityCurve);
@@ -467,12 +487,14 @@ async function main() {
     for (const row of priceGrid) {
       const bc: BreakoutBacktestConfig = { ...boConfig, minPrice: row.value };
       const gc: GapUpBacktestConfig = { ...guConfig, minPrice: row.value };
+      const wbC: WeeklyBreakBacktestConfig = { ...wbConfig, minPrice: row.value };
       // シグナル再計算（minPrice が変わるとユニバースが変わる）
       const boSig = precomputeDailySignals(bc, allData, precomputed);
       const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+      const wbSig = precomputeWeeklyBreakSignals(wbC, allData, precomputed);
       const result = runCombinedSimulation(
-        { ...ctx, boConfig: bc, guConfig: gc, breakoutSignals: boSig, gapupSignals: guSig },
-        boConfig.maxPositions,
+        { ...ctx, boConfig: bc, guConfig: gc, wbConfig: wbC, breakoutSignals: boSig, gapupSignals: guSig, weeklyBreakSignals: wbSig },
+        defaultLimits,
       );
       const m = result.totalMetrics;
       const utilResult = calculateCapitalUtilization(result.equityCurve);
@@ -510,11 +532,13 @@ async function main() {
       for (const tr of turnoverCols) {
         const bc: BreakoutBacktestConfig = { ...boConfig, minPrice: pr.value, minTurnover: tr.value };
         const gc: GapUpBacktestConfig = { ...guConfig, minPrice: pr.value, minTurnover: tr.value };
+        const wbC: WeeklyBreakBacktestConfig = { ...wbConfig, minPrice: pr.value, minTurnover: tr.value };
         const boSig = precomputeDailySignals(bc, allData, precomputed);
         const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+        const wbSig = precomputeWeeklyBreakSignals(wbC, allData, precomputed);
         const result = runCombinedSimulation(
-          { ...ctx, boConfig: bc, guConfig: gc, breakoutSignals: boSig, gapupSignals: guSig },
-          boConfig.maxPositions,
+          { ...ctx, boConfig: bc, guConfig: gc, wbConfig: wbC, breakoutSignals: boSig, gapupSignals: guSig, weeklyBreakSignals: wbSig },
+          defaultLimits,
         );
         const m = result.totalMetrics;
         const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
@@ -528,9 +552,9 @@ async function main() {
     return;
   }
 
-  // 通常実行
-  console.log(`ポジション枠: 全戦略合計 ${boConfig.maxPositions}`);
-  const result = runCombinedSimulation(ctx, boConfig.maxPositions);
+  // 通常実行（breakoutは無効化中のためboMax=0）
+  console.log(`ポジション枠: GU${defaultLimits.guMax} + WB${defaultLimits.wbMax} (合計上限${defaultLimits.totalMax})`);
+  const result = runCombinedSimulation(ctx, defaultLimits);
 
   console.log("\n" + "=".repeat(60));
   console.log("統合バックテスト結果");
@@ -544,6 +568,7 @@ async function main() {
 
   printMetrics(result.boMetrics, "Breakout");
   printMetrics(result.guMetrics, "GapUp");
+  printMetrics(result.wbMetrics, "WeeklyBreak");
 
   const exitReasons = new Map<string, number>();
   for (const t of result.allTrades) {
@@ -575,7 +600,7 @@ async function main() {
   try {
     const id = await saveBacktestResult(
       {
-        config: { startDate, endDate, maxPositions: boConfig.maxPositions, initialBudget: budget },
+        config: { startDate, endDate, maxPositions: defaultLimits.totalMax ?? 3, initialBudget: budget },
         trades: result.allTrades,
         equityCurve: result.equityCurve,
         metrics: result.totalMetrics,

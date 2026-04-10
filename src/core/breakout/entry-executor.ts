@@ -26,11 +26,13 @@ import { checkLiquidity } from "../market-data";
 import { TIMEZONE } from "../../lib/constants/timezone";
 import { BREAKOUT } from "../../lib/constants/breakout";
 import { GAPUP } from "../../lib/constants/gapup";
+import { WEEKLY_BREAK } from "../../lib/constants/weekly-break";
 import { TACHIBANA_ORDER } from "../../lib/constants/broker";
 import { ORDER_EXPIRY } from "../../lib/constants/jobs";
 import type { BreakoutTrigger } from "./types";
 import type { QuoteData } from "./breakout-scanner";
 import type { GapUpTrigger } from "../gapup/gapup-scanner";
+import type { WeeklyBreakTrigger } from "../weekly-break/weekly-break-scanner";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -50,8 +52,8 @@ export interface ExecutionResult {
  * @param strategy 戦略種別（デフォルト: "breakout"）
  */
 export async function executeEntry(
-  trigger: BreakoutTrigger | GapUpTrigger,
-  strategy: "breakout" | "gapup" = "breakout",
+  trigger: BreakoutTrigger | GapUpTrigger | WeeklyBreakTrigger,
+  strategy: "breakout" | "gapup" | "weekly-break" = "breakout",
 ): Promise<ExecutionResult> {
   const { ticker, currentPrice, atr14 } = trigger;
 
@@ -88,7 +90,9 @@ export async function executeEntry(
 
   // 3. SL価格 = currentPrice - ATR × multiplier（最大3%に制限）
   const slAtrMultiplier =
-    strategy === "gapup" ? GAPUP.STOP_LOSS.ATR_MULTIPLIER : BREAKOUT.STOP_LOSS.ATR_MULTIPLIER;
+    strategy === "gapup" ? GAPUP.STOP_LOSS.ATR_MULTIPLIER
+    : strategy === "weekly-break" ? WEEKLY_BREAK.STOP_LOSS.ATR_MULTIPLIER
+    : BREAKOUT.STOP_LOSS.ATR_MULTIPLIER;
   const rawStopLoss = currentPrice - atr14 * slAtrMultiplier;
   const maxStopLoss = currentPrice * (1 - STOP_LOSS.MAX_LOSS_PCT);
   const stopLossPrice = Math.round(Math.max(rawStopLoss, maxStopLoss));
@@ -124,7 +128,7 @@ export async function executeEntry(
   let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
 
   if (quantity === 0) {
-    const reason = `予算不足でポジションサイズが0（余力: ¥${cashBalance.toLocaleString()}, リスク額: ¥${riskAmount.toLocaleString()}, RR: ${riskRewardRatio.toFixed(1)}, リスク%: ${riskPct}%）`;
+    const reason = `予算不足でポジションサイズが0（余力: ¥${cashBalance.toLocaleString()}, リスク額: ¥${riskAmount.toLocaleString()}, リスク%: ${riskPct}%）`;
     console.log(`[entry-executor] ${ticker} スキップ: ${reason}`);
     return { success: false, reason, retryable: true };
   }
@@ -194,12 +198,16 @@ export async function executeEntry(
 
   // 6. 変数の準備
   const isGapUp = strategy === "gapup";
-  const expiresAt = isGapUp
+  const isWeeklyBreak = strategy === "weekly-break";
+  const isCloseOrder = isGapUp || isWeeklyBreak;
+  const expiresAt = isCloseOrder
     ? dayjs().tz(TIMEZONE).hour(15).minute(30).second(0).toDate()
     : dayjs().tz(TIMEZONE).add(ORDER_EXPIRY.SWING_DAYS, "day").hour(15).minute(0).second(0).toDate();
-  const reasoning = isGapUp
-    ? `ギャップアップトリガー: 出来高サージ比率 ${trigger.volumeSurgeRatio.toFixed(2)}x, ギャップ3%以上`
-    : `ブレイクアウトトリガー: 出来高サージ比率 ${trigger.volumeSurgeRatio.toFixed(2)}x, 20日高値 ¥${'high20' in trigger ? trigger.high20 : ''} 突破`;
+  const reasoning = isWeeklyBreak
+    ? `週足ブレイクトリガー: ${'weeklyHigh' in trigger ? trigger.weeklyHigh : 0}円を上抜け, 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x`
+    : isGapUp
+      ? `ギャップアップトリガー: 出来高サージ比率 ${trigger.volumeSurgeRatio.toFixed(2)}x, ギャップ3%以上`
+      : `ブレイクアウトトリガー: 出来高サージ比率 ${trigger.volumeSurgeRatio.toFixed(2)}x, 20日高値 ¥${'high20' in trigger ? trigger.high20 : ''} 突破`;
 
   // 7. ブローカー発注（DB保存前に実行）
   let brokerResult;
@@ -208,9 +216,9 @@ export async function executeEntry(
       ticker,
       side: "buy",
       quantity,
-      limitPrice: isGapUp ? null : currentPrice,
-      condition: isGapUp ? TACHIBANA_ORDER.CONDITION.CLOSE : undefined,
-      expireDay: isGapUp ? undefined : dayjs(adjustToTradingDay(expiresAt)).tz(TIMEZONE).format("YYYYMMDD"),
+      limitPrice: isCloseOrder ? null : currentPrice,
+      condition: isCloseOrder ? TACHIBANA_ORDER.CONDITION.CLOSE : undefined,
+      expireDay: isCloseOrder ? undefined : dayjs(adjustToTradingDay(expiresAt)).tz(TIMEZONE).format("YYYYMMDD"),
     });
   } catch (brokerErr) {
     console.error(`[entry-executor] ブローカーエラー ${ticker}:`, brokerErr);
@@ -246,9 +254,9 @@ export async function executeEntry(
       updatedAt: new Date(),
       stockId: stock.id,
       side: "buy",
-      orderType: isGapUp ? "market" : "limit",
+      orderType: isCloseOrder ? "market" : "limit",
       strategy,
-      limitPrice: currentPrice, // gapup: スナップショット価格（実約定は引け値）
+      limitPrice: currentPrice, // gapup/weekly-break: スナップショット価格（実約定は引け値）
       takeProfitPrice,
       stopLossPrice,
       quantity,
@@ -263,6 +271,7 @@ export async function executeEntry(
           currentPrice: trigger.currentPrice,
           volumeSurgeRatio: trigger.volumeSurgeRatio,
           ...('high20' in trigger ? { high20: trigger.high20 } : {}),
+          ...('weeklyHigh' in trigger ? { weeklyHigh: trigger.weeklyHigh } : {}),
           atr14: trigger.atr14,
           triggeredAt: trigger.triggeredAt.toISOString(),
         },
@@ -287,9 +296,11 @@ export async function executeEntry(
   );
 
   // 8. Slack通知
-  const slackReasoning = isGapUp
-    ? `ギャップアップトリガー: 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x / ギャップ3%以上`
-    : `ブレイクアウトトリガー: 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x / 20日高値 ¥${'high20' in trigger ? trigger.high20 : ''} 突破`;
+  const slackReasoning = isWeeklyBreak
+    ? `週足ブレイクトリガー: ${'weeklyHigh' in trigger ? trigger.weeklyHigh : 0}円上抜け / 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x`
+    : isGapUp
+      ? `ギャップアップトリガー: 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x / ギャップ3%以上`
+      : `ブレイクアウトトリガー: 出来高サージ ${trigger.volumeSurgeRatio.toFixed(2)}x / 20日高値 ¥${'high20' in trigger ? trigger.high20 : ''} 突破`;
   await notifyOrderPlaced({
     tickerCode: ticker,
     name: stock.name,
