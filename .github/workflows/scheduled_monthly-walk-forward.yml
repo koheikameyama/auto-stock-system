@@ -27,7 +27,7 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
-      - name: Run walk-forward analysis (breakout + gapup)
+      - name: Run walk-forward analysis (all strategies)
         run: python scripts/run_monthly_walk_forward.py
 
   notify-failure:
