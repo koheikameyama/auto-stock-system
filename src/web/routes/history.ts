@@ -302,7 +302,7 @@ app.get("/", async (c) => {
                           <tr class="review-row">
                             <td
                               colspan="5"
-                              style="font-size:11px;color:#64748b;padding:4px 8px 12px"
+                              style="font-size:11px;color:#64748b;padding:4px 8px 12px;white-space:pre-wrap"
                             >
                               ${s.aiReview}
                             </td>
