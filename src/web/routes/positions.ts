@@ -170,9 +170,11 @@ app.get("/", async (c) => {
                           : "-"}
                       </td>
                       <td style="white-space:nowrap">${(() => {
-                        const snap = p.exitSnapshot as { priceJourney?: { maxFavorableExcursion?: number } } | null;
-                        const mfe = snap?.priceJourney?.maxFavorableExcursion;
-                        if (mfe == null) return "-";
+                        const snap = p.exitSnapshot as { priceJourney?: { maxHigh?: number } } | null;
+                        const maxHigh = snap?.priceJourney?.maxHigh;
+                        const entry = p.entryPrice ? Number(p.entryPrice) : null;
+                        if (maxHigh == null || !entry) return "-";
+                        const mfe = ((maxHigh - entry) / entry) * 100;
                         const color = mfe > 0 ? "#22c55e" : "#94a3b8";
                         return html`<span style="color:${color}">+${mfe.toFixed(1)}%</span>`;
                       })()}</td>

@@ -91,7 +91,6 @@ export async function openPosition(
       status: "open",
       entrySnapshot: entrySnapshot ?? undefined,
       maxHighDuringHold: entryPrice,
-      minLowDuringHold: entryPrice,
       trailingStopPrice: null,
       entryAtr: entryAtr ?? null,
       updatedAt: new Date(),

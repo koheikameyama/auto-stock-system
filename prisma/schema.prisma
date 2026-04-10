@@ -366,7 +366,6 @@ model TradingPosition {
   entrySnapshot             Json?
   exitSnapshot              Json?
   maxHighDuringHold         Decimal?               @db.Decimal(10, 2)
-  minLowDuringHold          Decimal?               @db.Decimal(10, 2)
   reviewComments            String?
   entryAtr                  Decimal?               @db.Decimal(10, 2)
   trailingStopPrice         Decimal?               @db.Decimal(10, 2)

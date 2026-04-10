@@ -35,12 +35,8 @@ async function forceClosePositions(
       `  → ${stock.tickerCode}: ${exitReason} @ ¥${exitPrice.toLocaleString()}`,
     );
 
-    const entryPriceNum = Number(position.entryPrice);
     const maxHigh = position.maxHighDuringHold
       ? Math.max(Number(position.maxHighDuringHold), quote?.high ?? exitPrice)
-      : exitPrice;
-    const minLow = position.minLowDuringHold
-      ? Math.min(Number(position.minLowDuringHold), quote?.low ?? exitPrice)
       : exitPrice;
 
     const exitSnapshot: ExitSnapshot = {
@@ -48,11 +44,6 @@ async function forceClosePositions(
       exitPrice,
       priceJourney: {
         maxHigh,
-        minLow,
-        maxFavorableExcursion:
-          ((maxHigh - entryPriceNum) / entryPriceNum) * 100,
-        maxAdverseExcursion:
-          ((entryPriceNum - minLow) / entryPriceNum) * 100,
       },
       marketContext: null,
     };

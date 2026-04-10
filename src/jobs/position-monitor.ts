@@ -331,11 +331,6 @@ export async function main() {
 
     const entryPriceNum = Number(position.entryPrice);
 
-    // minLow を更新（出口判定には不要だがスナップショットに使用）
-    const newMinLow = position.minLowDuringHold
-      ? Math.min(Number(position.minLowDuringHold), quote.low)
-      : quote.low;
-
     // 保有営業日数を算出
     const entryDate = dayjs(position.createdAt).tz(TIMEZONE);
     const now = dayjs().tz(TIMEZONE);
@@ -464,11 +459,6 @@ export async function main() {
         exitPrice,
         priceJourney: {
           maxHigh: newMaxHigh,
-          minLow: newMinLow,
-          maxFavorableExcursion:
-            ((newMaxHigh - entryPriceNum) / entryPriceNum) * 100,
-          maxAdverseExcursion:
-            ((entryPriceNum - newMinLow) / entryPriceNum) * 100,
         },
         trailingStop: {
           wasActivated: exitResult.isTrailingActivated,
@@ -510,14 +500,11 @@ export async function main() {
         exitReason,
       });
     } else {
-      // maxHigh/minLow/trailingStopPrice を更新
+      // maxHigh/trailingStopPrice を更新
       const updateData: Record<string, number | null> = {};
 
       if (newMaxHigh !== Number(position.maxHighDuringHold)) {
         updateData.maxHighDuringHold = newMaxHigh;
-      }
-      if (newMinLow !== Number(position.minLowDuringHold)) {
-        updateData.minLowDuringHold = newMinLow;
       }
       const currentTrailing = position.trailingStopPrice
         ? Number(position.trailingStopPrice)
@@ -589,13 +576,9 @@ export async function main() {
     const quote = await fetchStockQuote(position.stock.tickerCode);
     if (!quote) continue;
 
-    const entryPriceNum = Number(position.entryPrice);
     const maxHigh = position.maxHighDuringHold
       ? Math.max(Number(position.maxHighDuringHold), quote.high)
       : quote.high;
-    const minLow = position.minLowDuringHold
-      ? Math.min(Number(position.minLowDuringHold), quote.low)
-      : quote.low;
 
     const earningsReason = `決算前強制決済（決算まで${diffDays}日）`;
 
@@ -604,9 +587,6 @@ export async function main() {
       exitPrice: quote.price,
       priceJourney: {
         maxHigh,
-        minLow,
-        maxFavorableExcursion: ((maxHigh - entryPriceNum) / entryPriceNum) * 100,
-        maxAdverseExcursion: ((entryPriceNum - minLow) / entryPriceNum) * 100,
       },
       marketContext: null,
     };
@@ -692,20 +672,12 @@ export async function main() {
         const maxHigh = position.maxHighDuringHold
           ? Math.max(Number(position.maxHighDuringHold), quote.high)
           : quote.high;
-        const minLow = position.minLowDuringHold
-          ? Math.min(Number(position.minLowDuringHold), quote.low)
-          : quote.low;
 
         const exitSnapshot: ExitSnapshot = {
           exitReason: defensiveReason,
           exitPrice: quote.price,
           priceJourney: {
             maxHigh,
-            minLow,
-            maxFavorableExcursion:
-              ((maxHigh - entryPriceNum) / entryPriceNum) * 100,
-            maxAdverseExcursion:
-              ((entryPriceNum - minLow) / entryPriceNum) * 100,
           },
           marketContext: latestAssessmentForDefense
             ? {

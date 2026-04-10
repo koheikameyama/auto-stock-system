@@ -143,11 +143,14 @@ app.get("/", async (c) => {
   const expectancy =
     (winRate / 100) * avgWinPct + (1 - winRate / 100) * avgLossPct;
 
-  // MFE stats from exitSnapshot
+  // MFE stats: maxHigh と entryPrice から都度計算
   const mfeValues = closedPositions
     .map((p) => {
-      const snap = p.exitSnapshot as { priceJourney?: { maxFavorableExcursion?: number } } | null;
-      return snap?.priceJourney?.maxFavorableExcursion ?? null;
+      const snap = p.exitSnapshot as { priceJourney?: { maxHigh?: number } } | null;
+      const maxHigh = snap?.priceJourney?.maxHigh;
+      const entry = p.entryPrice ? Number(p.entryPrice) : null;
+      if (maxHigh == null || !entry) return null;
+      return ((maxHigh - entry) / entry) * 100;
     })
     .filter((v): v is number => v !== null);
   const avgMfe = mfeValues.length > 0 ? mfeValues.reduce((s, v) => s + v, 0) / mfeValues.length : 0;
@@ -156,10 +159,13 @@ app.get("/", async (c) => {
   // Only for trades that had positive MFE
   const givebackRates = closedPositions
     .map((p) => {
-      const snap = p.exitSnapshot as { priceJourney?: { maxFavorableExcursion?: number } } | null;
-      const mfe = snap?.priceJourney?.maxFavorableExcursion;
-      if (!mfe || mfe <= 0 || !p.entryPrice || !p.exitPrice) return null;
-      const realizedPct = ((Number(p.exitPrice) - Number(p.entryPrice)) / Number(p.entryPrice)) * 100;
+      const snap = p.exitSnapshot as { priceJourney?: { maxHigh?: number } } | null;
+      const maxHigh = snap?.priceJourney?.maxHigh;
+      const entry = p.entryPrice ? Number(p.entryPrice) : null;
+      if (maxHigh == null || !entry || !p.exitPrice) return null;
+      const mfe = ((maxHigh - entry) / entry) * 100;
+      if (mfe <= 0) return null;
+      const realizedPct = ((Number(p.exitPrice) - entry) / entry) * 100;
       return 1 - realizedPct / mfe; // 0 = kept all, 1 = returned all
     })
     .filter((v): v is number => v !== null);
