@@ -220,6 +220,7 @@ export async function buildWatchlist(): Promise<WatchlistBuildResult> {
         high20,
         atr14: summary.atr14,
         latestClose: summary.currentPrice,
+        weeklyHigh13: intermediates.weeklyHigh13 ?? undefined,
       });
     } catch (error) {
       skipError++;

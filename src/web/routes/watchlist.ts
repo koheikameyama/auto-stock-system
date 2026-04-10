@@ -1,5 +1,8 @@
 /**
  * ウォッチリストページ（GET /watchlist）
+ *
+ * 全戦略（GU/BO/WB）のエントリー候補を統合表示。
+ * サージ比率・戦略判定はポーリング API から取得。
  */
 
 import dayjs from "dayjs";
@@ -13,7 +16,6 @@ import { BREAKOUT } from "../../lib/constants/breakout";
 import { layout } from "../views/layout";
 import { formatYen, tickerLink, emptyState, tt } from "../views/components";
 import { getWatchlist } from "../../jobs/watchlist-builder";
-import { getScannerState } from "../../jobs/breakout-monitor";
 import { getTodayForDB } from "../../lib/market-date";
 
 dayjs.extend(utc);
@@ -21,68 +23,19 @@ dayjs.extend(timezone);
 
 const app = new Hono();
 
-type WatchlistStatus = "ordered" | "rejected" | "hot" | "holding" | "cold";
+type WatchlistStatus = "ordered" | "holding" | "watching";
 
-function getTickerStatus(
-  ticker: string,
-  hotSet: Map<string, unknown>,
-  triggeredToday: Set<string>,
-  holdingTickers: Set<string>,
-  orderedTickers: Set<string>,
-): WatchlistStatus {
-  if (holdingTickers.has(ticker)) return "holding";
-  if (triggeredToday.has(ticker)) {
-    return orderedTickers.has(ticker) ? "ordered" : "rejected";
-  }
-  if (hotSet.has(ticker)) return "hot";
-  return "cold";
-}
-
-function statusBadgeHtml(status: WatchlistStatus) {
+function statusBadgeHtml(status: WatchlistStatus, orderStrategy?: string) {
   switch (status) {
-    case "ordered":
-      return raw(`<span class="badge badge-triggered">注文済</span>`);
-    case "rejected":
-      return raw(`<span class="badge badge-rejected">却下</span>`);
-    case "hot":
-      return raw(`<span class="badge badge-hot">急騰中</span>`);
+    case "ordered": {
+      const label = orderStrategy ? `注文済(${orderStrategy.toUpperCase()})` : "注文済";
+      return raw(`<span class="badge badge-triggered">${label}</span>`);
+    }
     case "holding":
       return raw(`<span class="badge badge-holding">保有中</span>`);
-    case "cold":
+    case "watching":
       return raw(`<span class="badge badge-cold">監視中</span>`);
   }
-}
-
-/** ステータスのソート優先度（小さいほど上） */
-function statusOrder(status: WatchlistStatus): number {
-  switch (status) {
-    case "ordered": return 0;
-    case "hot": return 1;
-    case "holding": return 2;
-    case "cold": return 3;
-    case "rejected": return 4;
-  }
-}
-
-function formatSurgeRatio(ratio: number | undefined): string {
-  if (ratio === undefined) return "-";
-  return `${ratio.toFixed(1)}x`;
-}
-
-function surgeRatioClass(ratio: number | undefined): string {
-  if (ratio === undefined) return "";
-  if (ratio >= BREAKOUT.VOLUME_SURGE.TRIGGER_THRESHOLD) return "style=\"color: #ef4444; font-weight: 600;\"";
-  if (ratio >= BREAKOUT.VOLUME_SURGE.HOT_THRESHOLD) return "style=\"color: #f59e0b; font-weight: 600;\"";
-  return "";
-}
-
-/** 出来高条件の✓/✗表示 */
-function volumeCheckHtml(ratio: number | undefined): string {
-  if (ratio === undefined) return `<span style="color: #64748b;">出来高-</span>`;
-  const ok = ratio >= BREAKOUT.VOLUME_SURGE.TRIGGER_THRESHOLD;
-  const color = ok ? "#22c55e" : "#64748b";
-  const mark = ok ? "✓" : "✗";
-  return `<span style="color: ${color}; font-size: 11px;">出来高${mark}</span>`;
 }
 
 /** グローバル条件: 時間帯チェック */
@@ -90,73 +43,59 @@ function isInEntryTimeWindow(): boolean {
   const now = dayjs().tz(TIMEZONE);
   const [eh, em] = BREAKOUT.GUARD.EARLIEST_ENTRY_TIME.split(":").map(Number);
   const [lh, lm] = BREAKOUT.GUARD.LATEST_ENTRY_TIME.split(":").map(Number);
-  const h = now.hour();
-  const m = now.minute();
-  const current = h * 60 + m;
+  const current = now.hour() * 60 + now.minute();
   return current >= eh * 60 + em && current <= lh * 60 + lm;
 }
 
-const VALID_STATUSES = new Set<WatchlistStatus>(["ordered", "rejected", "hot", "holding", "cold"]);
-
 app.get("/", async (c) => {
-  const statusFilter = c.req.query("status") as WatchlistStatus | undefined;
-  const activeFilter = statusFilter && VALID_STATUSES.has(statusFilter) ? statusFilter : null;
-
   const watchlist = await getWatchlist();
 
-  // スキャナー状態を取得（市場時間外は null）
-  const scannerInfo = getScannerState();
-  const hotSet = scannerInfo?.state.hotSet ?? new Map();
-  const triggeredToday = scannerInfo?.state.triggeredToday ?? new Set();
-  const holdingTickers = scannerInfo?.holdingTickers ?? new Set();
-  const surgeRatios = scannerInfo?.state.lastSurgeRatios ?? new Map();
-
-  // グローバル条件 + 当日注文ティッカーを並列取得
+  // 保有・注文・市場評価を並列取得
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const [todayOrders, todayAssessment] = await Promise.all([
-    triggeredToday.size
-      ? prisma.tradingOrder.findMany({
-          where: {
-            side: "buy",
-            strategy: "breakout",
-            createdAt: { gte: todayStart },
-          },
-          select: { stock: { select: { tickerCode: true } } },
-        })
-      : Promise.resolve([]),
+  const [holdings, todayOrders, todayAssessment] = await Promise.all([
+    prisma.tradingPosition.findMany({
+      where: { status: "open" },
+      select: { stock: { select: { tickerCode: true } } },
+    }),
+    prisma.tradingOrder.findMany({
+      where: { side: "buy", createdAt: { gte: todayStart } },
+      select: { stock: { select: { tickerCode: true } }, strategy: true },
+    }),
     prisma.marketAssessment.findUnique({
       where: { date: getTodayForDB() },
       select: { shouldTrade: true },
     }),
   ]);
-  const orderedTickers = new Set(todayOrders.map((o) => o.stock.tickerCode));
+
+  const holdingTickers = new Set(holdings.map((h) => h.stock.tickerCode));
+  const orderedMap = new Map<string, string>();
+  for (const o of todayOrders) {
+    orderedMap.set(o.stock.tickerCode, o.strategy ?? "");
+  }
 
   // ステータス付きウォッチリストを作成しソート
   const watchlistWithStatus = watchlist.map((w) => {
-    const status = getTickerStatus(w.ticker, hotSet, triggeredToday, holdingTickers, orderedTickers);
-    const surgeRatio = surgeRatios.get(w.ticker);
-    return { ...w, status, surgeRatio };
+    let status: WatchlistStatus = "watching";
+    let orderStrategy: string | undefined;
+    if (holdingTickers.has(w.ticker)) {
+      status = "holding";
+    } else if (orderedMap.has(w.ticker)) {
+      status = "ordered";
+      orderStrategy = orderedMap.get(w.ticker);
+    }
+    return { ...w, status, orderStrategy };
   });
-  watchlistWithStatus.sort((a, b) => {
-    const orderDiff = statusOrder(a.status) - statusOrder(b.status);
-    if (orderDiff !== 0) return orderDiff;
-    // 同じステータス内ではサージ比率降順
-    return (b.surgeRatio ?? 0) - (a.surgeRatio ?? 0);
-  });
-
-  // フィルター適用
-  const filteredWatchlist = activeFilter
-    ? watchlistWithStatus.filter((w) => w.status === activeFilter)
-    : watchlistWithStatus;
+  // 注文済 → 保有中 → 監視中
+  const statusOrder = { ordered: 0, holding: 1, watching: 2 };
+  watchlistWithStatus.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
   // ページネーション
   const perPage = QUERY_LIMITS.WATCHLIST_PER_PAGE;
-  const totalPages = Math.max(1, Math.ceil(filteredWatchlist.length / perPage));
+  const totalPages = Math.max(1, Math.ceil(watchlistWithStatus.length / perPage));
   const page = Math.min(Math.max(1, Number(c.req.query("page")) || 1), totalPages);
   const start = (page - 1) * perPage;
-  const pagedWatchlist = filteredWatchlist.slice(start, start + perPage);
-  const filterQuery = activeFilter ? `&status=${activeFilter}` : "";
+  const pagedWatchlist = watchlistWithStatus.slice(start, start + perPage);
 
   const tickers = watchlist.map((w) => w.ticker);
   const stocks = tickers.length
@@ -169,44 +108,32 @@ app.get("/", async (c) => {
 
   // サマリー統計
   const orderedCount = watchlistWithStatus.filter((w) => w.status === "ordered").length;
-  const rejectedCount = watchlistWithStatus.filter((w) => w.status === "rejected").length;
-  const hotCount = watchlistWithStatus.filter((w) => w.status === "hot").length;
   const holdingCount = watchlistWithStatus.filter((w) => w.status === "holding").length;
+  const watchingCount = watchlistWithStatus.filter((w) => w.status === "watching").length;
 
   // グローバル条件
   const inTimeWindow = isInEntryTimeWindow();
   const shouldTrade = todayAssessment?.shouldTrade ?? false;
-
-  const coldCount = watchlistWithStatus.filter((w) => w.status === "cold").length;
-
-  /** フィルターバッジリンクを生成 */
-  function filterBadge(status: WatchlistStatus, label: string, count: number, badgeClass: string) {
-    const isActive = activeFilter === status;
-    const href = isActive ? "/watchlist" : `/watchlist?status=${status}`;
-    const activeStyle = isActive ? "outline: 2px solid currentColor; outline-offset: 1px;" : "opacity: 0.7;";
-    return raw(`<a href="${href}" class="badge ${badgeClass}" style="text-decoration: none; cursor: pointer; ${count ? activeStyle : "opacity: 0.3; pointer-events: none;"}">${label}: ${count}</a>`);
-  }
+  const isFriday = dayjs().tz(TIMEZONE).day() === 5;
 
   const content = html`
-    <p class="section-title">${tt("監視中のウォッチリスト", "毎朝8:00に構築。ブレイクアウト候補銘柄")} (${watchlist.length})</p>
-    ${scannerInfo
-      ? html`
-          <div class="card" style="padding: 8px 12px; margin-bottom: 8px; font-size: 12px;">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
-              <a href="/watchlist" style="text-decoration: none; color: ${!activeFilter ? "#e2e8f0" : "#94a3b8"}; font-size: 11px; ${!activeFilter ? "font-weight: 600;" : ""}">すべて</a>
-              ${filterBadge("ordered", "注文済", orderedCount, "badge-triggered")}
-              ${filterBadge("rejected", "却下", rejectedCount, "badge-rejected")}
-              ${filterBadge("hot", "急騰中", hotCount, "badge-hot")}
-              ${filterBadge("holding", "保有中", holdingCount, "badge-holding")}
-              ${filterBadge("cold", "監視中", coldCount, "badge-cold")}
-            </div>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap; color: #94a3b8; font-size: 11px; border-top: 1px solid #334155; padding-top: 6px;">
-              <span>${raw(`${tt("時間帯", `${BREAKOUT.GUARD.EARLIEST_ENTRY_TIME}〜${BREAKOUT.GUARD.LATEST_ENTRY_TIME}`)}: <span data-global-time style="color: ${inTimeWindow ? "#22c55e" : "#ef4444"};">${inTimeWindow ? "○" : "×"}</span>`)}</span>
-              <span>${raw(`${tt("市場評価", "MarketAssessment.shouldTrade")}: <span data-global-market style="color: ${shouldTrade ? "#22c55e" : "#ef4444"};">${shouldTrade ? "取引可" : "見送り"}</span>`)}</span>
-            </div>
-          </div>
-        `
-      : ""}
+    <p class="section-title">${tt("ウォッチリスト", "毎朝8:00に構築。全戦略共通の候補銘柄")} (${watchlist.length})</p>
+    <div class="card" style="padding: 8px 12px; margin-bottom: 8px; font-size: 12px;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
+        <span style="color: #e2e8f0; font-size: 11px; font-weight: 600;">すべて: ${watchlist.length}</span>
+        <span class="badge badge-triggered" style="opacity: ${orderedCount ? 0.7 : 0.3};">注文済: ${orderedCount}</span>
+        <span class="badge badge-holding" style="opacity: ${holdingCount ? 0.7 : 0.3};">保有中: ${holdingCount}</span>
+        <span class="badge badge-cold" style="opacity: ${watchingCount ? 0.7 : 0.3};">監視中: ${watchingCount}</span>
+        <span style="margin-left: auto;"></span>
+        <span data-summary-gu class="badge badge-gapup" style="opacity: 0.3;">GU: -</span>
+        <span data-summary-bo class="badge badge-hot" style="opacity: 0.3;">BO: -</span>
+        ${isFriday ? html`<span data-summary-wb class="badge badge-wb" style="opacity: 0.3;">WB: -</span>` : ""}
+      </div>
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; color: #94a3b8; font-size: 11px; border-top: 1px solid #334155; padding-top: 6px;">
+        <span>${raw(`${tt("時間帯", `${BREAKOUT.GUARD.EARLIEST_ENTRY_TIME}〜${BREAKOUT.GUARD.LATEST_ENTRY_TIME}`)}: <span data-global-time style="color: ${inTimeWindow ? "#22c55e" : "#ef4444"};">${inTimeWindow ? "○" : "×"}</span>`)}</span>
+        <span>${raw(`${tt("市場評価", "MarketAssessment.shouldTrade")}: <span data-global-market style="color: ${shouldTrade ? "#22c55e" : "#ef4444"};">${shouldTrade ? "取引可" : "見送り"}</span>`)}</span>
+      </div>
+    </div>
     ${watchlist.length
       ? html`
           <div class="card table-wrap">
@@ -214,9 +141,9 @@ app.get("/", async (c) => {
               <thead>
                 <tr>
                   <th>銘柄</th>
-                  <th>${tt("状態", "監視中→急騰中→注文済/却下")}</th>
-                  <th>${tt("条件", "出来高≥2.0x かつ 価格>20日高値 で注文")}</th>
-                  <th>${tt("サージ", "出来高サージ比率（1.5x=Hot, 2.0x=Trigger）")}</th>
+                  <th>${tt("状態", "保有中/注文済/監視中")}</th>
+                  <th>${tt("戦略", "GU=ギャップアップ BO=ブレイクアウト WB=週足ブレイク(金)")}</th>
+                  <th>${tt("サージ", "出来高サージ比率（時間帯加重）")}</th>
                   <th>${tt("現在価格", "リアルタイム価格")}</th>
                   <th>${tt("20日高値", "ブレイクアウト基準価格")}</th>
                   <th>${tt("乖離", "現在価格と20日高値の差（%）")}</th>
@@ -227,9 +154,9 @@ app.get("/", async (c) => {
                   (w) => html`
                     <tr data-quote-row data-ticker="${w.ticker}" data-order-price="${w.high20}">
                       <td>${tickerLink(w.ticker, `${w.ticker} ${nameMap.get(w.ticker) ?? w.ticker}`)}</td>
-                      <td data-status-badge>${statusBadgeHtml(w.status)}</td>
-                      <td style="font-size: 11px; white-space: nowrap;"><span data-volume-check>${raw(volumeCheckHtml(w.surgeRatio))}</span> <span data-price-check style="color: #64748b;">価格-</span></td>
-                      <td data-surge-ratio>${raw(`<span ${surgeRatioClass(w.surgeRatio)}>${formatSurgeRatio(w.surgeRatio)}</span>`)}</td>
+                      <td data-status-badge>${statusBadgeHtml(w.status, w.orderStrategy)}</td>
+                      <td data-strategies style="font-size: 11px; white-space: nowrap;"><span class="quote-loading">...</span></td>
+                      <td data-surge-ratio><span class="quote-loading">...</span></td>
                       <td data-quote-price><span class="quote-loading">...</span></td>
                       <td>¥${formatYen(w.high20)}</td>
                       <td data-quote-deviation><span class="quote-loading">...</span></td>
@@ -243,16 +170,16 @@ app.get("/", async (c) => {
             ? html`
                 <div class="pagination">
                   ${page > 1
-                    ? html`<a href="/watchlist?page=${page - 1}${filterQuery}" class="pagination-link">← 前へ</a>`
+                    ? html`<a href="/watchlist?page=${page - 1}" class="pagination-link">← 前へ</a>`
                     : html`<span class="pagination-link disabled">← 前へ</span>`}
                   <span class="pagination-info">${page} / ${totalPages}</span>
                   ${page < totalPages
-                    ? html`<a href="/watchlist?page=${page + 1}${filterQuery}" class="pagination-link">次へ →</a>`
+                    ? html`<a href="/watchlist?page=${page + 1}" class="pagination-link">次へ →</a>`
                     : html`<span class="pagination-link disabled">次へ →</span>`}
                 </div>
               `
             : ""}
-        `
+      `
       : html`<div class="card">${emptyState("監視銘柄なし（8:00に構築）")}</div>`}
     <script>
       (function() {
@@ -275,12 +202,16 @@ app.get("/", async (c) => {
 
         var fmt = function(v) { return Number(v).toLocaleString('ja-JP', { maximumFractionDigits: 0 }); };
 
+        var STRATEGY_BADGE = {
+          GU: '<span class="badge badge-gapup" style="font-size: 10px; padding: 1px 5px;">GU</span>',
+          BO: '<span class="badge badge-hot" style="font-size: 10px; padding: 1px 5px;">BO</span>',
+          WB: '<span class="badge badge-wb" style="font-size: 10px; padding: 1px 5px;">WB</span>'
+        };
+
         var STATUS_MAP = {
-          ordered: { label: '注文済', cls: 'badge-triggered' },
-          rejected: { label: '却下', cls: 'badge-rejected' },
-          hot: { label: '急騰中', cls: 'badge-hot' },
+          ordered: { cls: 'badge-triggered' },
           holding: { label: '保有中', cls: 'badge-holding' },
-          cold: { label: '監視中', cls: 'badge-cold' }
+          watching: { label: '監視中', cls: 'badge-cold' }
         };
 
         function poll() {
@@ -290,7 +221,8 @@ app.get("/", async (c) => {
             .then(function(data) {
               if (!data.tickers) return;
 
-              // 行ごとに更新
+              var guCount = 0, boCount = 0, wbCount = 0;
+
               rows.forEach(function(row) {
                 var ticker = row.getAttribute('data-ticker');
                 var d = data.tickers[ticker];
@@ -300,7 +232,28 @@ app.get("/", async (c) => {
                 var badgeEl = row.querySelector('[data-status-badge]');
                 if (badgeEl && d.status) {
                   var s = STATUS_MAP[d.status];
-                  if (s) badgeEl.innerHTML = '<span class="badge ' + s.cls + '">' + s.label + '</span>';
+                  if (s) {
+                    var label = s.label;
+                    if (d.status === 'ordered') {
+                      label = d.orderStrategy ? '注文済(' + d.orderStrategy.toUpperCase() + ')' : '注文済';
+                    }
+                    badgeEl.innerHTML = '<span class="badge ' + s.cls + '">' + label + '</span>';
+                  }
+                }
+
+                // 戦略バッジ
+                var stratEl = row.querySelector('[data-strategies]');
+                if (stratEl) {
+                  var strats = d.strategies || [];
+                  if (strats.length > 0) {
+                    stratEl.innerHTML = strats.map(function(s) { return STRATEGY_BADGE[s] || s; }).join(' ');
+                  } else {
+                    stratEl.innerHTML = '<span style="color: #475569; font-size: 11px;">-</span>';
+                  }
+                  // サマリー集計
+                  if (strats.indexOf('GU') !== -1) guCount++;
+                  if (strats.indexOf('BO') !== -1) boCount++;
+                  if (strats.indexOf('WB') !== -1) wbCount++;
                 }
 
                 // サージ比率
@@ -314,25 +267,12 @@ app.get("/", async (c) => {
                   surgeEl.innerHTML = '<span style="' + style + '">' + txt + '</span>';
                 }
 
-                // 出来高チェック
-                var volEl = row.querySelector('[data-volume-check]');
-                if (volEl) {
-                  var r2 = d.surgeRatio;
-                  if (r2 != null) {
-                    var ok = r2 >= SURGE_TRIGGER;
-                    var color = ok ? '#22c55e' : '#64748b';
-                    var mark = ok ? '\u2713' : '\u2717';
-                    volEl.innerHTML = '<span style="color: ' + color + '; font-size: 11px;">出来高' + mark + '</span>';
-                  }
-                }
-
                 // 価格
                 if (d.price != null) {
                   var priceEl = row.querySelector('[data-quote-price]');
                   if (priceEl) priceEl.innerHTML = '\u00a5' + fmt(d.price);
 
                   var orderPrice = parseFloat(row.getAttribute('data-order-price') || '0');
-                  // 乖離率
                   var devEl = row.querySelector('[data-quote-deviation]');
                   if (devEl && orderPrice) {
                     var dev = ((d.price - orderPrice) / orderPrice) * 100;
@@ -340,16 +280,16 @@ app.get("/", async (c) => {
                     var sign = dev >= 0 ? '+' : '';
                     devEl.innerHTML = '<span class="' + cls + '">' + sign + dev.toFixed(2) + '%</span>';
                   }
-
-                  // 価格チェック
-                  var priceCheckEl = row.querySelector('[data-price-check]');
-                  if (priceCheckEl && orderPrice) {
-                    var priceOk = d.price > orderPrice;
-                    priceCheckEl.innerHTML = '\u4fa1\u683c' + (priceOk ? '\u2713' : '\u2717');
-                    priceCheckEl.style.color = priceOk ? '#22c55e' : '#64748b';
-                  }
                 }
               });
+
+              // サマリーバッジ更新
+              var guEl = document.querySelector('[data-summary-gu]');
+              if (guEl) { guEl.textContent = 'GU: ' + guCount; guEl.style.opacity = guCount ? '0.7' : '0.3'; }
+              var boEl = document.querySelector('[data-summary-bo]');
+              if (boEl) { boEl.textContent = 'BO: ' + boCount; boEl.style.opacity = boCount ? '0.7' : '0.3'; }
+              var wbEl = document.querySelector('[data-summary-wb]');
+              if (wbEl) { wbEl.textContent = 'WB: ' + wbCount; wbEl.style.opacity = wbCount ? '0.7' : '0.3'; }
 
               // グローバル条件
               var g = data.global;
@@ -365,12 +305,11 @@ app.get("/", async (c) => {
                   marketEl.style.color = g.shouldTrade ? '#22c55e' : '#ef4444';
                 }
               }
-
-              // サマリーバッジの件数更新は行わない（フィルターリンクのためページ遷移が必要）
             })
             .catch(function() { /* エラー時はスキップ */ });
         }
 
+        poll();
         setInterval(poll, POLL_INTERVAL);
       })();
     </script>

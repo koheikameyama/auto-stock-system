@@ -71,8 +71,9 @@ model BreakoutWatchlistEntry {
   avgVolume25 Float
   high20      Float
   atr14       Float
-  latestClose Float
-  createdAt   DateTime @default(now())
+  latestClose  Float
+  weeklyHigh13 Float?
+  createdAt    DateTime @default(now())
 
   @@unique([date, tickerCode])
   @@index([date(sort: Desc)])

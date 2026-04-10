@@ -37,6 +37,7 @@ export async function getWatchlist(): Promise<WatchlistEntry[]> {
     high20: r.high20,
     atr14: r.atr14,
     latestClose: r.latestClose,
+    weeklyHigh13: r.weeklyHigh13 ?? undefined,
   }));
 
   cachedWatchlist = entries;
@@ -61,6 +62,7 @@ async function saveWatchlistToDB(entries: WatchlistEntry[]): Promise<void> {
         high20: e.high20,
         atr14: e.atr14,
         latestClose: e.latestClose,
+        weeklyHigh13: e.weeklyHigh13 ?? null,
       })),
     });
   }

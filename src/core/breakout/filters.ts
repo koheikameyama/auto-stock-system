@@ -70,6 +70,8 @@ export function checkGates(input: GateInput): { passed: boolean; reason?: string
 interface FilterIntermediates {
   weeklyClose: number | null;
   weeklySma13: number | null;
+  /** 13週高値（当週除く、WB戦略用） */
+  weeklyHigh13: number | null;
 }
 
 /**
@@ -78,7 +80,7 @@ interface FilterIntermediates {
  */
 export function computeScoringIntermediates(data: OHLCVData[]): FilterIntermediates {
   if (!data || data.length < 2) {
-    return { weeklyClose: null, weeklySma13: null };
+    return { weeklyClose: null, weeklySma13: null, weeklyHigh13: null };
   }
 
   // 古い順にソート
@@ -86,8 +88,9 @@ export function computeScoringIntermediates(data: OHLCVData[]): FilterIntermedia
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
 
-  // 週足に集約（各週の最終日の終値）
-  const weekMap = new Map<string, number>();
+  // 週足に集約（各週の終値・高値）
+  const weekCloseMap = new Map<string, number>();
+  const weekHighMap = new Map<string, number>();
   for (const bar of sorted) {
     const d = new Date(bar.date);
     const dayOfWeek = d.getDay();
@@ -95,25 +98,32 @@ export function computeScoringIntermediates(data: OHLCVData[]): FilterIntermedia
     const monday = new Date(d);
     monday.setDate(d.getDate() + daysToMonday);
     const weekKey = monday.toISOString().slice(0, 10);
-    weekMap.set(weekKey, bar.close); // 同週の後ろのデータで上書き → 週末終値
+    weekCloseMap.set(weekKey, bar.close); // 同週の後ろのデータで上書き → 週末終値
+    weekHighMap.set(weekKey, Math.max(weekHighMap.get(weekKey) ?? 0, bar.high));
   }
 
-  const weeklyCloses = Array.from(weekMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, close]) => close);
+  const weekKeys = Array.from(weekCloseMap.keys()).sort();
+  const weeklyCloses = weekKeys.map((k) => weekCloseMap.get(k)!);
 
   if (weeklyCloses.length === 0) {
-    return { weeklyClose: null, weeklySma13: null };
+    return { weeklyClose: null, weeklySma13: null, weeklyHigh13: null };
   }
 
   const weeklyClose = weeklyCloses[weeklyCloses.length - 1];
 
   if (weeklyCloses.length < 13) {
-    return { weeklyClose, weeklySma13: null };
+    return { weeklyClose, weeklySma13: null, weeklyHigh13: null };
   }
 
   const last13 = weeklyCloses.slice(-13);
   const weeklySma13 = last13.reduce((sum, c) => sum + c, 0) / 13;
 
-  return { weeklyClose, weeklySma13 };
+  // 13週高値（当週を除く直近13週の最大 high）
+  let weeklyHigh13: number | null = null;
+  if (weekKeys.length >= 14) {
+    const lookbackKeys = weekKeys.slice(-14, -1);
+    weeklyHigh13 = Math.max(...lookbackKeys.map((k) => weekHighMap.get(k)!));
+  }
+
+  return { weeklyClose, weeklySma13, weeklyHigh13 };
 }

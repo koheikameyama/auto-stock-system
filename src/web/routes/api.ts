@@ -18,7 +18,9 @@ import { yfFetchIndexChart } from "../../lib/yfinance-client";
 import { nikkeiChartBody } from "../views/components";
 import { NIKKEI_CHART_PERIODS, TIMEZONE } from "../../lib/constants";
 import { BREAKOUT } from "../../lib/constants/breakout";
-import { getScannerState } from "../../jobs/breakout-monitor";
+import { GAPUP } from "../../lib/constants/gapup";
+import { getWatchlist } from "../../jobs/watchlist-builder";
+import { calculateVolumeSurgeRatio } from "../../core/breakout/volume-surge";
 import { getTodayForDB } from "../../lib/market-date";
 import dayjs from "dayjs";
 import utcPlugin from "dayjs/plugin/utc.js";
@@ -277,6 +279,9 @@ app.get("/quotes", async (c) => {
 
 /**
  * GET /api/watchlist/state?tickers=7203,8306 - ウォッチリスト状態（ポーリング用）
+ *
+ * breakout-monitor 依存を排除し、ライブ時価から直接サージ比率を計算。
+ * GU/BO/WB 戦略ごとの条件チェック結果を返す。
  */
 app.get("/watchlist/state", async (c) => {
   const tickersParam = c.req.query("tickers");
@@ -285,23 +290,19 @@ app.get("/watchlist/state", async (c) => {
   const tickers = tickersParam.split(",").filter(Boolean);
   if (!tickers.length) return c.json({});
 
-  // スキャナー状態
-  const scannerInfo = getScannerState();
-  const hotSet = scannerInfo?.state.hotSet ?? new Map();
-  const triggeredToday = scannerInfo?.state.triggeredToday ?? new Set<string>();
-  const holdingTickers = scannerInfo?.holdingTickers ?? new Set<string>();
-  const surgeRatios = scannerInfo?.state.lastSurgeRatios ?? new Map();
-
-  // DB + 時価を並列取得
+  // ウォッチリスト・保有・注文・市場評価・時価を並列取得
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const [todayOrders, todayAssessment, quotes] = await Promise.all([
-    triggeredToday.size
-      ? prisma.tradingOrder.findMany({
-          where: { side: "buy", strategy: "breakout", createdAt: { gte: todayStart } },
-          select: { stock: { select: { tickerCode: true } } },
-        })
-      : Promise.resolve([]),
+  const [watchlist, holdings, todayOrders, todayAssessment, quotes] = await Promise.all([
+    getWatchlist(),
+    prisma.tradingPosition.findMany({
+      where: { status: "open" },
+      select: { stock: { select: { tickerCode: true } } },
+    }),
+    prisma.tradingOrder.findMany({
+      where: { side: "buy", createdAt: { gte: todayStart } },
+      select: { stock: { select: { tickerCode: true } }, strategy: true },
+    }),
     prisma.marketAssessment.findUnique({
       where: { date: getTodayForDB() },
       select: { shouldTrade: true },
@@ -309,47 +310,102 @@ app.get("/watchlist/state", async (c) => {
     fetchStockQuotesBatch(tickers, { yfinanceFallback: true }),
   ]);
 
-  const orderedTickers = new Set(todayOrders.map((o) => o.stock.tickerCode));
+  const holdingTickers = new Set(holdings.map((h) => h.stock.tickerCode));
+  const orderedMap = new Map<string, string>(); // ticker → strategy
+  for (const o of todayOrders) {
+    orderedMap.set(o.stock.tickerCode, o.strategy ?? "");
+  }
+
+  // ウォッチリストを Map 化
+  const wlMap = new Map(watchlist.map((w) => [w.ticker, w]));
+
+  // 現在時刻（サージ比率の時間帯加重用）
+  const now = dayjs().tz(TIMEZONE);
+  const hour = now.hour();
+  const minute = now.minute();
+  const isFriday = now.day() === 5;
 
   // ステータス判定
-  type WatchlistStatus = "ordered" | "rejected" | "hot" | "holding" | "cold";
-  function getStatus(ticker: string): WatchlistStatus {
-    if (holdingTickers.has(ticker)) return "holding";
-    if (triggeredToday.has(ticker)) {
-      return orderedTickers.has(ticker) ? "ordered" : "rejected";
+  type WatchlistStatus = "ordered" | "holding" | "watching";
+  function getStatus(ticker: string): { status: WatchlistStatus; orderStrategy?: string } {
+    if (holdingTickers.has(ticker)) return { status: "holding" };
+    if (orderedMap.has(ticker)) return { status: "ordered", orderStrategy: orderedMap.get(ticker) };
+    return { status: "watching" };
+  }
+
+  // 戦略条件チェック
+  function checkStrategies(ticker: string, quote: { price: number; open: number; volume: number } | null): string[] {
+    if (!quote) return [];
+    const wl = wlMap.get(ticker);
+    if (!wl) return [];
+
+    const surgeRatio = calculateVolumeSurgeRatio(quote.volume, wl.avgVolume25, hour, minute);
+    const strategies: string[] = [];
+
+    // GU: open > prevClose × 1.03 + 陽線 + サージ ≥ 1.5x
+    if (
+      wl.latestClose > 0 &&
+      quote.open > wl.latestClose * (1 + GAPUP.ENTRY.GAP_MIN_PCT) &&
+      quote.price >= quote.open &&
+      surgeRatio >= GAPUP.ENTRY.VOL_SURGE_RATIO
+    ) {
+      strategies.push("GU");
     }
-    if (hotSet.has(ticker)) return "hot";
-    return "cold";
+
+    // BO: price > high20 + サージ ≥ 2.0x
+    if (quote.price > wl.high20 && surgeRatio >= BREAKOUT.ENTRY.TRIGGER_THRESHOLD) {
+      strategies.push("BO");
+    }
+
+    // WB: price > weeklyHigh13（金曜のみ）
+    if (isFriday && wl.weeklyHigh13 != null && quote.price > wl.weeklyHigh13) {
+      strategies.push("WB");
+    }
+
+    return strategies;
   }
 
   // ティッカーごとのデータ
-  const tickerData: Record<string, { status: WatchlistStatus; surgeRatio: number | null; price: number | null }> = {};
-  const summary = { ordered: 0, rejected: 0, hot: 0, holding: 0, cold: 0 };
+  const tickerData: Record<string, {
+    status: WatchlistStatus;
+    orderStrategy?: string;
+    strategies: string[];
+    surgeRatio: number | null;
+    price: number | null;
+    open: number | null;
+  }> = {};
 
   for (const ticker of tickers) {
-    const status = getStatus(ticker);
-    summary[status]++;
+    const { status, orderStrategy } = getStatus(ticker);
     const quote = quotes.get(ticker);
+    const wl = wlMap.get(ticker);
+
+    const surgeRatio = quote && wl
+      ? calculateVolumeSurgeRatio(quote.volume, wl.avgVolume25, hour, minute)
+      : null;
+
     tickerData[ticker] = {
       status,
-      surgeRatio: surgeRatios.get(ticker) ?? null,
+      ...(orderStrategy && { orderStrategy }),
+      strategies: checkStrategies(ticker, quote ? { price: quote.price, open: quote.open, volume: quote.volume } : null),
+      surgeRatio,
       price: quote?.price ?? null,
+      open: quote?.open ?? null,
     };
   }
 
   // 時間帯チェック
-  const now = dayjs().tz(TIMEZONE);
   const [eh, em] = BREAKOUT.GUARD.EARLIEST_ENTRY_TIME.split(":").map(Number);
   const [lh, lm] = BREAKOUT.GUARD.LATEST_ENTRY_TIME.split(":").map(Number);
-  const current = now.hour() * 60 + now.minute();
+  const current = hour * 60 + minute;
   const inTimeWindow = current >= eh * 60 + em && current <= lh * 60 + lm;
 
   return c.json({
     tickers: tickerData,
-    summary,
     global: {
       inTimeWindow,
       shouldTrade: todayAssessment?.shouldTrade ?? false,
+      isFriday,
     },
   });
 });

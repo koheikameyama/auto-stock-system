@@ -14,6 +14,8 @@ export interface WatchlistEntry {
   atr14: number;
   /** 最新終値 */
   latestClose: number;
+  /** 13週高値（WB戦略用、金曜のみ使用） */
+  weeklyHigh13?: number;
 }
 
 /** ホットリストエントリ（体積サージ中の銘柄） */
