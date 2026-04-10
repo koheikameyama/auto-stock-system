@@ -334,6 +334,7 @@ export async function main() {
     // 保有営業日数を算出
     const entryDate = dayjs(position.createdAt).tz(TIMEZONE);
     const now = dayjs().tz(TIMEZONE);
+    const isEntryDay = entryDate.format("YYYY-MM-DD") === now.format("YYYY-MM-DD");
     let holdingBusinessDays = 0;
     let d = entryDate.add(1, "day");
     while (d.isBefore(now, "day") || d.isSame(now, "day")) {
@@ -427,7 +428,10 @@ export async function main() {
         maxHoldingDaysOverride,
         baseLimitHoldingDaysOverride,
       },
-      { open: quote.open, high: quote.high, low: quote.low, close: quote.price },
+      // エントリー当日は current price のみ使用（当日OHLCはエントリー前の値動きを含むため）
+      isEntryDay
+        ? { open: quote.price, high: quote.price, low: quote.price, close: quote.price }
+        : { open: quote.open, high: quote.high, low: quote.low, close: quote.price },
     );
 
     const newMaxHigh = exitResult.newMaxHigh;
@@ -576,9 +580,15 @@ export async function main() {
     const quote = await fetchStockQuote(position.stock.tickerCode);
     if (!quote) continue;
 
+    // エントリー当日は当日高値を使わない（エントリー前の値動きを含むため）
+    const earningsEntryDay = dayjs(position.createdAt).tz(TIMEZONE).format("YYYY-MM-DD");
+    const earningsToday = dayjs().tz(TIMEZONE).format("YYYY-MM-DD");
+    const earningsIsEntryDay = earningsEntryDay === earningsToday;
+    const earningsDayHigh = earningsIsEntryDay ? quote.price : quote.high;
+
     const maxHigh = position.maxHighDuringHold
-      ? Math.max(Number(position.maxHighDuringHold), quote.high)
-      : quote.high;
+      ? Math.max(Number(position.maxHighDuringHold), earningsDayHigh)
+      : earningsDayHigh;
 
     const earningsReason = `決算前強制決済（決算まで${diffDays}日）`;
 
@@ -669,9 +679,15 @@ export async function main() {
       const defensiveReason = `crisis全ポジション即時決済（含み損益: ${currentProfitPct >= 0 ? "+" : ""}${currentProfitPct.toFixed(2)}%）`;
 
       {
+        // エントリー当日は当日高値を使わない（エントリー前の値動きを含むため）
+        const defEntryDay = dayjs(position.createdAt).tz(TIMEZONE).format("YYYY-MM-DD");
+        const defToday = dayjs().tz(TIMEZONE).format("YYYY-MM-DD");
+        const defIsEntryDay = defEntryDay === defToday;
+        const defDayHigh = defIsEntryDay ? quote.price : quote.high;
+
         const maxHigh = position.maxHighDuringHold
-          ? Math.max(Number(position.maxHighDuringHold), quote.high)
-          : quote.high;
+          ? Math.max(Number(position.maxHighDuringHold), defDayHigh)
+          : defDayHigh;
 
         const exitSnapshot: ExitSnapshot = {
           exitReason: defensiveReason,
