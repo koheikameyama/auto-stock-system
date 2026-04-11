@@ -197,7 +197,7 @@ async function main() {
   const ctx = { boConfig, guConfig, wbConfig, budget, verbose: !quietMode && verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount, equityCurveSmaPeriod: 20 };
 
   // デフォルトポジション制限（breakoutは無効化中）
-  const defaultLimits: PositionLimits = { boMax: 0, guMax: 3, wbMax: 3, totalMax: 3 };
+  const defaultLimits: PositionLimits = { boMax: 0, guMax: 3, wbMax: 2 };
 
   // 資金比較モード
   if (compareBudget) {
@@ -553,7 +553,7 @@ async function main() {
   }
 
   // 通常実行（breakoutは無効化中のためboMax=0）
-  console.log(`ポジション枠: GU${defaultLimits.guMax} + WB${defaultLimits.wbMax} (合計上限${defaultLimits.totalMax})`);
+  console.log(`ポジション枠: GU${defaultLimits.guMax} + WB${defaultLimits.wbMax}${defaultLimits.totalMax ? ` (合計上限${defaultLimits.totalMax})` : ""}`);
   const result = runCombinedSimulation(ctx, defaultLimits);
 
   console.log("\n" + "=".repeat(60));

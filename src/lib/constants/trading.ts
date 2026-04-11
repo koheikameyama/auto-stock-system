@@ -13,7 +13,7 @@ export const TRADING_DEFAULTS = {
   TOTAL_BUDGET: 500_000, // 50万円
   MAX_POSITIONS: 3, // 最大同時保有数（戦略別・独立）
   MAX_POSITIONS_BO: 3, // ブレイクアウト戦略の最大ポジション数
-  MAX_POSITIONS_GU: 2, // ギャップアップ戦略の最大ポジション数
+  MAX_POSITIONS_GU: 3, // ギャップアップ戦略の最大ポジション数（資金稼働率向上）
   MAX_POSITIONS_WB: 2, // 週足レンジブレイク戦略の最大ポジション数
   MAX_POSITION_PCT: 40, // 1銘柄集中リスク防止（50万円規模: 最大20万/銘柄）
   MAX_DAILY_LOSS_PCT: 3, // 日次最大損失率(%)
