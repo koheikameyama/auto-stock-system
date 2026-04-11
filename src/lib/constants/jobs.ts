@@ -35,7 +35,7 @@ export const BREAK_EVEN_STOP = {
     gapup: 0.3,      // ATR×0.3の含み益でBE発動（WF最適値: be=0.3・trail=0.3が全ウィンドウで安定）
     momentum: 1.0,
     "earnings-gap": 0.3,
-    "weekly-break": 0.8,
+    "weekly-break": 0.5,    // WF最適値: be=0.5（6窓中4窓で選択）
     "squeeze-breakout": 0.5,
   },
   // ATR不明時のフォールバック（%ベース）
@@ -50,7 +50,7 @@ export const TRAILING_STOP = {
     gapup: 0.3,      // BE発動(ATR×0.3)後にATR×0.3のタイトなトレール（WF最適値）
     momentum: 1.0,
     "earnings-gap": 0.3,
-    "weekly-break": 1.0,
+    "weekly-break": 0.8,    // WF最適値: trail=0.8（直近2窓で安定）
     "squeeze-breakout": 0.5,
   },
   // ATR不明時のフォールバック（%ベース）

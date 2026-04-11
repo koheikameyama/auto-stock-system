@@ -107,6 +107,37 @@ npm run walk-forward:gapup
 - 平均保有日数: 1.2日
 - ※ 以前の結果（2026-03-29: PF=2.44、ts=0.5）は `getDynamicMaxPositionPct` に `stockPrice` 引数漏れによるバグ（qty=NaN）で無効だった
 
+### 週足レンジブレイク戦略バックテスト
+
+```bash
+npm run backtest:weekly-break
+# オプション: --start 2025-01-01 --end 2025-12-31 --budget 500000 --verbose
+```
+
+13週高値ブレイク + 週足出来高サージ1.3倍でブレイク週の最終営業日終値エントリー。
+
+### 週足レンジブレイク walk-forward 分析
+
+```bash
+npm run walk-forward:weekly-break
+```
+
+#### パラメータグリッド（27通り、エグジット系のみ）
+
+| パラメータ | 値 |
+|-----------|-----|
+| atrMultiplier | 1.0, 1.5, 2.0 |
+| beActivationMultiplier | 0.5, 0.8, 1.2 |
+| trailMultiplier | 0.8, 1.0, 1.5 |
+
+#### 最新WF結果（2026-04-11実施）
+
+- **OOS集計PF=3.12、判定「堅牢 ✓」（IS/OOS比=1.04）**
+- 全6ウィンドウアクティブ（休止なし）
+- atr=1.0 が全ウィンドウで安定、be=0.5 が4/6窓、trail=0.8 が直近2窓
+- 84トレード、勝率40.5%
+- パラメータを本番に反映: atr=1.0, be=0.5, trail=0.8
+
 ### スクイーズブレイクアウト戦略バックテスト
 
 ```bash

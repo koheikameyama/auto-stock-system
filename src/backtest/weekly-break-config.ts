@@ -21,9 +21,9 @@ export const WEEKLY_BREAK_BACKTEST_DEFAULTS: Omit<WeeklyBreakBacktestConfig, "st
   atrMultiplier: WEEKLY_BREAK.STOP_LOSS.ATR_MULTIPLIER, // 1.5
   maxLossPct: STOP_LOSS.MAX_LOSS_PCT,                    // 0.03
 
-  // トレーリングストップ
-  beActivationMultiplier: 0.8,
-  trailMultiplier: 1.0,
+  // トレーリングストップ（WF最適値: atr=1.0, be=0.5, trail=0.8）
+  beActivationMultiplier: 0.5,
+  trailMultiplier: 0.8,
 
   // タイムストップ（週足は長め）
   maxHoldingDays: 15,

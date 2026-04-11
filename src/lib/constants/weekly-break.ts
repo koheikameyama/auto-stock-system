@@ -13,8 +13,8 @@ export const WEEKLY_BREAK = {
     MIN_ATR_PCT: 1.5,
   },
   STOP_LOSS: {
-    /** SL = entry - ATR × this（週足は広め） */
-    ATR_MULTIPLIER: 1.5,
+    /** SL = entry - ATR × this（WF最適値: atr=1.0が全6ウィンドウで安定） */
+    ATR_MULTIPLIER: 1.0,
   },
   MARKET_FILTER: {
     BREADTH_THRESHOLD: 0.6,
