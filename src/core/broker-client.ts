@@ -16,6 +16,7 @@ import {
 } from "../lib/constants/broker";
 import { mapNumericKeys } from "../lib/tachibana-key-map";
 import { TIMEZONE } from "../lib/constants";
+import { notifyBrokerError } from "../lib/slack";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -63,6 +64,12 @@ export class TachibanaClient {
   private baseUrl: string;
   /** 再ログイン中の Promise（同時多発再ログインを防ぐ） */
   private reLoginPromise: Promise<void> | null = null;
+  /** ログインロック検出時刻（nullなら正常） */
+  private loginLockedUntil: Date | null = null;
+  /** ログインロックのSlack通知済みフラグ（重複通知防止） */
+  private loginLockNotified = false;
+  /** ログインロック時のクールダウン（30分） */
+  private static readonly LOGIN_LOCK_COOLDOWN_MS = 30 * 60 * 1000;
   /**
    * リクエストのシリアライズ用ミューテックス
    * p_no採番〜HTTPレスポンス受信までをアトミックにし、
@@ -83,6 +90,13 @@ export class TachibanaClient {
    * ログイン — 仮想URLを5つ取得しセッションに保持
    */
   async login(): Promise<TachibanaSession> {
+    // ログインロック中はクールダウン期間スキップ
+    if (this.loginLockedUntil && new Date() < this.loginLockedUntil) {
+      throw new Error(
+        `Tachibana login is locked until ${this.loginLockedUntil.toISOString()}. Call the support center to unlock.`,
+      );
+    }
+
     const userId = process.env.TACHIBANA_USER_ID;
     const password = process.env.TACHIBANA_PASSWORD;
 
@@ -108,6 +122,30 @@ export class TachibanaClient {
         `Tachibana login failed: [${raw.sResultCode}] ${raw.sResultText ?? ""}`,
       );
     }
+
+    // アカウントロック検出（パスワード間違い規定回数超過）
+    const orderResultCode = raw.sOrderResultCode as string | undefined;
+    if (orderResultCode === "10033") {
+      this.loginLockedUntil = new Date(
+        Date.now() + TachibanaClient.LOGIN_LOCK_COOLDOWN_MS,
+      );
+      const errorMsg = (raw.sOrderResultText as string) || "アカウントがロックされています";
+      console.error(`[TachibanaClient] Account locked: ${errorMsg}`);
+
+      if (!this.loginLockNotified) {
+        this.loginLockNotified = true;
+        notifyBrokerError(
+          "アカウントロック",
+          `立花証券のログインがロックされました。\n📞 サポートセンター: 03-3669-0777 ／ 電話認証: 050-3102-6575\n\nエラー: ${errorMsg}`,
+        ).catch(() => {});
+      }
+
+      throw new Error(`Tachibana account locked: ${errorMsg}`);
+    }
+
+    // ログインロック解除（正常ログイン成功時）
+    this.loginLockedUntil = null;
+    this.loginLockNotified = false;
 
     // 金商法のお知らせ未読チェック
     if (raw.sKinsyouhouMidokuFlg === "1") {
@@ -319,6 +357,27 @@ export class TachibanaClient {
    */
   getSession(): TachibanaSession | null {
     return this.session;
+  }
+
+  /**
+   * ログインロックの状態を取得
+   */
+  getLoginLockStatus(): { isLocked: boolean; lockedUntil: Date | null } {
+    const isLocked = this.loginLockedUntil !== null && new Date() < this.loginLockedUntil;
+    return {
+      isLocked,
+      lockedUntil: isLocked ? this.loginLockedUntil : null,
+    };
+  }
+
+  /**
+   * ログインロックを手動解除（コールセンターで解除後に使用）
+   */
+  clearLoginLock(): void {
+    this.loginLockedUntil = null;
+    this.loginLockNotified = false;
+    this.session = null;
+    console.log("[TachibanaClient] Login lock cleared manually");
   }
 
   // ========================================

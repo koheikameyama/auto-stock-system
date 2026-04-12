@@ -22,6 +22,7 @@ import { GAPUP } from "../../lib/constants/gapup";
 import { getWatchlist } from "../../jobs/watchlist-builder";
 import { calculateVolumeSurgeRatio } from "../../core/breakout/volume-surge";
 import { getTodayForDB } from "../../lib/market-date";
+import { getTachibanaClient } from "../../core/broker-client";
 import dayjs from "dayjs";
 import utcPlugin from "dayjs/plugin/utc.js";
 import timezonePlugin from "dayjs/plugin/timezone.js";
@@ -140,6 +141,22 @@ app.post("/config/budget", async (c) => {
   console.log(`[${new Date().toISOString()}] Budget updated to ¥${body.totalBudget.toLocaleString()} via API`);
 
   return c.json({ success: true, totalBudget: body.totalBudget });
+});
+
+/**
+ * POST /api/broker/clear-login-lock - ブローカーログインロック解除
+ */
+app.post("/broker/clear-login-lock", async (c) => {
+  const client = getTachibanaClient();
+  client.clearLoginLock();
+
+  await notifySlack({
+    title: "🔓 ブローカーログインロック解除",
+    message: "ダッシュボードから手動でログインロックを解除しました",
+    color: "good",
+  }).catch(() => {});
+
+  return c.json({ success: true });
 });
 
 /**
