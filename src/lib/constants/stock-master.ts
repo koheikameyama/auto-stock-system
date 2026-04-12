@@ -42,6 +42,12 @@ export const JPX_DELISTING = {
   RESTRICTION_DAYS_BEFORE: 30,
 } as const;
 
+// JPX監理・整理銘柄スクレイピング設定
+export const JPX_SUPERVISION = {
+  /** JPX監理・整理銘柄一覧ページURL */
+  LIST_URL: "https://www.jpx.co.jp/listing/market-alerts/supervision/index.html",
+} as const;
+
 // 立花APIステータス定義（将来実装用）
 export const TACHIBANA_STATUS = {
   FLAGS: {

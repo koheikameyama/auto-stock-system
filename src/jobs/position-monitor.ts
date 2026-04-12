@@ -1,11 +1,13 @@
 /**
  * ポジションモニター（9:00〜15:00 / 毎分）
  *
- * 1. pending注文の約定チェック
+ * 1. pending注文の約定チェック（監理・整理銘柄の買い注文は即キャンセル）
  * 2. 約定した買い注文 → ポジションをオープン + 利確/損切り注文を作成
  * 3. openポジションの利確・損切り約定チェック
- * 4. デイトレポジションのタイムストップ（14:50以降は強制決済）
- * 5. Slackに約定・損益通知
+ * 4. 決算前強制決済
+ * 5. 監理・整理銘柄の強制売却（isRestricted = true）
+ * 6. ディフェンシブモード（crisis時の全ポジション即時決済）
+ * 7. Slackに約定・損益通知
  */
 
 import { Prisma } from "@prisma/client";
@@ -100,6 +102,23 @@ export async function main() {
     if (!(await isSystemActive())) {
       console.log("  → システム停止中のため終了");
       return;
+    }
+
+    // 買い注文: 監理・整理銘柄はquote取得前にキャンセル
+    if (order.side === "buy" && order.stock.isRestricted) {
+      console.log(
+        `  → ${order.stock.tickerCode}: 監理・整理銘柄のため買い注文キャンセル`,
+      );
+      if (order.brokerOrderId && order.brokerBusinessDay) {
+        await cancelOrder(order.brokerOrderId, order.brokerBusinessDay, `${order.stock.tickerCode}: 監理・整理銘柄のため買い注文キャンセル`).catch(
+          (err) => console.error(`[position-monitor] cancel error: ${err}`),
+        );
+      }
+      await prisma.tradingOrder.update({
+        where: { id: order.id },
+        data: { status: "cancelled" },
+      });
+      continue;
     }
 
     // 買い注文: ディフェンシブモード中はquote取得前にキャンセル（防御的二重チェック）
@@ -642,6 +661,79 @@ export async function main() {
     });
   } else {
     console.log("  → 決算前強制決済対象なし");
+  }
+
+  // 3.3. 監理・整理銘柄の強制売却
+  console.log("[2.3/3] 監理・整理銘柄強制売却チェック...");
+  const remainingForSupervision = await getOpenPositions();
+  let supervisionCloseCount = 0;
+
+  for (const position of remainingForSupervision) {
+    if (!position.stock.isRestricted) continue;
+
+    const quote = await fetchStockQuote(position.stock.tickerCode);
+    if (!quote) continue;
+
+    const supervisionReason = `監理・整理銘柄強制売却（${position.stock.supervisionFlag ?? "制限"}）`;
+
+    // エントリー当日は当日高値を使わない
+    const svEntryDay = dayjs(position.createdAt).tz(TIMEZONE).format("YYYY-MM-DD");
+    const svToday = dayjs().tz(TIMEZONE).format("YYYY-MM-DD");
+    const svIsEntryDay = svEntryDay === svToday;
+    const svDayHigh = svIsEntryDay ? quote.price : quote.high;
+
+    const maxHigh = position.maxHighDuringHold
+      ? Math.max(Number(position.maxHighDuringHold), svDayHigh)
+      : svDayHigh;
+
+    const exitSnapshot: ExitSnapshot = {
+      exitReason: supervisionReason,
+      exitPrice: quote.price,
+      priceJourney: { maxHigh },
+      marketContext: null,
+    };
+
+    console.log(
+      `  → ${position.stock.tickerCode}: ${supervisionReason} @ ¥${quote.price.toLocaleString()}`,
+    );
+
+    // ブローカー連携: SL注文取消 + 成行売り発注
+    await cancelBrokerSL(position.id);
+    await submitOrder({
+      ticker: position.stock.tickerCode,
+      side: "sell",
+      quantity: position.quantity,
+      limitPrice: null,
+    }).catch((err) =>
+      console.error(`[position-monitor] sell order error: ${err}`),
+    );
+
+    const closed = await closePosition(
+      position.id,
+      quote.price,
+      exitSnapshot as object,
+    );
+
+    await notifyOrderFilled({
+      tickerCode: position.stock.tickerCode,
+      name: position.stock.name,
+      side: "sell",
+      filledPrice: quote.price,
+      quantity: position.quantity,
+      pnl: getPositionPnl(closed),
+      exitReason: supervisionReason,
+    });
+
+    supervisionCloseCount++;
+  }
+
+  if (supervisionCloseCount > 0) {
+    await notifyRiskAlert({
+      type: "監理・整理銘柄強制売却",
+      message: `${supervisionCloseCount}件のポジションを監理・整理銘柄のため強制売却しました`,
+    });
+  } else {
+    console.log("  → 監理・整理銘柄対象なし");
   }
 
   // システム停止チェック（フェーズ間で再確認）
