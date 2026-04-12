@@ -44,16 +44,15 @@ export async function computeRealizedPnl(): Promise<number> {
  *
  * TACHIBANA_ENV=production: ブローカーAPIの買余力 + 投資中金額
  * それ以外: DBのtotalBudget + 累計確定損益
- * API失敗時はDBフォールバック。
  */
 export async function getEffectiveCapital(config?: TradingConfig | null): Promise<number> {
   if (isTachibanaProduction) {
     const apiBuyingPower = await getBuyingPower();
-    if (apiBuyingPower != null) {
-      const investedAmount = await getInvestedAmount();
-      return apiBuyingPower + investedAmount;
+    if (apiBuyingPower == null) {
+      throw new Error("証券APIから買余力を取得できませんでした");
     }
-    // API失敗時はDBフォールバック
+    const investedAmount = await getInvestedAmount();
+    return apiBuyingPower + investedAmount;
   }
 
   const cfg = config ?? await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
@@ -218,8 +217,10 @@ export async function getTotalPortfolioValue(
 export async function getCashBalance(): Promise<number> {
   if (isTachibanaProduction) {
     const apiBuyingPower = await getBuyingPower();
-    if (apiBuyingPower != null) return apiBuyingPower;
-    // API失敗時はDBフォールバック
+    if (apiBuyingPower == null) {
+      throw new Error("証券APIから買余力を取得できませんでした");
+    }
+    return apiBuyingPower;
   }
 
   const [effectiveCapital, openPositions, pendingBuyOrders] = await Promise.all([
