@@ -11,10 +11,10 @@ import utc from "dayjs/plugin/utc.js";
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
 import { prisma } from "../../lib/prisma";
-import { QUERY_LIMITS, TIMEZONE } from "../../lib/constants";
+import { TIMEZONE } from "../../lib/constants";
 import { BREAKOUT } from "../../lib/constants/breakout";
 import { layout } from "../views/layout";
-import { formatYen, tickerLink, emptyState, tt } from "../views/components";
+import { tickerLink, tt } from "../views/components";
 import { getWatchlist } from "../../jobs/watchlist-builder";
 import { getTodayForDB } from "../../lib/market-date";
 
@@ -90,13 +90,6 @@ app.get("/", async (c) => {
   const statusOrder = { ordered: 0, holding: 1, watching: 2 };
   watchlistWithStatus.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
-  // ページネーション
-  const perPage = QUERY_LIMITS.WATCHLIST_PER_PAGE;
-  const totalPages = Math.max(1, Math.ceil(watchlistWithStatus.length / perPage));
-  const page = Math.min(Math.max(1, Number(c.req.query("page")) || 1), totalPages);
-  const start = (page - 1) * perPage;
-  const pagedWatchlist = watchlistWithStatus.slice(start, start + perPage);
-
   const tickers = watchlist.map((w) => w.ticker);
   const stocks = tickers.length
     ? await prisma.stock.findMany({
@@ -117,7 +110,7 @@ app.get("/", async (c) => {
   const isFriday = dayjs().tz(TIMEZONE).day() === 5;
 
   const content = html`
-    <p class="section-title">${tt("ウォッチリスト", "毎朝8:00に構築。全戦略共通の候補銘柄")} (${watchlist.length})</p>
+    <p class="section-title">今日のエントリー候補</p>
     <div class="card" style="padding: 8px 12px; margin-bottom: 8px; font-size: 12px;">
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
         <span style="color: #e2e8f0; font-size: 11px; font-weight: 600;">すべて: ${watchlist.length}</span>
@@ -126,7 +119,6 @@ app.get("/", async (c) => {
         <span class="badge badge-cold" style="opacity: ${watchingCount ? 0.7 : 0.3};">監視中: ${watchingCount}</span>
         <span style="margin-left: auto;"></span>
         <span data-summary-gu class="badge badge-gapup" style="opacity: 0.3;">GU: -</span>
-        <span data-summary-bo class="badge badge-hot" style="opacity: 0.3;">BO: -</span>
         ${isFriday ? html`<span data-summary-wb class="badge badge-wb" style="opacity: 0.3;">WB: -</span>` : ""}
       </div>
       <div style="display: flex; gap: 12px; flex-wrap: wrap; color: #94a3b8; font-size: 11px; border-top: 1px solid #334155; padding-top: 6px;">
@@ -134,55 +126,42 @@ app.get("/", async (c) => {
         <span>${raw(`${tt("市場評価", "MarketAssessment.shouldTrade")}: <span data-global-market style="color: ${shouldTrade ? "#22c55e" : "#ef4444"};">${shouldTrade ? "取引可" : "見送り"}</span>`)}</span>
       </div>
     </div>
-    ${watchlist.length
-      ? html`
-          <div class="card table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>銘柄</th>
-                  <th>${tt("状態", "保有中/注文済/監視中")}</th>
-                  <th>${tt("GU条件", "Gap≥3% / 陽線(終値≥始値) / 出来高≥1.5x")}</th>
-                  <th>${tt("サージ", "出来高サージ比率（時間帯加重）")}</th>
-                  <th>${tt("現在価格", "リアルタイム価格")}</th>
-                  <th>${tt("20日高値", "ブレイクアウト基準価格")}</th>
-                  <th>${tt("乖離", "現在価格と20日高値の差（%）")}</th>
-                  ${isFriday ? html`<th>${tt("WB乖離", "現在価格 vs 13週高値（金曜のみ）")}</th>` : ""}
-                </tr>
-              </thead>
-              <tbody>
-                ${pagedWatchlist.map(
-                  (w) => html`
-                    <tr data-quote-row data-ticker="${w.ticker}" data-order-price="${w.high20}">
-                      <td>${tickerLink(w.ticker, `${w.ticker} ${nameMap.get(w.ticker) ?? w.ticker}`)}</td>
-                      <td data-status-badge>${statusBadgeHtml(w.status, w.orderStrategy)}</td>
-                      <td data-gapup-conditions style="font-size: 11px; white-space: nowrap;"><span class="quote-loading">...</span></td>
-                      <td data-surge-ratio><span class="quote-loading">...</span></td>
-                      <td data-quote-price><span class="quote-loading">...</span></td>
-                      <td>¥${formatYen(w.high20)}</td>
-                      <td data-quote-deviation><span class="quote-loading">...</span></td>
-                      ${isFriday ? html`<td data-wb-deviation><span class="quote-loading">...</span></td>` : ""}
-                    </tr>
-                  `,
-                )}
-              </tbody>
-            </table>
-          </div>
-          ${totalPages > 1
-            ? html`
-                <div class="pagination">
-                  ${page > 1
-                    ? html`<a href="/watchlist?page=${page - 1}" class="pagination-link">← 前へ</a>`
-                    : html`<span class="pagination-link disabled">← 前へ</span>`}
-                  <span class="pagination-info">${page} / ${totalPages}</span>
-                  ${page < totalPages
-                    ? html`<a href="/watchlist?page=${page + 1}" class="pagination-link">次へ →</a>`
-                    : html`<span class="pagination-link disabled">次へ →</span>`}
-                </div>
-              `
-            : ""}
-      `
-      : html`<div class="card">${emptyState("監視銘柄なし（8:00に構築）")}</div>`}
+    <div id="loading-state" class="card" style="padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;">
+      読み込み中...
+    </div>
+    <div id="empty-state" class="card" style="display:none; padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;">
+      今日のエントリー候補はありません
+    </div>
+    <div id="candidates-table" class="card table-wrap" style="display:none;">
+      <table>
+        <thead>
+          <tr>
+            <th>戦略</th>
+            <th>銘柄</th>
+            <th>${tt("GU条件", "Gap≥3% / 陽線 / 出来高≥1.5x")}</th>
+            <th>${tt("現在価格", "リアルタイム価格")}</th>
+            <th>${tt("損切りライン", "ATRベース (entry - ATR × 1.0)")}</th>
+            ${isFriday ? html`<th>${tt("WB乖離", "現在価格 vs 13週高値（金曜のみ）")}</th>` : ""}
+            <th>${tt("状態", "保有中/注文済/監視中")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${watchlistWithStatus.map(
+            (w) => html`
+              <tr data-quote-row data-ticker="${w.ticker}" data-atr14="${w.atr14}" style="display:none;">
+                <td data-strategy-badge><span style="color: #475569; font-size: 11px;">-</span></td>
+                <td>${tickerLink(w.ticker, `${w.ticker} ${nameMap.get(w.ticker) ?? w.ticker}`)}</td>
+                <td data-gapup-conditions style="font-size: 11px; white-space: nowrap;"><span class="quote-loading">...</span></td>
+                <td data-quote-price><span class="quote-loading">...</span></td>
+                <td data-sl-price><span class="quote-loading">...</span></td>
+                ${isFriday ? html`<td data-wb-deviation><span class="quote-loading">...</span></td>` : ""}
+                <td data-status-badge>${statusBadgeHtml(w.status, w.orderStrategy)}</td>
+              </tr>
+            `,
+          )}
+        </tbody>
+      </table>
+    </div>
     <script>
       (function() {
         var POLL_INTERVAL = 30000;
