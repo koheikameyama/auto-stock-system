@@ -71,6 +71,8 @@ export class TachibanaClient {
   private loginLockNotified = false;
   /** ログインロック時のクールダウン（30分） */
   private static readonly LOGIN_LOCK_COOLDOWN_MS = 30 * 60 * 1000;
+  /** 電話番号認証要求時のクールダウン（24時間・手動解除を促す） */
+  private static readonly PHONE_AUTH_LOCK_MS = 24 * 60 * 60 * 1000;
   /**
    * リクエストのシリアライズ用ミューテックス
    * p_no採番〜HTTPレスポンス受信までをアトミックにし、
@@ -168,6 +170,40 @@ export class TachibanaClient {
       }
 
       throw new Error(`Tachibana account locked: ${errorMsg}`);
+    }
+
+    // 電話番号認証要求（10089）— 即通知してログインをスキップ
+    if (orderResultCode === "10089") {
+      const lockedUntil = new Date(Date.now() + TachibanaClient.PHONE_AUTH_LOCK_MS);
+      this.loginLockedUntil = lockedUntil;
+      const errorMsg = (raw.sOrderResultText as string) || "電話番号認証が必要です";
+      console.error(`[TachibanaClient] Phone auth required: ${errorMsg}`);
+
+      // DBに永続化
+      try {
+        const configToUpdate = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+        if (configToUpdate) {
+          await prisma.tradingConfig.update({
+            where: { id: configToUpdate.id },
+            data: { loginLockedUntil: lockedUntil, loginLockReason: errorMsg },
+          });
+        } else {
+          console.warn("[TachibanaClient] TradingConfig not found, phone auth lock not persisted to DB");
+        }
+      } catch (err) {
+        console.warn("[TachibanaClient] Failed to persist phone auth lock to DB", err);
+      }
+
+      // 初回のみSlack通知（重複通知防止）
+      if (!this.loginLockNotified) {
+        this.loginLockNotified = true;
+        notifyBrokerError(
+          "電話番号認証が必要",
+          `立花証券のログインに電話番号認証が必要です。\n登録の電話番号から認証番号へ電話後、ダッシュボードの「ロック解除」ボタンを押してください。\n\nエラー: ${errorMsg}`,
+        ).catch(() => {});
+      }
+
+      throw new Error(`Tachibana phone auth required: ${errorMsg}`);
     }
 
     // ログインロック解除（正常ログイン成功時）
