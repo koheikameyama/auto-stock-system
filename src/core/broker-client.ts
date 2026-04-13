@@ -305,7 +305,18 @@ export class TachibanaClient {
       };
 
       const url = `${virtualUrl}?${this.encodeParams(fullParams)}`;
-      const res = await this.fetchWithDecode(url);
+      let res = await this.fetchWithDecode(url);
+
+      // p_no順序エラー: サーバー側の最終p_noを解析してカウンターを修正し1回リトライ
+      if (this.isPNoError(res)) {
+        this.fixPNoCounter(res);
+        const retryParams = {
+          ...params,
+          p_no: this.nextRequestNo(),
+          p_sd_date: this.formatTimestamp(),
+        };
+        res = await this.fetchWithDecode(`${virtualUrl}?${this.encodeParams(retryParams)}`);
+      }
 
       if (!["0", "2"].includes(res.sResultCode)) {
         const logParams = (fullParams as Record<string, string>).sSecondPassword
@@ -365,6 +376,17 @@ export class TachibanaClient {
     };
     const url = `${this.session!.urlPrice}?${this.encodeParams(fullParams)}`;
     const res = await this.fetchWithDecode(url);
+
+    // p_no順序エラー: カウンターを修正して1回リトライ
+    if (this.isPNoError(res)) {
+      this.fixPNoCounter(res);
+      const retryParams = {
+        ...params,
+        p_no: this.nextRequestNo(),
+        p_sd_date: this.formatTimestamp(),
+      };
+      res = await this.fetchWithDecode(`${this.session!.urlPrice}?${this.encodeParams(retryParams)}`);
+    }
 
     if (this.isSessionError(res)) {
       console.warn(
@@ -536,6 +558,34 @@ export class TachibanaClient {
    */
   private isSessionError(res: TachibanaResponse): boolean {
     return res.sResultCode === "2";
+  }
+
+  /**
+   * p_no順序エラーかどうか判定（前要求のp_no以下の値を送った場合）
+   */
+  private isPNoError(res: TachibanaResponse): boolean {
+    return (
+      res.sResultCode === "6" &&
+      typeof res.sResultText === "string" &&
+      res.sResultText.includes("前要求.p_no")
+    );
+  }
+
+  /**
+   * p_noエラーのレスポンスからサーバー側の最終p_noを読み取りカウンターを修正する。
+   * エラーメッセージ例: 引数（p_no:[xxx] <= 前要求.p_no:[1776059556]）エラー。
+   */
+  private fixPNoCounter(res: TachibanaResponse): void {
+    const match = /前要求\.p_no:\[(\d+)\]/.exec(res.sResultText as string);
+    if (match) {
+      const serverLastPNo = parseInt(match[1], 10);
+      if (serverLastPNo >= this.requestCounter) {
+        this.requestCounter = serverLastPNo;
+        console.warn(
+          `[TachibanaClient] p_no counter fixed: jumped to ${this.requestCounter} (was behind server's last p_no)`,
+        );
+      }
+    }
   }
 
   /**
