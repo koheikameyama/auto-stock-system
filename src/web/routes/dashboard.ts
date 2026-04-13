@@ -190,8 +190,10 @@ app.get("/", async (c) => {
           </button>
         </span>
       </div>
-      ${!config?.isActive && brokerLock.reason
-        ? detailRow("停止理由", html`<span style="color:#fca5a5">${brokerLock.reason}</span>`)
+      ${!config?.isActive
+        ? detailRow("停止理由", brokerLock.reason
+            ? html`<span style="color:#fca5a5">${brokerLock.reason}</span>`
+            : html`<span style="color:#94a3b8">手動停止</span>`)
         : ""}
       ${detailRow("実行中ジョブ", `${jobState.running.size > 0 ? [...jobState.running].join(", ") : "なし"}`)}
       ${detailRow(tt("オープンポジション", "現在保有中の建玉"), `${openPositions.length}`)}
