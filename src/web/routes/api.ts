@@ -301,7 +301,7 @@ app.get("/quotes", async (c) => {
  * GET /api/watchlist/state?tickers=7203,8306 - ウォッチリスト状態（ポーリング用）
  *
  * breakout-monitor 依存を排除し、ライブ時価から直接サージ比率を計算。
- * GU/BO/WB 戦略ごとの条件チェック結果を返す。
+ * GU/WB 戦略ごとの条件チェック結果を返す。
  */
 app.get("/watchlist/state", async (c) => {
   const tickersParam = c.req.query("tickers");
