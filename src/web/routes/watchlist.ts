@@ -17,7 +17,7 @@ import { GAPUP } from "../../lib/constants/gapup";
 import { WEEKLY_BREAK } from "../../lib/constants/weekly-break";
 import { layout } from "../views/layout";
 import { tickerLink, tt } from "../views/components";
-import { getWatchlist } from "../../jobs/watchlist-builder";
+import { getGuWatchlist } from "../../jobs/watchlist-builder";
 import { getTodayForDB } from "../../lib/market-date";
 
 dayjs.extend(utc);
@@ -50,7 +50,7 @@ function isInEntryTimeWindow(): boolean {
 }
 
 app.get("/", async (c) => {
-  const watchlist = await getWatchlist();
+  const watchlist = await getGuWatchlist();
 
   // 保有・注文・市場評価を並列取得
   const todayStart = new Date();
