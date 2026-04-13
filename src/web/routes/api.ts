@@ -93,11 +93,16 @@ app.post("/trading/toggle", async (c) => {
 
   await prisma.tradingConfig.update({
     where: { id: config.id },
-    data: { isActive: body.active },
+    data: body.active
+      // 再開時はブローカーロック状態もクリア（次のcron tickで自動ログイン）
+      ? { isActive: true, loginLockedUntil: null, loginLockReason: null }
+      : { isActive: false },
   });
 
   // cron タスク自体を停止/再開（スケジュール発火を根本から止める）
   if (body.active) {
+    // インメモリのロック状態もクリア
+    getTachibanaClient().clearLoginLock().catch(() => {});
     cronControl.start();
   } else {
     cronControl.stop();
@@ -143,21 +148,6 @@ app.post("/config/budget", async (c) => {
   return c.json({ success: true, totalBudget: body.totalBudget });
 });
 
-/**
- * POST /api/broker/clear-login-lock - ブローカーログインロック解除
- */
-app.post("/broker/clear-login-lock", async (c) => {
-  const client = getTachibanaClient();
-  await client.clearLoginLock();
-
-  await notifySlack({
-    title: "🔓 ブローカーログインロック解除",
-    message: "ダッシュボードから手動でログインロックを解除しました。システム再開ボタンで再開してください。",
-    color: "good",
-  }).catch(() => {});
-
-  return c.json({ success: true });
-});
 
 /**
  * GET /api/stock/:tickerCode - 銘柄詳細データ

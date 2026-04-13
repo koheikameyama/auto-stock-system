@@ -157,16 +157,11 @@ app.get("/", async (c) => {
       ? html`
         <div style="background:#991b1b;border:1px solid #ef4444;border-radius:12px;padding:16px;margin-bottom:16px">
           <div style="font-weight:700;font-size:15px;margin-bottom:8px">🚨 ブローカーログインロック中（システム自動停止済み）</div>
-          <div style="font-size:13px;color:#fca5a5;margin-bottom:12px">
-            立花証券のログインがロックされています。解除後、下のボタンを押してください。<br>
+          <div style="font-size:13px;color:#fca5a5">
+            立花証券のログインがロックされています。手続き後にシステム再開ボタンを押してください。<br>
             📞 サポートセンター: <a href="tel:0336690777" style="color:#fca5a5">03-3669-0777</a> ／ 電話認証: <a href="tel:05031026575" style="color:#fca5a5">050-3102-6575</a>
             ${brokerLock.reason ? html`<br>理由: ${brokerLock.reason}` : ""}
           </div>
-          <button
-            id="clearLockBtn"
-            class="btn-toggle btn-success"
-            onclick="clearLoginLock()"
-          >ロック解除</button>
         </div>`
       : ""}
 
@@ -343,29 +338,6 @@ app.get("/", async (c) => {
         });
       }
 
-      function clearLoginLock() {
-        var btn = document.getElementById('clearLockBtn');
-        if (!btn) return;
-        if (!confirm('ブローカーのログインロックを解除しますか？')) return;
-        btn.disabled = true;
-        btn.textContent = '処理中...';
-        var params = new URLSearchParams(window.location.search);
-        var token = params.get('token') || '';
-        fetch('/api/broker/clear-login-lock?token=' + encodeURIComponent(token), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
-        .then(function(res) {
-          if (!res.ok) throw new Error('Failed');
-          alert('ロックを解除しました。システム再開ボタンで再開してください。');
-          location.reload();
-        })
-        .catch(function() {
-          alert('ロック解除に失敗しました');
-          btn.disabled = false;
-          btn.textContent = 'ロック解除';
-        });
-      }
 
       function editBudget(current) {
         var input = prompt('新しい予算（入金額）を入力してください（円）:', current);
