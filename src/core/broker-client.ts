@@ -375,7 +375,7 @@ export class TachibanaClient {
       p_sd_date: this.formatTimestamp(),
     };
     const url = `${this.session!.urlPrice}?${this.encodeParams(fullParams)}`;
-    const res = await this.fetchWithDecode(url);
+    let res = await this.fetchWithDecode(url);
 
     // p_no順序エラー: カウンターを修正して1回リトライ
     if (this.isPNoError(res)) {
