@@ -41,7 +41,9 @@ describe("TachibanaClient", () => {
     vi.stubEnv("TACHIBANA_USER_ID", "testuser");
     vi.stubEnv("TACHIBANA_PASSWORD", "testpass");
     mockFetch.mockReset();
+    mockTradingConfigFindFirst.mockReset();
     mockTradingConfigFindFirst.mockResolvedValue(null);
+    mockTradingConfigUpdate.mockReset();
     mockTradingConfigUpdate.mockResolvedValue({});
   });
 
@@ -143,7 +145,8 @@ describe("TachibanaClient", () => {
         where: { id: "config-1" },
         data: expect.objectContaining({
           loginLockedUntil: expect.any(Date),
-          loginLockReason: "account locked by server",
+          loginLockReason: "アカウントロック",
+          isActive: false,
         }),
       });
     });
@@ -171,7 +174,8 @@ describe("TachibanaClient", () => {
         where: { id: "config-1" },
         data: expect.objectContaining({
           loginLockedUntil: expect.any(Date),
-          loginLockReason: "phone auth required",
+          loginLockReason: "電話番号認証が必要",
+          isActive: false,
         }),
       });
     });

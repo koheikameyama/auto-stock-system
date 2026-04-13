@@ -150,7 +150,7 @@ export class TachibanaClient {
         if (configToUpdate) {
           await prisma.tradingConfig.update({
             where: { id: configToUpdate.id },
-            data: { loginLockedUntil: lockedUntil, loginLockReason: errorMsg, isActive: false },
+            data: { loginLockedUntil: lockedUntil, loginLockReason: "アカウントロック", isActive: false },
           });
         } else {
           console.warn("[TachibanaClient] TradingConfig not found, login lock not persisted to DB");
@@ -183,7 +183,7 @@ export class TachibanaClient {
         if (configToUpdate) {
           await prisma.tradingConfig.update({
             where: { id: configToUpdate.id },
-            data: { loginLockedUntil: lockedUntil, loginLockReason: errorMsg, isActive: false },
+            data: { loginLockedUntil: lockedUntil, loginLockReason: "電話番号認証が必要", isActive: false },
           });
         } else {
           console.warn("[TachibanaClient] TradingConfig not found, phone auth lock not persisted to DB");
@@ -197,7 +197,7 @@ export class TachibanaClient {
         this.loginLockNotified = true;
         notifyBrokerError(
           "電話番号認証が必要",
-          `立花証券のログインに電話番号認証が必要です。\n登録の電話番号から認証番号へ電話後、ダッシュボードの「ロック解除」ボタンを押してください。\n\nエラー: ${errorMsg}`,
+          `立花証券のログインに電話番号認証が必要です。\n登録の電話番号から認証番号へ電話後、ダッシュボードの「再開」ボタンを押してください。\n\nエラー: ${errorMsg}`,
         ).catch(() => {});
       }
 
