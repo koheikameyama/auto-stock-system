@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TachibanaClient, resetTachibanaClient } from "../broker-client";
 
+const { mockTradingConfigFindFirst, mockTradingConfigUpdate } = vi.hoisted(() => ({
+  mockTradingConfigFindFirst: vi.fn(),
+  mockTradingConfigUpdate: vi.fn(),
+}));
+
+vi.mock("../../lib/prisma", () => ({
+  prisma: {
+    tradingConfig: {
+      findFirst: mockTradingConfigFindFirst,
+      update: mockTradingConfigUpdate,
+    },
+  },
+}));
+
 // fetchをモック
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -27,6 +41,8 @@ describe("TachibanaClient", () => {
     vi.stubEnv("TACHIBANA_USER_ID", "testuser");
     vi.stubEnv("TACHIBANA_PASSWORD", "testpass");
     mockFetch.mockReset();
+    mockTradingConfigFindFirst.mockResolvedValue(null);
+    mockTradingConfigUpdate.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -92,6 +108,71 @@ describe("TachibanaClient", () => {
       await expect(client.login()).rejects.toThrow(
         "TACHIBANA_USER_ID and TACHIBANA_PASSWORD are required",
       );
+    });
+
+    it("DBにログインロックがある場合はAPIを呼ばずにエラーをスローする", async () => {
+      const lockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30分後
+      mockTradingConfigFindFirst.mockResolvedValueOnce({ loginLockedUntil: lockedUntil });
+
+      await expect(client.login()).rejects.toThrow("Tachibana login is locked until");
+
+      // fetchが呼ばれていないことを確認
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("アカウントロック検出時にDBにログインロック状態を書き込む", async () => {
+      // ロックチェック: nullなのでスルー
+      // ロック検出時のDB書き込み用config
+      const mockConfig = { id: "config-1" };
+      mockTradingConfigFindFirst
+        .mockResolvedValueOnce(null)      // ロックチェック
+        .mockResolvedValueOnce(mockConfig); // ロック書き込み用
+
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({
+          "287": "0",
+          "334": "CLMAuthLoginAck",
+          "688": "10033",
+          "689": "account locked by server",
+        }),
+      );
+
+      await expect(client.login()).rejects.toThrow("Tachibana account locked");
+
+      expect(mockTradingConfigUpdate).toHaveBeenCalledWith({
+        where: { id: "config-1" },
+        data: expect.objectContaining({
+          loginLockedUntil: expect.any(Date),
+          loginLockReason: "account locked by server",
+        }),
+      });
+    });
+
+    it("正常ログイン成功時にDBのロック状態をクリアする", async () => {
+      const mockConfig = { id: "config-1" };
+      mockTradingConfigFindFirst
+        .mockResolvedValueOnce(null)        // ロックチェック
+        .mockResolvedValueOnce(mockConfig); // 成功後クリア用
+
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({
+          "287": "0",
+          "334": "CLMAuthLoginAck",
+          "872": "https://vurl/request/",
+          "870": "https://vurl/master/",
+          "871": "https://vurl/price/",
+          "868": "https://vurl/event/",
+          "869": "wss://vurl/ws/",
+          "552": "0",
+        }),
+      );
+
+      await client.login();
+
+      expect(mockTradingConfigUpdate).toHaveBeenCalledWith({
+        where: { id: "config-1" },
+        data: { loginLockedUntil: null, loginLockReason: null },
+      });
     });
   });
 
