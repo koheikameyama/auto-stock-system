@@ -148,7 +148,7 @@ app.post("/config/budget", async (c) => {
  */
 app.post("/broker/clear-login-lock", async (c) => {
   const client = getTachibanaClient();
-  client.clearLoginLock();
+  await client.clearLoginLock();
 
   await notifySlack({
     title: "🔓 ブローカーログインロック解除",
