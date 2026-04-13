@@ -139,81 +139,11 @@ export class TachibanaClient {
     // アカウントロック検出（パスワード間違い規定回数超過）
     const orderResultCode = raw.sOrderResultCode as string | undefined;
     if (orderResultCode === "10033" || orderResultCode === "10089") {
-      const lockedUntil = TachibanaClient.INDEFINITE_LOCK_DATE;
-      this.loginLockedUntil = lockedUntil;
-      const isAccountLock = orderResultCode === "10033";
-      const reason = isAccountLock ? "アカウントロック" : "電話番号認証が必要";
-      const errorMsg = (raw.sOrderResultText as string) || reason;
-      console.error(`[TachibanaClient] ${reason}: ${errorMsg}`);
-
-      // isActive=false を最優先で書き込む（ロック列と分離してマイグレーション未適用でも確実に停止）
-      try {
-        const configToStop = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
-        if (configToStop) {
-          await prisma.tradingConfig.update({
-            where: { id: configToStop.id },
-            data: { isActive: false },
-          });
-        }
-      } catch (err) {
-        console.warn("[TachibanaClient] Failed to set isActive=false", err);
-      }
-
-      // ロック理由を書き込む（ダッシュボード表示に必要）
-      try {
-        const configToUpdate = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
-        if (configToUpdate) {
-          await prisma.tradingConfig.update({
-            where: { id: configToUpdate.id },
-            data: { loginLockedUntil: lockedUntil, loginLockReason: reason },
-          });
-        }
-      } catch (err) {
-        console.warn("[TachibanaClient] Failed to persist login lock reason to DB", err);
-      }
-
-      // 発生日時を記録（分析用・loginLockOccurredAt 列が存在しない場合は無視）
-      try {
-        const configForOccurredAt = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
-        if (configForOccurredAt) {
-          await prisma.tradingConfig.update({
-            where: { id: configForOccurredAt.id },
-            data: { loginLockOccurredAt: new Date() },
-          });
-        }
-      } catch {
-        // loginLockOccurredAt 列未存在でも無視
-      }
-
-      if (!this.loginLockNotified) {
-        this.loginLockNotified = true;
-        notifyBrokerError(
-          reason,
-          isAccountLock
-            ? `立花証券のログインがロックされました。\n📞 サポートセンター: 03-3669-0777 ／ 電話認証: 050-3102-6575\n\nエラー: ${errorMsg}`
-            : `立花証券のログインに電話番号認証が必要です。\n登録の電話番号から認証番号へ電話後、ダッシュボードの「再開」ボタンを押してください。\n\nエラー: ${errorMsg}`,
-        ).catch(() => {});
-      }
-
-      throw new Error(`Tachibana login blocked (${reason}): ${errorMsg}`);
+      await this.handleAccountLock(raw, orderResultCode);
     }
 
     // ログインロック解除（正常ログイン成功時）
-    this.loginLockedUntil = null;
-    this.loginLockNotified = false;
-
-    // DBもクリア
-    try {
-      const configToClear = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
-      if (configToClear) {
-        await prisma.tradingConfig.update({
-          where: { id: configToClear.id },
-          data: { loginLockedUntil: null, loginLockReason: null },
-        });
-      }
-    } catch (err) {
-      console.warn("[TachibanaClient] Failed to clear login lock from DB", err);
-    }
+    await this.clearLockOnSuccess();
 
     // 金商法のお知らせ未読チェック
     if (raw.sKinsyouhouMidokuFlg === "1") {
@@ -552,6 +482,97 @@ export class TachibanaClient {
   // ========================================
   // 内部ユーティリティ
   // ========================================
+
+  /**
+   * アカウントロック検出時の処理
+   * - トレーディング停止（isActive=false）
+   * - ロック理由・発生日時をDB永続化
+   * - Slack通知（初回のみ）
+   */
+  private async handleAccountLock(
+    raw: TachibanaResponse,
+    orderResultCode: string,
+  ): Promise<never> {
+    const lockedUntil = TachibanaClient.INDEFINITE_LOCK_DATE;
+    this.loginLockedUntil = lockedUntil;
+    const isAccountLock = orderResultCode === "10033";
+    const reason = isAccountLock ? "アカウントロック" : "電話番号認証が必要";
+    const errorMsg = (raw.sOrderResultText as string) || reason;
+    console.error(`[TachibanaClient] ${reason}: ${errorMsg}`);
+
+    // DB書き込み: isActive停止 + ロック理由 + 発生日時を1回で更新
+    try {
+      const config = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      if (config) {
+        await prisma.tradingConfig.update({
+          where: { id: config.id },
+          data: {
+            isActive: false,
+            loginLockedUntil: lockedUntil,
+            loginLockReason: reason,
+            loginLockOccurredAt: new Date(),
+          },
+        });
+      }
+    } catch {
+      // loginLockOccurredAt 列未存在でもフォールバック
+      try {
+        const config = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+        if (config) {
+          await prisma.tradingConfig.update({
+            where: { id: config.id },
+            data: { isActive: false, loginLockedUntil: lockedUntil, loginLockReason: reason },
+          });
+        }
+      } catch (innerErr) {
+        console.warn("[TachibanaClient] Failed to persist account lock to DB", innerErr);
+        // isActive=false だけでも試みる
+        try {
+          const config = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+          if (config) {
+            await prisma.tradingConfig.update({
+              where: { id: config.id },
+              data: { isActive: false },
+            });
+          }
+        } catch (e) {
+          console.warn("[TachibanaClient] Failed to set isActive=false", e);
+        }
+      }
+    }
+
+    if (!this.loginLockNotified) {
+      this.loginLockNotified = true;
+      notifyBrokerError(
+        reason,
+        isAccountLock
+          ? `立花証券のログインがロックされました。\n📞 サポートセンター: 03-3669-0777 ／ 電話認証: 050-3102-6575\n\nエラー: ${errorMsg}`
+          : `立花証券のログインに電話番号認証が必要です。\n登録の電話番号から認証番号へ電話後、ダッシュボードの「再開」ボタンを押してください。\n\nエラー: ${errorMsg}`,
+      ).catch(() => {});
+    }
+
+    throw new Error(`Tachibana login blocked (${reason}): ${errorMsg}`);
+  }
+
+  /**
+   * 正常ログイン成功時にロック状態をクリア
+   */
+  private async clearLockOnSuccess(): Promise<void> {
+    this.loginLockedUntil = null;
+    this.loginLockNotified = false;
+
+    try {
+      const config = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      if (config) {
+        await prisma.tradingConfig.update({
+          where: { id: config.id },
+          data: { loginLockedUntil: null, loginLockReason: null },
+        });
+      }
+    } catch (err) {
+      console.warn("[TachibanaClient] Failed to clear login lock from DB", err);
+    }
+  }
 
   /**
    * セッション切断エラーかどうか判定
