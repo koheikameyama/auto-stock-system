@@ -92,11 +92,17 @@ export class TachibanaClient {
    */
   async login(): Promise<TachibanaSession> {
     // ログインロック中はDBから確認してクールダウン期間スキップ
-    const configForLockCheck = await prisma.tradingConfig.findFirst({
-      orderBy: { createdAt: "desc" },
-      select: { loginLockedUntil: true },
-    });
-    const dbLockedUntil = configForLockCheck?.loginLockedUntil ?? null;
+    let dbLockedUntil: Date | null = null;
+    try {
+      const configForLockCheck = await prisma.tradingConfig.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { loginLockedUntil: true },
+      });
+      dbLockedUntil = configForLockCheck?.loginLockedUntil ?? null;
+    } catch (err) {
+      console.warn("[TachibanaClient] Failed to read loginLockedUntil from DB, falling back to in-memory state", err);
+      dbLockedUntil = this.loginLockedUntil;
+    }
     if (dbLockedUntil && new Date() < dbLockedUntil) {
       this.loginLockedUntil = dbLockedUntil;
       throw new Error(
@@ -139,12 +145,18 @@ export class TachibanaClient {
       console.error(`[TachibanaClient] Account locked: ${errorMsg}`);
 
       // DBに永続化
-      const configToUpdate = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
-      if (configToUpdate) {
-        await prisma.tradingConfig.update({
-          where: { id: configToUpdate.id },
-          data: { loginLockedUntil: lockedUntil, loginLockReason: errorMsg },
-        });
+      try {
+        const configToUpdate = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+        if (configToUpdate) {
+          await prisma.tradingConfig.update({
+            where: { id: configToUpdate.id },
+            data: { loginLockedUntil: lockedUntil, loginLockReason: errorMsg },
+          });
+        } else {
+          console.warn("[TachibanaClient] TradingConfig not found, login lock not persisted to DB");
+        }
+      } catch (err) {
+        console.warn("[TachibanaClient] Failed to persist login lock to DB", err);
       }
 
       if (!this.loginLockNotified) {
@@ -163,12 +175,16 @@ export class TachibanaClient {
     this.loginLockNotified = false;
 
     // DBもクリア
-    const configToClear = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
-    if (configToClear) {
-      await prisma.tradingConfig.update({
-        where: { id: configToClear.id },
-        data: { loginLockedUntil: null, loginLockReason: null },
-      });
+    try {
+      const configToClear = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      if (configToClear) {
+        await prisma.tradingConfig.update({
+          where: { id: configToClear.id },
+          data: { loginLockedUntil: null, loginLockReason: null },
+        });
+      }
+    } catch (err) {
+      console.warn("[TachibanaClient] Failed to clear login lock from DB", err);
     }
 
     // 金商法のお知らせ未読チェック
