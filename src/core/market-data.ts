@@ -3,7 +3,7 @@
  *
  * market-data-provider を使用して株価・市場指標データを取得する。
  * プライマリ: 立花証券API
- * 画面表示用フォールバック: 立花API → DB（Stock + StockDailyBar）→ yfinance
+ * 画面表示用フォールバック: 立花API → yfinance → DB（Stock + StockDailyBar）
  * workerではフォールバックなし（立花APIのみ）
  */
 
@@ -84,7 +84,7 @@ export interface MarketData {
 // ========================================
 
 interface QuoteFetchOptions {
-  /** 立花API失敗時に DB→yfinance へフォールバックする（画面表示用） */
+  /** 立花API失敗時に yfinance→DB へフォールバックする（画面表示用） */
   yfinanceFallback?: boolean;
 }
 
@@ -199,7 +199,7 @@ async function fetchQuotesBatchFromDB(tickerCodes: string[]): Promise<Map<string
 
 /**
  * 個別銘柄のリアルタイムクォートを取得
- * @param options.yfinanceFallback true なら立花API失敗時に DB→yfinance の順でフォールバック（画面表示用）
+ * @param options.yfinanceFallback true なら立花API失敗時に yfinance→DB の順でフォールバック（画面表示用）
  */
 export async function fetchStockQuote(
   tickerCode: string,
@@ -213,10 +213,17 @@ export async function fetchStockQuote(
   } catch (error) {
     if (options?.yfinanceFallback) {
       console.warn(
-        `[market-data] 立花API失敗、DBフォールバック試行 (${symbol}):`,
+        `[market-data] 立花API失敗、yfinanceフォールバック試行 (${symbol}):`,
         error instanceof Error ? error.message : error,
       );
-      // 1st fallback: DB（外部API不要、即座に返せる）
+      // 1st fallback: yfinance（取引時間中なら15分遅延のリアルタイムデータ）
+      try {
+        const result = await yfFetchQuote(symbol);
+        return result as StockQuote;
+      } catch (yfError) {
+        console.warn(`[market-data] yfinanceフォールバック失敗 (${symbol}):`, yfError);
+      }
+      // 2nd fallback: DB（外部API全滅時の最終防衛線）
       try {
         const dbResult = await fetchQuoteFromDB(symbol);
         if (dbResult) {
@@ -224,16 +231,9 @@ export async function fetchStockQuote(
           return dbResult;
         }
       } catch (dbError) {
-        console.warn(`[market-data] DBフォールバック失敗 (${symbol}):`, dbError);
+        console.error(`[market-data] DBフォールバックも失敗 (${symbol}):`, dbError);
       }
-      // 2nd fallback: yfinance
-      try {
-        const result = await yfFetchQuote(symbol);
-        return result as StockQuote;
-      } catch (yfError) {
-        console.error(`[market-data] yfinanceフォールバックも失敗 (${symbol}):`, yfError);
-        return null;
-      }
+      return null;
     }
     console.error(`[market-data] Failed to fetch quote for ${symbol}:`, error);
     return null;
@@ -242,7 +242,7 @@ export async function fetchStockQuote(
 
 /**
  * 複数銘柄のクォートをバッチ取得（1リクエストで複数銘柄）
- * @param options.yfinanceFallback true なら立花API失敗時に DB→yfinance の順でフォールバック（画面表示用）
+ * @param options.yfinanceFallback true なら立花API失敗時に yfinance→DB の順でフォールバック（画面表示用）
  */
 export async function fetchStockQuotesBatch(
   tickerCodes: string[],
@@ -263,33 +263,33 @@ export async function fetchStockQuotesBatch(
         }
       }
 
-      // 立花APIで null だった銘柄を DB→yfinance で補完
+      // 立花APIで null だった銘柄を yfinance→DB で補完
       if (options?.yfinanceFallback) {
         const failedSymbols = batch.filter((s) => !results.has(s));
         if (failedSymbols.length > 0) {
-          // 1st fallback: DB
+          // 1st fallback: yfinance
           console.warn(
-            `[market-data] 立花APIで${failedSymbols.length}銘柄失敗、DBで補完`,
+            `[market-data] 立花APIで${failedSymbols.length}銘柄失敗、yfinanceで補完`,
           );
           try {
-            const dbResults = await fetchQuotesBatchFromDB(failedSymbols);
-            for (const [k, v] of dbResults) results.set(k, v);
-          } catch (dbError) {
-            console.warn(`[market-data] DBバッチ補完失敗:`, dbError);
+            const fbResults = await yfFetchQuotesBatch(failedSymbols);
+            for (const r of fbResults) {
+              if (r && r.tickerCode) results.set(r.tickerCode, r as StockQuote);
+            }
+          } catch (yfError) {
+            console.warn(`[market-data] yfinanceバッチ補完失敗:`, yfError);
           }
-          // 2nd fallback: yfinance（DB でも取れなかった銘柄のみ）
+          // 2nd fallback: DB（yfinance でも取れなかった銘柄のみ）
           const stillFailed = failedSymbols.filter((s) => !results.has(s));
           if (stillFailed.length > 0) {
             console.warn(
-              `[market-data] DB後も${stillFailed.length}銘柄未取得、yfinanceで補完`,
+              `[market-data] yfinance後も${stillFailed.length}銘柄未取得、DBで補完`,
             );
             try {
-              const fbResults = await yfFetchQuotesBatch(stillFailed);
-              for (const r of fbResults) {
-                if (r && r.tickerCode) results.set(r.tickerCode, r as StockQuote);
-              }
-            } catch (yfError) {
-              console.warn(`[market-data] yfinanceバッチ補完も失敗:`, yfError);
+              const dbResults = await fetchQuotesBatchFromDB(stillFailed);
+              for (const [k, v] of dbResults) results.set(k, v);
+            } catch (dbError) {
+              console.warn(`[market-data] DBバッチ補完も失敗:`, dbError);
             }
           }
         }
@@ -301,24 +301,24 @@ export async function fetchStockQuotesBatch(
       );
 
       if (options?.yfinanceFallback) {
-        // 立花バッチ全失敗 → DB → yfinance の順でフォールバック
-        console.warn(`[market-data] 立花APIバッチ全失敗、DBにフォールバック`);
+        // 立花バッチ全失敗 → yfinance → DB の順でフォールバック
+        console.warn(`[market-data] 立花APIバッチ全失敗、yfinanceにフォールバック`);
         try {
-          const dbResults = await fetchQuotesBatchFromDB(batch);
-          for (const [k, v] of dbResults) results.set(k, v);
-        } catch (dbError) {
-          console.warn(`[market-data] DBバッチフォールバック失敗:`, dbError);
+          const fbResults = await yfFetchQuotesBatch(batch);
+          for (const r of fbResults) {
+            if (r && r.tickerCode) results.set(r.tickerCode, r as StockQuote);
+          }
+        } catch (yfError) {
+          console.warn(`[market-data] yfinanceバッチフォールバック失敗:`, yfError);
         }
         const stillFailed = batch.filter((s) => !results.has(s));
         if (stillFailed.length > 0) {
-          console.warn(`[market-data] DB後も${stillFailed.length}銘柄未取得、yfinanceにフォールバック`);
+          console.warn(`[market-data] yfinance後も${stillFailed.length}銘柄未取得、DBにフォールバック`);
           try {
-            const fbResults = await yfFetchQuotesBatch(stillFailed);
-            for (const r of fbResults) {
-              if (r && r.tickerCode) results.set(r.tickerCode, r as StockQuote);
-            }
-          } catch (yfError) {
-            console.warn(`[market-data] yfinanceバッチフォールバックも失敗:`, yfError);
+            const dbResults = await fetchQuotesBatchFromDB(stillFailed);
+            for (const [k, v] of dbResults) results.set(k, v);
+          } catch (dbError) {
+            console.warn(`[market-data] DBバッチフォールバックも失敗:`, dbError);
           }
         }
       } else {
