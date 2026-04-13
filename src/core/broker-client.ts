@@ -150,7 +150,7 @@ export class TachibanaClient {
         if (configToUpdate) {
           await prisma.tradingConfig.update({
             where: { id: configToUpdate.id },
-            data: { loginLockedUntil: lockedUntil, loginLockReason: "アカウントロック", isActive: false },
+            data: { loginLockedUntil: lockedUntil, loginLockReason: "アカウントロック", loginLockOccurredAt: new Date(), isActive: false },
           });
         } else {
           console.warn("[TachibanaClient] TradingConfig not found, login lock not persisted to DB");
@@ -183,7 +183,7 @@ export class TachibanaClient {
         if (configToUpdate) {
           await prisma.tradingConfig.update({
             where: { id: configToUpdate.id },
-            data: { loginLockedUntil: lockedUntil, loginLockReason: "電話番号認証が必要", isActive: false },
+            data: { loginLockedUntil: lockedUntil, loginLockReason: "電話番号認証が必要", loginLockOccurredAt: new Date(), isActive: false },
           });
         } else {
           console.warn("[TachibanaClient] TradingConfig not found, phone auth lock not persisted to DB");

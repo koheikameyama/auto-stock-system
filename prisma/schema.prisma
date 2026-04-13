@@ -299,8 +299,9 @@ model TradingConfig {
   updatedAt         DateTime  @updatedAt
   peakEquity        Decimal?  @db.Decimal(12, 0)
   realizedPnl       Decimal   @default(0) @db.Decimal(12, 0)
-  loginLockedUntil  DateTime? // ロック解除予定時刻（nullなら正常）
-  loginLockReason   String?   // ロック理由メッセージ
+  loginLockedUntil    DateTime? // ロック解除予定時刻（nullなら正常）
+  loginLockReason     String?   // ロック理由メッセージ
+  loginLockOccurredAt DateTime? // ロック発生日時（パターン分析用・クリアしない）
 }
 
 model TradingDailySummary {

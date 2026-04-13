@@ -5,7 +5,12 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
 import { prisma } from "../../lib/prisma";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 import { getOpenPositions, getCashBalance, getEffectiveCapital, computeRealizedPnl } from "../../core/position-manager";
 import { getPendingOrders } from "../../core/order-executor";
 import { layout } from "../views/layout";
@@ -25,7 +30,7 @@ import type { SignalStatus } from "../views/components";
 import { isMarketDay } from "../../lib/market-date";
 import { determineMarketRegime } from "../../core/market-regime";
 import { calculateDrawdownStatus } from "../../core/drawdown-manager";
-import { VIX_THRESHOLDS, CME_NIGHT_DIVERGENCE, DRAWDOWN } from "../../lib/constants";
+import { VIX_THRESHOLDS, CME_NIGHT_DIVERGENCE, DRAWDOWN, TIMEZONE } from "../../lib/constants";
 import { isTachibanaProduction } from "../../lib/constants/broker";
 import { COLORS } from "../views/styles";
 
@@ -139,6 +144,7 @@ app.get("/", async (c) => {
     isLocked: !!(config?.loginLockedUntil && now < config.loginLockedUntil),
     lockedUntil: config?.loginLockedUntil ?? null,
     reason: config?.loginLockReason ?? null,
+    occurredAt: config?.loginLockOccurredAt ?? null,
   };
   const overallEmoji = canTrade ? "\u{1F7E2}" : "\u{1F534}";
   const overallLabel = canTrade ? "トレード可" : "取引見送り";
@@ -161,6 +167,7 @@ app.get("/", async (c) => {
             立花証券のログインがロックされています。手続き後にシステム再開ボタンを押してください。<br>
             📞 サポートセンター: <a href="tel:0336690777" style="color:#fca5a5">03-3669-0777</a> ／ 電話認証: <a href="tel:05031026575" style="color:#fca5a5">050-3102-6575</a>
             ${brokerLock.reason ? html`<br>理由: ${brokerLock.reason}` : ""}
+            ${brokerLock.occurredAt ? html`<br>発生日時: ${dayjs(brokerLock.occurredAt).tz(TIMEZONE).format("YYYY-MM-DD HH:mm")}` : ""}
           </div>
         </div>`
       : ""}
@@ -192,7 +199,7 @@ app.get("/", async (c) => {
       </div>
       ${!config?.isActive
         ? detailRow("停止理由", brokerLock.reason
-            ? html`<span style="color:#fca5a5">${brokerLock.reason}</span>`
+            ? html`<span style="color:#fca5a5">${brokerLock.reason}${brokerLock.occurredAt ? ` (${dayjs(brokerLock.occurredAt).tz(TIMEZONE).format("MM/DD HH:mm")})` : ""}</span>`
             : html`<span style="color:#94a3b8">手動停止</span>`)
         : ""}
       ${detailRow("実行中ジョブ", `${jobState.running.size > 0 ? [...jobState.running].join(", ") : "なし"}`)}
