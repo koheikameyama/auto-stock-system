@@ -224,11 +224,20 @@ app.get("/", async (c) => {
               if (!data.tickers) return;
 
               var guCount = 0, boCount = 0, wbCount = 0;
+              var rowSortData = {};
 
               rows.forEach(function(row) {
                 var ticker = row.getAttribute('data-ticker');
                 var d = data.tickers[ticker];
                 if (!d) return;
+
+                // ソート用データを収集
+                var guAllMet = d.gapup && d.gapup.isGapOk && d.gapup.isCandleOk && d.gapup.isVolumeOk;
+                rowSortData[ticker] = {
+                  guAllMet: guAllMet ? 1 : 0,
+                  surgeRatio: d.surgeRatio || 0,
+                  status: d.status || 'watching'
+                };
 
                 // ステータスバッジ
                 var badgeEl = row.querySelector('[data-status-badge]');
@@ -320,6 +329,25 @@ app.get("/", async (c) => {
                   }
                 }
               });
+
+              // 行をエントリー可能性順にソート（ステータス → GU全条件OK → サージ比率）
+              var statusOrder = { ordered: 0, holding: 1, watching: 2 };
+              var tbody = document.querySelector('table tbody');
+              if (tbody) {
+                var rowArr = Array.prototype.slice.call(rows);
+                rowArr.sort(function(a, b) {
+                  var ta = a.getAttribute('data-ticker');
+                  var tb = b.getAttribute('data-ticker');
+                  var da = rowSortData[ta] || { guAllMet: 0, surgeRatio: 0, status: 'watching' };
+                  var db = rowSortData[tb] || { guAllMet: 0, surgeRatio: 0, status: 'watching' };
+                  var statusDiff = (statusOrder[da.status] != null ? statusOrder[da.status] : 2) - (statusOrder[db.status] != null ? statusOrder[db.status] : 2);
+                  if (statusDiff !== 0) return statusDiff;
+                  var guDiff = db.guAllMet - da.guAllMet;
+                  if (guDiff !== 0) return guDiff;
+                  return db.surgeRatio - da.surgeRatio;
+                });
+                rowArr.forEach(function(row) { tbody.appendChild(row); });
+              }
 
               // サマリーバッジ更新
               var guEl = document.querySelector('[data-summary-gu]');
