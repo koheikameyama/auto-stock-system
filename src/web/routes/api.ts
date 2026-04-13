@@ -96,7 +96,7 @@ app.post("/trading/toggle", async (c) => {
     data: body.active
       // 再開時はブローカーロック状態もクリア（次のcron tickで自動ログイン）
       ? { isActive: true, loginLockedUntil: null, loginLockReason: null }
-      : { isActive: false },
+      : { isActive: false, loginLockReason: "手動停止", loginLockedUntil: null },
   });
 
   // cron タスク自体を停止/再開（スケジュール発火を根本から止める）

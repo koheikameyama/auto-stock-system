@@ -198,9 +198,13 @@ app.get("/", async (c) => {
         </span>
       </div>
       ${!config?.isActive
-        ? detailRow("停止理由", brokerLock.reason
-            ? html`<span style="color:#fca5a5">${brokerLock.reason}${brokerLock.occurredAt ? ` (${dayjs(brokerLock.occurredAt).tz(TIMEZONE).format("MM/DD HH:mm")})` : ""}</span>`
-            : html`<span style="color:#94a3b8">手動停止</span>`)
+        ? detailRow("停止理由", (() => {
+            const reason = brokerLock.reason;
+            if (!reason) return html`<span style="color:#94a3b8">不明</span>`;
+            if (reason === "手動停止") return html`<span style="color:#94a3b8">手動停止</span>`;
+            const occurredStr = brokerLock.occurredAt ? ` (${dayjs(brokerLock.occurredAt).tz(TIMEZONE).format("MM/DD HH:mm")})` : "";
+            return html`<span style="color:#fca5a5">${reason}${occurredStr}</span>`;
+          })())
         : ""}
       ${detailRow("実行中ジョブ", `${jobState.running.size > 0 ? [...jobState.running].join(", ") : "なし"}`)}
       ${detailRow(tt("オープンポジション", "現在保有中の建玉"), `${openPositions.length}`)}
