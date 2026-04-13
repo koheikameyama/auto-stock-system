@@ -100,6 +100,17 @@ async function runJob(
     if (entry) entry.error = String(err);
     console.error(`[${nowJST()}] ${name} エラー:`, err);
 
+    // ブローカーログインロック中はエラー通知を抑制（ロック通知で十分）
+    const brokerLockConfig = await prisma.tradingConfig.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { loginLockedUntil: true },
+    }).catch(() => null);
+    const isBrokerLocked = !!(brokerLockConfig?.loginLockedUntil && new Date() < brokerLockConfig.loginLockedUntil);
+    if (isBrokerLocked) {
+      console.log(`[${nowJST()}] ${name} エラー通知スキップ（ブローカーロック中）`);
+      return;
+    }
+
     const errorDetail =
       err instanceof Error
         ? `${err.message}\n\n\`\`\`\n${err.stack?.split("\n").slice(1, 6).join("\n") ?? ""}\n\`\`\``

@@ -148,6 +148,34 @@ describe("TachibanaClient", () => {
       });
     });
 
+    it("電話番号認証要求(10089)検出時にDBにログインロック状態を書き込む", async () => {
+      // ロックチェック: nullなのでスルー
+      // ロック書き込み用config
+      const mockConfig = { id: "config-1" };
+      mockTradingConfigFindFirst
+        .mockResolvedValueOnce(null)      // ロックチェック
+        .mockResolvedValueOnce(mockConfig); // ロック書き込み用
+
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({
+          "287": "0",
+          "334": "CLMAuthLoginAck",
+          "688": "10089",
+          "689": "phone auth required",
+        }),
+      );
+
+      await expect(client.login()).rejects.toThrow("Tachibana phone auth required");
+
+      expect(mockTradingConfigUpdate).toHaveBeenCalledWith({
+        where: { id: "config-1" },
+        data: expect.objectContaining({
+          loginLockedUntil: expect.any(Date),
+          loginLockReason: "phone auth required",
+        }),
+      });
+    });
+
     it("正常ログイン成功時にDBのロック状態をクリアする", async () => {
       const mockConfig = { id: "config-1" };
       mockTradingConfigFindFirst
