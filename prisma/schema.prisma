@@ -440,3 +440,15 @@ model EarningsDate {
   @@index([tickerCode, date(sort: Desc)])
   @@index([date])
 }
+
+model BrokerSession {
+  id                String   @id @default(cuid())
+  env               String   @unique // "demo" or "production"
+  urlRequest        String
+  urlMaster         String
+  urlPrice          String
+  urlEvent          String
+  urlEventWebSocket String
+  loginAt           DateTime
+  updatedAt         DateTime @updatedAt
+}

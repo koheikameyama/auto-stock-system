@@ -253,6 +253,9 @@ export class TachibanaClient {
       `[TachibanaClient] Virtual URLs: request=${urlRequest?.slice(0, 60)}..., master=${urlMaster?.slice(0, 60)}..., price=${urlPrice?.slice(0, 60)}...`,
     );
 
+    // セッションをDBに保存（デプロイ後の復元用）
+    await this.saveSession(this.session);
+
     return this.session;
   }
 
@@ -411,6 +414,70 @@ export class TachibanaClient {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+  }
+
+  /**
+   * セッションURLをDBに保存（デプロイ後の復元用）
+   */
+  private async saveSession(session: TachibanaSession): Promise<void> {
+    try {
+      await prisma.brokerSession.upsert({
+        where: { env: this.env },
+        create: {
+          env: this.env,
+          urlRequest: session.urlRequest,
+          urlMaster: session.urlMaster,
+          urlPrice: session.urlPrice,
+          urlEvent: session.urlEvent,
+          urlEventWebSocket: session.urlEventWebSocket,
+          loginAt: session.loginAt,
+        },
+        update: {
+          urlRequest: session.urlRequest,
+          urlMaster: session.urlMaster,
+          urlPrice: session.urlPrice,
+          urlEvent: session.urlEvent,
+          urlEventWebSocket: session.urlEventWebSocket,
+          loginAt: session.loginAt,
+        },
+      });
+      console.log(`[TachibanaClient] Session saved to DB (${this.env})`);
+    } catch (err) {
+      console.warn("[TachibanaClient] Failed to save session to DB:", err);
+    }
+  }
+
+  /**
+   * DBからセッションを復元するか、なければ新規ログイン。
+   * デプロイ後の再起動時に既存セッションを再利用して電話番号認証を回避する。
+   * セッションの有効性はテストしない — 最初のAPI呼び出しで sResultCode=2 が来れば
+   * 既存の reLoginOnce() が自動で対応する。
+   */
+  async restoreOrLogin(): Promise<TachibanaSession> {
+    try {
+      const saved = await prisma.brokerSession.findUnique({
+        where: { env: this.env },
+      });
+      if (saved) {
+        this.session = {
+          urlRequest: saved.urlRequest,
+          urlMaster: saved.urlMaster,
+          urlPrice: saved.urlPrice,
+          urlEvent: saved.urlEvent,
+          urlEventWebSocket: saved.urlEventWebSocket,
+          loginAt: saved.loginAt,
+        };
+        console.log(
+          `[TachibanaClient] Session restored from DB (${this.env}), loginAt=${saved.loginAt.toISOString()}`,
+        );
+        return this.session;
+      }
+    } catch (err) {
+      console.warn("[TachibanaClient] Failed to restore session from DB, falling back to login:", err);
+    }
+
+    console.log("[TachibanaClient] No saved session found, logging in...");
+    return this.login();
   }
 
   /**

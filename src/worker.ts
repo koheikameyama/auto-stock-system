@@ -199,9 +199,9 @@ serve({ fetch: app.fetch, port }, (info) => {
 // ブローカーセッション初期化
 (async () => {
   try {
-    console.log("  ブローカーログイン中...");
+    console.log("  ブローカーセッション初期化中...");
     const client = getTachibanaClient();
-    const session = await client.login();
+    const session = await client.restoreOrLogin();
 
     // WebSocket EVENT I/F 接続（約定通知のリアルタイム受信）
     const stream = getBrokerEventStream();
