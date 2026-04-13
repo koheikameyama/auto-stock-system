@@ -140,7 +140,6 @@ app.get("/", async (c) => {
     lockedUntil: config?.loginLockedUntil ?? null,
     reason: config?.loginLockReason ?? null,
   };
-
   const overallEmoji = canTrade ? "\u{1F7E2}" : "\u{1F534}";
   const overallLabel = canTrade ? "トレード可" : "取引見送り";
   const overallColor = canTrade ? "#22c55e" : "#ef4444";
@@ -157,7 +156,7 @@ app.get("/", async (c) => {
     ${brokerLock.isLocked
       ? html`
         <div style="background:#991b1b;border:1px solid #ef4444;border-radius:12px;padding:16px;margin-bottom:16px">
-          <div style="font-weight:700;font-size:15px;margin-bottom:8px">🚨 ブローカーログインロック中</div>
+          <div style="font-weight:700;font-size:15px;margin-bottom:8px">🚨 ブローカーログインロック中（システム自動停止済み）</div>
           <div style="font-size:13px;color:#fca5a5;margin-bottom:12px">
             立花証券のログインがロックされています。解除後、下のボタンを押してください。<br>
             📞 サポートセンター: <a href="tel:0336690777" style="color:#fca5a5">03-3669-0777</a> ／ 電話認証: <a href="tel:05031026575" style="color:#fca5a5">050-3102-6575</a>
@@ -358,6 +357,7 @@ app.get("/", async (c) => {
         })
         .then(function(res) {
           if (!res.ok) throw new Error('Failed');
+          alert('ロックを解除しました。システム再開ボタンで再開してください。');
           location.reload();
         })
         .catch(function() {

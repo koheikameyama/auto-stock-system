@@ -152,7 +152,7 @@ app.post("/broker/clear-login-lock", async (c) => {
 
   await notifySlack({
     title: "🔓 ブローカーログインロック解除",
-    message: "ダッシュボードから手動でログインロックを解除しました",
+    message: "ダッシュボードから手動でログインロックを解除しました。システム再開ボタンで再開してください。",
     color: "good",
   }).catch(() => {});
 
