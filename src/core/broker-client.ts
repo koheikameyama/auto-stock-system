@@ -159,17 +159,30 @@ export class TachibanaClient {
         console.warn("[TachibanaClient] Failed to set isActive=false", err);
       }
 
-      // ロック詳細を書き込む（loginLockedUntil 列が存在する場合のみ成功）
+      // ロック理由を書き込む（ダッシュボード表示に必要）
       try {
         const configToUpdate = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
         if (configToUpdate) {
           await prisma.tradingConfig.update({
             where: { id: configToUpdate.id },
-            data: { loginLockedUntil: lockedUntil, loginLockReason: reason, loginLockOccurredAt: new Date() },
+            data: { loginLockedUntil: lockedUntil, loginLockReason: reason },
           });
         }
       } catch (err) {
-        console.warn("[TachibanaClient] Failed to persist login lock details to DB", err);
+        console.warn("[TachibanaClient] Failed to persist login lock reason to DB", err);
+      }
+
+      // 発生日時を記録（分析用・loginLockOccurredAt 列が存在しない場合は無視）
+      try {
+        const configForOccurredAt = await prisma.tradingConfig.findFirst({ orderBy: { createdAt: "desc" } });
+        if (configForOccurredAt) {
+          await prisma.tradingConfig.update({
+            where: { id: configForOccurredAt.id },
+            data: { loginLockOccurredAt: new Date() },
+          });
+        }
+      } catch {
+        // loginLockOccurredAt 列未存在でも無視
       }
 
       if (!this.loginLockNotified) {

@@ -124,12 +124,13 @@ describe("TachibanaClient", () => {
 
     it("アカウントロック検出時にDBにログインロック状態を書き込む", async () => {
       // ロックチェック: nullなのでスルー
-      // isActive=false 書き込み用 + ロック詳細書き込み用（2回）
+      // isActive=false / ロック理由 / 発生日時 で3回書き込み
       const mockConfig = { id: "config-1" };
       mockTradingConfigFindFirst
         .mockResolvedValueOnce(null)       // ロックチェック
         .mockResolvedValueOnce(mockConfig) // isActive=false 書き込み用
-        .mockResolvedValueOnce(mockConfig); // ロック詳細書き込み用
+        .mockResolvedValueOnce(mockConfig) // ロック理由書き込み用
+        .mockResolvedValueOnce(mockConfig); // 発生日時書き込み用
 
       mockFetch.mockResolvedValueOnce(
         createMockResponse({
@@ -147,7 +148,7 @@ describe("TachibanaClient", () => {
         where: { id: "config-1" },
         data: { isActive: false },
       });
-      // 2回目: ロック詳細
+      // 2回目: ロック理由
       expect(mockTradingConfigUpdate).toHaveBeenNthCalledWith(2, {
         where: { id: "config-1" },
         data: expect.objectContaining({
@@ -159,12 +160,13 @@ describe("TachibanaClient", () => {
 
     it("電話番号認証要求(10089)検出時にDBにログインロック状態を書き込む", async () => {
       // ロックチェック: nullなのでスルー
-      // isActive=false 書き込み用 + ロック詳細書き込み用（2回）
+      // isActive=false / ロック理由 / 発生日時 で3回書き込み
       const mockConfig = { id: "config-1" };
       mockTradingConfigFindFirst
         .mockResolvedValueOnce(null)       // ロックチェック
         .mockResolvedValueOnce(mockConfig) // isActive=false 書き込み用
-        .mockResolvedValueOnce(mockConfig); // ロック詳細書き込み用
+        .mockResolvedValueOnce(mockConfig) // ロック理由書き込み用
+        .mockResolvedValueOnce(mockConfig); // 発生日時書き込み用
 
       mockFetch.mockResolvedValueOnce(
         createMockResponse({
@@ -182,7 +184,7 @@ describe("TachibanaClient", () => {
         where: { id: "config-1" },
         data: { isActive: false },
       });
-      // 2回目: ロック詳細
+      // 2回目: ロック理由
       expect(mockTradingConfigUpdate).toHaveBeenNthCalledWith(2, {
         where: { id: "config-1" },
         data: expect.objectContaining({
