@@ -28,7 +28,7 @@ import { notifySlack, notifyBrokerError } from "./lib/slack";
 import { isMarketDay } from "./lib/market-date";
 import { TIMEZONE } from "./lib/constants";
 import { cronControl } from "./lib/cron-control";
-import { getTachibanaClient, resetTachibanaClient, type TachibanaClient } from "./core/broker-client";
+import { getTachibanaClient, resetTachibanaClient } from "./core/broker-client";
 import { getBrokerEventStream, resetBrokerEventStream, isBrokerConnectionWindow } from "./core/broker-event-stream";
 import { handleBrokerFill } from "./core/broker-fill-handler";
 
@@ -79,16 +79,6 @@ async function runJob(
     }
   }
 
-  // ブローカーロックチェック（インメモリ優先、DBフォールバック）
-  const brokerLocked = await isBrokerLocked(getTachibanaClient());
-  if (brokerLocked) {
-    if (!holidaySkipLogged.has(`${name}:broker-locked`)) {
-      console.log(`[${nowJST()}] ${name} スキップ（ブローカーロック中）`);
-      holidaySkipLogged.add(`${name}:broker-locked`);
-    }
-    return;
-  }
-
   if (jobState.running.has(name)) {
     console.log(
       `[${nowJST()}] ${name} スキップ（前回の実行がまだ完了していません）`,
@@ -127,25 +117,6 @@ async function runJob(
 
 function nowJST(): string {
   return dayjs().tz(TIMEZONE).format("YYYY-MM-DD HH:mm:ss");
-}
-
-/**
- * ブローカーロック中かどうか確認（インメモリ優先、DBフォールバック）
- *
- * インメモリのロック状態を先に確認することで、DBカラム未適用の環境でも
- * 同一プロセス内でのロック検出が機能する。
- */
-async function isBrokerLocked(client: TachibanaClient): Promise<boolean> {
-  // インメモリのロック状態を先に確認（DBマイグレーション未適用時のフォールバック）
-  if (client.getLoginLockStatus().isLocked) {
-    return true;
-  }
-  // DBのロック状態を確認
-  const config = await prisma.tradingConfig.findFirst({
-    orderBy: { createdAt: "desc" },
-    select: { loginLockedUntil: true },
-  }).catch(() => null);
-  return !!(config?.loginLockedUntil && new Date() < config.loginLockedUntil);
 }
 
 // 市場時間の毎分tick: broker-reconciliation → position-monitor の順にシーケンシャル実行
