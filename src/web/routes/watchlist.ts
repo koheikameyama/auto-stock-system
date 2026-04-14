@@ -244,7 +244,10 @@ app.get("/", async (c) => {
 
                 // ソート用データを収集
                 var guAllMet = d.gapup && d.gapup.isGapOk && d.gapup.isCandleOk && d.gapup.isVolumeOk;
+                var wbMet = d.wbDeviation != null && d.wbDeviation >= 0;
+                var isEntryCandidate = (guAllMet || wbMet) ? 1 : 0;
                 rowSortData[ticker] = {
+                  isEntryCandidate: isEntryCandidate,
                   guAllMet: guAllMet ? 1 : 0,
                   surgeRatio: d.surgeRatio || 0,
                   status: d.status || 'watching'
@@ -258,6 +261,8 @@ app.get("/", async (c) => {
                     var label = s.label;
                     if (d.status === 'ordered') {
                       label = d.orderStrategy ? '注文済(' + d.orderStrategy.toUpperCase() + ')' : '注文済';
+                    } else if (d.status === 'watching' && hasOpen && !isEntryCandidate) {
+                      label = '対象外';
                     }
                     badgeEl.innerHTML = '<span class="badge ' + s.cls + '">' + label + '</span>';
                   }
@@ -364,7 +369,7 @@ app.get("/", async (c) => {
                 }
               }
 
-              // ---- 行ソート（ステータス → GU全条件OK → サージ比率） ----
+              // ---- 行ソート（エントリー候補 → ステータス → サージ比率） ----
               var statusOrder = { ordered: 0, holding: 1, watching: 2 };
               var tbody = document.querySelector('table tbody');
               if (tbody) {
@@ -372,12 +377,15 @@ app.get("/", async (c) => {
                 rowArr.sort(function(a, b) {
                   var ta = a.getAttribute('data-ticker');
                   var tb = b.getAttribute('data-ticker');
-                  var da = rowSortData[ta] || { guAllMet: 0, surgeRatio: 0, status: 'watching' };
-                  var db = rowSortData[tb] || { guAllMet: 0, surgeRatio: 0, status: 'watching' };
+                  var da = rowSortData[ta] || { isEntryCandidate: 0, guAllMet: 0, surgeRatio: 0, status: 'watching' };
+                  var db = rowSortData[tb] || { isEntryCandidate: 0, guAllMet: 0, surgeRatio: 0, status: 'watching' };
+                  // 1. エントリー候補（GU全条件OK or WB条件OK）を最上位
+                  var entryDiff = db.isEntryCandidate - da.isEntryCandidate;
+                  if (entryDiff !== 0) return entryDiff;
+                  // 2. ステータス: 注文済 → 保有中 → 監視中
                   var statusDiff = (statusOrder[da.status] != null ? statusOrder[da.status] : 2) - (statusOrder[db.status] != null ? statusOrder[db.status] : 2);
                   if (statusDiff !== 0) return statusDiff;
-                  var guDiff = db.guAllMet - da.guAllMet;
-                  if (guDiff !== 0) return guDiff;
+                  // 3. サージ比率（出来高が多い順）
                   return db.surgeRatio - da.surgeRatio;
                 });
                 rowArr.forEach(function(row) { tbody.appendChild(row); });
