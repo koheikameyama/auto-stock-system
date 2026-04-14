@@ -88,6 +88,7 @@ model WatchlistEntry {
   latestClose  Float
   momentum5d   Float
   weeklyHigh13 Float?
+  ma20         Float?   // 20日移動平均（当日朝に計算）
   createdAt    DateTime @default(now())
 
   @@unique([date, tickerCode])
@@ -466,4 +467,20 @@ model BrokerSession {
   urlEventWebSocket String
   loginAt           DateTime
   updatedAt         DateTime @updatedAt
+}
+
+model IntraDayMaPullbackSignal {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @db.Date
+  tickerCode    String
+  detectedAt    DateTime
+  ma20          Float
+  detectedPrice Float
+  closePrice    Float?
+  stopLossPrice Float
+  atr14         Float
+  createdAt     DateTime @default(now())
+
+  @@index([date(sort: Desc)])
+  @@unique([date, tickerCode])
 }
