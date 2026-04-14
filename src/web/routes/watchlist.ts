@@ -115,9 +115,9 @@ app.get("/", async (c) => {
     <div class="card" style="padding: 8px 12px; margin-bottom: 8px; font-size: 12px;">
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
         <span style="color: #e2e8f0; font-size: 11px; font-weight: 600;">すべて: ${watchlist.length}</span>
-        <span class="badge badge-triggered" style="opacity: ${orderedCount ? 0.7 : 0.3};">注文済: ${orderedCount}</span>
-        <span class="badge badge-holding" style="opacity: ${holdingCount ? 0.7 : 0.3};">保有中: ${holdingCount}</span>
-        <span class="badge badge-cold" style="opacity: ${watchingCount ? 0.7 : 0.3};">監視中: ${watchingCount}</span>
+        <span data-summary-ordered class="badge badge-triggered" style="opacity: ${orderedCount ? 0.7 : 0.3};">注文済: ${orderedCount}</span>
+        <span data-summary-holding class="badge badge-holding" style="opacity: ${holdingCount ? 0.7 : 0.3};">保有中: ${holdingCount}</span>
+        <span data-summary-watching class="badge badge-cold" style="opacity: ${watchingCount ? 0.7 : 0.3};">監視中: ${watchingCount}</span>
         <span style="margin-left: auto;"></span>
         <span data-summary-gu class="badge badge-gapup" style="opacity: 0.3;">GU: -</span>
         ${isFriday ? html`<span data-summary-wb class="badge badge-wb" style="opacity: 0.3;">WB: -</span>` : ""}
@@ -140,6 +140,7 @@ app.get("/", async (c) => {
             <th>戦略</th>
             <th>銘柄</th>
             <th>${tt("GU条件", "Gap≥3% / 陽線 / 出来高≥1.5x")}</th>
+            <th>${tt("始値", "当日始値")}</th>
             <th>${tt("現在価格", "リアルタイム価格")}</th>
             <th>${tt("損切りライン", "ATRベース (entry - ATR × 1.0)")}</th>
             ${isFriday ? html`<th>${tt("WB乖離", "現在価格 vs 13週高値（金曜のみ）")}</th>` : ""}
@@ -153,6 +154,7 @@ app.get("/", async (c) => {
                 <td data-strategy-badge><span style="color: #475569; font-size: 11px;">-</span></td>
                 <td>${tickerLink(w.ticker, `${w.ticker} ${nameMap.get(w.ticker) ?? w.ticker}`)}</td>
                 <td data-gapup-conditions style="font-size: 11px; white-space: nowrap;"><span class="quote-loading">...</span></td>
+                <td data-open-price><span class="quote-loading">...</span></td>
                 <td data-quote-price><span class="quote-loading">...</span></td>
                 <td data-sl-price><span class="quote-loading">...</span></td>
                 ${isFriday ? html`<td data-wb-deviation><span class="quote-loading">...</span></td>` : ""}
@@ -223,6 +225,7 @@ app.get("/", async (c) => {
               }
 
               var guCount = 0, wbCount = 0;
+              var orderedCount = 0, holdingCount = 0, watchingCount = 0;
               var rowSortData = {};
 
               rows.forEach(function(row) {
@@ -238,6 +241,13 @@ app.get("/", async (c) => {
                 var shouldShow = isActive || isGapOk || isWbOk || !hasOpen;
                 row.style.display = shouldShow ? '' : 'none';
                 row.style.opacity = '1';
+
+                // ---- ステータス別カウント（表示行のみ） ----
+                if (shouldShow) {
+                  if (d.status === 'ordered') orderedCount++;
+                  else if (d.status === 'holding') holdingCount++;
+                  else watchingCount++;
+                }
 
                 // ソート用データを収集
                 var guAllMet = d.gapup && d.gapup.isGapOk && d.gapup.isCandleOk && d.gapup.isVolumeOk;
@@ -260,8 +270,6 @@ app.get("/", async (c) => {
                     var label = s.label;
                     if (d.status === 'ordered') {
                       label = d.orderStrategy ? '注文済(' + d.orderStrategy.toUpperCase() + ')' : '注文済';
-                    } else if (d.status === 'watching' && hasOpen && !isEntryCandidate) {
-                      label = '対象外';
                     }
                     badgeEl.innerHTML = '<span class="badge ' + s.cls + '">' + label + '</span>';
                   }
@@ -303,6 +311,10 @@ app.get("/", async (c) => {
                     guEl.innerHTML = '<span style="color: #475569;">-</span>';
                   }
                 }
+
+                // ---- 始値（data-open-price） ----
+                var openEl = row.querySelector('[data-open-price]');
+                if (openEl) openEl.innerHTML = d.open != null ? '\u00a5' + fmt(d.open) : '-';
 
                 // ---- 現在価格（data-quote-price） ----
                 if (d.price != null) {
@@ -348,6 +360,12 @@ app.get("/", async (c) => {
               if (emptyEl) emptyEl.style.display = rows.length ? 'none' : '';
 
               // ---- サマリーバッジ更新 ----
+              var orderedSummaryEl = document.querySelector('[data-summary-ordered]');
+              if (orderedSummaryEl) { orderedSummaryEl.textContent = '注文済: ' + orderedCount; orderedSummaryEl.style.opacity = orderedCount ? '0.7' : '0.3'; }
+              var holdingSummaryEl = document.querySelector('[data-summary-holding]');
+              if (holdingSummaryEl) { holdingSummaryEl.textContent = '保有中: ' + holdingCount; holdingSummaryEl.style.opacity = holdingCount ? '0.7' : '0.3'; }
+              var watchingSummaryEl = document.querySelector('[data-summary-watching]');
+              if (watchingSummaryEl) { watchingSummaryEl.textContent = '監視中: ' + watchingCount; watchingSummaryEl.style.opacity = watchingCount ? '0.7' : '0.3'; }
               var guSummaryEl = document.querySelector('[data-summary-gu]');
               if (guSummaryEl) { guSummaryEl.textContent = 'GU: ' + guCount; guSummaryEl.style.opacity = guCount ? '0.7' : '0.3'; }
               var wbSummaryEl = document.querySelector('[data-summary-wb]');
