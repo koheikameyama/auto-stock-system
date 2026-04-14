@@ -13,6 +13,48 @@ import { getTodayForDB } from "../lib/market-date";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** 各銘柄の20日MAをStockDailyBarから計算してWatchlistEntryを更新 */
+async function updateMa20ForWatchlist(tickerCodes: string[], today: Date): Promise<void> {
+  const MA_PERIOD = 20;
+
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - MA_PERIOD * 3); // 営業日換算で余裕を持たせる
+
+  const bars = await prisma.stockDailyBar.findMany({
+    where: {
+      tickerCode: { in: tickerCodes },
+      date: { gte: startDate, lte: today },
+    },
+    orderBy: [{ tickerCode: "asc" }, { date: "asc" }],
+    select: { tickerCode: true, close: true },
+  });
+
+  // tickerCode ごとにグループ化
+  const barsByTicker = new Map<string, number[]>();
+  for (const bar of bars) {
+    const closes = barsByTicker.get(bar.tickerCode) ?? [];
+    closes.push(Number(bar.close));
+    barsByTicker.set(bar.tickerCode, closes);
+  }
+
+  // MA20を計算してWatchlistEntryを更新
+  const updates: Promise<unknown>[] = [];
+  for (const ticker of tickerCodes) {
+    const closes = barsByTicker.get(ticker);
+    if (!closes || closes.length < MA_PERIOD) continue;
+    const recent = closes.slice(-MA_PERIOD);
+    const ma20 = recent.reduce((s, v) => s + v, 0) / MA_PERIOD;
+    updates.push(
+      prisma.watchlistEntry.updateMany({
+        where: { date: today, tickerCode: ticker },
+        data: { ma20 },
+      }),
+    );
+  }
+  await Promise.all(updates);
+  console.log(`[watchlist-builder] MA20計算完了: ${updates.length}銘柄`);
+}
+
 async function saveGuWatchlistToDB(entries: GuWatchlistEntry[]): Promise<void> {
   const today = getTodayForDB();
   await prisma.watchlistEntry.deleteMany({ where: { date: today } });
@@ -28,6 +70,8 @@ async function saveGuWatchlistToDB(entries: GuWatchlistEntry[]): Promise<void> {
         weeklyHigh13: e.weeklyHigh13 ?? null,
       })),
     });
+    // MA20を計算してWatchlistEntryを更新
+    await updateMa20ForWatchlist(entries.map((e) => e.ticker), today);
   }
 }
 
