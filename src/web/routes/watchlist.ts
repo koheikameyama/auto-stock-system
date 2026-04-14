@@ -261,6 +261,8 @@ app.get("/", async (c) => {
                     var label = s.label;
                     if (d.status === 'ordered') {
                       label = d.orderStrategy ? '注文済(' + d.orderStrategy.toUpperCase() + ')' : '注文済';
+                    } else if (d.status === 'watching' && hasOpen && !isEntryCandidate) {
+                      label = '対象外';
                     }
                     badgeEl.innerHTML = '<span class="badge ' + s.cls + '">' + label + '</span>';
                   }
