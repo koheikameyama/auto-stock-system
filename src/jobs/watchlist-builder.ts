@@ -17,8 +17,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 async function updateMa20ForWatchlist(tickerCodes: string[], today: Date): Promise<void> {
   const MA_PERIOD = 20;
 
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - MA_PERIOD * 3); // 営業日換算で余裕を持たせる
+  const startDate = dayjs(today).subtract(MA_PERIOD * 3, "day").toDate(); // 営業日換算で余裕を持たせる
 
   const bars = await prisma.stockDailyBar.findMany({
     where: {
@@ -52,7 +51,7 @@ async function updateMa20ForWatchlist(tickerCodes: string[], today: Date): Promi
     );
   }
   await Promise.all(updates);
-  console.log(`[watchlist-builder] MA20計算完了: ${updates.length}銘柄`);
+  console.log(`[watchlist-builder] MA20計算完了: ${updates.length}/${tickerCodes.length}銘柄`);
 }
 
 async function saveGuWatchlistToDB(entries: GuWatchlistEntry[]): Promise<void> {
