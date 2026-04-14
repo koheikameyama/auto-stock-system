@@ -59,6 +59,11 @@ const NAV_ITEMS = [
     label: "未約定",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
   },
+  {
+    path: "/intraday-ma-signals",
+    label: "MA押し目",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2 16 7 11 11 15 17 9 22 9"/><circle cx="17" cy="9" r="2" fill="currentColor" stroke="none"/></svg>`,
+  },
 ];
 
 export function layout(
