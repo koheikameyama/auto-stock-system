@@ -20,6 +20,7 @@ import { main as runMonitor } from "./jobs/position-monitor";
 import { main as runWeeklyBreakMonitor } from "./jobs/weekly-break-monitor";
 import { main as runGapupMonitor } from "./jobs/gapup-monitor";
 import { main as runBrokerReconciliation } from "./jobs/broker-reconciliation";
+import { main as runIntradayMaScanner } from "./jobs/intraday-ma-scanner";
 import { app } from "./web/app";
 import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
@@ -124,6 +125,11 @@ async function runMarketTick() {
   await runJob("position-monitor", runMonitor, true);
 }
 
+// 前場のみのtick: intraday-ma-scanner を実行
+async function runAMTick() {
+  await runJob("intraday-ma-scanner", runIntradayMaScanner, true);
+}
+
 // スケジュール定義（全て JST）
 // ※ position-monitor のみ Worker cron で実行
 // ※ バッチジョブ（end-of-day, jpx-delisting-sync）は cron-job.org → /api/cron/* に移行
@@ -134,6 +140,10 @@ const schedules = [
   { cron: "0-59 9 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
   { cron: "* 10 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
   { cron: "0-30 11 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
+  // 前場のみ: intraday-ma-scanner（9:00-11:30）
+  { cron: "0-59 9 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
+  { cron: "* 10 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
+  { cron: "0-30 11 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
   { cron: "30-59 12 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
   { cron: "* 13-14 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
   { cron: "0-30 15 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
@@ -164,6 +174,7 @@ cronControl.register(
     for (const task of cronTasks) task.start();
     holidaySkipLogged.delete("position-monitor:inactive");
     holidaySkipLogged.delete("broker-reconciliation:inactive");
+    holidaySkipLogged.delete("intraday-ma-scanner:inactive");
     console.log(`[${nowJST()}] cron タスク再開（${cronTasks.length}件）`);
   },
 );
