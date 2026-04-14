@@ -17,6 +17,7 @@ import unfilledOrdersRoute from "./routes/unfilled-orders";
 import newsRoute from "./routes/news";
 import apiRoute from "./routes/api";
 import cronRoute from "./routes/cron";
+import intradayMaSignalsRoute from "./routes/intraday-ma-signals";
 
 export const app = new Hono();
 
@@ -135,6 +136,7 @@ app.route("/weekly", weeklyRoute);
 app.route("/backtest", backtestRoute);
 app.route("/unfilled-orders", unfilledOrdersRoute);
 app.route("/news", newsRoute);
+app.route("/intraday-ma-signals", intradayMaSignalsRoute);
 
 // API routes (authenticated)
 app.route("/api", apiRoute);
