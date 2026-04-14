@@ -20,7 +20,7 @@ import { NIKKEI_CHART_PERIODS, TIMEZONE } from "../../lib/constants";
 import { GAPUP } from "../../lib/constants/gapup";
 import { getGuWatchlist } from "../../jobs/watchlist-builder";
 import { calculateVolumeSurgeRatio } from "../../core/breakout/volume-surge";
-import { getTodayForDB, isMarketOpen } from "../../lib/market-date";
+import { getTodayForDB, getDaysAgoForDB, isMarketOpen } from "../../lib/market-date";
 import { getTachibanaClient } from "../../core/broker-client";
 import dayjs from "dayjs";
 import utcPlugin from "dayjs/plugin/utc.js";
@@ -476,8 +476,8 @@ app.get("/intraday-ma-signals", async (c) => {
   const fromParam = c.req.query("from");
   const toParam = c.req.query("to");
 
-  const from = fromParam ? new Date(`${fromParam}T00:00:00Z`) : dayjs().subtract(30, "day").toDate();
-  const to = toParam ? new Date(`${toParam}T00:00:00Z`) : new Date();
+  const from = fromParam ? new Date(`${fromParam}T00:00:00Z`) : getDaysAgoForDB(30);
+  const to = toParam ? new Date(`${toParam}T00:00:00Z`) : getTodayForDB();
 
   const signals = await prisma.intraDayMaPullbackSignal.findMany({
     where: {
