@@ -385,7 +385,47 @@ export async function main() {
     aiReview,
   });
 
+  // 6. MA押し目シグナルの終値補完
+  await fillIntradayMaSignalClosePrices(getTodayForDB());
+
   console.log("=== End of Day 終了 ===");
+}
+
+async function fillIntradayMaSignalClosePrices(today: Date): Promise<void> {
+  const signals = await prisma.intraDayMaPullbackSignal.findMany({
+    where: { date: today, closePrice: null },
+    select: { id: true, tickerCode: true },
+  });
+
+  if (!signals.length) {
+    console.log("[end-of-day] MA押し目シグナル終値補完: 対象なし");
+    return;
+  }
+
+  const tickers = signals.map((s) => s.tickerCode);
+
+  const bars = await prisma.stockDailyBar.findMany({
+    where: { tickerCode: { in: tickers }, date: today },
+    select: { tickerCode: true, close: true },
+  });
+
+  const closeMap = new Map<string, number>();
+  for (const bar of bars) {
+    closeMap.set(bar.tickerCode, Number(bar.close));
+  }
+
+  await Promise.all(
+    tickers.map((ticker) => {
+      const close = closeMap.get(ticker);
+      if (close == null) return Promise.resolve();
+      return prisma.intraDayMaPullbackSignal.updateMany({
+        where: { date: today, tickerCode: ticker },
+        data: { closePrice: close },
+      });
+    }),
+  );
+
+  console.log(`[end-of-day] MA押し目シグナル終値補完: ${signals.length}件`);
 }
 
 const isDirectRun = process.argv[1]?.includes("end-of-day");
