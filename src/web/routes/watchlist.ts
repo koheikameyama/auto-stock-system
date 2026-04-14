@@ -178,7 +178,8 @@ app.get("/", async (c) => {
         var STATUS_MAP = {
           ordered: { cls: 'badge-triggered' },
           holding: { label: '保有中', cls: 'badge-holding' },
-          watching: { label: '監視中', cls: 'badge-cold' }
+          watching: { label: '監視中', cls: 'badge-cold' },
+          not_target: { label: '対象外', cls: 'badge-cold' }
         };
 
         if (rows.length === 0) {
@@ -229,30 +230,17 @@ app.get("/", async (c) => {
                 var d = data.tickers[ticker];
                 if (!d) return;
 
-                // ---- 表示判定（主条件を満たさない行は非表示） ----
-                var isActive = d.status === 'ordered' || d.status === 'holding';
-                var isGapOk = d.gapup && d.gapup.isGapOk;
-                var isWbOk = d.wbDeviation != null && d.wbDeviation >= 0;
-                var hasOpen = d.open != null && d.open > 0;
-                var shouldShow = isActive || isGapOk || isWbOk || !hasOpen;
-                row.style.display = shouldShow ? '' : 'none';
-                row.style.opacity = '1';
-
-                // ---- ステータス別カウント（表示行のみ） ----
-                if (shouldShow) {
-                  if (d.status === 'ordered') orderedCount++;
-                  else if (d.status === 'holding') holdingCount++;
-                  else watchingCount++;
-                }
+                // ---- ステータス別カウント ----
+                if (d.status === 'ordered') orderedCount++;
+                else if (d.status === 'holding') holdingCount++;
+                else watchingCount++;
 
                 // ソート用データを収集
                 var guAllMet = d.gapup && d.gapup.isGapOk && d.gapup.isCandleOk && d.gapup.isVolumeOk;
                 var wbMet = d.wbDeviation != null && d.wbDeviation >= 0;
                 var isEntryCandidate = (guAllMet || wbMet) ? 1 : 0;
-                var isVisible = shouldShow ? 1 : 0;
                 rowSortData[ticker] = {
                   isEntryCandidate: isEntryCandidate,
-                  isVisible: isVisible,
                   guAllMet: guAllMet ? 1 : 0,
                   surgeRatio: d.surgeRatio || 0,
                   status: d.status || 'watching'
@@ -260,11 +248,15 @@ app.get("/", async (c) => {
 
                 // ---- ステータスバッジ ----
                 var badgeEl = row.querySelector('[data-status-badge]');
-                if (badgeEl && d.status) {
-                  var s = STATUS_MAP[d.status];
+                if (badgeEl) {
+                  var resolvedStatus = d.status;
+                  if (d.status !== 'ordered' && d.status !== 'holding') {
+                    resolvedStatus = (guAllMet || wbMet) ? 'watching' : 'not_target';
+                  }
+                  var s = STATUS_MAP[resolvedStatus];
                   if (s) {
                     var label = s.label;
-                    if (d.status === 'ordered') {
+                    if (resolvedStatus === 'ordered') {
                       label = d.orderStrategy ? '注文済(' + d.orderStrategy.toUpperCase() + ')' : '注文済';
                     }
                     badgeEl.innerHTML = '<span class="badge ' + s.cls + '">' + label + '</span>';
@@ -382,13 +374,10 @@ app.get("/", async (c) => {
                   // 1. エントリー候補（GU全条件OK or WB条件OK）を最上位
                   var entryDiff = db.isEntryCandidate - da.isEntryCandidate;
                   if (entryDiff !== 0) return entryDiff;
-                  // 2. 減衰しない行を優先（active or isGapOk or isWbOk）
-                  var visibleDiff = db.isVisible - da.isVisible;
-                  if (visibleDiff !== 0) return visibleDiff;
-                  // 3. ステータス: 注文済 → 保有中 → 監視中
+                  // 2. ステータス: 注文済 → 保有中 → 監視中
                   var statusDiff = (statusOrder[da.status] != null ? statusOrder[da.status] : 2) - (statusOrder[db.status] != null ? statusOrder[db.status] : 2);
                   if (statusDiff !== 0) return statusDiff;
-                  // 4. サージ比率（出来高が多い順）
+                  // 3. サージ比率（出来高が多い順）
                   return db.surgeRatio - da.surgeRatio;
                 });
                 rowArr.forEach(function(row) { tbody.appendChild(row); });
