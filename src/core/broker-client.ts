@@ -77,6 +77,8 @@ export class TachibanaClient {
    * 複数ジョブからの並行呼び出しによるp_no順序エラーを防ぐ。
    */
   private requestMutex: Promise<void> = Promise.resolve();
+  /** セッション確立時に1回だけ呼ばれるコールバック（遅延ログイン用） */
+  private sessionReadyCallbacks: Array<(session: TachibanaSession) => void> = [];
 
   constructor(env?: TachibanaEnv) {
     this.env = env ?? ((process.env.TACHIBANA_ENV as TachibanaEnv) || "demo");
@@ -400,12 +402,11 @@ export class TachibanaClient {
   }
 
   /**
-   * DBからセッションを復元するか、なければ新規ログイン。
-   * デプロイ後の再起動時に既存セッションを再利用して電話番号認証を回避する。
-   * セッションの有効性はテストしない — 最初のAPI呼び出しで sResultCode=2 が来れば
-   * 既存の reLoginOnce() が自動で対応する。
+   * DBからセッションを復元のみ（APIログインはしない）。
+   * デプロイ時の起動処理で使用。セッションがなければ null を返し、
+   * 実際のAPI呼び出し時に ensureSession() 経由で遅延ログインする。
    */
-  async restoreOrLogin(): Promise<TachibanaSession> {
+  async restoreFromDB(): Promise<TachibanaSession | null> {
     try {
       const saved = await prisma.brokerSession.findUnique({
         where: { env: this.env },
@@ -429,11 +430,55 @@ export class TachibanaClient {
         return this.session;
       }
     } catch (err) {
-      console.warn("[TachibanaClient] Failed to restore session from DB, falling back to login:", err);
+      console.warn("[TachibanaClient] Failed to restore session from DB:", err);
+    }
+
+    return null;
+  }
+
+  /**
+   * DBからセッションを復元するか、なければ新規ログイン。
+   * ensureSession() から呼ばれる遅延ログイン用。
+   * セッションの有効性はテストしない — 最初のAPI呼び出しで sResultCode=2 が来れば
+   * 既存の reLoginOnce() が自動で対応する。
+   */
+  async restoreOrLogin(): Promise<TachibanaSession> {
+    const restored = await this.restoreFromDB();
+    if (restored) {
+      this.fireSessionReadyCallbacks();
+      return restored;
     }
 
     console.log("[TachibanaClient] No saved session found, logging in...");
-    return this.login();
+    const session = await this.login();
+    this.fireSessionReadyCallbacks();
+    return session;
+  }
+
+  /**
+   * セッション確立時のコールバックを登録。
+   * 既にセッションがあれば即座に呼び出す。
+   * まだなければ、初回 ensureSession() でセッション確立後に呼び出す。
+   */
+  onSessionReady(callback: (session: TachibanaSession) => void): void {
+    if (this.session) {
+      callback(this.session);
+    } else {
+      this.sessionReadyCallbacks.push(callback);
+    }
+  }
+
+  private fireSessionReadyCallbacks(): void {
+    if (this.sessionReadyCallbacks.length === 0 || !this.session) return;
+    const callbacks = this.sessionReadyCallbacks;
+    this.sessionReadyCallbacks = [];
+    for (const cb of callbacks) {
+      try {
+        cb(this.session);
+      } catch (err) {
+        console.error("[TachibanaClient] onSessionReady callback error:", err);
+      }
+    }
   }
 
   /**
@@ -654,7 +699,7 @@ export class TachibanaClient {
 
   private async ensureSession(): Promise<void> {
     if (!this.session) {
-      await this.login();
+      await this.restoreOrLogin();
     }
   }
 

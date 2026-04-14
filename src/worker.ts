@@ -24,11 +24,11 @@ import { main as runIntradayMaScanner } from "./jobs/intraday-ma-scanner";
 import { app } from "./web/app";
 import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
-import { notifySlack, notifyBrokerError } from "./lib/slack";
+import { notifySlack } from "./lib/slack";
 import { isMarketDay } from "./lib/market-date";
 import { TIMEZONE } from "./lib/constants";
 import { cronControl } from "./lib/cron-control";
-import { getTachibanaClient, resetTachibanaClient } from "./core/broker-client";
+import { getTachibanaClient, resetTachibanaClient, type TachibanaSession } from "./core/broker-client";
 import { getBrokerEventStream, resetBrokerEventStream, isBrokerConnectionWindow } from "./core/broker-event-stream";
 import { handleBrokerFill } from "./core/broker-fill-handler";
 
@@ -198,40 +198,46 @@ serve({ fetch: app.fetch, port }, (info) => {
   console.log(`  Dashboard: http://localhost:${info.port}`);
 });
 
-// ブローカーセッション初期化
+// ブローカーセッション初期化（APIログインは行わない — 初回API呼び出し時に遅延ログイン）
 (async () => {
   try {
     console.log("  ブローカーセッション初期化中...");
     const client = getTachibanaClient();
-    const session = await client.restoreOrLogin();
 
-    // WebSocket EVENT I/F 接続（約定通知のリアルタイム受信）
-    const stream = getBrokerEventStream();
-    stream.on("execution", (event) => {
-      handleBrokerFill(event).catch((err) => {
-        console.error("[worker] broker-fill error:", err);
+    // WebSocket + auto-refresh セットアップ（セッション確立後に実行）
+    const setupBrokerConnection = (session: TachibanaSession) => {
+      const stream = getBrokerEventStream();
+      stream.on("execution", (event) => {
+        handleBrokerFill(event).catch((err) => {
+          console.error("[worker] broker-fill error:", err);
+        });
       });
-    });
-    stream.on("error", (err) => {
-      console.error("[worker] EventStream error:", err);
-    });
-    if (!isBrokerConnectionWindow()) {
-      console.log("  WebSocket: 営業時間外 — 次の営業時間に自動接続します");
+      stream.on("error", (err) => {
+        console.error("[worker] EventStream error:", err);
+      });
+      if (!isBrokerConnectionWindow()) {
+        console.log("  WebSocket: 営業時間外 — 次の営業時間に自動接続します");
+      }
+      stream.connect(session.urlEventWebSocket);
+
+      client.startAutoRefresh((newSession) => {
+        stream.reconnect(newSession.urlEventWebSocket);
+      });
+
+      console.log("  ブローカーセッション確立");
+    };
+
+    // DBからセッション復元を試みる（APIログインはしない）
+    const session = await client.restoreFromDB();
+
+    if (session) {
+      setupBrokerConnection(session);
+    } else {
+      console.log("  セッションなし — 初回API呼び出し時にログインします");
+      client.onSessionReady(setupBrokerConnection);
     }
-    stream.connect(session.urlEventWebSocket);
-
-    // セッション更新時にWebSocket再接続
-    client.startAutoRefresh((newSession) => {
-      stream.reconnect(newSession.urlEventWebSocket);
-    });
-
-    console.log(`  ブローカーセッション確立`);
   } catch (e) {
-    console.error("  ブローカーログイン失敗:", e);
-    await notifyBrokerError(
-      "起動時ログイン失敗",
-      e instanceof Error ? e.message : String(e),
-    ).catch(() => {});
+    console.error("  ブローカーセッション復元失敗:", e);
   }
 })();
 
