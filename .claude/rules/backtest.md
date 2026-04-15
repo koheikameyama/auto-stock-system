@@ -163,6 +163,13 @@ npm run walk-forward:gapdown-reversal
 | beActivationMultiplier | 0.3, 0.5, 0.8 |
 | trailMultiplier | 0.3, 0.5, 0.8 |
 
+#### WF結果（2026-04-15実施）
+
+- **OOS集計PF=0.68、判定「過学習 ✗」（IS/OOS比=1.35）**
+- 7窓中2窓が休止（IS PF < 0.5）、Window 3でOOS PF=0.00
+- パラメータ不安定（trailが0.8/0.3でバラバラ）
+- **結論: 実戦投入なし。中小型株ユニバースではギャップダウン後の続落パターンが多くエッジなし**
+
 ### スクイーズブレイクアウト戦略バックテスト
 
 ```bash
