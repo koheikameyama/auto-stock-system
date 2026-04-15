@@ -105,7 +105,7 @@ export async function getGuWatchlist(): Promise<GuWatchlistEntry[]> {
 }
 
 /** PSCエントリー候補: momentum5d の正負に関わらず全銘柄 */
-export async function getPscWatchlist(): Promise<GuWatchlistEntry[]> {
+export async function getAllWatchlist(): Promise<GuWatchlistEntry[]> {
   return getAllWatchlistEntries();
 }
 

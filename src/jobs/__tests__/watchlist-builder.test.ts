@@ -11,7 +11,7 @@ vi.mock("../../lib/prisma", () => ({
 }));
 
 // キャッシュをリセットするためにモジュールを動的インポートする
-import { getGuWatchlist, getPscWatchlist } from "../watchlist-builder";
+import { getGuWatchlist, getAllWatchlist } from "../watchlist-builder";
 
 function makeRow(ticker: string, momentum5d: number) {
   return {
@@ -43,7 +43,7 @@ describe("getGuWatchlist", () => {
   });
 });
 
-describe("getPscWatchlist", () => {
+describe("getAllWatchlist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -55,7 +55,7 @@ describe("getPscWatchlist", () => {
       makeRow("3333", 0),
     ]);
 
-    const result = await getPscWatchlist();
+    const result = await getAllWatchlist();
 
     expect(result.map((e) => e.ticker)).toEqual(["1111", "2222", "3333"]);
   });

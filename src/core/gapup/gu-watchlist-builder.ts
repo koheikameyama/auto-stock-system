@@ -239,7 +239,7 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
       const momentum5d = (latestClose - close5dAgo) / close5dAgo;
       // momentum5d フィルターはここでは行わない。
       // GU候補は getGuWatchlist() の取得時に momentum5d > 0 でフィルタリングする。
-      // PSC候補はフィルターなしで全エントリーを使う。
+      // WB・PSC候補は getAllWatchlist() でフィルターなしの全エントリーを使う。
 
       // atr14 が null の場合はスキップ
       if (summary.atr14 == null) {

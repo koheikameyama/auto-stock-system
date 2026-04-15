@@ -19,7 +19,7 @@ import { nikkeiChartBody } from "../views/components";
 import { NIKKEI_CHART_PERIODS, TIMEZONE } from "../../lib/constants";
 import { GAPUP } from "../../lib/constants/gapup";
 import { POST_SURGE_CONSOLIDATION } from "../../lib/constants/post-surge-consolidation";
-import { getPscWatchlist } from "../../jobs/watchlist-builder";
+import { getAllWatchlist } from "../../jobs/watchlist-builder";
 import { calculateVolumeSurgeRatio } from "../../core/breakout/volume-surge";
 import { getTodayForDB, getDaysAgoForDB, isMarketOpen } from "../../lib/market-date";
 import { getTachibanaClient } from "../../core/broker-client";
@@ -314,7 +314,7 @@ app.get("/watchlist/state", async (c) => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const [watchlist, holdings, todayOrders, todayAssessment, quotes] = await Promise.all([
-    getPscWatchlist(),
+    getAllWatchlist(),
     prisma.tradingPosition.findMany({
       where: { status: "open" },
       select: { stock: { select: { tickerCode: true } } },
