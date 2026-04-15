@@ -53,6 +53,7 @@ export function precomputeGapUpDailySignals(
     | "gapMinPct" | "volSurgeRatio"
     | "marketTrendFilter" | "marketTrendThreshold" | "indexTrendFilter"
     | "maxLossPct" | "signalSortMethod"
+    | "gapRelaxVolThreshold" | "gapMinPctRelaxed"
   >,
   allData: Map<string, OHLCVData[]>,
   precomputed: PrecomputedSimData,
@@ -110,6 +111,8 @@ export function precomputeGapUpDailySignals(
         avgVolume25,
         gapMinPct: config.gapMinPct,
         volSurgeRatio: config.volSurgeRatio,
+        gapRelaxVolThreshold: config.gapRelaxVolThreshold,
+        gapMinPctRelaxed: config.gapMinPctRelaxed,
       })) continue;
 
       const gapPct = (todayBar.open - prevBar.close) / prevBar.close;

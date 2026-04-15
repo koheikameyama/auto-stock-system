@@ -15,7 +15,7 @@ import { prisma } from "../src/lib/prisma";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "../src/backtest/data-fetcher";
 import { precomputeSimData } from "../src/backtest/breakout-simulation";
 import { runGapUpBacktest, precomputeGapUpDailySignals } from "../src/backtest/gapup-simulation";
-import { GAPUP_BACKTEST_DEFAULTS, generateGapUpParameterCombinations, GAPUP_PARAMETER_GRID } from "../src/backtest/gapup-config";
+import { GAPUP_BACKTEST_DEFAULTS, generateGapUpParameterCombinations, GAPUP_PARAMETER_GRID, GAPUP_RELAXED_GAP_MIN_PCT } from "../src/backtest/gapup-config";
 import type { GapUpBacktestConfig, PerformanceMetrics } from "../src/backtest/types";
 import type { OHLCVData } from "../src/core/technical-analysis";
 
@@ -45,7 +45,7 @@ interface ComboResult {
 }
 
 function paramComboKey(params: Partial<GapUpBacktestConfig>): string {
-  return `${params.gapMinPct}_${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}`;
+  return `${params.gapRelaxVolThreshold ?? "off"}_${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}`;
 }
 
 function calcMedian(values: number[]): number {
@@ -68,8 +68,9 @@ function selectByMaxPF(comboResults: Map<string, ComboResult>): ComboResult | nu
 }
 
 function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult | null {
-  const gridArrays: number[][] = [
-    [...GAPUP_PARAMETER_GRID.gapMinPct],
+  const gapRelaxValues = [...GAPUP_PARAMETER_GRID.gapRelaxVolThreshold];
+  const gridArrays: (number | undefined)[][] = [
+    gapRelaxValues,
     [...GAPUP_PARAMETER_GRID.atrMultiplier],
     [...GAPUP_PARAMETER_GRID.beActivationMultiplier],
     [...GAPUP_PARAMETER_GRID.trailMultiplier],
@@ -82,7 +83,7 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
   for (const result of comboResults.values()) {
     const p = result.params;
     const indices = [
-      gridArrays[0].indexOf(p.gapMinPct!),
+      gridArrays[0].indexOf(p.gapRelaxVolThreshold),
       gridArrays[1].indexOf(p.atrMultiplier!),
       gridArrays[2].indexOf(p.beActivationMultiplier!),
       gridArrays[3].indexOf(p.trailMultiplier!),
@@ -99,7 +100,8 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
 
     function collectNeighbors(dim: number, current: number[]): void {
       if (dim === ranges.length) {
-        const nKey = current.map((i, d) => gridArrays[d][i]).join("_");
+        const vals = current.map((i, d) => gridArrays[d][i]);
+        const nKey = `${vals[0] ?? "off"}_${vals[1]}_${vals[2]}_${vals[3]}`;
         const nResult = comboResults.get(nKey);
         if (nResult) neighborPFs.push(nResult.metrics.profitFactor);
         return;
@@ -213,7 +215,7 @@ async function main() {
     console.log(`  IS:  ${isStart} → ${isEnd}`);
     console.log(`  OOS: ${oosStart} → ${oosEnd}`);
 
-    // IS 事前計算（precomputeSimData は共通、signals は gapMinPct ごとに分ける）
+    // IS 事前計算（precomputeSimData は共通、signals は gapRelaxVolThreshold ごとに分ける）
     const isPrecomputed = precomputeSimData(
       isStart, isEnd, allData,
       filterCfg.marketTrendFilter ?? false,
@@ -225,18 +227,28 @@ async function main() {
       filterCfg.indexTrendOffBufferPct ?? 0,
       filterCfg.indexTrendOnBufferPct ?? 0,
     );
-    const isSignalsByGap = new Map(
-      GAPUP_PARAMETER_GRID.gapMinPct.map((gap) =>
-        [gap, precomputeGapUpDailySignals({ ...filterCfg, gapMinPct: gap }, allData, isPrecomputed)]
-      )
+    // gapRelaxVolThreshold ごとに1回だけシグナルを事前計算する
+    const isSignalsByRelax = new Map(
+      GAPUP_PARAMETER_GRID.gapRelaxVolThreshold.map((threshold) => [
+        threshold ?? "off",
+        precomputeGapUpDailySignals(
+          {
+            ...filterCfg,
+            gapRelaxVolThreshold: threshold,
+            gapMinPctRelaxed: threshold != null ? GAPUP_RELAXED_GAP_MIN_PCT : undefined,
+          },
+          allData,
+          isPrecomputed,
+        ),
+      ])
     );
 
     // IS: 全パラメータ組み合わせテスト
     const comboResults = new Map<string, ComboResult>();
 
     for (const params of paramCombos) {
-      const gapMinPct = params.gapMinPct ?? GAPUP_BACKTEST_DEFAULTS.gapMinPct;
-      const isSignals = isSignalsByGap.get(gapMinPct)!;
+      const key = params.gapRelaxVolThreshold ?? "off";
+      const isSignals = isSignalsByRelax.get(key)!;
       const config: GapUpBacktestConfig = {
         ...GAPUP_BACKTEST_DEFAULTS,
         ...params,
@@ -274,7 +286,7 @@ async function main() {
       continue;
     }
 
-    // OOS 事前計算 & 評価（bestParams の gapMinPct に合わせてシグナルを生成）
+    // OOS 事前計算 & 評価（bestParams の gapRelaxVolThreshold に合わせてシグナルを生成）
     const oosPrecomputed = precomputeSimData(
       oosStart, oosEnd, allData,
       filterCfg.marketTrendFilter ?? false,
@@ -286,9 +298,12 @@ async function main() {
       filterCfg.indexTrendOffBufferPct ?? 0,
       filterCfg.indexTrendOnBufferPct ?? 0,
     );
-    const oosGapMinPct = bestParams.gapMinPct ?? GAPUP_BACKTEST_DEFAULTS.gapMinPct;
     const oosSignals = precomputeGapUpDailySignals(
-      { ...filterCfg, gapMinPct: oosGapMinPct },
+      {
+        ...filterCfg,
+        gapRelaxVolThreshold: bestParams.gapRelaxVolThreshold,
+        gapMinPctRelaxed: bestParams.gapMinPctRelaxed,
+      },
       allData,
       oosPrecomputed,
     );
@@ -311,7 +326,10 @@ async function main() {
 
     console.log(`  IS  最適PF: ${formatPF(bestIsMetrics.profitFactor)} (${bestIsMetrics.totalTrades}tr, 勝率${bestIsMetrics.winRate}%)`);
     console.log(`  OOS PF:     ${formatPF(oosResult.metrics.profitFactor)} (${oosResult.metrics.totalTrades}tr, 勝率${oosResult.metrics.winRate}%)`);
-    console.log(`  最適パラメータ: gap=${bestParams.gapMinPct != null ? (bestParams.gapMinPct * 100).toFixed(0) + "%" : "-"}, atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}`);
+    const relaxStr = bestParams.gapRelaxVolThreshold != null
+      ? `relax@vol${bestParams.gapRelaxVolThreshold}x→${((bestParams.gapMinPctRelaxed ?? 0.01) * 100).toFixed(0)}%`
+      : "no-relax";
+    console.log(`  最適パラメータ: gap=3%(${relaxStr}), atr=${bestParams.atrMultiplier}, be=${bestParams.beActivationMultiplier}, trail=${bestParams.trailMultiplier}`);
     console.log("");
   }
 
@@ -375,8 +393,10 @@ function printSummary(results: WindowResult[]): void {
   console.log("-".repeat(90));
   for (const r of results) {
     const p = r.bestIsParams;
-    const gapStr = p.gapMinPct != null ? `gap=${(p.gapMinPct * 100).toFixed(0)}%` : "gap=-";
-    const paramStr = `${gapStr} atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier}`;
+    const relaxStr = p.gapRelaxVolThreshold != null
+      ? `relax@${p.gapRelaxVolThreshold}x`
+      : "no-relax";
+    const paramStr = `${relaxStr} atr=${p.atrMultiplier} be=${p.beActivationMultiplier} trail=${p.trailMultiplier}`;
     if (r.oosMetrics === null) {
       console.log(
         `  ${r.windowIdx + 1}    | ${padPF(r.isMetrics.profitFactor)} |    休止 |      -  |           - | ${paramStr}`,
@@ -391,8 +411,14 @@ function printSummary(results: WindowResult[]): void {
 
   // パラメータ安定性
   console.log("\n[パラメータ安定性]");
-  const paramKeys = ["gapMinPct", "atrMultiplier", "beActivationMultiplier", "trailMultiplier"] as const;
-  for (const key of paramKeys) {
+  const relaxValues = activeResults.map((r) =>
+    r.bestIsParams.gapRelaxVolThreshold != null ? `relax@${r.bestIsParams.gapRelaxVolThreshold}x` : "no-relax"
+  );
+  const uniqueRelax = [...new Set(relaxValues)];
+  console.log(`  gapRelaxVolThreshold: ${uniqueRelax.join(", ")} → ${uniqueRelax.length === 1 ? "安定" : uniqueRelax.length <= 2 ? "やや安定" : "不安定"}`);
+
+  const exitKeys = ["atrMultiplier", "beActivationMultiplier", "trailMultiplier"] as const;
+  for (const key of exitKeys) {
     const values = activeResults.map((r) => r.bestIsParams[key]);
     const uniqueValues = [...new Set(values)];
     const stability = uniqueValues.length === 1 ? "安定" : uniqueValues.length <= 2 ? "やや安定" : "不安定";

@@ -59,24 +59,34 @@ export const GAPUP_BACKTEST_DEFAULTS: Omit<GapUpBacktestConfig, "startDate" | "e
 /** 1トレードあたりリスク（%） */
 export const GAPUP_RISK_PER_TRADE_PCT = POSITION_SIZING.RISK_PER_TRADE_PCT; // 2
 
-/** walk-forward パラメータグリッド（gap率 + エグジット系、81通り） */
+/**
+ * walk-forward パラメータグリッド（条件付きgap緩和 + エグジット系、81通り）
+ *
+ * gapMinPct=3% 固定。vol が gapRelaxVolThreshold 以上のとき gapMinPctRelaxed=1% に緩和。
+ * gapRelaxVolThreshold=undefined は緩和無効（従来の gap=3% 単純フィルター）。
+ */
 export const GAPUP_PARAMETER_GRID = {
-  gapMinPct: [0.01, 0.02, 0.03],
+  /** undefined = 緩和無効 */
+  gapRelaxVolThreshold: [undefined, 3.0, 4.0] as (number | undefined)[],
   atrMultiplier: [0.8, 1.0, 1.2],
   beActivationMultiplier: [0.3, 0.5, 0.8],
   trailMultiplier: [0.3, 0.5, 0.8],
 } as const;
 
+/** 緩和時の gap 下限 */
+export const GAPUP_RELAXED_GAP_MIN_PCT = 0.01;
+
 /** パラメータグリッドの全組み合わせを生成 */
 export function generateGapUpParameterCombinations(): Array<Partial<GapUpBacktestConfig>> {
   const combos: Array<Partial<GapUpBacktestConfig>> = [];
 
-  for (const gapMinPct of GAPUP_PARAMETER_GRID.gapMinPct) {
+  for (const gapRelaxVolThreshold of GAPUP_PARAMETER_GRID.gapRelaxVolThreshold) {
     for (const atrMultiplier of GAPUP_PARAMETER_GRID.atrMultiplier) {
       for (const beActivationMultiplier of GAPUP_PARAMETER_GRID.beActivationMultiplier) {
         for (const trailMultiplier of GAPUP_PARAMETER_GRID.trailMultiplier) {
           combos.push({
-            gapMinPct,
+            gapRelaxVolThreshold,
+            gapMinPctRelaxed: gapRelaxVolThreshold != null ? GAPUP_RELAXED_GAP_MIN_PCT : undefined,
             atrMultiplier,
             beActivationMultiplier,
             trailMultiplier,

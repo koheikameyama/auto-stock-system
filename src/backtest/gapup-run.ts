@@ -100,6 +100,8 @@ async function main() {
   const verbose = args.includes("--verbose");
   const compareEntry = args.includes("--compare-entry");
   const noPositionCap = args.includes("--no-position-cap");
+  const gapMinPctArg = getArg(args, "--gap-min-pct");
+  const gapMinPct = gapMinPctArg != null ? parseFloat(gapMinPctArg) / 100 : undefined;
 
   console.log("=".repeat(60));
   console.log("ギャップアップ バックテスト");
@@ -138,6 +140,7 @@ async function main() {
     maxPrice,
     verbose,
     positionCapEnabled: !noPositionCap,
+    ...(gapMinPct != null ? { gapMinPct } : {}),
   };
 
   const vixArg = vixData.size > 0 ? vixData : undefined;
