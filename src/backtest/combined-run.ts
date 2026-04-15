@@ -286,13 +286,14 @@ async function main() {
   // 戦略別ポジション分離比較モード
   if (compareSplitPositions) {
     const grid: { label: string; limits: PositionLimits }[] = [
-      { label: "合算3（現状）",        limits: { boMax: 3, guMax: 3, wbMax: 3, totalMax: 3 } },
-      { label: "GU+WB 合算3",         limits: { boMax: 0, guMax: 3, wbMax: 3, totalMax: 3 } },
-      { label: "GU+WB 独立3+3",       limits: { boMax: 0, guMax: 3, wbMax: 3 } },
-      { label: "GU+WB 独立3+3・合算5", limits: { boMax: 0, guMax: 3, wbMax: 3, totalMax: 5 } },
-      { label: "GU+WB 独立2+2",       limits: { boMax: 0, guMax: 2, wbMax: 2 } },
-      { label: "GU+WB 独立2+2・合算3", limits: { boMax: 0, guMax: 2, wbMax: 2, totalMax: 3 } },
-      { label: "全戦略 独立3+3+3",     limits: { boMax: 3, guMax: 3, wbMax: 3 } },
+      { label: "GU3+PSC2（現状）",     limits: { boMax: 0, guMax: 3, wbMax: 0, pscMax: 2 } },
+      { label: "GU3+PSC2・合算3",      limits: { boMax: 0, guMax: 3, wbMax: 0, pscMax: 2, totalMax: 3 } },
+      { label: "GU3+PSC3",            limits: { boMax: 0, guMax: 3, wbMax: 0, pscMax: 3 } },
+      { label: "GU5+PSC3",            limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 3 } },
+      { label: "GU5+PSC3・合算5",      limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 3, totalMax: 5 } },
+      { label: "GU5+PSC5",            limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 5 } },
+      { label: "GU5+PSC5・合算5",      limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 5, totalMax: 5 } },
+      { label: "GU10+PSC5",           limits: { boMax: 0, guMax: 10, wbMax: 0, pscMax: 5 } },
     ];
 
     console.log("\n=== 戦略別ポジション分離比較 ===");
@@ -307,22 +308,16 @@ async function main() {
       const util = calculateCapitalUtilization(result.equityCurve);
       const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
       const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
-      const bm = result.boMetrics;
       const gm = result.guMetrics;
-      const wm = result.wbMetrics;
       console.log(
         `${row.label.padEnd(24)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
       );
-      if (bm.totalTrades > 0) {
-        console.log(
-          `${"  BO".padEnd(24)}| ${String(bm.totalTrades).padStart(6)} | ${bm.winRate.toFixed(1).padStart(6)}% | ${(bm.profitFactor === Infinity ? "∞" : bm.profitFactor.toFixed(2)).padStart(5)} | ${((bm.expectancy >= 0 ? "+" : "") + bm.expectancy.toFixed(2) + "%").padStart(8)}`,
-        );
-      }
+      const pm = result.pscMetrics;
       console.log(
         `${"  GU".padEnd(24)}| ${String(gm.totalTrades).padStart(6)} | ${gm.winRate.toFixed(1).padStart(6)}% | ${(gm.profitFactor === Infinity ? "∞" : gm.profitFactor.toFixed(2)).padStart(5)} | ${((gm.expectancy >= 0 ? "+" : "") + gm.expectancy.toFixed(2) + "%").padStart(8)}`,
       );
       console.log(
-        `${"  WB".padEnd(24)}| ${String(wm.totalTrades).padStart(6)} | ${wm.winRate.toFixed(1).padStart(6)}% | ${(wm.profitFactor === Infinity ? "∞" : wm.profitFactor.toFixed(2)).padStart(5)} | ${((wm.expectancy >= 0 ? "+" : "") + wm.expectancy.toFixed(2) + "%").padStart(8)}`,
+        `${"  PSC".padEnd(24)}| ${String(pm.totalTrades).padStart(6)} | ${pm.winRate.toFixed(1).padStart(6)}% | ${(pm.profitFactor === Infinity ? "∞" : pm.profitFactor.toFixed(2)).padStart(5)} | ${((pm.expectancy >= 0 ? "+" : "") + pm.expectancy.toFixed(2) + "%").padStart(8)}`,
       );
     }
     console.log("");
