@@ -25,5 +25,5 @@ export const WEEKLY_BREAK = {
     SCAN_MINUTE: 20,
   },
   /** 本番エントリー有効フラグ */
-  ENTRY_ENABLED: true,
+  ENTRY_ENABLED: false,
 } as const;

@@ -213,7 +213,7 @@ async function main() {
   const ctx = { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose: !quietMode && verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount, equityCurveSmaPeriod: 20 };
 
   // デフォルトポジション制限（breakoutは無効化中）
-  const defaultLimits: PositionLimits = { boMax: 0, guMax: 3, wbMax: 2, pscMax: 2 };
+  const defaultLimits: PositionLimits = { boMax: 0, guMax: 3, wbMax: 0, pscMax: 2 };
 
   // 資金比較モード
   if (compareBudget) {
