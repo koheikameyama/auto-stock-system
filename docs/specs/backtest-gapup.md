@@ -6,12 +6,18 @@
 
 ## エントリーシグナル
 
-以下の4条件が同時に成立した場合、**当日終値**でエントリー:
+以下の条件が同時に成立した場合、**当日終値**でエントリー:
 
-1. **ギャップ閾値**: `(open - prevClose) / prevClose >= gapMinPct`（default: 3%）
+1. **ギャップ閾値**: `(open - prevClose) / prevClose >= effectiveGapMin`
+   - 通常: `effectiveGapMin = 3%`
+   - vol >= 4x の場合: `effectiveGapMin = 1%`（高出来高緩和ルール）
 2. **陽線引け**: `close >= open`（ギャップが日中に維持されている）
-3. **ギャップ維持**: `close > prevClose × (1 + gapMinPct)`
+3. **ギャップ維持**: `close > prevClose × (1 + effectiveGapMin)`
 4. **出来高サージ**: `volume / avgVolume25 >= volSurgeRatio`（default: 1.5x）
+
+**高出来高緩和ルール（2026-04-15追加）**: vol >= 4x（`GAP_RELAX_VOL_THRESHOLD`）のとき、
+ギャップ閾値を1%（`GAP_MIN_PCT_RELAXED`）に緩和。WF検証（2026-04-15）で直近2ウィンドウ
+（W5/W6）連続選択を確認。「強い出来高が需給の質を担保する」という仮説に基づく。
 
 ### ユニバースフィルター（breakoutと共通）
 

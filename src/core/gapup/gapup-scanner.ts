@@ -71,6 +71,8 @@ export class GapUpScanner {
         avgVolume25: entry.avgVolume25,
         gapMinPct: GAPUP.ENTRY.GAP_MIN_PCT,
         volSurgeRatio: GAPUP.ENTRY.VOL_SURGE_RATIO,
+        gapRelaxVolThreshold: GAPUP.ENTRY.GAP_RELAX_VOL_THRESHOLD,
+        gapMinPctRelaxed: GAPUP.ENTRY.GAP_MIN_PCT_RELAXED,
       });
 
       if (!isSignal) continue;

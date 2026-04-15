@@ -263,6 +263,11 @@ export interface GapUpBacktestConfig {
 
   /** シグナルソート方法。"gapvol"=gapPct×vol(デフォルト), "rr"=RR比, "volume"=出来高サージ */
   signalSortMethod?: "gapvol" | "rr" | "volume";
+
+  /** vol >= この倍率のとき gap 条件を gapMinPctRelaxed に緩和。省略時=無効 */
+  gapRelaxVolThreshold?: number;
+  /** gapRelaxVolThreshold 超時の緩和 gap 閾値。省略時=gapMinPct と同値 */
+  gapMinPctRelaxed?: number;
 }
 
 export interface GapUpBacktestResult {
