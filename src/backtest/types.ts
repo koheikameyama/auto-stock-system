@@ -565,3 +565,54 @@ export interface MaPullbackBacktestResult {
   equityCurve: DailyEquity[];
   metrics: PerformanceMetrics;
 }
+
+// ──────────────────────────────────────────
+// ギャップダウンリバーサルバックテスト設定
+// ──────────────────────────────────────────
+
+export interface GapDownReversalBacktestConfig {
+  startDate: string;
+  endDate: string;
+  initialBudget: number;
+  maxPositions: number;
+
+  gapMinPct: number;
+  volSurgeRatio: number;
+
+  atrMultiplier: number;
+  maxLossPct: number;
+
+  beActivationMultiplier: number;
+  trailMultiplier: number;
+
+  maxHoldingDays: number;
+  maxExtendedHoldingDays: number;
+
+  maxPrice: number;
+  minAvgVolume25: number;
+  minAtrPct: number;
+  minTurnover: number;
+  minPrice: number;
+
+  costModelEnabled: boolean;
+  priceLimitEnabled: boolean;
+
+  cooldownDays: number;
+
+  // マーケットフィルター（indexのみ、breadthなし）
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+  indexTrendOffBufferPct?: number;
+  indexTrendOnBufferPct?: number;
+
+  verbose: boolean;
+  positionCapEnabled?: boolean;
+  maxDailyEntries?: number;
+}
+
+export interface GapDownReversalBacktestResult {
+  config: GapDownReversalBacktestConfig;
+  trades: SimulatedPosition[];
+  equityCurve: DailyEquity[];
+  metrics: PerformanceMetrics;
+}
