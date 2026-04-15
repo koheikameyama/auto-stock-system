@@ -40,6 +40,26 @@ jobs:
         if: steps.check_changes.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_BODY: |
+            ## 週次メモリ振り返り
+
+            自動的に検出されたパターンと昇格されたルールを確認してください。
+
+            ### 変更内容
+
+            - memory/daily/ からパターンを抽出
+            - memory/long-term/ に繰り返しパターンを記録
+            - pain_count >= 3 のエントリを .claude/rules/ に昇格
+
+            ### レビューポイント
+
+            - [ ] long-term/ のエントリが適切か確認
+            - [ ] rules/ への昇格が妥当か確認
+            - [ ] 不要なエントリがあれば削除
+
+            ---
+
+            進化的記憶システムによる自動PR
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -51,31 +71,12 @@ jobs:
           git commit -m "chore: 週次メモリ振り返り $(date +%Y-%m-%d)"
           git push origin "$BRANCH_NAME"
 
-          PR_BODY="## 週次メモリ振り返り
-
-自動的に検出されたパターンと昇格されたルールを確認してください。
-
-### 変更内容
-
-- memory/daily/ からパターンを抽出
-- memory/long-term/ に繰り返しパターンを記録
-- pain_count ≥ 3 のエントリを .claude/rules/ に昇格
-
-### レビューポイント
-
-- [ ] long-term/ のエントリが適切か確認
-- [ ] rules/ への昇格が妥当か確認
-- [ ] 不要なエントリがあれば削除
-
----
-
-進化的記憶システムによる自動PR"
-
+          echo "$PR_BODY" > /tmp/pr-body.md
           gh pr create \
             --base main \
             --head "$BRANCH_NAME" \
             --title "chore: 週次メモリ振り返り $(date +%Y-%m-%d)" \
-            --body "$PR_BODY"
+            --body-file /tmp/pr-body.md
 
   notify-failure:
     needs: memory-review
