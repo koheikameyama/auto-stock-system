@@ -18,7 +18,8 @@ import { yfFetchIndexChart } from "../../lib/yfinance-client";
 import { nikkeiChartBody } from "../views/components";
 import { NIKKEI_CHART_PERIODS, TIMEZONE } from "../../lib/constants";
 import { GAPUP } from "../../lib/constants/gapup";
-import { getGuWatchlist } from "../../jobs/watchlist-builder";
+import { POST_SURGE_CONSOLIDATION } from "../../lib/constants/post-surge-consolidation";
+import { getPscWatchlist } from "../../jobs/watchlist-builder";
 import { calculateVolumeSurgeRatio } from "../../core/breakout/volume-surge";
 import { getTodayForDB, getDaysAgoForDB, isMarketOpen } from "../../lib/market-date";
 import { getTachibanaClient } from "../../core/broker-client";
@@ -313,7 +314,7 @@ app.get("/watchlist/state", async (c) => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const [watchlist, holdings, todayOrders, todayAssessment, quotes] = await Promise.all([
-    getGuWatchlist(),
+    getPscWatchlist(),
     prisma.tradingPosition.findMany({
       where: { status: "open" },
       select: { stock: { select: { tickerCode: true } } },
@@ -374,6 +375,15 @@ app.get("/watchlist/state", async (c) => {
     // WB: price > weeklyHigh13（金曜のみ）
     if (isFriday && wl.weeklyHigh13 != null && quote.price > wl.weeklyHigh13) {
       strategies.push("WB");
+    }
+
+    // PSC: momentum5d <= 0（押し目候補）+ 出来高サージ >= 1.5x + 陽線
+    if (
+      wl.momentum5d <= 0 &&
+      surgeRatio >= POST_SURGE_CONSOLIDATION.ENTRY.VOL_SURGE_RATIO &&
+      quote.price >= quote.open
+    ) {
+      strategies.push("PSC");
     }
 
     return strategies;

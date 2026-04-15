@@ -15,7 +15,7 @@ import { TIMEZONE } from "../../lib/constants";
 import { GAPUP } from "../../lib/constants/gapup";
 import { layout } from "../views/layout";
 import { tickerLink, tt } from "../views/components";
-import { getGuWatchlist } from "../../jobs/watchlist-builder";
+import { getPscWatchlist } from "../../jobs/watchlist-builder";
 import { getTodayForDB } from "../../lib/market-date";
 
 dayjs.extend(utc);
@@ -48,7 +48,7 @@ function isInEntryTimeWindow(): boolean {
 }
 
 app.get("/", async (c) => {
-  const watchlist = await getGuWatchlist();
+  const watchlist = await getPscWatchlist();
 
   // 保有・注文・市場評価を並列取得
   const todayStart = new Date();
@@ -120,6 +120,7 @@ app.get("/", async (c) => {
         <span style="margin-left: auto;"></span>
         <span data-summary-gu class="badge badge-gapup" style="opacity: 0.3;">GU: -</span>
         ${isFriday ? html`<span data-summary-wb class="badge badge-wb" style="opacity: 0.3;">WB: -</span>` : ""}
+        <span data-summary-psc class="badge badge-psc" style="opacity: 0.3;">PSC: -</span>
       </div>
       <div style="display: flex; gap: 12px; flex-wrap: wrap; color: #94a3b8; font-size: 11px; border-top: 1px solid #334155; padding-top: 6px;">
         <span>${raw(`${tt("時間帯", "09:05〜15:25")}: <span data-global-time style="color: ${inTimeWindow ? "#22c55e" : "#ef4444"};">${inTimeWindow ? "○" : "×"}</span>`)}</span>
@@ -172,7 +173,8 @@ app.get("/", async (c) => {
 
         var STRATEGY_BADGE = {
           GU: '<span class="badge badge-gapup" style="font-size: 10px; padding: 1px 5px;">GU</span>',
-          WB: '<span class="badge badge-wb" style="font-size: 10px; padding: 1px 5px;">WB</span>'
+          WB: '<span class="badge badge-wb" style="font-size: 10px; padding: 1px 5px;">WB</span>',
+          PSC: '<span class="badge badge-psc" style="font-size: 10px; padding: 1px 5px;">PSC</span>'
         };
 
         var STATUS_MAP = {
@@ -221,7 +223,7 @@ app.get("/", async (c) => {
                 }
               }
 
-              var guCount = 0, wbCount = 0;
+              var guCount = 0, wbCount = 0, pscCount = 0;
               var orderedCount = 0, holdingCount = 0, watchingCount = 0;
               var rowSortData = {};
 
@@ -273,6 +275,7 @@ app.get("/", async (c) => {
                 }
                 if (strats.indexOf('GU') !== -1) guCount++;
                 if (strats.indexOf('WB') !== -1) wbCount++;
+                if (strats.indexOf('PSC') !== -1) pscCount++;
 
                 // ---- GU条件（data-gapup-conditions） ----
                 var guEl = row.querySelector('[data-gapup-conditions]');
@@ -345,6 +348,8 @@ app.get("/", async (c) => {
               if (guSummaryEl) { guSummaryEl.textContent = 'GU: ' + guCount; guSummaryEl.style.opacity = guCount ? '0.7' : '0.3'; }
               var wbSummaryEl = document.querySelector('[data-summary-wb]');
               if (wbSummaryEl) { wbSummaryEl.textContent = 'WB: ' + wbCount; wbSummaryEl.style.opacity = wbCount ? '0.7' : '0.3'; }
+              var pscSummaryEl = document.querySelector('[data-summary-psc]');
+              if (pscSummaryEl) { pscSummaryEl.textContent = 'PSC: ' + pscCount; pscSummaryEl.style.opacity = pscCount ? '0.7' : '0.3'; }
 
               // ---- グローバル条件更新 ----
               var g = data.global;
