@@ -138,6 +138,31 @@ npm run walk-forward:weekly-break
 - 84トレード、勝率40.5%
 - パラメータを本番に反映: atr=1.0, be=0.5, trail=0.8
 
+### ギャップダウンリバーサル戦略バックテスト
+
+```bash
+npm run backtest:gapdown-reversal
+# オプション: --start 2025-01-01 --end 2026-03-25 --budget 500000 --verbose
+```
+
+ギャップダウン（-3%以上）後に陽線+出来高サージ1.5倍で反転を確認し、当日終値でエントリーする短期平均回帰戦略。マーケットフィルターはインデックスSMA50のみ（breadthフィルターなし）。タイムストップはgapupより短縮（2日/3日）。
+
+### ギャップダウンリバーサル walk-forward 分析
+
+```bash
+npm run walk-forward:gapdown-reversal
+```
+
+ブレイクアウトと同じウィンドウ構成（IS 6ヶ月 / OOS 3ヶ月 × 7ウィンドウ）。
+
+#### パラメータグリッド（27通り、エグジット系のみ）
+
+| パラメータ | 値 |
+|-----------|-----|
+| atrMultiplier | 0.8, 1.0, 1.2 |
+| beActivationMultiplier | 0.3, 0.5, 0.8 |
+| trailMultiplier | 0.3, 0.5, 0.8 |
+
 ### スクイーズブレイクアウト戦略バックテスト
 
 ```bash
