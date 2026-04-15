@@ -138,6 +138,31 @@ npm run walk-forward:weekly-break
 - 84トレード、勝率40.5%
 - パラメータを本番に反映: atr=1.0, be=0.5, trail=0.8
 
+### 高騰後押し目戦略バックテスト（Post-Surge Consolidation）
+
+```bash
+npm run backtest:psc
+# オプション: --start 2025-01-01 --end 2026-03-25 --budget 500000 --verbose
+```
+
+直近20日+15%急騰後、高値から-5%以内で出来高干上がり → 当日に出来高サージ1.5倍+陽線で再加速した銘柄を終値でエントリー。タイムストップ5/7日。マーケットフィルターはgapupと同じ（breadth≥60%+日経SMA50）。
+
+### 高騰後押し目 walk-forward 分析
+
+```bash
+npm run walk-forward:psc
+```
+
+IS 6ヶ月 / OOS 3ヶ月 × 7ウィンドウ。
+
+#### パラメータグリッド（27通り、エグジット系のみ）
+
+| パラメータ | 値 |
+|-----------|-----|
+| atrMultiplier | 0.8, 1.0, 1.2 |
+| beActivationMultiplier | 0.3, 0.5, 0.8 |
+| trailMultiplier | 0.5, 0.8, 1.0 |
+
 ### ギャップダウンリバーサル戦略バックテスト
 
 ```bash
