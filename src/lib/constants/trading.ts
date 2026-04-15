@@ -15,6 +15,7 @@ export const TRADING_DEFAULTS = {
   MAX_POSITIONS_BO: 3, // ブレイクアウト戦略の最大ポジション数
   MAX_POSITIONS_GU: 3, // ギャップアップ戦略の最大ポジション数（資金稼働率向上）
   MAX_POSITIONS_WB: 2, // 週足レンジブレイク戦略の最大ポジション数
+  MAX_POSITIONS_PSC: 1, // 高騰後押し目戦略の最大ポジション数（スモールスタート）
   MAX_POSITION_PCT: 40, // 1銘柄集中リスク防止（50万円規模: 最大20万/銘柄）
   MAX_DAILY_LOSS_PCT: 3, // 日次最大損失率(%)
 } as const;

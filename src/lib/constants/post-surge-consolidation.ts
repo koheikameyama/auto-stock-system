@@ -20,4 +20,5 @@ export const POST_SURGE_CONSOLIDATION = {
     MAX_HOLDING_DAYS: 5,
     MAX_EXTENDED_HOLDING_DAYS: 7,
   },
+  ENTRY_ENABLED: false, // WF検証済み。本番適用時に true に変更
 } as const;
