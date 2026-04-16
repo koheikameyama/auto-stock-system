@@ -288,9 +288,11 @@ model StockDailyBar {
   low        Float
   close      Float
   volume     BigInt
+  market     String   @default("JP") // "JP" | "US" | "INDEX"
 
   @@unique([tickerCode, date])
   @@index([tickerCode, date(sort: Desc)])
+  @@index([market])
 }
 
 model StockStatusLog {
