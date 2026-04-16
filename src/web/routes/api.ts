@@ -3,6 +3,7 @@
  */
 
 import { Hono } from "hono";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { getOpenPositions, getCashBalance, getEffectiveCapital, computeRealizedPnl } from "../../core/position-manager";
 import { getPendingOrders } from "../../core/order-executor";
@@ -556,6 +557,50 @@ app.get("/intraday-ma-signals", async (c) => {
   });
 
   return c.json(result);
+});
+
+/**
+ * GET /api/rejected-signals
+ *
+ * クエリパラメータ:
+ * - strategy: gapup | weekly-break | post-surge-consolidation | all (default: all)
+ * - dateFrom: YYYY-MM-DD
+ * - dateTo: YYYY-MM-DD
+ */
+app.get("/rejected-signals", async (c) => {
+  const strategy = c.req.query("strategy") ?? "all";
+  const dateFrom = c.req.query("dateFrom");
+  const dateTo = c.req.query("dateTo");
+
+  const where: Prisma.RejectedSignalWhereInput = {};
+  if (strategy !== "all") where.strategy = strategy;
+  if (dateFrom) where.rejectedAt = { ...((where.rejectedAt ?? {}) as object), gte: new Date(dateFrom) };
+  if (dateTo) where.rejectedAt = { ...((where.rejectedAt ?? {}) as object), lte: new Date(`${dateTo}T23:59:59Z`) };
+
+  const signals = await prisma.rejectedSignal.findMany({
+    where,
+    orderBy: { rejectedAt: "desc" },
+    take: 200,
+  });
+
+  // 理由別集計
+  const summaryMap = new Map<string, { count: number; sum5d: number; count5d: number; sum10d: number; count10d: number }>();
+  for (const s of signals) {
+    const entry = summaryMap.get(s.reasonLabel) ?? { count: 0, sum5d: 0, count5d: 0, sum10d: 0, count10d: 0 };
+    entry.count++;
+    if (s.return5dPct !== null) { entry.sum5d += s.return5dPct; entry.count5d++; }
+    if (s.return10dPct !== null) { entry.sum10d += s.return10dPct; entry.count10d++; }
+    summaryMap.set(s.reasonLabel, entry);
+  }
+
+  const summary = Array.from(summaryMap.entries()).map(([label, v]) => ({
+    label,
+    count: v.count,
+    avg5dPct: v.count5d > 0 ? v.sum5d / v.count5d : null,
+    avg10dPct: v.count10d > 0 ? v.sum10d / v.count10d : null,
+  }));
+
+  return c.json({ summary, signals });
 });
 
 /**
