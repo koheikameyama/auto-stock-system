@@ -241,6 +241,10 @@ async function main() {
       { label: "2M", budget: 2_000_000 },
       { label: "3M", budget: 3_000_000 },
       { label: "5M", budget: 5_000_000 },
+      { label: "7.5M", budget: 7_500_000 },
+      { label: "10M", budget: 10_000_000 },
+      { label: "15M", budget: 15_000_000 },
+      { label: "20M", budget: 20_000_000 },
     ];
 
     console.log("\n=== 資金規模比較 ===");
