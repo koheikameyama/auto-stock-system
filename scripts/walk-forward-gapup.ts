@@ -19,6 +19,7 @@ import { runGapUpBacktest, precomputeGapUpDailySignals } from "../src/backtest/g
 import { GAPUP_BACKTEST_DEFAULTS, generateGapUpParameterCombinations, GAPUP_PARAMETER_GRID, GAPUP_RELAXED_GAP_MIN_PCT } from "../src/backtest/gapup-config";
 import type { GapUpBacktestConfig, PerformanceMetrics } from "../src/backtest/types";
 import type { OHLCVData } from "../src/core/technical-analysis";
+import { getMaxBuyablePrice } from "../src/core/risk-manager";
 
 const IS_MONTHS = 6;
 const OOS_MONTHS = 3;
@@ -163,6 +164,9 @@ async function main() {
     : undefined;
   const sp500MaxReturnArg = args.find((a) => a.startsWith("--sp500-max-return="));
   const sp500MaxReturn = sp500MaxReturnArg ? parseFloat(sp500MaxReturnArg.split("=")[1]) : undefined;
+  const budgetArg = args.find((a) => a.startsWith("--budget="));
+  const budget = budgetArg ? parseInt(budgetArg.split("=")[1], 10) : 500_000;
+  const maxPriceOverride = getMaxBuyablePrice(budget);
   const endDate = dayjs().format("YYYY-MM-DD");
   const startDate = dayjs().subtract(TOTAL_MONTHS, "month").format("YYYY-MM-DD");
 
@@ -176,6 +180,7 @@ async function main() {
   if (signalSortMethod) console.log(`シグナルソート: ${signalSortMethod}`);
   if (maxDailyEntries != null) console.log(`1日最大エントリー: ${maxDailyEntries}件`);
   if (sp500MaxReturn != null) console.log(`SP500フィルター: 前日SP500リターン > ${(sp500MaxReturn * 100).toFixed(1)}% の日はスキップ`);
+  if (budget !== 500_000) console.log(`資金: ${(budget / 10000).toFixed(0)}万円 (maxPrice: ${maxPriceOverride}円)`);
 
   const paramCombos = generateGapUpParameterCombinations();
   console.log(`パラメータ組み合わせ: ${paramCombos.length}通り`);
@@ -219,7 +224,7 @@ async function main() {
 
   console.log(`[data] ${rawData.size}銘柄（raw）, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
-  const maxPrice = GAPUP_BACKTEST_DEFAULTS.maxPrice;
+  const maxPrice = maxPriceOverride;
   const allData = new Map<string, OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
     if (bars.some((b) => b.close <= maxPrice && b.close > 0)) {
@@ -230,9 +235,10 @@ async function main() {
   console.log("");
 
   const windows = generateWindows(startDate);
+  const budgetOverrides = { maxPrice: maxPriceOverride, initialBudget: budget };
   const filterCfg = signalSortMethod
-    ? { ...GAPUP_BACKTEST_DEFAULTS, signalSortMethod }
-    : GAPUP_BACKTEST_DEFAULTS;
+    ? { ...GAPUP_BACKTEST_DEFAULTS, ...budgetOverrides, signalSortMethod }
+    : { ...GAPUP_BACKTEST_DEFAULTS, ...budgetOverrides };
   const vixArg = vixData.size > 0 ? vixData : undefined;
   const indexArg = indexData.size > 0 ? indexData : undefined;
 
@@ -282,6 +288,7 @@ async function main() {
       const isSignals = isSignalsByRelax.get(key)!;
       const config: GapUpBacktestConfig = {
         ...GAPUP_BACKTEST_DEFAULTS,
+        ...budgetOverrides,
         ...params,
         startDate: isStart,
         endDate: isEnd,
@@ -344,6 +351,7 @@ async function main() {
 
     const oosConfig: GapUpBacktestConfig = {
       ...GAPUP_BACKTEST_DEFAULTS,
+      ...budgetOverrides,
       ...bestParams,
       startDate: oosStart,
       endDate: oosEnd,

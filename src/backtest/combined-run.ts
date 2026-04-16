@@ -132,8 +132,9 @@ async function main() {
   const minPriceOverride = getArg(args, "--min-price");
   const minTurnoverOverride = getArg(args, "--min-turnover");
   const saveResult = args.includes("--save");
+  const compareEfficiency = args.includes("--compare-efficiency");
 
-  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover || comparePrice || comparePriceTurnover;
+  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
@@ -175,22 +176,35 @@ async function main() {
     console.log(`月次追加: ¥${monthlyAddAmount.toLocaleString()}`);
   }
 
-  // データ取得
+  // データ取得（Stockテーブルが空の場合はStockDailyBarから直接取得）
   const stocks = await prisma.stock.findMany({
     where: { isDelisted: false, isActive: true, isRestricted: false },
     select: { tickerCode: true },
   });
-  const tickerCodes = stocks.map((s) => s.tickerCode);
+  let tickerCodes: string[];
+  if (stocks.length > 0) {
+    tickerCodes = stocks.map((s) => s.tickerCode);
+  } else {
+    const distinctTickers = await prisma.stockDailyBar.findMany({
+      where: { market: "JP" },
+      distinct: ["tickerCode"],
+      select: { tickerCode: true },
+    });
+    tickerCodes = distinctTickers.map((s) => s.tickerCode);
+  }
   console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
 
   const rawData = await fetchHistoricalFromDB(tickerCodes, startDate, endDate);
   const vixData = await fetchVixFromDB(startDate, endDate);
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
 
-  const maxPrice = Math.max(boConfig.maxPrice, guConfig.maxPrice);
+  // budget-compare時はグリッド最大予算(5M→maxPrice=25,000円)で銘柄をロード
+  const maxPriceForData = compareBudget
+    ? getMaxBuyablePrice(5_000_000)
+    : Math.max(boConfig.maxPrice, guConfig.maxPrice);
   const allData = new Map<string, import("../core/technical-analysis").OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
-    if (bars.some((b) => b.close <= maxPrice && b.close > 0)) {
+    if (bars.some((b) => b.close <= maxPriceForData && b.close > 0)) {
       allData.set(ticker, bars);
     }
   }
@@ -231,15 +245,25 @@ async function main() {
 
     console.log("\n=== 資金規模比較 ===");
     console.log(
-      `${"資金".padEnd(14)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
+      `${"資金".padEnd(14)}| ${"maxP".padStart(5)} | ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
     );
-    console.log("-".repeat(84));
+    console.log("-".repeat(95));
 
     for (const row of budgetGrid) {
-      const bc: BreakoutBacktestConfig = { ...boConfig, initialBudget: row.budget };
-      const gc: GapUpBacktestConfig = { ...guConfig, initialBudget: row.budget };
+      const mp = maxPriceOverride ? Number(maxPriceOverride) : getMaxBuyablePrice(row.budget);
+      const bc: BreakoutBacktestConfig = { ...boConfig, initialBudget: row.budget, maxPrice: mp };
+      const gc: GapUpBacktestConfig = { ...guConfig, initialBudget: row.budget, maxPrice: mp };
+      const wc: WeeklyBreakBacktestConfig = { ...wbConfig, initialBudget: row.budget, maxPrice: mp };
+      const pc: PostSurgeConsolidationBacktestConfig = { ...pscConfig, initialBudget: row.budget, maxPrice: mp };
+      // maxPriceが変わるためシグナルを再計算
+      const boSig = precomputeDailySignals(bc, allData, precomputed);
+      const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+      const wbSig = precomputeWeeklyBreakSignals(wc, allData, precomputed);
+      const pSig = precomputePSCDailySignals(pc, allData, precomputed);
       const result = runCombinedSimulation(
-        { ...ctx, boConfig: bc, guConfig: gc, budget: row.budget },
+        { ...ctx, boConfig: bc, guConfig: gc, wbConfig: wc, pscConfig: pc,
+          breakoutSignals: boSig, gapupSignals: guSig, weeklyBreakSignals: wbSig, pscSignals: pSig,
+          budget: row.budget },
         defaultLimits,
       );
       const m = result.totalMetrics;
@@ -247,7 +271,42 @@ async function main() {
       const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
       const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
       console.log(
-        `${row.label.padEnd(14)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+        `${row.label.padEnd(14)}| ${String(mp).padStart(5)} | ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // 資金効率比較モード（T+2 / リスク%）
+  if (compareEfficiency) {
+    const grid: { label: string; settlementDays: number; riskPct: number | undefined }[] = [
+      { label: "現状(T+2,2%)", settlementDays: 2, riskPct: undefined },
+      { label: "T+0,2%", settlementDays: 0, riskPct: undefined },
+      { label: "T+2,3%", settlementDays: 2, riskPct: 3 },
+      { label: "T+2,4%", settlementDays: 2, riskPct: 4 },
+      { label: "T+0,3%", settlementDays: 0, riskPct: 3 },
+      { label: "T+0,4%", settlementDays: 0, riskPct: 4 },
+    ];
+
+    console.log("\n=== 資金効率比較（受渡日数 × リスク%） ===");
+    console.log(
+      `${"条件".padEnd(16)}| ${"Trades".padStart(6)} | ${"WinRate".padStart(7)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"稼働率".padStart(6)}`,
+    );
+    console.log("-".repeat(82));
+
+    for (const row of grid) {
+      const result = runCombinedSimulation(
+        { ...ctx, settlementDays: row.settlementDays, riskPctOverride: row.riskPct },
+        defaultLimits,
+      );
+      const m = result.totalMetrics;
+      const util = calculateCapitalUtilization(result.equityCurve);
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      console.log(
+        `${row.label.padEnd(16)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
       );
     }
     console.log("");

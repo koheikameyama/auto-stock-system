@@ -57,6 +57,10 @@ export interface SimContext {
   boVixSkipLevel?: RegimeLevel;
   /** VIXレジーム別戦略フィルター: このレベル以上でGapUpエントリーを停止（undefined = crisisのみ停止） */
   guVixSkipLevel?: RegimeLevel;
+  /** 受渡日数（デフォルト2 = T+2、信用取引シミュレーション時は0） */
+  settlementDays?: number;
+  /** リスク%上書き（全戦略共通、デフォルト = 各戦略の定数を使用） */
+  riskPctOverride?: number;
 }
 
 export interface SimResult {
@@ -145,6 +149,7 @@ function processExits(
   closedTrades: SimulatedPosition[],
   lastExitDayIdx: Map<string, number>,
   verbose: boolean,
+  settlementDays: number,
 ): void {
   const toClose: number[] = [];
   for (let i = 0; i < positions.length; i++) {
@@ -216,7 +221,7 @@ function processExits(
     if (exitPrice != null && exitReason != null) {
       closePosition(pos, exitPrice, exitReason, dayIdx, tradingDays, config.costModelEnabled, verbose);
       const proceeds = exitPrice * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
-      pendingSettlement.push({ amount: proceeds, availableDayIdx: dayIdx + 2 });
+      pendingSettlement.push({ amount: proceeds, availableDayIdx: dayIdx + settlementDays });
       toClose.push(i);
     }
   }
@@ -245,6 +250,7 @@ function processDefensive(
   lastExitDayIdx: Map<string, number>,
   costModelEnabled: boolean,
   verbose: boolean,
+  settlementDays: number,
 ): void {
   if (todayRegime !== "crisis" && todayRegime !== "high") return;
   if (positions.length === 0) return;
@@ -264,7 +270,7 @@ function processDefensive(
     if (shouldClose) {
       closePosition(pos, todayBar.close, "defensive_exit", dayIdx, tradingDays, costModelEnabled, verbose);
       const proceeds = todayBar.close * pos.quantity - (pos.exitCommission ?? 0) - (pos.tax ?? 0);
-      pendingSettlement.push({ amount: proceeds, availableDayIdx: dayIdx + 2 });
+      pendingSettlement.push({ amount: proceeds, availableDayIdx: dayIdx + settlementDays });
       defClose.push(i);
     }
   }
@@ -389,8 +395,9 @@ export function runCombinedSimulation(
     typeof maxPositions === "number"
       ? { boMax: maxPositions, guMax: maxPositions, wbMax: maxPositions, pscMax: maxPositions, totalMax: maxPositions }
       : maxPositions;
-  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel } = ctx;
+  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride } = ctx;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
+  const settlementDays = settlementDaysOpt ?? 2;
 
   const boConfigLocal = { ...boConfig };
   const guConfigLocal = { ...guConfig };
@@ -446,23 +453,23 @@ export function runCombinedSimulation(
       todayVix != null ? determineMarketRegime(todayVix).level : "normal";
 
     // ── 1. 出口判定 ──
-    processExits(boPositions, boConfigLocal, "breakout", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, verbose);
-    processExits(guPositions, guConfigLocal, "gapup", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, verbose);
+    processExits(boPositions, boConfigLocal, "breakout", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, verbose, settlementDays);
+    processExits(guPositions, guConfigLocal, "gapup", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, verbose, settlementDays);
     if (wbConfigLocal) {
-      processExits(wbPositions, wbConfigLocal, "weekly-break", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, wbClosedTrades, lastExitDayIdx, verbose);
+      processExits(wbPositions, wbConfigLocal, "weekly-break", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, wbClosedTrades, lastExitDayIdx, verbose, settlementDays);
     }
     if (pscConfigLocal) {
-      processExits(pscPositions, pscConfigLocal, "post-surge-consolidation", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, pscClosedTrades, lastExitDayIdx, verbose);
+      processExits(pscPositions, pscConfigLocal, "post-surge-consolidation", dayIdx, today, tradingDays, tradingDayIndex, dateIndexMap, allData, pendingSettlement, pscClosedTrades, lastExitDayIdx, verbose, settlementDays);
     }
 
     // ── 1.5 ディフェンシブモード ──
-    processDefensive(boPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, boConfigLocal.costModelEnabled, verbose);
-    processDefensive(guPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, guConfigLocal.costModelEnabled, verbose);
+    processDefensive(boPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, boClosedTrades, lastExitDayIdx, boConfigLocal.costModelEnabled, verbose, settlementDays);
+    processDefensive(guPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, guClosedTrades, lastExitDayIdx, guConfigLocal.costModelEnabled, verbose, settlementDays);
     if (wbConfigLocal) {
-      processDefensive(wbPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, wbClosedTrades, lastExitDayIdx, wbConfigLocal.costModelEnabled, verbose);
+      processDefensive(wbPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, wbClosedTrades, lastExitDayIdx, wbConfigLocal.costModelEnabled, verbose, settlementDays);
     }
     if (pscConfigLocal) {
-      processDefensive(pscPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, pscClosedTrades, lastExitDayIdx, pscConfigLocal.costModelEnabled, verbose);
+      processDefensive(pscPositions, todayRegime, dayIdx, today, tradingDays, dateIndexMap, allData, pendingSettlement, pscClosedTrades, lastExitDayIdx, pscConfigLocal.costModelEnabled, verbose, settlementDays);
     }
 
     // ── 1.6 ドローダウンハルト判定（全戦略に適用） ──
@@ -517,7 +524,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * (RISK_PER_TRADE_PCT / 100);
+        const riskAmount = cash * ((riskPctOverride ?? RISK_PER_TRADE_PCT) / 100);
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
@@ -557,7 +564,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * (GAPUP_RISK_PER_TRADE_PCT / 100);
+        const riskAmount = cash * ((riskPctOverride ?? GAPUP_RISK_PER_TRADE_PCT) / 100);
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
@@ -597,7 +604,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * (WEEKLY_BREAK_RISK_PER_TRADE_PCT / 100);
+        const riskAmount = cash * ((riskPctOverride ?? WEEKLY_BREAK_RISK_PER_TRADE_PCT) / 100);
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
@@ -637,7 +644,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * (PSC_RISK_PER_TRADE_PCT / 100);
+        const riskAmount = cash * ((riskPctOverride ?? PSC_RISK_PER_TRADE_PCT) / 100);
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;

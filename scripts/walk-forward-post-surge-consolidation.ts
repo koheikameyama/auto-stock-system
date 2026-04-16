@@ -18,6 +18,7 @@ import { runPSCBacktest, precomputePSCDailySignals } from "../src/backtest/post-
 import { PSC_BACKTEST_DEFAULTS, generatePSCParameterCombinations } from "../src/backtest/post-surge-consolidation-config";
 import type { PostSurgeConsolidationBacktestConfig, PerformanceMetrics } from "../src/backtest/types";
 import type { OHLCVData } from "../src/core/technical-analysis";
+import { getMaxBuyablePrice } from "../src/core/risk-manager";
 
 const IS_MONTHS = 6;
 const OOS_MONTHS = 3;
@@ -93,6 +94,9 @@ async function main() {
   const args = process.argv.slice(2);
   const maxDailyEntriesArg = args.find((a) => a.startsWith("--max-daily-entries="));
   const maxDailyEntries = maxDailyEntriesArg ? parseInt(maxDailyEntriesArg.split("=")[1], 10) : undefined;
+  const budgetArg = args.find((a) => a.startsWith("--budget="));
+  const budget = budgetArg ? parseInt(budgetArg.split("=")[1], 10) : 500_000;
+  const maxPriceOverride = getMaxBuyablePrice(budget);
   const endDate = dayjs().format("YYYY-MM-DD");
   const startDate = dayjs().subtract(TOTAL_MONTHS, "month").format("YYYY-MM-DD");
 
@@ -104,17 +108,28 @@ async function main() {
   console.log(`ウィンドウ数: ${NUM_WINDOWS}`);
   console.log(`選択方式: 最大PF`);
   if (maxDailyEntries != null) console.log(`1日最大エントリー: ${maxDailyEntries}件`);
+  if (budget !== 500_000) console.log(`資金: ${(budget / 10000).toFixed(0)}万円 (maxPrice: ${maxPriceOverride}円)`);
 
   const paramCombos = generatePSCParameterCombinations();
   console.log(`パラメータ組み合わせ: ${paramCombos.length}通り`);
   console.log("");
 
-  // データ取得
+  // データ取得（Stockテーブルが空の場合はStockDailyBarから直接取得）
   const stocks = await prisma.stock.findMany({
     where: { isDelisted: false, isActive: true, isRestricted: false },
     select: { tickerCode: true },
   });
-  const tickerCodes = stocks.map((s) => s.tickerCode);
+  let tickerCodes: string[];
+  if (stocks.length > 0) {
+    tickerCodes = stocks.map((s) => s.tickerCode);
+  } else {
+    const distinctTickers = await prisma.stockDailyBar.findMany({
+      where: { market: "JP" },
+      distinct: ["tickerCode"],
+      select: { tickerCode: true },
+    });
+    tickerCodes = distinctTickers.map((s) => s.tickerCode);
+  }
   console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
 
   const rawData = await fetchHistoricalFromDB(tickerCodes, startDate, endDate);
@@ -122,7 +137,7 @@ async function main() {
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
   console.log(`[data] ${rawData.size}銘柄（raw）, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
-  const maxPrice = PSC_BACKTEST_DEFAULTS.maxPrice;
+  const maxPrice = maxPriceOverride;
   const allData = new Map<string, OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
     if (bars.some((b) => b.close <= maxPrice && b.close > 0)) {
@@ -133,7 +148,8 @@ async function main() {
   console.log("");
 
   const windows = generateWindows(startDate);
-  const filterCfg = PSC_BACKTEST_DEFAULTS;
+  const budgetOverrides = { maxPrice: maxPriceOverride, initialBudget: budget };
+  const filterCfg = { ...PSC_BACKTEST_DEFAULTS, ...budgetOverrides };
   const vixArg = vixData.size > 0 ? vixData : undefined;
   const indexArg = indexData.size > 0 ? indexData : undefined;
 
@@ -165,6 +181,7 @@ async function main() {
     for (const params of paramCombos) {
       const config: PostSurgeConsolidationBacktestConfig = {
         ...PSC_BACKTEST_DEFAULTS,
+        ...budgetOverrides,
         ...params,
         startDate: isStart,
         endDate: isEnd,
@@ -215,6 +232,7 @@ async function main() {
 
     const oosConfig: PostSurgeConsolidationBacktestConfig = {
       ...PSC_BACKTEST_DEFAULTS,
+      ...budgetOverrides,
       ...bestParams,
       startDate: oosStart,
       endDate: oosEnd,
