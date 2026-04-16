@@ -143,8 +143,8 @@ app.get("/", async (c) => {
         <thead>
           <tr>
             <th>銘柄</th>
-            <th class="col-gu" style="display:none;">${tt("GU条件", "Gap≥3% / 陽線 / 出来高≥1.5x")}</th>
-            <th class="col-psc" style="display:none;">${tt("PSC条件", "mom5d / 陽線 / 出来高≥1.5x")}</th>
+            <th class="col-gu" style="display:none;">${tt("GU条件", "始値Gap≥3% / 終値Gap維持 / 陽線 / 出来高≥1.5x（4x以上でGap1%に緩和）")}</th>
+            <th class="col-psc" style="display:none;">${tt("PSC条件", "mom20d≥15% / 高値-5%以内 / 前日Vol干上がり / 陽線 / 出来高≥1.5x")}</th>
             <th>${tt("現在価格", "リアルタイム価格")}</th>
             <th class="col-gu col-psc" style="display:none;">${tt("始値", "当日始値")}</th>
             ${isFriday ? html`<th class="col-wb" style="display:none;">${tt("WB乖離", "現在価格 vs 13週高値（金曜のみ）")}</th>` : ""}
@@ -290,22 +290,48 @@ app.get("/", async (c) => {
                 else watchingCount++;
 
                 // ソート用データを収集
-                var guAllMet = d.gapup && d.gapup.isGapOk && d.gapup.isCandleOk && d.gapup.isVolumeOk;
+                var guAllMet = d.gapup && d.gapup.isGapOk && d.gapup.isCloseGapOk && d.gapup.isCandleOk && d.gapup.isVolumeOk;
                 var wbMet = d.wbDeviation != null && d.wbDeviation >= 0;
                 var isEntryCandidate = (guAllMet || wbMet) ? 1 : 0;
+
+                // GU条件達成数（0〜4）
+                var guConditionsMet = 0;
+                if (d.gapup) {
+                  if (d.gapup.isGapOk) guConditionsMet++;
+                  if (d.gapup.isCloseGapOk) guConditionsMet++;
+                  if (d.gapup.isCandleOk) guConditionsMet++;
+                  if (d.gapup.isVolumeOk) guConditionsMet++;
+                }
+
+                // PSC条件達成数（0〜5）
+                var pscConditionsMet = 0;
+                var pscAllMetFlag = false;
+                if (d.psc) {
+                  if (d.psc.isMomentum20dOk) pscConditionsMet++;
+                  if (d.psc.isHighDistanceOk) pscConditionsMet++;
+                  if (d.psc.isPrevVolDryOk) pscConditionsMet++;
+                  if (d.psc.isCandleOk) pscConditionsMet++;
+                  if (d.psc.isVolumeOk) pscConditionsMet++;
+                  pscAllMetFlag = pscConditionsMet === 5;
+                }
+
                 rowSortData[ticker] = {
                   isEntryCandidate: isEntryCandidate,
                   guAllMet: guAllMet ? 1 : 0,
+                  guConditionsMet: guConditionsMet,
+                  gapPct: d.gapup ? d.gapup.gapPct : -999,
+                  pscAllMet: pscAllMetFlag ? 1 : 0,
+                  pscConditionsMet: pscConditionsMet,
+                  momentum20d: d.psc ? d.psc.momentum20d : -999,
                   surgeRatio: d.surgeRatio || 0,
                   status: d.status || 'watching'
                 };
 
                 // フィルター用データを収集
-                var pscAllMetFlag = !!(d.psc && d.psc.isMomentumOk && d.psc.isCandleOk && d.psc.isVolumeOk);
                 rowFilterData[ticker] = {
                   isGapOk: !!(d.gapup && d.gapup.isGapOk),
                   guAllMet: !!(guAllMet),
-                  isMomentumOk: !!(d.psc && d.psc.isMomentumOk),
+                  isMomentumOk: !!(d.psc && d.psc.isMomentum20dOk),
                   pscAllMet: pscAllMetFlag
                 };
 
@@ -336,18 +362,29 @@ app.get("/", async (c) => {
                 if (guEl) {
                   var gu = d.gapup;
                   if (gu) {
+                    // 出来高4x以上なら緩和表示
+                    var isRelaxed = gu.surgeRatio >= 4.0;
+                    var gapThreshold = isRelaxed ? 1 : 3;
+                    // 1. 始値ギャップ
                     var gapSign = gu.gapPct >= 0 ? '+' : '';
                     var gapColor = gu.isGapOk ? '#22c55e' : (gu.gapPct >= 1.5 ? '#f59e0b' : '#64748b');
+                    // 2. 終値ギャップ維持
+                    var closeSign = gu.closePct >= 0 ? '+' : '';
+                    var closeColor = gu.isCloseGapOk ? '#22c55e' : '#64748b';
+                    // 3. 陽線
                     var candleColor = gu.isCandleOk ? '#22c55e' : '#ef4444';
                     var candleLabel = gu.isCandleOk ? '\u25cb' : '\u00d7';
+                    // 4. 出来高サージ
                     var volColor = gu.isVolumeOk ? '#22c55e' : '#64748b';
-                    var allMet = gu.isGapOk && gu.isCandleOk && gu.isVolumeOk;
+                    var allMet = gu.isGapOk && gu.isCloseGapOk && gu.isCandleOk && gu.isVolumeOk;
                     guEl.innerHTML =
-                      '<span style="color:' + gapColor + ';">' + gapSign + gu.gapPct.toFixed(1) + '%</span>' +
+                      '<span style="color:' + gapColor + ';" title="始値Gap (≥' + gapThreshold + '%' + (isRelaxed ? ' 緩和' : '') + ')">' + gapSign + gu.gapPct.toFixed(1) + '%</span>' +
                       '<span style="color:#475569; margin: 0 2px;">|</span>' +
-                      '<span style="color:' + candleColor + ';">' + candleLabel + '</span>' +
+                      '<span style="color:' + closeColor + ';" title="終値Gap維持 (≥' + gapThreshold + '%)">' + closeSign + gu.closePct.toFixed(1) + '%</span>' +
                       '<span style="color:#475569; margin: 0 2px;">|</span>' +
-                      '<span style="color:' + volColor + ';">' + (d.surgeRatio != null ? d.surgeRatio.toFixed(1) : '-') + 'x</span>' +
+                      '<span style="color:' + candleColor + ';" title="陽線">' + candleLabel + '</span>' +
+                      '<span style="color:#475569; margin: 0 2px;">|</span>' +
+                      '<span style="color:' + volColor + ';" title="出来高サージ (≥1.5x' + (isRelaxed ? ', 4x以上で緩和' : '') + ')">' + (d.surgeRatio != null ? d.surgeRatio.toFixed(1) : '-') + 'x</span>' +
                       (allMet ? ' <span style="color:#22c55e; font-weight:600;">\u2714</span>' : '');
                   } else {
                     guEl.innerHTML = '<span style="color: #475569;">-</span>';
@@ -359,18 +396,31 @@ app.get("/", async (c) => {
                 if (pscEl) {
                   var psc = d.psc;
                   if (psc) {
-                    var momSign = psc.momentum5d >= 0 ? '+' : '';
-                    var momColor = psc.isMomentumOk ? '#22c55e' : '#64748b';
+                    // 1. 20日モメンタム >= 15%
+                    var mom20Sign = psc.momentum20d >= 0 ? '+' : '';
+                    var mom20Color = psc.isMomentum20dOk ? '#22c55e' : '#64748b';
+                    // 2. 高値圏維持（-5%以内）
+                    var highDistSign = psc.highDistancePct >= 0 ? '+' : '';
+                    var highDistColor = psc.isHighDistanceOk ? '#22c55e' : '#64748b';
+                    // 3. 前日出来高干上がり
+                    var prevVolDryColor = psc.isPrevVolDryOk ? '#22c55e' : '#64748b';
+                    var prevVolDryLabel = psc.isPrevVolDryOk ? '\u25cb' : '\u00d7';
+                    // 4. 陽線
                     var pscCandleColor = psc.isCandleOk ? '#22c55e' : '#ef4444';
                     var pscCandleLabel = psc.isCandleOk ? '\u25cb' : '\u00d7';
+                    // 5. 出来高サージ
                     var pscVolColor = psc.isVolumeOk ? '#22c55e' : '#64748b';
-                    var pscAllMet = psc.isMomentumOk && psc.isCandleOk && psc.isVolumeOk;
+                    var pscAllMet = psc.isMomentum20dOk && psc.isHighDistanceOk && psc.isPrevVolDryOk && psc.isCandleOk && psc.isVolumeOk;
                     pscEl.innerHTML =
-                      '<span style="color:' + momColor + ';">' + momSign + (psc.momentum5d * 100).toFixed(1) + '%</span>' +
+                      '<span style="color:' + mom20Color + ';" title="20日モメンタム (≥15%)">' + mom20Sign + (psc.momentum20d * 100).toFixed(1) + '%</span>' +
                       '<span style="color:#475569; margin: 0 2px;">|</span>' +
-                      '<span style="color:' + pscCandleColor + ';">' + pscCandleLabel + '</span>' +
+                      '<span style="color:' + highDistColor + ';" title="高値乖離 (≥-5%)">' + highDistSign + (psc.highDistancePct * 100).toFixed(1) + '%</span>' +
                       '<span style="color:#475569; margin: 0 2px;">|</span>' +
-                      '<span style="color:' + pscVolColor + ';">' + (d.surgeRatio != null ? d.surgeRatio.toFixed(1) : '-') + 'x</span>' +
+                      '<span style="color:' + prevVolDryColor + ';" title="前日Vol干上がり">' + prevVolDryLabel + '</span>' +
+                      '<span style="color:#475569; margin: 0 2px;">|</span>' +
+                      '<span style="color:' + pscCandleColor + ';" title="陽線">' + pscCandleLabel + '</span>' +
+                      '<span style="color:#475569; margin: 0 2px;">|</span>' +
+                      '<span style="color:' + pscVolColor + ';" title="出来高サージ (≥1.5x)">' + (d.surgeRatio != null ? d.surgeRatio.toFixed(1) : '-') + 'x</span>' +
                       (pscAllMet ? ' <span style="color:#22c55e; font-weight:600;">\u2714</span>' : '');
                   } else {
                     pscEl.innerHTML = '<span style="color: #475569;">-</span>';
@@ -444,7 +494,7 @@ app.get("/", async (c) => {
                 }
               }
 
-              // ---- 行ソート（エントリー候補 → ステータス → サージ比率） ----
+              // ---- 行ソート ----
               var statusOrder = { ordered: 0, holding: 1, watching: 2 };
               var tbody = document.querySelector('table tbody');
               if (tbody) {
@@ -452,28 +502,40 @@ app.get("/", async (c) => {
                 rowArr.sort(function(a, b) {
                   var ta = a.getAttribute('data-ticker');
                   var tb = b.getAttribute('data-ticker');
-                  var da = rowSortData[ta] || { isEntryCandidate: 0, guAllMet: 0, surgeRatio: 0, status: 'watching' };
-                  var db = rowSortData[tb] || { isEntryCandidate: 0, guAllMet: 0, surgeRatio: 0, status: 'watching' };
-                  var fa = rowFilterData[ta] || {};
-                  var fb = rowFilterData[tb] || {};
-                  // 1. GUタブ: ✔（全条件OK）を最上位
+                  var da = rowSortData[ta] || { isEntryCandidate: 0, guAllMet: 0, guConditionsMet: 0, gapPct: -999, pscAllMet: 0, pscConditionsMet: 0, momentum20d: -999, surgeRatio: 0, status: 'watching' };
+                  var db = rowSortData[tb] || { isEntryCandidate: 0, guAllMet: 0, guConditionsMet: 0, gapPct: -999, pscAllMet: 0, pscConditionsMet: 0, momentum20d: -999, surgeRatio: 0, status: 'watching' };
+
+                  // GUタブ: ✔ → 条件達成数 → Gap% → 出来高サージ
                   if (currentTab === 'gu') {
-                    var guAllDiff = (fb.guAllMet ? 1 : 0) - (fa.guAllMet ? 1 : 0);
+                    // 1. ✔（全条件OK）を最上位
+                    var guAllDiff = db.guAllMet - da.guAllMet;
                     if (guAllDiff !== 0) return guAllDiff;
-                    // 場中/場後: gap条件OK行を次に
-                    if (currentMarketPhase !== 'pre') {
-                      var gapDiff = (fb.isGapOk ? 1 : 0) - (fa.isGapOk ? 1 : 0);
-                      if (gapDiff !== 0) return gapDiff;
-                    }
+                    // 2. 条件達成数（多い順）
+                    var guCondDiff = db.guConditionsMet - da.guConditionsMet;
+                    if (guCondDiff !== 0) return guCondDiff;
+                    // 3. Gap%（大きい順）
+                    var gapDiff = db.gapPct - da.gapPct;
+                    if (gapDiff !== 0) return gapDiff;
+                    // 4. 出来高サージ（大きい順）
+                    return db.surgeRatio - da.surgeRatio;
                   }
-                  // 1b. PSCタブ: ✔（全条件OK）を最上位、次にmom条件OK
+
+                  // PSCタブ: ✔ → 条件達成数 → momentum20d% → 出来高サージ
                   if (currentTab === 'psc') {
-                    var pscAllDiff = (fb.pscAllMet ? 1 : 0) - (fa.pscAllMet ? 1 : 0);
+                    // 1. ✔（全条件OK）を最上位
+                    var pscAllDiff = db.pscAllMet - da.pscAllMet;
                     if (pscAllDiff !== 0) return pscAllDiff;
-                    var momDiff = (fb.isMomentumOk ? 1 : 0) - (fa.isMomentumOk ? 1 : 0);
+                    // 2. 条件達成数（多い順）
+                    var pscCondDiff = db.pscConditionsMet - da.pscConditionsMet;
+                    if (pscCondDiff !== 0) return pscCondDiff;
+                    // 3. momentum20d%（大きい順）
+                    var momDiff = db.momentum20d - da.momentum20d;
                     if (momDiff !== 0) return momDiff;
+                    // 4. 出来高サージ（大きい順）
+                    return db.surgeRatio - da.surgeRatio;
                   }
-                  // 1c. その他: エントリー候補（GU全条件OK or WB条件OK）を最上位
+
+                  // WBタブ・その他: エントリー候補 → ステータス → 出来高サージ
                   var entryDiff = db.isEntryCandidate - da.isEntryCandidate;
                   if (entryDiff !== 0) return entryDiff;
                   // 2. ステータス: 注文済 → 保有中 → 監視中

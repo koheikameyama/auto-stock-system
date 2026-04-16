@@ -298,11 +298,54 @@ app.get("/quotes", async (c) => {
   return c.json(result);
 });
 
+/** PSCシグナル判定に必要な履歴データ */
+type PSCHistoricalData = {
+  close20DaysAgo: number;
+  high20: number;
+  prevVolume: number;
+};
+
+/** PSC用履歴データをバッチ取得 */
+async function fetchPSCHistoricalData(tickers: string[]): Promise<Map<string, PSCHistoricalData>> {
+  const LOOKBACK_DAYS = 25;
+  const cutoff = dayjs().tz(TIMEZONE).subtract(50, "day").toDate();
+
+  const bars = await prisma.stockDailyBar.findMany({
+    where: { tickerCode: { in: tickers }, date: { gte: cutoff } },
+    select: { tickerCode: true, close: true, volume: true },
+    orderBy: [{ tickerCode: "asc" }, { date: "asc" }],
+  });
+
+  const tickerBars = new Map<string, Array<{ close: number; volume: number }>>();
+  for (const bar of bars) {
+    let arr = tickerBars.get(bar.tickerCode);
+    if (!arr) {
+      arr = [];
+      tickerBars.set(bar.tickerCode, arr);
+    }
+    arr.push({ close: bar.close, volume: Number(bar.volume) });
+  }
+
+  const result = new Map<string, PSCHistoricalData>();
+  for (const [ticker, barList] of tickerBars) {
+    if (barList.length < LOOKBACK_DAYS) continue;
+
+    const recent = barList.slice(-LOOKBACK_DAYS);
+    const prevVolume = recent[recent.length - 1].volume;
+    const close20DaysAgo = recent[recent.length - 20].close;
+    const high20 = Math.max(...recent.slice(-20).map((b) => b.close));
+
+    result.set(ticker, { close20DaysAgo, high20, prevVolume });
+  }
+
+  return result;
+}
+
 /**
  * GET /api/watchlist/state?tickers=7203,8306 - ウォッチリスト状態（ポーリング用）
  *
  * breakout-monitor 依存を排除し、ライブ時価から直接サージ比率を計算。
- * GU/WB 戦略ごとの条件チェック結果を返す。
+ * GU/WB/PSC 戦略ごとの条件チェック結果を返す。
  */
 app.get("/watchlist/state", async (c) => {
   const tickersParam = c.req.query("tickers");
@@ -311,10 +354,10 @@ app.get("/watchlist/state", async (c) => {
   const tickers = tickersParam.split(",").filter(Boolean);
   if (!tickers.length) return c.json({});
 
-  // ウォッチリスト・保有・注文・市場評価・時価を並列取得
+  // ウォッチリスト・保有・注文・市場評価・時価・PSC履歴を並列取得
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const [watchlist, holdings, todayOrders, todayAssessment, quotes] = await Promise.all([
+  const [watchlist, holdings, todayOrders, todayAssessment, quotes, pscHistMap] = await Promise.all([
     getAllWatchlist(),
     prisma.tradingPosition.findMany({
       where: { status: "open" },
@@ -329,6 +372,7 @@ app.get("/watchlist/state", async (c) => {
       select: { shouldTrade: true },
     }),
     fetchStockQuotesBatch(tickers, { yfinanceFallback: !isMarketOpen() }),
+    fetchPSCHistoricalData(tickers),
   ]);
 
   const holdingTickers = new Set(holdings.map((h) => h.stock.tickerCode));
@@ -363,10 +407,14 @@ app.get("/watchlist/state", async (c) => {
     const surgeRatio = calculateVolumeSurgeRatio(quote.volume, wl.avgVolume25, hour, minute);
     const strategies: string[] = [];
 
-    // GU: open > prevClose × 1.03 + 陽線 + サージ ≥ 1.5x
+    // GU: 全4条件（vol4x以上なら gap 条件を1%に緩和）
+    const effectiveGapMin = surgeRatio >= GAPUP.ENTRY.GAP_RELAX_VOL_THRESHOLD
+      ? GAPUP.ENTRY.GAP_MIN_PCT_RELAXED
+      : GAPUP.ENTRY.GAP_MIN_PCT;
     if (
       wl.latestClose > 0 &&
-      quote.open > wl.latestClose * (1 + GAPUP.ENTRY.GAP_MIN_PCT) &&
+      quote.open > wl.latestClose * (1 + effectiveGapMin) &&
+      quote.price > wl.latestClose * (1 + effectiveGapMin) &&
       quote.price >= quote.open &&
       surgeRatio >= GAPUP.ENTRY.VOL_SURGE_RATIO
     ) {
@@ -378,13 +426,22 @@ app.get("/watchlist/state", async (c) => {
       strategies.push("WB");
     }
 
-    // PSC: momentum5d <= 0（押し目候補）+ 出来高サージ >= 1.5x + 陽線
-    if (
-      wl.momentum5d <= 0 &&
-      surgeRatio >= POST_SURGE_CONSOLIDATION.ENTRY.VOL_SURGE_RATIO &&
-      quote.price >= quote.open
-    ) {
-      strategies.push("PSC");
+    // PSC: 全5条件を満たす場合のみ
+    const pscHist = pscHistMap.get(ticker);
+    if (pscHist) {
+      const momentum20d = pscHist.close20DaysAgo > 0 ? quote.price / pscHist.close20DaysAgo - 1 : 0;
+      const highDistancePct = pscHist.high20 > 0 ? quote.price / pscHist.high20 - 1 : -1;
+      const isPrevVolDry = wl.avgVolume25 > 0 && pscHist.prevVolume < wl.avgVolume25;
+
+      if (
+        momentum20d >= POST_SURGE_CONSOLIDATION.ENTRY.MOMENTUM_MIN_RETURN &&
+        highDistancePct >= -POST_SURGE_CONSOLIDATION.ENTRY.MAX_HIGH_DISTANCE_PCT &&
+        isPrevVolDry &&
+        quote.price >= quote.open &&
+        surgeRatio >= POST_SURGE_CONSOLIDATION.ENTRY.VOL_SURGE_RATIO
+      ) {
+        strategies.push("PSC");
+      }
     }
 
     return strategies;
@@ -392,12 +449,15 @@ app.get("/watchlist/state", async (c) => {
 
   // GU条件詳細を計算
   type GapupConditions = {
-    gapPct: number;        // ギャップ率 (%)
-    isGapOk: boolean;      // gap >= 3%
-    isCandleOk: boolean;   // 陽線（price >= open）
-    isVolumeOk: boolean;   // 出来高サージ >= 1.5x
+    gapPct: number;           // ギャップ率 (%)
+    isGapOk: boolean;         // gap >= 3%（vol4x以上なら1%に緩和）
+    closePct: number;         // 終値の前日比 (%)
+    isCloseGapOk: boolean;    // 終値もギャップ維持（close > prevClose × 1.03）
+    isCandleOk: boolean;      // 陽線（price >= open）
+    isVolumeOk: boolean;      // 出来高サージ >= 1.5x
     prevClose: number;
     open: number;
+    surgeRatio: number;       // 出来高サージ倍率（緩和判定用）
   };
 
   function calcGapupConditions(ticker: string, quote: { price: number; open: number; volume: number } | null): GapupConditions | null {
@@ -407,26 +467,42 @@ app.get("/watchlist/state", async (c) => {
 
     const surgeRatio = calculateVolumeSurgeRatio(quote.volume, wl.avgVolume25, hour, minute);
     const gapPct = ((quote.open - wl.latestClose) / wl.latestClose) * 100;
+    const closePct = ((quote.price - wl.latestClose) / wl.latestClose) * 100;
+
+    // vol が 4x 以上なら gap 条件を 1% に緩和
+    const effectiveGapMin = surgeRatio >= GAPUP.ENTRY.GAP_RELAX_VOL_THRESHOLD
+      ? GAPUP.ENTRY.GAP_MIN_PCT_RELAXED
+      : GAPUP.ENTRY.GAP_MIN_PCT;
 
     return {
       gapPct,
-      isGapOk: quote.open > wl.latestClose * (1 + GAPUP.ENTRY.GAP_MIN_PCT),
+      isGapOk: quote.open > wl.latestClose * (1 + effectiveGapMin),
+      closePct,
+      isCloseGapOk: quote.price > wl.latestClose * (1 + effectiveGapMin),
       isCandleOk: quote.price >= quote.open,
       isVolumeOk: surgeRatio >= GAPUP.ENTRY.VOL_SURGE_RATIO,
       prevClose: wl.latestClose,
       open: quote.open,
+      surgeRatio,
     };
   }
 
   // PSC条件詳細を計算
   type PscConditions = {
-    momentum5d: number;      // 5日モメンタム（押し目インジケータ）
-    isMomentumOk: boolean;   // momentum5d <= 0（押し目フェーズ）
-    isCandleOk: boolean;     // 陽線（price >= open）
-    isVolumeOk: boolean;     // 出来高サージ >= 1.5x
+    momentum20d: number;       // 20日モメンタム (%)
+    isMomentum20dOk: boolean;  // 20日モメンタム >= 15%
+    highDistancePct: number;   // 高値からの乖離 (%)
+    isHighDistanceOk: boolean; // 高値から-5%以内
+    isPrevVolDryOk: boolean;   // 前日出来高干上がり（< avgVolume25）
+    isCandleOk: boolean;       // 陽線（price >= open）
+    isVolumeOk: boolean;       // 出来高サージ >= 1.5x
   };
 
-  function calcPscConditions(ticker: string, quote: { price: number; open: number; volume: number } | null): PscConditions | null {
+  function calcPscConditions(
+    ticker: string,
+    quote: { price: number; open: number; volume: number } | null,
+    pscHist: PSCHistoricalData | undefined,
+  ): PscConditions | null {
     const wl = wlMap.get(ticker);
     if (!wl) return null;
 
@@ -434,9 +510,21 @@ app.get("/watchlist/state", async (c) => {
       ? calculateVolumeSurgeRatio(quote.volume, wl.avgVolume25, hour, minute)
       : 0;
 
+    // 履歴データがない場合はデフォルト値
+    const currentPrice = quote?.price ?? wl.latestClose;
+    const close20DaysAgo = pscHist?.close20DaysAgo ?? 0;
+    const high20 = pscHist?.high20 ?? 0;
+    const prevVolume = pscHist?.prevVolume ?? 0;
+
+    const momentum20d = close20DaysAgo > 0 ? (currentPrice / close20DaysAgo - 1) : 0;
+    const highDistancePct = high20 > 0 ? (currentPrice / high20 - 1) : 0;
+
     return {
-      momentum5d: wl.momentum5d,
-      isMomentumOk: wl.momentum5d <= 0,
+      momentum20d,
+      isMomentum20dOk: momentum20d >= POST_SURGE_CONSOLIDATION.ENTRY.MOMENTUM_MIN_RETURN,
+      highDistancePct,
+      isHighDistanceOk: highDistancePct >= -POST_SURGE_CONSOLIDATION.ENTRY.MAX_HIGH_DISTANCE_PCT,
+      isPrevVolDryOk: wl.avgVolume25 > 0 ? prevVolume < wl.avgVolume25 : false,
       isCandleOk: quote ? quote.price >= quote.open : false,
       isVolumeOk: surgeRatio >= POST_SURGE_CONSOLIDATION.ENTRY.VOL_SURGE_RATIO,
     };
@@ -490,7 +578,7 @@ app.get("/watchlist/state", async (c) => {
       price: quote?.price ?? null,
       open: marketPhase !== "pre" ? (quote?.open ?? null) : null,
       gapup: calcGapupConditions(ticker, quoteData),
-      psc: calcPscConditions(ticker, quoteData),
+      psc: calcPscConditions(ticker, quoteData, pscHistMap.get(ticker)),
       wbDeviation,
     };
   }
