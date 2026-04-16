@@ -750,3 +750,63 @@ export interface NR7BacktestResult {
   equityCurve: DailyEquity[];
   metrics: PerformanceMetrics;
 }
+
+// ──────────────────────────────────────────
+// ストップ高フォロースルーバックテスト設定
+// ──────────────────────────────────────────
+
+export interface StopHighBacktestConfig {
+  startDate: string;
+  endDate: string;
+  initialBudget: number;
+  maxPositions: number;
+
+  /** 前日がストップ高とみなす最小比率（limit_up × this 以上の終値） */
+  stopHighThresholdRatio: number;
+  /** 当日の最小ギャップ率（open / prevClose - 1） */
+  minGapPct: number;
+  /** 当日の最小陽線幅（close / open - 1） */
+  minBodyPct: number;
+  /** 当日の最大陽線幅（ストップ高ロック銘柄を除外、close / open - 1 がこの未満） */
+  maxBodyPct: number;
+  /** 当日の出来高サージ倍率（volume / avgVolume25 >= this） */
+  volSurgeRatio: number;
+
+  atrMultiplier: number;
+  maxLossPct: number;
+
+  beActivationMultiplier: number;
+  trailMultiplier: number;
+
+  maxHoldingDays: number;
+  maxExtendedHoldingDays: number;
+
+  maxPrice: number;
+  minAvgVolume25: number;
+  minAtrPct: number;
+  minTurnover: number;
+  minPrice: number;
+
+  costModelEnabled: boolean;
+  priceLimitEnabled: boolean;
+
+  cooldownDays: number;
+
+  marketTrendFilter?: boolean;
+  marketTrendThreshold?: number;
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+  indexTrendOffBufferPct?: number;
+  indexTrendOnBufferPct?: number;
+
+  verbose: boolean;
+  positionCapEnabled?: boolean;
+  maxDailyEntries?: number;
+}
+
+export interface StopHighBacktestResult {
+  config: StopHighBacktestConfig;
+  trades: SimulatedPosition[];
+  equityCurve: DailyEquity[];
+  metrics: PerformanceMetrics;
+}
