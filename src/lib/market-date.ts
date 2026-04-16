@@ -171,3 +171,20 @@ export function getNextTradingDay(from?: Date): Date {
   }
   return new Date(Date.UTC(d.year(), d.month(), d.date()));
 }
+
+/**
+ * 指定日からN営業日後の日付を返す
+ *
+ * @param from 起点日
+ * @param n 営業日数
+ * @returns JST日付をUTC 00:00のDateとして返す（getTodayForDBと同じ形式）
+ */
+export function addTradingDays(from: Date, n: number): Date {
+  let d = dayjs(from).tz(JST);
+  let count = 0;
+  while (count < n) {
+    d = d.add(1, "day");
+    if (isMarketDay(d.toDate())) count++;
+  }
+  return new Date(Date.UTC(d.year(), d.month(), d.date()));
+}
