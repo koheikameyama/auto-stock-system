@@ -810,3 +810,181 @@ export interface StopHighBacktestResult {
   equityCurve: DailyEquity[];
   metrics: PerformanceMetrics;
 }
+
+// ──────────────────────────────────────────
+// Early Volume Spike バックテスト設定
+// ──────────────────────────────────────────
+
+export interface EarlyVolumeSpikeBacktestConfig {
+  startDate: string;
+  endDate: string;
+  initialBudget: number;
+  maxPositions: number;
+
+  /** 出来高サージ倍率（volume / avgVolume25 >= this） */
+  volSurgeRatio: number;
+  /** 20日高値に対する最小比率（close / high20 >= this） */
+  minHigh20Ratio: number;
+  /** 20日高値に対する最大比率（close / high20 < this） */
+  maxHigh20Ratio: number;
+  /** 高値ルックバック日数 */
+  highLookbackDays: number;
+  /** 最小陽線幅（close / open - 1） */
+  minBodyPct: number;
+  /** ATR拡大フィルター: 当日レンジ >= ATR14 × this */
+  minRangeAtrRatio: number;
+
+  atrMultiplier: number;
+  maxLossPct: number;
+
+  beActivationMultiplier: number;
+  trailMultiplier: number;
+
+  maxHoldingDays: number;
+  maxExtendedHoldingDays: number;
+
+  maxPrice: number;
+  minAvgVolume25: number;
+  minAtrPct: number;
+  minTurnover: number;
+  minPrice: number;
+
+  costModelEnabled: boolean;
+  priceLimitEnabled: boolean;
+
+  cooldownDays: number;
+
+  marketTrendFilter?: boolean;
+  marketTrendThreshold?: number;
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+  indexTrendOffBufferPct?: number;
+  indexTrendOnBufferPct?: number;
+
+  verbose: boolean;
+  positionCapEnabled?: boolean;
+  maxDailyEntries?: number;
+}
+
+export interface EarlyVolumeSpikeBacktestResult {
+  config: EarlyVolumeSpikeBacktestConfig;
+  trades: SimulatedPosition[];
+  equityCurve: DailyEquity[];
+  metrics: PerformanceMetrics;
+}
+
+// ──────────────────────────────────────────
+// Down-Day Reversal バックテスト設定
+// ──────────────────────────────────────────
+
+export interface DownDayReversalBacktestConfig {
+  startDate: string;
+  endDate: string;
+  initialBudget: number;
+  maxPositions: number;
+
+  /** 前日からの最小下落率 */
+  minDropPct: number;
+  /** 出来高サージ倍率 */
+  volSurgeRatio: number;
+  /** 当日最小陽線幅 */
+  minBodyPct: number;
+  /** breadth上限（この未満でのみエントリー） */
+  maxBreadth: number;
+
+  atrMultiplier: number;
+  maxLossPct: number;
+
+  beActivationMultiplier: number;
+  trailMultiplier: number;
+
+  maxHoldingDays: number;
+  maxExtendedHoldingDays: number;
+
+  maxPrice: number;
+  minAvgVolume25: number;
+  minAtrPct: number;
+  minTurnover: number;
+  minPrice: number;
+
+  costModelEnabled: boolean;
+  priceLimitEnabled: boolean;
+
+  cooldownDays: number;
+
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+  indexTrendOffBufferPct?: number;
+  indexTrendOnBufferPct?: number;
+
+  verbose: boolean;
+  positionCapEnabled?: boolean;
+  maxDailyEntries?: number;
+}
+
+export interface DownDayReversalBacktestResult {
+  config: DownDayReversalBacktestConfig;
+  trades: SimulatedPosition[];
+  equityCurve: DailyEquity[];
+  metrics: PerformanceMetrics;
+}
+
+// ──────────────────────────────────────────
+// Overnight Gap-Fade バックテスト設定
+// ──────────────────────────────────────────
+
+export interface OvernightGapFadeBacktestConfig {
+  startDate: string;
+  endDate: string;
+  initialBudget: number;
+  maxPositions: number;
+
+  /** 前日の最小陽線幅 */
+  prevMinBodyPct: number;
+  /** 当日gapdown最小 */
+  minGapDownPct: number;
+  /** 当日gapdown最大 */
+  maxGapDownPct: number;
+  /** 当日最小陽線幅 */
+  minBodyPct: number;
+  /** 前日出来高サージ倍率 */
+  prevVolSurgeRatio: number;
+
+  atrMultiplier: number;
+  maxLossPct: number;
+
+  beActivationMultiplier: number;
+  trailMultiplier: number;
+
+  maxHoldingDays: number;
+  maxExtendedHoldingDays: number;
+
+  maxPrice: number;
+  minAvgVolume25: number;
+  minAtrPct: number;
+  minTurnover: number;
+  minPrice: number;
+
+  costModelEnabled: boolean;
+  priceLimitEnabled: boolean;
+
+  cooldownDays: number;
+
+  marketTrendFilter?: boolean;
+  marketTrendThreshold?: number;
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+  indexTrendOffBufferPct?: number;
+  indexTrendOnBufferPct?: number;
+
+  verbose: boolean;
+  positionCapEnabled?: boolean;
+  maxDailyEntries?: number;
+}
+
+export interface OvernightGapFadeBacktestResult {
+  config: OvernightGapFadeBacktestConfig;
+  trades: SimulatedPosition[];
+  equityCurve: DailyEquity[];
+  metrics: PerformanceMetrics;
+}
