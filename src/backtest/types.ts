@@ -696,3 +696,57 @@ export interface PostSurgeConsolidationBacktestResult {
   equityCurve: DailyEquity[];
   metrics: PerformanceMetrics;
 }
+
+// ──────────────────────────────────────────
+// NR7ブレイクバックテスト設定
+// ──────────────────────────────────────────
+
+export interface NR7BacktestConfig {
+  startDate: string;
+  endDate: string;
+  initialBudget: number;
+  maxPositions: number;
+
+  /** NR7 ルックバック日数 */
+  lookbackDays: number;
+  /** 出来高サージ倍率 */
+  volSurgeRatio: number;
+
+  atrMultiplier: number;
+  maxLossPct: number;
+
+  beActivationMultiplier: number;
+  trailMultiplier: number;
+
+  maxHoldingDays: number;
+  maxExtendedHoldingDays: number;
+
+  maxPrice: number;
+  minAvgVolume25: number;
+  minAtrPct: number;
+  minTurnover: number;
+  minPrice: number;
+
+  costModelEnabled: boolean;
+  priceLimitEnabled: boolean;
+
+  cooldownDays: number;
+
+  marketTrendFilter?: boolean;
+  marketTrendThreshold?: number;
+  indexTrendFilter?: boolean;
+  indexTrendSmaPeriod?: number;
+  indexTrendOffBufferPct?: number;
+  indexTrendOnBufferPct?: number;
+
+  verbose: boolean;
+  positionCapEnabled?: boolean;
+  maxDailyEntries?: number;
+}
+
+export interface NR7BacktestResult {
+  config: NR7BacktestConfig;
+  trades: SimulatedPosition[];
+  equityCurve: DailyEquity[];
+  metrics: PerformanceMetrics;
+}

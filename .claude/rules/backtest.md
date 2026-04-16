@@ -234,9 +234,43 @@ npm run walk-forward:squeeze-breakout
 - パラメータ不安定（atr, beが窓ごとにバラバラ、trailのみ安定=0.5）
 - **結論: 実戦投入には至らず。`ENTRY_ENABLED = false` のまま**
 
-### 戦略追加検証の総括（2026-04-10）
+### NR7ブレイク戦略バックテスト
 
-breakout無効化後の3本目の戦略候補を4つWF検証した結果:
+```bash
+npm run backtest:nr7
+# オプション: --start 2025-01-01 --end 2026-03-25 --budget 500000 --verbose --no-position-cap
+```
+
+7日間で最も狭いレンジ（NR7: ボラ収縮）→ブレイクアウト（close > 前6日高値）+ 出来高サージ1.5倍 + 陽線で当日終値エントリー。マーケットフィルターはgapup/PSCと同じ（breadth≥60%+日経SMA50）。タイムストップ5/7日。
+
+### NR7ブレイク walk-forward 分析
+
+```bash
+npm run walk-forward:nr7
+```
+
+IS 6ヶ月 / OOS 3ヶ月 × 7ウィンドウ。
+
+#### パラメータグリッド（27通り、エグジット系のみ）
+
+| パラメータ | 値 |
+|-----------|-----|
+| atrMultiplier | 0.8, 1.0, 1.2 |
+| beActivationMultiplier | 0.3, 0.5, 0.8 |
+| trailMultiplier | 0.5, 0.8, 1.0 |
+
+#### WF結果（2026-04-16実施）
+
+- **OOS集計PF=0.44、判定「過学習 ✗」**
+- 7窓中1窓休止、残り6窓中5窓でOOS PF < 1.0
+- OOS総トレード22件、勝率36.4%
+- ISでもエッジが弱い（7窓中4窓でIS PF < 1.0）
+- パラメータ不安定（beが0.3/0.5/0.8でバラバラ）
+- **結論: 実戦投入なし。ボラ収縮→拡張パターンは中小型株ユニバースでエッジなし**
+
+### 戦略追加検証の総括（2026-04-10〜04-16）
+
+breakout無効化後の3本目の戦略候補をWF検証した結果:
 
 | 戦略 | OOS集計PF | 判定 | 問題点 |
 |------|-----------|------|--------|
@@ -244,6 +278,7 @@ breakout無効化後の3本目の戦略候補を4つWF検証した結果:
 | earnings-gap | - | 検証不能 | 決算日データ不足、全窓トレード3件未満 |
 | momentum | 0.00 | 過学習 | OOS合計2トレード全敗 |
 | 出来高+大陽線 | 未検証 | - | 旧breakout亜種、見送り |
+| NR7ブレイク | 0.44 | 過学習 | ISでもエッジ弱、22trで勝率36% |
 
 **結論: 50万以下の中小型株ユニバースでは日足テクニカル系に新たなエッジなし。**
 
@@ -285,3 +320,14 @@ breakout無効化後の3本目の戦略候補を4つWF検証した結果:
 | `src/backtest/squeeze-breakout-simulation.ts` | シミュレーションエンジン（precompute対応） |
 | `src/backtest/squeeze-breakout-run.ts` | CLI実行エントリーポイント（`--compare-entry` オプションあり） |
 | `scripts/walk-forward-squeeze-breakout.ts` | walk-forward検証スクリプト |
+
+### nr7
+
+| ファイル | 役割 |
+|---------|------|
+| `src/lib/constants/nr7.ts` | NR7ブレイク戦略の定数 |
+| `src/core/nr7/entry-conditions.ts` | `isNR7Signal()` エントリー判定 |
+| `src/backtest/nr7-config.ts` | デフォルト設定 + WFパラメータグリッド |
+| `src/backtest/nr7-simulation.ts` | シミュレーションエンジン（precompute対応） |
+| `src/backtest/nr7-run.ts` | CLI実行エントリーポイント |
+| `scripts/walk-forward-nr7.ts` | walk-forward検証スクリプト |
