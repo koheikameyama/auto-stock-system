@@ -352,13 +352,14 @@ async function main() {
   if (compareSplitPositions) {
     const grid: { label: string; limits: PositionLimits }[] = [
       { label: "GU3+PSC2（現状）",     limits: { boMax: 0, guMax: 3, wbMax: 0, pscMax: 2 } },
-      { label: "GU3+PSC2・合算3",      limits: { boMax: 0, guMax: 3, wbMax: 0, pscMax: 2, totalMax: 3 } },
+      { label: "GU3+WB2+PSC2",        limits: { boMax: 0, guMax: 3, wbMax: 2, pscMax: 2 } },
+      { label: "GU3+WB1+PSC2",        limits: { boMax: 0, guMax: 3, wbMax: 1, pscMax: 2 } },
+      { label: "GU3+WB2+PSC2・合算5",  limits: { boMax: 0, guMax: 3, wbMax: 2, pscMax: 2, totalMax: 5 } },
+      { label: "GU5+WB2+PSC3",        limits: { boMax: 0, guMax: 5, wbMax: 2, pscMax: 3 } },
+      { label: "GU5+WB3+PSC3",        limits: { boMax: 0, guMax: 5, wbMax: 3, pscMax: 3 } },
       { label: "GU3+PSC3",            limits: { boMax: 0, guMax: 3, wbMax: 0, pscMax: 3 } },
       { label: "GU5+PSC3",            limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 3 } },
-      { label: "GU5+PSC3・合算5",      limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 3, totalMax: 5 } },
       { label: "GU5+PSC5",            limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 5 } },
-      { label: "GU5+PSC5・合算5",      limits: { boMax: 0, guMax: 5, wbMax: 0, pscMax: 5, totalMax: 5 } },
-      { label: "GU10+PSC5",           limits: { boMax: 0, guMax: 10, wbMax: 0, pscMax: 5 } },
     ];
 
     console.log("\n=== 戦略別ポジション分離比較 ===");
@@ -378,9 +379,15 @@ async function main() {
         `${row.label.padEnd(24)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
       );
       const pm = result.pscMetrics;
+      const wm = result.wbMetrics;
       console.log(
         `${"  GU".padEnd(24)}| ${String(gm.totalTrades).padStart(6)} | ${gm.winRate.toFixed(1).padStart(6)}% | ${(gm.profitFactor === Infinity ? "∞" : gm.profitFactor.toFixed(2)).padStart(5)} | ${((gm.expectancy >= 0 ? "+" : "") + gm.expectancy.toFixed(2) + "%").padStart(8)}`,
       );
+      if (wm.totalTrades > 0) {
+        console.log(
+          `${"  WB".padEnd(24)}| ${String(wm.totalTrades).padStart(6)} | ${wm.winRate.toFixed(1).padStart(6)}% | ${(wm.profitFactor === Infinity ? "∞" : wm.profitFactor.toFixed(2)).padStart(5)} | ${((wm.expectancy >= 0 ? "+" : "") + wm.expectancy.toFixed(2) + "%").padStart(8)}`,
+        );
+      }
       console.log(
         `${"  PSC".padEnd(24)}| ${String(pm.totalTrades).padStart(6)} | ${pm.winRate.toFixed(1).padStart(6)}% | ${(pm.profitFactor === Infinity ? "∞" : pm.profitFactor.toFixed(2)).padStart(5)} | ${((pm.expectancy >= 0 ? "+" : "") + pm.expectancy.toFixed(2) + "%").padStart(8)}`,
       );
