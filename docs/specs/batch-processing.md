@@ -380,3 +380,33 @@ weekly-review を実行。休場日チェックなし（土曜固定）。
 | 市場予想 | 翌営業日outlook・確信度・サマリー・リスク | blue |
 | リスクアラート | 日次損失制限超過等 | red |
 | ジョブ失敗 | エラー内容 | red |
+
+---
+
+## 弾かれたシグナル追跡（/rejected-signals）
+
+`executeEntry()` でシグナルが出たがフィルターにより発注できなかったケースを `RejectedSignal` テーブルに記録し、管理画面で確認できる。
+
+### 追跡対象のスキップ理由
+
+| ラベル | 判定キーワード |
+|---|---|
+| 残高不足 | 予算不足 / 残高不足 / 現金残高不足 |
+| 集中率上限 | 集中率上限 / 投資比率上限 |
+| ポジション数上限 | 最大同時保有数 |
+| 流動性不足 | 流動性 |
+| セクター集中 | セクター |
+| 連敗クールダウン | 連敗クールダウン |
+
+### データフロー
+
+1. `executeEntry()` スキップ時 → `RejectedSignal` に保存（ticker・strategy・reason・reasonLabel・entryPrice）
+2. end-of-day バッチ → `StockDailyBar` から5日・10日後の終値を補完（close5d・close10d・return5dPct・return10dPct）
+
+### 管理画面（GET /rejected-signals）
+
+- 理由別集計カード（件数・5日平均リターン・10日平均リターン）
+- 個別シグナル一覧テーブル（銘柄・戦略・理由・エントリー価格・5日後・10日後）
+- 戦略フィルター（all / gapup / weekly-break / post-surge-consolidation）
+- JSON API: `GET /api/rejected-signals`（strategy・dateFrom・dateTo パラメータ対応）
+
