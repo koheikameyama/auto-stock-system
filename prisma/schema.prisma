@@ -487,3 +487,21 @@ model IntraDayMaPullbackSignal {
   @@index([date(sort: Desc)])
   @@unique([date, tickerCode])
 }
+
+model RejectedSignal {
+  id           String   @id @default(cuid())
+  ticker       String
+  strategy     String
+  rejectedAt   DateTime
+  reason       String
+  reasonLabel  String
+  entryPrice   Float
+  close5d      Float?
+  close10d     Float?
+  return5dPct  Float?
+  return10dPct Float?
+  createdAt    DateTime @default(now())
+
+  @@index([rejectedAt(sort: Desc)])
+  @@index([ticker])
+}
