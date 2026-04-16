@@ -13,6 +13,7 @@
 import dayjs from "dayjs";
 import { prisma } from "../src/lib/prisma";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "../src/backtest/data-fetcher";
+import { fetchSP500FromDB } from "../src/backtest/us/us-data-fetcher";
 import { precomputeSimData } from "../src/backtest/breakout-simulation";
 import { runGapUpBacktest, precomputeGapUpDailySignals } from "../src/backtest/gapup-simulation";
 import { GAPUP_BACKTEST_DEFAULTS, generateGapUpParameterCombinations, GAPUP_PARAMETER_GRID, GAPUP_RELAXED_GAP_MIN_PCT } from "../src/backtest/gapup-config";
@@ -160,6 +161,8 @@ async function main() {
   const signalSortMethod = sortMethodArg
     ? (sortMethodArg.split("=")[1] as "gapvol" | "rr" | "volume")
     : undefined;
+  const sp500MaxReturnArg = args.find((a) => a.startsWith("--sp500-max-return="));
+  const sp500MaxReturn = sp500MaxReturnArg ? parseFloat(sp500MaxReturnArg.split("=")[1]) : undefined;
   const endDate = dayjs().format("YYYY-MM-DD");
   const startDate = dayjs().subtract(TOTAL_MONTHS, "month").format("YYYY-MM-DD");
 
@@ -172,22 +175,48 @@ async function main() {
   console.log(`選択方式: ${useRobust ? "ロバスト（近傍中央値PF）" : "最大PF"}`);
   if (signalSortMethod) console.log(`シグナルソート: ${signalSortMethod}`);
   if (maxDailyEntries != null) console.log(`1日最大エントリー: ${maxDailyEntries}件`);
+  if (sp500MaxReturn != null) console.log(`SP500フィルター: 前日SP500リターン > ${(sp500MaxReturn * 100).toFixed(1)}% の日はスキップ`);
 
   const paramCombos = generateGapUpParameterCombinations();
   console.log(`パラメータ組み合わせ: ${paramCombos.length}通り`);
   console.log("");
 
-  // データ取得
+  // データ取得（Stockテーブルが空の場合はStockDailyBarから直接取得）
   const stocks = await prisma.stock.findMany({
     where: { isDelisted: false, isActive: true, isRestricted: false },
     select: { tickerCode: true },
   });
-  const tickerCodes = stocks.map((s) => s.tickerCode);
+  let tickerCodes: string[];
+  if (stocks.length > 0) {
+    tickerCodes = stocks.map((s) => s.tickerCode);
+  } else {
+    const distinctTickers = await prisma.stockDailyBar.findMany({
+      where: { market: "JP" },
+      distinct: ["tickerCode"],
+      select: { tickerCode: true },
+    });
+    tickerCodes = distinctTickers.map((s) => s.tickerCode);
+  }
   console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
 
   const rawData = await fetchHistoricalFromDB(tickerCodes, startDate, endDate);
   const vixData = await fetchVixFromDB(startDate, endDate);
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
+
+  // S&P 500 データ取得 & 日次リターン計算
+  let sp500DailyReturn: Map<string, number> | undefined;
+  if (sp500MaxReturn != null) {
+    const sp500Data = await fetchSP500FromDB(startDate, endDate);
+    const sortedDates = [...sp500Data.keys()].sort();
+    sp500DailyReturn = new Map<string, number>();
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prevClose = sp500Data.get(sortedDates[i - 1])!;
+      const todayClose = sp500Data.get(sortedDates[i])!;
+      sp500DailyReturn.set(sortedDates[i], (todayClose - prevClose) / prevClose);
+    }
+    console.log(`[data] S&P 500: ${sp500Data.size}日, リターン算出: ${sp500DailyReturn.size}日`);
+  }
+
   console.log(`[data] ${rawData.size}銘柄（raw）, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
   const maxPrice = GAPUP_BACKTEST_DEFAULTS.maxPrice;
@@ -236,9 +265,11 @@ async function main() {
             ...filterCfg,
             gapRelaxVolThreshold: threshold,
             gapMinPctRelaxed: threshold != null ? GAPUP_RELAXED_GAP_MIN_PCT : undefined,
+            ...(sp500MaxReturn != null ? { sp500MaxReturn } : {}),
           },
           allData,
           isPrecomputed,
+          sp500DailyReturn,
         ),
       ])
     );
@@ -257,6 +288,7 @@ async function main() {
         verbose: false,
         ...(maxDailyEntries != null ? { maxDailyEntries } : {}),
         ...(signalSortMethod ? { signalSortMethod } : {}),
+        ...(sp500MaxReturn != null ? { sp500MaxReturn } : {}),
       };
       const result = runGapUpBacktest(config, allData, vixArg, indexArg, isPrecomputed, isSignals);
       if (result.metrics.totalTrades < 3) continue;
@@ -303,9 +335,11 @@ async function main() {
         ...filterCfg,
         gapRelaxVolThreshold: bestParams.gapRelaxVolThreshold,
         gapMinPctRelaxed: bestParams.gapMinPctRelaxed,
+        ...(sp500MaxReturn != null ? { sp500MaxReturn } : {}),
       },
       allData,
       oosPrecomputed,
+      sp500DailyReturn,
     );
 
     const oosConfig: GapUpBacktestConfig = {
@@ -316,6 +350,7 @@ async function main() {
       verbose: false,
       ...(maxDailyEntries != null ? { maxDailyEntries } : {}),
       ...(signalSortMethod ? { signalSortMethod } : {}),
+      ...(sp500MaxReturn != null ? { sp500MaxReturn } : {}),
     };
     const oosResult = runGapUpBacktest(oosConfig, allData, vixArg, indexArg, oosPrecomputed, oosSignals);
 
