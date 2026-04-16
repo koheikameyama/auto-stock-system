@@ -10,7 +10,7 @@
  */
 
 import { prisma } from "../lib/prisma";
-import { getTodayForDB, getStartOfDayJST, getEndOfDayJST } from "../lib/market-date";
+import { getTodayForDB, getStartOfDayJST, getEndOfDayJST, addTradingDays } from "../lib/market-date";
 import { STRATEGY_SWITCHING } from "../lib/constants";
 import { fetchStockQuote } from "../core/market-data";
 import { closePosition, getCashBalance, getTotalPortfolioValue, getPositionPnl } from "../core/position-manager";
@@ -385,7 +385,10 @@ export async function main() {
     aiReview,
   });
 
-  // 6. MA押し目シグナルの終値補完
+  // 6. RejectedSignal の close5d/close10d 補完
+  await fillRejectedSignalReturns();
+
+  // 7. MA押し目シグナルの終値補完
   await fillIntradayMaSignalClosePrices(getTodayForDB());
 
   console.log("=== End of Day 終了 ===");
@@ -426,6 +429,68 @@ async function fillIntradayMaSignalClosePrices(today: Date): Promise<void> {
   );
 
   console.log(`[end-of-day] MA押し目シグナル終値補完: ${signals.length}件`);
+}
+
+/**
+ * RejectedSignal の close5d / close10d を StockDailyBar から補完する
+ */
+async function fillRejectedSignalReturns(): Promise<void> {
+  const tag = "[end-of-day] RejectedSignal補完";
+
+  const signals = await prisma.rejectedSignal.findMany({
+    where: {
+      OR: [{ close5d: null }, { close10d: null }],
+    },
+  });
+
+  if (!signals.length) {
+    console.log(`${tag}: 対象なし`);
+    return;
+  }
+
+  console.log(`${tag}: ${signals.length}件処理開始`);
+
+  for (const signal of signals) {
+    const updates: {
+      close5d?: number;
+      return5dPct?: number;
+      close10d?: number;
+      return10dPct?: number;
+    } = {};
+
+    if (signal.close5d === null) {
+      const target5d = addTradingDays(signal.rejectedAt, 5);
+      const bar5d = await prisma.stockDailyBar.findFirst({
+        where: { tickerCode: signal.ticker, date: target5d },
+        select: { close: true },
+      });
+      if (bar5d) {
+        updates.close5d = bar5d.close;
+        updates.return5dPct = ((bar5d.close - signal.entryPrice) / signal.entryPrice) * 100;
+      }
+    }
+
+    if (signal.close10d === null) {
+      const target10d = addTradingDays(signal.rejectedAt, 10);
+      const bar10d = await prisma.stockDailyBar.findFirst({
+        where: { tickerCode: signal.ticker, date: target10d },
+        select: { close: true },
+      });
+      if (bar10d) {
+        updates.close10d = bar10d.close;
+        updates.return10dPct = ((bar10d.close - signal.entryPrice) / signal.entryPrice) * 100;
+      }
+    }
+
+    if (Object.keys(updates).length) {
+      await prisma.rejectedSignal.update({
+        where: { id: signal.id },
+        data: updates,
+      });
+    }
+  }
+
+  console.log(`${tag}: 完了`);
 }
 
 const isDirectRun = process.argv[1]?.includes("end-of-day");
