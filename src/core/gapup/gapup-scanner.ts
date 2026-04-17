@@ -13,7 +13,7 @@ import type { WatchlistEntry } from "../breakout/types";
 export interface GapUpQuoteData {
   ticker: string;
   open: number;
-  price: number; // 現在値（15:20時点 ≈ 終値の代替）
+  price: number; // 現在値（15:24時点 ≈ 終値の代替）
   high: number;
   low: number;
   volume: number;
@@ -62,7 +62,7 @@ export class GapUpScanner {
       // prevClose = ウォッチリストのlatestClose（前日終値）
       const prevClose = entry.latestClose;
 
-      // isGapUpSignal で判定（15:20時点のpriceをcloseとして使用）
+      // isGapUpSignal で判定（15:24時点のpriceをcloseとして使用）
       const isSignal = isGapUpSignal({
         open: quote.open,
         close: quote.price,

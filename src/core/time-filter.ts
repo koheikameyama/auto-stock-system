@@ -3,7 +3,7 @@
  *
  * 時間帯に応じたエントリー可否判定を行う。
  * - breakout: 9:00-9:30の寄付き直後はブロック（乱高下回避）
- * - gapup: 15:20-15:25のみエントリー可能（引け注文受付期限に合わせる）
+ * - gapup: 15:24-15:25のみエントリー可能（クロージングオークション直前に合わせる）
  */
 
 import { TIME_WINDOW, TIMEZONE } from "../lib/constants";
@@ -48,14 +48,14 @@ export function checkTimeWindow(
     };
   }
 
-  // gapup: 15:20-15:25のみエントリー可能（引け注文受付期限に合わせる）
+  // gapup: 15:24-15:25のみエントリー可能（クロージングオークション直前に合わせる）
   if (strategy === "gapup") {
     const gapupStart = jstNow.clone().hour(GAPUP.GUARD.SCAN_HOUR).minute(GAPUP.GUARD.SCAN_MINUTE).second(0).millisecond(0);
     const gapupEnd = jstNow.clone().hour(15).minute(25).second(0).millisecond(0);
     if (jstNow.isBefore(gapupStart) || !jstNow.isBefore(gapupEnd)) {
       return {
         canTrade: false,
-        reason: "gapup戦略は15:20-15:25のみエントリー可能",
+        reason: "gapup戦略は15:24-15:25のみエントリー可能",
         isOpeningVolatility: false,
       };
     }

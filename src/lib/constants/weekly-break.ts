@@ -20,9 +20,9 @@ export const WEEKLY_BREAK = {
     BREADTH_THRESHOLD: 0.6,
   },
   GUARD: {
-    /** スキャン実行時刻（JST） */
+    /** スキャン実行時刻（JST、15:24）— 東証クロージングオークション（15:25〜）直前に発注 */
     SCAN_HOUR: 15,
-    SCAN_MINUTE: 20,
+    SCAN_MINUTE: 24,
   },
   /** 本番エントリー有効フラグ */
   ENTRY_ENABLED: false,

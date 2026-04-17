@@ -1,7 +1,7 @@
 /**
  * ギャップアップモニタージョブ
  *
- * worker.tsのnode-cronから15:20-15:25に呼ばれる。
+ * worker.tsのnode-cronから15:24に呼ばれる（15:24:00/20/40 の3段リトライ）。
  * ウォッチリストの銘柄をリアルタイム時価でスキャンし、
  * ギャップアップトリガーが検出された場合はエントリーを実行する。
  */
@@ -32,7 +32,7 @@ let lastScanDate: string | null = null;
 export async function main(): Promise<void> {
   const tag = "[gapup-monitor]";
 
-  // 時刻チェック: 15:20以降のみ実行
+  // 時刻チェック: 15:24以降のみ実行
   const jstNow = dayjs().tz(TIMEZONE);
   const scanStart = jstNow
     .clone()

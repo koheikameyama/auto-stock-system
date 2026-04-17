@@ -150,16 +150,23 @@ const schedules = [
   { cron: "30-59 12 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
   { cron: "* 13-14 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
   { cron: "0-30 15 * * 1-5", job: runMarketTick, name: "market-tick", requiresMarketDay: false },
-  // 15:20-15:29 ギャップアップ監視（内部で1日1回制限。API失敗時は次分リトライ）
-  { cron: "20-29 15 * * 1-5", job: runGapupMonitor, name: "gapup-monitor", requiresMarketDay: true },
-  // 15:20-15:29 週足ブレイク監視（内部で週末最終営業日のみ実行）
-  { cron: "20-29 15 * * 1-5", job: runWeeklyBreakMonitor, name: "weekly-break-monitor", requiresMarketDay: true },
-  // 15:20-15:29 高騰後押し目監視（ENTRY_ENABLED=false の間は内部でスキップ）
-  { cron: "20-29 15 * * 1-5", job: runPSCMonitor, name: "psc-monitor", requiresMarketDay: true },
+  // 15:24:00/20/40 ギャップアップ監視（東証クロージングオークション15:25〜直前に発注）
+  // 接続エラー等のretryableな失敗時に20秒間隔で最大3回試行。成功後はlastScanDateで以降をスキップ
+  { cron: "0 24 15 * * 1-5", job: runGapupMonitor, name: "gapup-monitor", requiresMarketDay: true },
+  { cron: "20 24 15 * * 1-5", job: runGapupMonitor, name: "gapup-monitor", requiresMarketDay: true },
+  { cron: "40 24 15 * * 1-5", job: runGapupMonitor, name: "gapup-monitor", requiresMarketDay: true },
+  // 15:24:00/20/40 週足ブレイク監視（内部で週末最終営業日のみ実行）
+  { cron: "0 24 15 * * 1-5", job: runWeeklyBreakMonitor, name: "weekly-break-monitor", requiresMarketDay: true },
+  { cron: "20 24 15 * * 1-5", job: runWeeklyBreakMonitor, name: "weekly-break-monitor", requiresMarketDay: true },
+  { cron: "40 24 15 * * 1-5", job: runWeeklyBreakMonitor, name: "weekly-break-monitor", requiresMarketDay: true },
+  // 15:24:00/20/40 高騰後押し目監視（ENTRY_ENABLED=false の間は内部でスキップ）
+  { cron: "0 24 15 * * 1-5", job: runPSCMonitor, name: "psc-monitor", requiresMarketDay: true },
+  { cron: "20 24 15 * * 1-5", job: runPSCMonitor, name: "psc-monitor", requiresMarketDay: true },
+  { cron: "40 24 15 * * 1-5", job: runPSCMonitor, name: "psc-monitor", requiresMarketDay: true },
   // 8:50 プレマーケット セッション確認（電話番号認証の早期検出）
   { cron: "50 8 * * 1-5", job: runSessionHealthCheck, name: "session-health-check", requiresMarketDay: true },
-  // 14:50 プレクローズ セッション確認（15:20のモニター前に最終確認）
-  { cron: "50 14 * * 1-5", job: runSessionHealthCheck, name: "session-health-check", requiresMarketDay: true },
+  // 15:15 プレクローズ セッション確認（15:24のエントリー発注前に最終確認。9分の再ログイン・電話認証対応余裕）
+  { cron: "15 15 * * 1-5", job: runSessionHealthCheck, name: "session-health-check", requiresMarketDay: true },
   // 取引時間外のSL未発注ポジションへの発注（broker-reconciliation は getOrders/getHoldings が
   // 0件を返す場外では誤判定リスクがあるため走らせない。場外は発注のみの ensure-broker-sl で安全）
   // 17:00〜 は翌日注文受付開始（16時台は 11102 受付時間外エラーが出るため除外）

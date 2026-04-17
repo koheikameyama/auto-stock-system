@@ -4,6 +4,9 @@
  * デモ/本番の切替は TACHIBANA_ENV で行う。
  */
 
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
 import { prisma } from "../lib/prisma";
 import { getTachibanaClient, type TachibanaRequestParams, type TachibanaResponse } from "./broker-client";
 import { tickerToBrokerCode, brokerCodeToTicker } from "../lib/ticker-utils";
@@ -14,7 +17,11 @@ import {
   TACHIBANA_ORDER_QUERY,
   isTachibanaProduction,
 } from "../lib/constants/broker";
+import { TIMEZONE } from "../lib/constants";
 import { notifySlack } from "../lib/slack";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // ========================================
 // 型定義
@@ -73,6 +80,23 @@ export interface BrokerHolding {
 export async function submitOrder(
   req: BrokerOrderRequest,
 ): Promise<BrokerOrderResult> {
+  // 引け成行は東証クロージングオークション（15:25〜15:30）開始前に発注する必要がある。
+  // 15:25以降はAPI側で拒否される可能性が高いため、事前にブロックしてSlack通知。
+  if (req.condition === TACHIBANA_ORDER.CONDITION.CLOSE) {
+    const jstNow = dayjs().tz(TIMEZONE);
+    const cutoff = jstNow.clone().hour(15).minute(25).second(0).millisecond(0);
+    if (!jstNow.isBefore(cutoff)) {
+      const msg = `引け成行は15:25以降発注不可（現在 ${jstNow.format("HH:mm:ss")} JST）`;
+      console.warn(`[broker-orders] ${msg}: ${req.ticker}`);
+      await notifySlack({
+        title: "⚠️ 引け成行発注ブロック",
+        message: `${msg}\nticker=${req.ticker} qty=${req.quantity}`,
+        color: "warning",
+      }).catch(() => {});
+      return { success: false, error: msg };
+    }
+  }
+
   // デモ環境では売り注文をスキップ（サーバー側に保有データがないためエラーになる）
   if (!isTachibanaProduction && req.side === "sell") {
     console.log(

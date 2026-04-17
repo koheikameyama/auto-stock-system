@@ -112,7 +112,7 @@ describe("gapup-monitor main()", () => {
     vi.useRealTimers();
   });
 
-  it("15:20より前はDB呼び出しなしで即リターン", async () => {
+  it("15:24より前はDB呼び出しなしで即リターン", async () => {
     vi.setSystemTime(new Date("2026-04-10T05:00:00Z")); // 14:00 JST
     await main();
     expect(mockAssessmentFindUnique).not.toHaveBeenCalled();

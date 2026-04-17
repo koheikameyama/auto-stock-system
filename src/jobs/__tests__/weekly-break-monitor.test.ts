@@ -29,7 +29,7 @@ const {
   mockCountNonTradingDaysAhead: vi.fn().mockReturnValue(2),
   mockWeeklyBreakConstants: {
     ENTRY_ENABLED: true,
-    GUARD: { SCAN_HOUR: 15, SCAN_MINUTE: 20 },
+    GUARD: { SCAN_HOUR: 15, SCAN_MINUTE: 24 },
     MARKET_FILTER: { BREADTH_THRESHOLD: 0.6 },
     ENTRY: { HIGH_LOOKBACK_WEEKS: 13, VOL_SURGE_RATIO: 1.3, MIN_AVG_VOLUME_25: 100_000, MIN_ATR_PCT: 1.5 },
     STOP_LOSS: { ATR_MULTIPLIER: 1.5 },
@@ -149,7 +149,7 @@ describe("weekly-break-monitor main()", () => {
     expect(mockAssessmentFindUnique).not.toHaveBeenCalled();
   });
 
-  it("15:20より前→即リターン", async () => {
+  it("15:24より前→即リターン", async () => {
     vi.setSystemTime(new Date("2026-04-10T05:00:00Z")); // 14:00 JST
     mockWeeklyBreakConstants.ENTRY_ENABLED = true;
     mockCountNonTradingDaysAhead.mockReturnValue(2);

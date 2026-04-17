@@ -17,9 +17,9 @@ export const GAPUP = {
   },
   /** エントリーガード条件（ライブ用） */
   GUARD: {
-    /** gapupスキャン実行時刻（JST、15:20） */
+    /** gapupスキャン実行時刻（JST、15:24）— 東証クロージングオークション（15:25〜）直前に発注 */
     SCAN_HOUR: 15,
-    SCAN_MINUTE: 20,
+    SCAN_MINUTE: 24,
   },
   /** マーケットフィルター（ライブ用） */
   MARKET_FILTER: {

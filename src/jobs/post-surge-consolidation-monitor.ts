@@ -1,7 +1,7 @@
 /**
  * 高騰後押し目（Post-Surge Consolidation）モニタージョブ
  *
- * worker.ts の node-cron から 15:20-15:25 に呼ばれる。
+ * worker.ts の node-cron から 15:24 に呼ばれる（15:24:00/20/40 の3段リトライ）。
  * ウォッチリストの銘柄をリアルタイム時価でスキャンし、
  * PSC トリガーが検出された場合はエントリーを実行する。
  */
@@ -37,7 +37,7 @@ export async function main(): Promise<void> {
     return;
   }
 
-  // 時刻チェック: 15:20以降のみ実行
+  // 時刻チェック: 15:24以降のみ実行
   const jstNow = dayjs().tz(TIMEZONE);
   const scanStart = jstNow.clone().hour(GAPUP.GUARD.SCAN_HOUR).minute(GAPUP.GUARD.SCAN_MINUTE).second(0).millisecond(0);
   if (jstNow.isBefore(scanStart)) {
