@@ -36,7 +36,7 @@ import type { OHLCVData } from "../core/technical-analysis";
 // 型
 // ──────────────────────────────────────────
 export interface SimContext {
-  boConfig: BreakoutBacktestConfig;
+  boConfig?: BreakoutBacktestConfig;
   guConfig: GapUpBacktestConfig;
   wbConfig?: WeeklyBreakBacktestConfig;
   pscConfig?: PostSurgeConsolidationBacktestConfig;
@@ -45,7 +45,7 @@ export interface SimContext {
   verbose: boolean;
   allData: Map<string, OHLCVData[]>;
   precomputed: PrecomputedSimData;
-  breakoutSignals: ReturnType<typeof precomputeDailySignals>;
+  breakoutSignals?: ReturnType<typeof precomputeDailySignals>;
   gapupSignals: ReturnType<typeof precomputeGapUpDailySignals>;
   weeklyBreakSignals?: PrecomputedWeeklyBreakSignals;
   vixData?: Map<string, number>;
@@ -511,7 +511,7 @@ export function runCombinedSimulation(
     const totalPositions = () => boPositions.length + guPositions.length + wbPositions.length + pscPositions.length;
     const totalUnderLimit = () => limits.totalMax === undefined || totalPositions() < limits.totalMax;
     if (boShouldTrade && !shouldSkipByVixRegime(todayRegime, boVixSkipLevel) && boPositions.length < limits.boMax && totalUnderLimit() && cash > 0) {
-      const rawSignals = breakoutSignals.get(today) ?? [];
+      const rawSignals = breakoutSignals?.get(today) ?? [];
       for (const signal of rawSignals) {
         if (boPositions.length >= limits.boMax || !totalUnderLimit()) break;
         if (allOpenTickers.has(signal.ticker)) continue;
