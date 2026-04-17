@@ -130,23 +130,27 @@ export async function cancelBrokerSL(positionId: string): Promise<void> {
       `${position.stock.tickerCode}: SL注文取消`,
     );
 
-    // 取消結果にかかわらずフィールドをクリア（約定済みの場合も含む）
-    await prisma.tradingPosition.update({
-      where: { id: positionId },
-      data: {
-        slBrokerOrderId: null,
-        slBrokerBusinessDay: null,
-      },
-    });
+    // 立花側で注文が既に消えているケース（約定済み・取消済み）も成功扱い
+    const alreadyGone = result.error
+      ? /約定|取消|執行済み|消化|既に/.test(result.error)
+      : false;
 
-    if (result.success) {
+    if (result.success || alreadyGone) {
+      // 立花側で注文が存在しないことが確認できた場合のみ DB クリア
+      await prisma.tradingPosition.update({
+        where: { id: positionId },
+        data: {
+          slBrokerOrderId: null,
+          slBrokerBusinessDay: null,
+        },
+      });
       console.log(
-        `[broker-sl] SL order cancelled: ${position.slBrokerOrderId}`,
+        `[broker-sl] SL order cancelled (DBクリア): ${position.slBrokerOrderId}${alreadyGone ? " [already gone]" : ""}`,
       );
     } else {
-      // 既に約定済み・取消済みの場合はエラーだが、フィールドはクリア済みなので問題なし
+      // 取消失敗 = 立花側に注文が残っている可能性 → DB は維持して次サイクルで再試行
       console.warn(
-        `[broker-sl] SL cancel returned error (may be already filled/cancelled): ${result.error}`,
+        `[broker-sl] SL cancel failed (DB維持): ${result.error}`,
       );
     }
   } catch (err) {
@@ -165,6 +169,9 @@ export async function cancelBrokerSL(positionId: string): Promise<void> {
 
 /**
  * 既存のSL注文を取消し、新しい価格で再発注する
+ *
+ * cancel が失敗（立花側に旧注文が残存）している場合、DB は維持されているので
+ * submit をスキップして重複発注を防ぐ。次サイクルで Phase 1.5 が整合を取る。
  */
 export async function updateBrokerSL(params: {
   positionId: string;
@@ -174,6 +181,19 @@ export async function updateBrokerSL(params: {
   strategy: string;
 }): Promise<void> {
   await cancelBrokerSL(params.positionId);
+
+  // cancelBrokerSL の結果をDBから確認: slBrokerOrderId が残っている = cancel失敗
+  const post = await prisma.tradingPosition.findUnique({
+    where: { id: params.positionId },
+    select: { slBrokerOrderId: true },
+  });
+  if (post?.slBrokerOrderId) {
+    console.warn(
+      `[broker-sl] cancel失敗のため再発注スキップ (${params.ticker}): 立花側に旧SL注文が残存、次サイクルで再試行`,
+    );
+    return;
+  }
+
   await submitBrokerSL({
     positionId: params.positionId,
     ticker: params.ticker,

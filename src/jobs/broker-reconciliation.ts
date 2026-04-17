@@ -5,7 +5,7 @@
  * position-monitor より先に実行されることを前提とする。
  *
  * Phase 1: 注文ステータス同期    (syncBrokerOrderStatuses から移管)
- * Phase 1.5: SL注文取消/失効検出 (slBrokerOrderId をクリアして Phase 1.6 の対象にする)
+ * Phase 1.5: SL注文状態・値の整合性チェック (取消/失効 + トリガー価格/数量の乖離検出)
  * Phase 1.6: SL未発注ポジションへの発注 (slBrokerOrderId=null に対して DBのstopLossPriceで発注)
  * Phase 2: 見逃し約定リカバリ   (recoverMissedFills から移管)
  * Phase 3: 保有株数照合         ブローカー保有 vs DBオープンポジション
@@ -18,7 +18,7 @@ import { syncBrokerOrderStatuses, getHoldings, getOrderDetail, getOrders } from 
 import { recoverMissedFills } from "../core/broker-fill-handler";
 import { TACHIBANA_ORDER, TACHIBANA_ORDER_STATUS, isTachibanaProduction } from "../lib/constants/broker";
 import { closePosition } from "../core/position-manager";
-import { submitBrokerSL } from "../core/broker-sl-manager";
+import { submitBrokerSL, cancelBrokerSL } from "../core/broker-sl-manager";
 
 // 約定直後はブローカーの保有反映が遅れるためスキップする猶予期間
 const HOLDINGS_GRACE_PERIOD_MS = 5 * 60 * 1000; // 5分
@@ -72,11 +72,15 @@ export async function main(): Promise<void> {
 }
 
 /**
- * SL注文の取消/失効を検出して slBrokerOrderId をクリアする
+ * SL注文の状態・値の整合性をチェックして不整合を修正する
  *
  * broker-sl-manager 経由で発注されたSL注文は TradingOrder レコードを持たないため
- * syncBrokerOrderStatuses の対象外。手動取消・期限失効を検知する専用処理。
- * クリア後は ensure-broker-sl が次回サイクルで再発注する。
+ * syncBrokerOrderStatuses の対象外。ここで専用にチェックする。
+ *
+ * 検出する不整合:
+ *   (1) 取消・失効  → slBrokerOrderId をクリア（Phase 1.6 が再発注）
+ *   (2) トリガー価格乖離 → cancelBrokerSL で取消（Phase 1.6 が DB値で再発注）
+ *   (3) 数量乖離       → cancelBrokerSL で取消（同上）
  */
 async function syncBrokerSLStatuses(): Promise<void> {
   if (!isTachibanaProduction) return;
@@ -90,6 +94,8 @@ async function syncBrokerSLStatuses(): Promise<void> {
       id: true,
       slBrokerOrderId: true,
       slBrokerBusinessDay: true,
+      stopLossPrice: true,
+      quantity: true,
       stock: { select: { tickerCode: true } },
     },
   });
@@ -106,6 +112,7 @@ async function syncBrokerSLStatuses(): Promise<void> {
 
     const brokerStatus = String(detail.sOrderStatusCode ?? detail.sOrderStatus ?? "");
 
+    // (1) 取消・失効の検出
     if (
       brokerStatus === TACHIBANA_ORDER_STATUS.CANCELLED ||
       brokerStatus === TACHIBANA_ORDER_STATUS.EXPIRED
@@ -116,15 +123,80 @@ async function syncBrokerSLStatuses(): Promise<void> {
         data: { slBrokerOrderId: null, slBrokerBusinessDay: null },
       });
       console.log(
-        `[broker-reconciliation] ${pos.stock.tickerCode}: SL注文 ${pos.slBrokerOrderId} が${label}済み → slBrokerOrderId クリア（ensure-broker-sl が再発注）`,
+        `[broker-reconciliation] ${pos.stock.tickerCode}: SL注文 ${pos.slBrokerOrderId} が${label}済み → slBrokerOrderId クリア（Phase 1.6 が再発注）`,
       );
       await notifySlack({
         title: `⚠️ SL注文${label}検出: ${pos.stock.tickerCode}`,
-        message: `SL注文 ${pos.slBrokerOrderId} が立花側で${label}されたため、再発注ジョブが次回サイクルでSLを再発注します`,
+        message: `SL注文 ${pos.slBrokerOrderId} が立花側で${label}されたため、次サイクルでSLを再発注します`,
         color: "warning",
       }).catch(() => {});
+      continue;
+    }
+
+    // (2)(3) 値の整合性チェック（まだ有効な注文のみ）
+    const brokerTrigger = extractTriggerPrice(detail);
+    const brokerQuantity = extractOrderQuantity(detail);
+    const dbTrigger = pos.stopLossPrice ? Number(pos.stopLossPrice) : null;
+
+    // デバッグ: 初回はレスポンス構造を記録（フィールド名確認用）
+    if (brokerTrigger == null || brokerQuantity == null) {
+      console.warn(
+        `[broker-reconciliation] ${pos.stock.tickerCode}: SL詳細からトリガー/数量を抽出できず: ${JSON.stringify(detail).slice(0, 500)}`,
+      );
+      continue;
+    }
+
+    const triggerMismatch = dbTrigger != null && brokerTrigger !== dbTrigger;
+    const quantityMismatch = brokerQuantity !== pos.quantity;
+
+    if (triggerMismatch || quantityMismatch) {
+      const details: string[] = [];
+      if (triggerMismatch) details.push(`トリガー価格 DB=¥${dbTrigger} ブローカー=¥${brokerTrigger}`);
+      if (quantityMismatch) details.push(`数量 DB=${pos.quantity} ブローカー=${brokerQuantity}`);
+
+      console.warn(
+        `[broker-reconciliation] ${pos.stock.tickerCode}: SL値乖離検出 ${details.join(" / ")} → 取消して次サイクルで再発注`,
+      );
+      await notifySlack({
+        title: `⚠️ SL注文値乖離検出: ${pos.stock.tickerCode}`,
+        message: `${details.join("\n")}\n立花SL注文を取消し、次サイクルで DB の値で再発注します`,
+        color: "warning",
+      }).catch(() => {});
+
+      // 立花側をキャンセルするとsl*フィールドがクリアされる → Phase 1.6 が再発注
+      await cancelBrokerSL(pos.id);
     }
   }
+}
+
+// 立花レスポンスから逆指値トリガー価格を抽出（フィールド名の揺れに対応）
+function extractTriggerPrice(detail: Record<string, unknown>): number | null {
+  const candidates = [
+    detail.sGyakusasiZyouken,
+    detail.sOrderGyakusasiZyouken,
+    detail.sOrderGyakusasiPrice,
+  ];
+  for (const v of candidates) {
+    if (v == null) continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+// 立花レスポンスから注文数量を抽出（フィールド名の揺れに対応）
+function extractOrderQuantity(detail: Record<string, unknown>): number | null {
+  const candidates = [
+    detail.sOrderSuryou,
+    detail.sOrderOrderSuryou,
+    detail.sOrderZanSuryou,
+  ];
+  for (const v of candidates) {
+    if (v == null) continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
 }
 
 /**

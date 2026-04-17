@@ -151,7 +151,7 @@ describe("cancelBrokerSL", () => {
     expect(mockPrisma.tradingPosition.update).not.toHaveBeenCalled();
   });
 
-  it("cancelOrder失敗時もフィールドをクリアする", async () => {
+  it("既に約定/取消の場合はDBをクリアする（already gone扱い）", async () => {
     mockPrisma.tradingPosition.findUnique.mockResolvedValue({
       slBrokerOrderId: "SL-001",
       slBrokerBusinessDay: "20260320",
@@ -159,12 +159,11 @@ describe("cancelBrokerSL", () => {
     });
     mockCancelOrder.mockResolvedValue({
       success: false,
-      error: "Order already filled",
+      error: "既に約定済みです",
     });
 
     await cancelBrokerSL("pos-1");
 
-    // 取消失敗でもフィールドはクリア（約定済みの場合など）
     expect(mockPrisma.tradingPosition.update).toHaveBeenCalledWith({
       where: { id: "pos-1" },
       data: {
@@ -172,6 +171,23 @@ describe("cancelBrokerSL", () => {
         slBrokerBusinessDay: null,
       },
     });
+  });
+
+  it("取消が本当に失敗した場合はDBを維持する（整合性保証）", async () => {
+    mockPrisma.tradingPosition.findUnique.mockResolvedValue({
+      slBrokerOrderId: "SL-001",
+      slBrokerBusinessDay: "20260320",
+      stock: { tickerCode: "7203.T" },
+    });
+    mockCancelOrder.mockResolvedValue({
+      success: false,
+      error: "ネットワークエラー",
+    });
+
+    await cancelBrokerSL("pos-1");
+
+    // 立花側に注文が残っている可能性があるのでDBはそのまま
+    expect(mockPrisma.tradingPosition.update).not.toHaveBeenCalled();
   });
 });
 
@@ -186,11 +202,16 @@ describe("updateBrokerSL", () => {
   });
 
   it("cancel → resubmit の順序で実行する", async () => {
-    mockPrisma.tradingPosition.findUnique.mockResolvedValue({
-      slBrokerOrderId: "SL-OLD",
-      slBrokerBusinessDay: "20260320",
-      stock: { tickerCode: "7203.T" },
-    });
+    // 1回目: cancelBrokerSL内の既存SL取得、2回目: updateBrokerSL内の再確認(クリア後)
+    mockPrisma.tradingPosition.findUnique
+      .mockResolvedValueOnce({
+        slBrokerOrderId: "SL-OLD",
+        slBrokerBusinessDay: "20260320",
+        stock: { tickerCode: "7203.T" },
+      })
+      .mockResolvedValueOnce({
+        slBrokerOrderId: null,
+      });
 
     const callOrder: string[] = [];
     mockCancelOrder.mockImplementation(async () => {
@@ -221,6 +242,34 @@ describe("updateBrokerSL", () => {
         stopTriggerPrice: 980,
       }),
     );
+  });
+
+  it("cancel失敗時は resubmit をスキップする（重複発注防止）", async () => {
+    // 1回目: 既存SL取得、2回目: cancelBrokerSL失敗でDB維持されたままの再確認
+    mockPrisma.tradingPosition.findUnique
+      .mockResolvedValueOnce({
+        slBrokerOrderId: "SL-OLD",
+        slBrokerBusinessDay: "20260320",
+        stock: { tickerCode: "7203.T" },
+      })
+      .mockResolvedValueOnce({
+        slBrokerOrderId: "SL-OLD",
+      });
+    mockCancelOrder.mockResolvedValue({
+      success: false,
+      error: "ネットワークエラー",
+    });
+
+    await updateBrokerSL({
+      positionId: "pos-1",
+      ticker: "7203.T",
+      quantity: 100,
+      newStopTriggerPrice: 980,
+      strategy: "breakout",
+    });
+
+    // cancel失敗でDB維持 → submit呼ばれない
+    expect(mockSubmitOrder).not.toHaveBeenCalled();
   });
 
 });
