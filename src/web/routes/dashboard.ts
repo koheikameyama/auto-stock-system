@@ -140,10 +140,13 @@ app.get("/", async (c) => {
 
   // Broker login lock status
   const now = new Date();
+  const reasonText = config?.loginLockReason ?? null;
+  const isPhoneAuthOnly = reasonText !== null && reasonText.includes("電話番号認証");
   const brokerLock = {
     isLocked: !!(config?.loginLockedUntil && now < config.loginLockedUntil),
+    isPhoneAuthOnly,
     lockedUntil: config?.loginLockedUntil ?? null,
-    reason: config?.loginLockReason ?? null,
+    reason: reasonText,
     occurredAt: config?.loginLockOccurredAt ?? null,
   };
   const overallEmoji = canTrade ? "\u{1F7E2}" : "\u{1F534}";
@@ -160,12 +163,22 @@ app.get("/", async (c) => {
   const content = html`
     <!-- Broker login lock banner -->
     ${brokerLock.isLocked
-      ? html`
+      ? brokerLock.isPhoneAuthOnly
+        ? html`
+        <div style="background:#78350f;border:1px solid #f59e0b;border-radius:12px;padding:16px;margin-bottom:16px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:8px">📞 立花証券の電話番号認証が必要</div>
+          <div style="font-size:13px;color:#fcd34d">
+            登録電話番号から <a href="tel:05031026575" style="color:#fcd34d">050-3102-6575</a> に発信して認証してください。<br>
+            認証完了後、システム再開ボタンを押すとログインが実行されます。
+            ${brokerLock.occurredAt ? html`<br>発生日時: ${dayjs(brokerLock.occurredAt).tz(TIMEZONE).format("YYYY-MM-DD HH:mm")}` : ""}
+          </div>
+        </div>`
+        : html`
         <div style="background:#991b1b;border:1px solid #ef4444;border-radius:12px;padding:16px;margin-bottom:16px">
           <div style="font-weight:700;font-size:15px;margin-bottom:8px">🚨 ブローカーログインロック中（システム自動停止済み）</div>
           <div style="font-size:13px;color:#fca5a5">
             立花証券のログインがロックされています。手続き後にシステム再開ボタンを押してください。<br>
-            📞 サポートセンター: <a href="tel:0336690777" style="color:#fca5a5">03-3669-0777</a> ／ 電話認証: <a href="tel:05031026575" style="color:#fca5a5">050-3102-6575</a>
+            📞 サポートセンター: <a href="tel:0336690777" style="color:#fca5a5">03-3669-0777</a>
             ${brokerLock.reason ? html`<br>理由: ${brokerLock.reason}` : ""}
             ${brokerLock.occurredAt ? html`<br>発生日時: ${dayjs(brokerLock.occurredAt).tz(TIMEZONE).format("YYYY-MM-DD HH:mm")}` : ""}
           </div>
