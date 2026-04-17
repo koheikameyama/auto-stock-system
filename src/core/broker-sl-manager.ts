@@ -73,6 +73,11 @@ export async function submitBrokerSL(params: {
       console.log(
         `[broker-sl] SL order submitted: ${result.orderNumber} @ trigger ¥${params.stopTriggerPrice} (${params.ticker})`,
       );
+      await notifySlack({
+        title: `✅ SL注文発注: ${params.ticker}`,
+        message: `注文番号: ${result.orderNumber}\nトリガー: ¥${params.stopTriggerPrice.toLocaleString()}\n数量: ${params.quantity}株`,
+        color: "good",
+      }).catch(() => {});
     } else if (!result.success) {
       console.error(
         `[broker-sl] Failed to submit SL order for ${params.ticker}: ${result.error}`,
