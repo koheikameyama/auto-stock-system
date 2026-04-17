@@ -147,9 +147,10 @@ export async function main() {
       continue;
     }
 
-    // gapup: 引け注文（CONDITION.CLOSE）のため intraday 疑似約定は不要。
+    // 引け成行買い（gapup/weekly-break/PSC 等）は intraday 疑似約定を行わない。
+    // entry-executor が limitPrice にスナップショット価格を入れるため checkOrderFill が誤約定しうる。
     // broker-fill-handler が 15:30 の約定通知を受けてポジションをオープンする。
-    if (order.strategy === "gapup" && order.side === "buy") {
+    if (order.orderType === "market" && order.side === "buy") {
       continue;
     }
 
