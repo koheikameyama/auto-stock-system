@@ -133,8 +133,10 @@ async function main() {
   const minTurnoverOverride = getArg(args, "--min-turnover");
   const saveResult = args.includes("--save");
   const compareEfficiency = args.includes("--compare-efficiency");
+  const compareWbEntry = args.includes("--compare-wb-entry");
+  const compareWbHalfsize = args.includes("--compare-wb-halfsize");
 
-  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency;
+  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareVixFilter || compareBudget || compareHolding || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareWbEntry || compareWbHalfsize;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const boConfig: BreakoutBacktestConfig = { ...BREAKOUT_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
@@ -312,6 +314,123 @@ async function main() {
       console.log(
         `${row.label.padEnd(16)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
       );
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // WBエントリー厳選比較モード
+  if (compareWbEntry) {
+    const budgets = [1_000_000, 2_000_000];
+    const wbVariants: { label: string; lookback: number | null; volSurge: number | null; wbMax: number }[] = [
+      { label: "ベース GU3+PSC2", lookback: null, volSurge: null, wbMax: 0 },
+      { label: "WB1 13w/1.3x", lookback: 13, volSurge: 1.3, wbMax: 1 },
+      { label: "WB1 13w/1.5x", lookback: 13, volSurge: 1.5, wbMax: 1 },
+      { label: "WB1 13w/1.7x", lookback: 13, volSurge: 1.7, wbMax: 1 },
+      { label: "WB1 26w/1.3x", lookback: 26, volSurge: 1.3, wbMax: 1 },
+      { label: "WB1 26w/1.5x", lookback: 26, volSurge: 1.5, wbMax: 1 },
+      { label: "WB1 26w/1.7x", lookback: 26, volSurge: 1.7, wbMax: 1 },
+    ];
+
+    for (const b of budgets) {
+      const mp = maxPriceOverride ? Number(maxPriceOverride) : getMaxBuyablePrice(b);
+      console.log(`\n=== WBエントリー厳選比較 (budget=¥${b.toLocaleString()}, maxPrice=${mp}) ===`);
+      console.log(
+        `${"パターン".padEnd(20)}| ${"Trades".padStart(6)} | ${"WinR".padStart(6)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"WB件".padStart(5)} | ${"WB PF".padStart(6)} | ${"WB Exp".padStart(8)}`,
+      );
+      console.log("-".repeat(110));
+      for (const v of wbVariants) {
+        const bc: BreakoutBacktestConfig = { ...boConfig, initialBudget: b, maxPrice: mp };
+        const gc: GapUpBacktestConfig = { ...guConfig, initialBudget: b, maxPrice: mp };
+        const wc: WeeklyBreakBacktestConfig = {
+          ...wbConfig,
+          initialBudget: b,
+          maxPrice: mp,
+          weeklyHighLookback: v.lookback ?? wbConfig.weeklyHighLookback,
+          weeklyVolSurgeRatio: v.volSurge ?? wbConfig.weeklyVolSurgeRatio,
+        };
+        const pc: PostSurgeConsolidationBacktestConfig = { ...pscConfig, initialBudget: b, maxPrice: mp };
+        const boSig = precomputeDailySignals(bc, allData, precomputed);
+        const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+        const wbSig = precomputeWeeklyBreakSignals(wc, allData, precomputed);
+        const pSig = precomputePSCDailySignals(pc, allData, precomputed);
+        const limits: PositionLimits = { boMax: 0, guMax: 3, wbMax: v.wbMax, pscMax: 2 };
+        const result = runCombinedSimulation(
+          { ...ctx, boConfig: bc, guConfig: gc, wbConfig: wc, pscConfig: pc,
+            breakoutSignals: boSig, gapupSignals: guSig, weeklyBreakSignals: wbSig, pscSignals: pSig,
+            budget: b },
+          limits,
+        );
+        const m = result.totalMetrics;
+        const wm = result.wbMetrics;
+        const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+        const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+        const wbPfStr = wm.profitFactor === Infinity ? "∞" : wm.profitFactor.toFixed(2);
+        const wbExpStr = (wm.expectancy >= 0 ? "+" : "") + wm.expectancy.toFixed(2) + "%";
+        console.log(
+          `${v.label.padEnd(20)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(5)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${String(wm.totalTrades).padStart(5)} | ${wbPfStr.padStart(6)} | ${wbExpStr.padStart(8)}`,
+        );
+      }
+    }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // WBハーフサイズ＆タイムストップ短縮比較モード
+  if (compareWbHalfsize) {
+    const budgets = [1_000_000, 2_000_000];
+    const variants: { label: string; wbMax: number; riskPct: number | undefined; holdDays: number; extDays: number }[] = [
+      { label: "ベース GU3+PSC2",           wbMax: 0, riskPct: undefined, holdDays: 15, extDays: 25 },
+      { label: "WB1 フル(2%)・15/25",        wbMax: 1, riskPct: 2,         holdDays: 15, extDays: 25 },
+      { label: "WB1 ハーフ(1%)・15/25",      wbMax: 1, riskPct: 1,         holdDays: 15, extDays: 25 },
+      { label: "WB1 ハーフ(1%)・10/15",      wbMax: 1, riskPct: 1,         holdDays: 10, extDays: 15 },
+      { label: "WB1 ハーフ(1%)・7/10",       wbMax: 1, riskPct: 1,         holdDays: 7,  extDays: 10 },
+      { label: "WB2 ハーフ(1%)・10/15",      wbMax: 2, riskPct: 1,         holdDays: 10, extDays: 15 },
+      { label: "WB2 ハーフ(1%)・7/10",       wbMax: 2, riskPct: 1,         holdDays: 7,  extDays: 10 },
+    ];
+
+    for (const b of budgets) {
+      const mp = maxPriceOverride ? Number(maxPriceOverride) : getMaxBuyablePrice(b);
+      console.log(`\n=== WBハーフサイズ＆タイムストップ短縮比較 (budget=¥${b.toLocaleString()}, maxPrice=${mp}) ===`);
+      console.log(
+        `${"パターン".padEnd(26)}| ${"Trades".padStart(6)} | ${"WinR".padStart(6)} | ${"PF".padStart(5)} | ${"Expect".padStart(8)} | ${"MaxDD".padStart(7)} | ${"NetRet".padStart(8)} | ${"WB件".padStart(5)} | ${"WB PF".padStart(6)} | ${"WB Exp".padStart(8)} | ${"WB AvgH".padStart(8)}`,
+      );
+      console.log("-".repeat(122));
+      for (const v of variants) {
+        const bc: BreakoutBacktestConfig = { ...boConfig, initialBudget: b, maxPrice: mp };
+        const gc: GapUpBacktestConfig = { ...guConfig, initialBudget: b, maxPrice: mp };
+        const wc: WeeklyBreakBacktestConfig = {
+          ...wbConfig,
+          initialBudget: b,
+          maxPrice: mp,
+          maxHoldingDays: v.holdDays,
+          maxExtendedHoldingDays: v.extDays,
+        };
+        const pc: PostSurgeConsolidationBacktestConfig = { ...pscConfig, initialBudget: b, maxPrice: mp };
+        const boSig = precomputeDailySignals(bc, allData, precomputed);
+        const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+        const wbSig = precomputeWeeklyBreakSignals(wc, allData, precomputed);
+        const pSig = precomputePSCDailySignals(pc, allData, precomputed);
+        const limits: PositionLimits = { boMax: 0, guMax: 3, wbMax: v.wbMax, pscMax: 2 };
+        const result = runCombinedSimulation(
+          { ...ctx, boConfig: bc, guConfig: gc, wbConfig: wc, pscConfig: pc,
+            breakoutSignals: boSig, gapupSignals: guSig, weeklyBreakSignals: wbSig, pscSignals: pSig,
+            budget: b, wbRiskPctOverride: v.riskPct },
+          limits,
+        );
+        const m = result.totalMetrics;
+        const wm = result.wbMetrics;
+        const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+        const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+        const wbPfStr = wm.profitFactor === Infinity ? "∞" : wm.profitFactor.toFixed(2);
+        const wbExpStr = (wm.expectancy >= 0 ? "+" : "") + wm.expectancy.toFixed(2) + "%";
+        const wbAvgH = wm.totalTrades > 0 ? wm.avgHoldingDays.toFixed(1) + "d" : "-";
+        console.log(
+          `${v.label.padEnd(26)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(5)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${String(wm.totalTrades).padStart(5)} | ${wbPfStr.padStart(6)} | ${wbExpStr.padStart(8)} | ${wbAvgH.padStart(8)}`,
+        );
+      }
     }
     console.log("");
     await prisma.$disconnect();

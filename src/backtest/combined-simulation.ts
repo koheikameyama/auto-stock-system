@@ -61,6 +61,8 @@ export interface SimContext {
   settlementDays?: number;
   /** リスク%上書き（全戦略共通、デフォルト = 各戦略の定数を使用） */
   riskPctOverride?: number;
+  /** WB専用リスク%上書き（ハーフサイズ検証用。riskPctOverrideより優先） */
+  wbRiskPctOverride?: number;
 }
 
 export interface SimResult {
@@ -395,7 +397,7 @@ export function runCombinedSimulation(
     typeof maxPositions === "number"
       ? { boMax: maxPositions, guMax: maxPositions, wbMax: maxPositions, pscMax: maxPositions, totalMax: maxPositions }
       : maxPositions;
-  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride } = ctx;
+  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride, wbRiskPctOverride } = ctx;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
   const settlementDays = settlementDaysOpt ?? 2;
 
@@ -604,7 +606,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * ((riskPctOverride ?? WEEKLY_BREAK_RISK_PER_TRADE_PCT) / 100);
+        const riskAmount = cash * ((wbRiskPctOverride ?? riskPctOverride ?? WEEKLY_BREAK_RISK_PER_TRADE_PCT) / 100);
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
