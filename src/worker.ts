@@ -23,6 +23,7 @@ import { main as runPSCMonitor } from "./jobs/post-surge-consolidation-monitor";
 import { main as runBrokerReconciliation } from "./jobs/broker-reconciliation";
 import { main as runIntradayMaScanner } from "./jobs/intraday-ma-scanner";
 import { main as runSessionHealthCheck } from "./jobs/session-health-check";
+import { main as runEnsureBrokerSL } from "./jobs/ensure-broker-sl";
 import { app } from "./web/app";
 import { setJobState } from "./web/routes/dashboard";
 import { prisma } from "./lib/prisma";
@@ -159,6 +160,11 @@ const schedules = [
   { cron: "50 8 * * 1-5", job: runSessionHealthCheck, name: "session-health-check", requiresMarketDay: true },
   // 14:50 プレクローズ セッション確認（15:20のモニター前に最終確認）
   { cron: "50 14 * * 1-5", job: runSessionHealthCheck, name: "session-health-check", requiresMarketDay: true },
+  // SL未発注ポジション保険: 翌日注文受付開始付近と前場開始前をカバー（5分刻み）
+  // quote不要・trail再計算なしのため取引時間外でも安全
+  // 対象ポジションが無ければ即returnで無害、発注成功後は slBrokerOrderId が埋まり次回対象外
+  { cron: "*/5 16-17 * * 1-5", job: runEnsureBrokerSL, name: "ensure-broker-sl", requiresMarketDay: false },
+  { cron: "*/5 7-8 * * 1-5", job: runEnsureBrokerSL, name: "ensure-broker-sl", requiresMarketDay: false },
 ];
 
 // cron 登録

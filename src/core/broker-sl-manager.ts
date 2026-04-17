@@ -19,6 +19,19 @@ import {
 import { notifySlack } from "../lib/slack";
 
 // ========================================
+// 通知throttle（同一エラー連続時のSlackスパム防止）
+// ========================================
+const SL_NOTIFY_THROTTLE_MS = 30 * 60 * 1000; // 30分
+const lastSLNotifiedAt = new Map<string, number>();
+function shouldNotifySLError(key: string): boolean {
+  const now = Date.now();
+  const last = lastSLNotifiedAt.get(key);
+  if (last && now - last < SL_NOTIFY_THROTTLE_MS) return false;
+  lastSLNotifiedAt.set(key, now);
+  return true;
+}
+
+// ========================================
 // SL 注文発注
 // ========================================
 
@@ -64,22 +77,27 @@ export async function submitBrokerSL(params: {
       console.error(
         `[broker-sl] Failed to submit SL order for ${params.ticker}: ${result.error}`,
       );
-      await notifySlack({
-        title: "SL注文発注失敗",
-        message: `${params.ticker}: ${result.error}`,
-        color: "danger",
-      }).catch(() => {});
+      if (shouldNotifySLError(`submit:${params.ticker}:${result.error}`)) {
+        await notifySlack({
+          title: "SL注文発注失敗",
+          message: `${params.ticker}: ${result.error}`,
+          color: "danger",
+        }).catch(() => {});
+      }
     }
   } catch (err) {
     console.error(
       `[broker-sl] Error submitting SL for ${params.ticker}:`,
       err,
     );
-    await notifySlack({
-      title: "SL注文発注エラー",
-      message: `${params.ticker}: ${err instanceof Error ? err.message : String(err)}`,
-      color: "danger",
-    }).catch(() => {});
+    const msg = err instanceof Error ? err.message : String(err);
+    if (shouldNotifySLError(`error:${params.ticker}:${msg}`)) {
+      await notifySlack({
+        title: "SL注文発注エラー",
+        message: `${params.ticker}: ${msg}`,
+        color: "danger",
+      }).catch(() => {});
+    }
   }
 }
 

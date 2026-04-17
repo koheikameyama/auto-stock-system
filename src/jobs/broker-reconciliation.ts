@@ -5,6 +5,7 @@
  * position-monitor より先に実行されることを前提とする。
  *
  * Phase 1: 注文ステータス同期    (syncBrokerOrderStatuses から移管)
+ * Phase 1.5: SL注文取消/失効検出 (slBrokerOrderId 追跡用、ensure-broker-sl の前提)
  * Phase 2: 見逃し約定リカバリ   (recoverMissedFills から移管)
  * Phase 3: 保有株数照合         (NEW) ブローカー保有 vs DBオープンポジション
  * Phase 4: 孤立買い注文キャンセル (NEW) DBに記録のないブローカー買い注文を自動キャンセル
@@ -30,6 +31,13 @@ export async function main(): Promise<void> {
     console.warn("[broker-reconciliation] syncBrokerOrderStatuses error (ignored):", e);
   }
 
+  // Phase 1.5: SL注文取消/失効検出
+  try {
+    await syncBrokerSLStatuses();
+  } catch (e) {
+    console.warn("[broker-reconciliation] syncBrokerSLStatuses error (ignored):", e);
+  }
+
   // Phase 2: 見逃し約定リカバリ
   try {
     await recoverMissedFills();
@@ -52,6 +60,62 @@ export async function main(): Promise<void> {
   }
 
   console.log("=== Broker Reconciliation 完了 ===");
+}
+
+/**
+ * SL注文の取消/失効を検出して slBrokerOrderId をクリアする
+ *
+ * broker-sl-manager 経由で発注されたSL注文は TradingOrder レコードを持たないため
+ * syncBrokerOrderStatuses の対象外。手動取消・期限失効を検知する専用処理。
+ * クリア後は ensure-broker-sl が次回サイクルで再発注する。
+ */
+async function syncBrokerSLStatuses(): Promise<void> {
+  if (!isTachibanaProduction) return;
+
+  const positions = await prisma.tradingPosition.findMany({
+    where: {
+      status: "open",
+      slBrokerOrderId: { not: null },
+    },
+    select: {
+      id: true,
+      slBrokerOrderId: true,
+      slBrokerBusinessDay: true,
+      stock: { select: { tickerCode: true } },
+    },
+  });
+
+  for (const pos of positions) {
+    if (!pos.slBrokerOrderId || !pos.slBrokerBusinessDay) continue;
+
+    const detail = await getOrderDetail(
+      pos.slBrokerOrderId,
+      pos.slBrokerBusinessDay,
+    ).catch(() => null);
+
+    if (!detail) continue;
+
+    const brokerStatus = String(detail.sOrderStatusCode ?? detail.sOrderStatus ?? "");
+
+    if (
+      brokerStatus === TACHIBANA_ORDER_STATUS.CANCELLED ||
+      brokerStatus === TACHIBANA_ORDER_STATUS.EXPIRED
+    ) {
+      const label = brokerStatus === TACHIBANA_ORDER_STATUS.CANCELLED ? "取消" : "失効";
+      await prisma.tradingPosition.update({
+        where: { id: pos.id },
+        data: { slBrokerOrderId: null, slBrokerBusinessDay: null },
+      });
+      console.log(
+        `[broker-reconciliation] ${pos.stock.tickerCode}: SL注文 ${pos.slBrokerOrderId} が${label}済み → slBrokerOrderId クリア（ensure-broker-sl が再発注）`,
+      );
+      await notifySlack({
+        title: `⚠️ SL注文${label}検出: ${pos.stock.tickerCode}`,
+        message: `SL注文 ${pos.slBrokerOrderId} が立花側で${label}されたため、再発注ジョブが次回サイクルでSLを再発注します`,
+        color: "warning",
+      }).catch(() => {});
+    }
+  }
 }
 
 /**
