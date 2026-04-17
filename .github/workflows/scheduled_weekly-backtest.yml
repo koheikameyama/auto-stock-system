@@ -1,4 +1,4 @@
-name: "[Scheduled] Weekly Backtest (Combined)"
+name: "[Scheduled] Weekly Strategy Health Check"
 
 on:
   schedule:
@@ -15,7 +15,7 @@ env:
   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 jobs:
-  run-backtest:
+  run-health-check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -26,10 +26,10 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npx prisma generate
-      - run: npm run backtest
+      - run: npm run backtest:health-check -- --notify
 
   notify-failure:
-    needs: run-backtest
+    needs: run-health-check
     if: failure()
     runs-on: ubuntu-latest
     steps:
@@ -37,9 +37,9 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "❌ Weekly Backtest (Combined) 失敗"
+          SLACK_TITLE: "❌ Weekly Strategy Health Check 失敗"
           SLACK_MESSAGE: |
-            統合バックテストが失敗しました。
+            戦略ヘルスチェックが失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
           SLACK_FOOTER: "Auto Stock Trader"

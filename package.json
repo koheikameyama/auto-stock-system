@@ -23,6 +23,7 @@
     "jpx-sync": "tsx src/jobs/jpx-csv-sync.ts",
     "delisting-sync": "tsx src/jobs/jpx-delisting-sync.ts",
     "backtest:combined": "tsx src/backtest/combined-run.ts",
+    "backtest:health-check": "tsx src/backtest/health-check-run.ts",
     "backtest:gapup": "tsx src/backtest/gapup-run.ts",
     "backtest:gapdown-reversal": "tsx src/backtest/gapdown-reversal-run.ts",
     "backtest:psc": "tsx src/backtest/post-surge-consolidation-run.ts",
