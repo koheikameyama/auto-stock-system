@@ -92,4 +92,4 @@ jobs:
             週次メモリ振り返りが失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
-          SLACK_FOOTER: "Stock Buddy"
+          SLACK_FOOTER: "Auto Stock Trader"

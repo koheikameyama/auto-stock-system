@@ -79,7 +79,7 @@ export function layout(
           name="viewport"
           content="width=device-width, initial-scale=1.0, viewport-fit=cover"
         />
-        <title>${title} - Stock Buddy</title>
+        <title>${title} - Auto Stock Trader</title>
         <meta name="theme-color" content="#0f172a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta

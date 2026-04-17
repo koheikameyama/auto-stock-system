@@ -85,4 +85,4 @@ jobs:
             未約定注文フォローアップが失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
-          SLACK_FOOTER: "Stock Buddy"
+          SLACK_FOOTER: "Auto Stock Trader"

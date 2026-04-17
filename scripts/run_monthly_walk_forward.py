@@ -241,7 +241,7 @@ def notify_slack(results: list[dict], ai_review: str) -> None:
             "color": color,
             "title": title,
             "fields": fields,
-            "footer": "Stock Buddy",
+            "footer": "Auto Stock Trader",
         }],
     }
 

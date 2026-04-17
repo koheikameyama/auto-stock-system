@@ -225,7 +225,7 @@ if __name__ == "__main__":
     SLACK_MESSAGE: |
       処理の詳細メッセージ ✅
     SLACK_COLOR: good
-    SLACK_FOOTER: "Stock Buddy"
+    SLACK_FOOTER: "Auto Stock Trader"
 
 - name: Notify Slack on failure
   if: failure()
@@ -237,7 +237,7 @@ if __name__ == "__main__":
       処理中にエラーが発生しました
       詳細はGitHub Actionsログを確認してください
     SLACK_COLOR: danger
-    SLACK_FOOTER: "Stock Buddy"
+    SLACK_FOOTER: "Auto Stock Trader"
 ```
 
 ### ルール
@@ -246,7 +246,7 @@ if __name__ == "__main__":
 2. **失敗時**: `if: failure()` で赤色（`danger`）通知
 3. **アクション**: `rtCamp/action-slack-notify@v2` を使用
 4. **Webhook**: `secrets.SLACK_WEBHOOK_URL` を使用
-5. **フッター**: 必ず `"Stock Buddy"` を設定
+5. **フッター**: 必ず `"Auto Stock Trader"` を設定
 
 ### チェックリスト
 

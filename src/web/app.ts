@@ -42,7 +42,7 @@ app.use("*", async (c, next) => {
 // PWA assets (no auth)
 app.get("/manifest.json", async (c) => {
   const manifest = {
-    name: "Stock Buddy",
+    name: "Auto Stock Trader",
     short_name: "StockBuddy",
     description: "自動売買シミュレーション ダッシュボード",
     start_url: "/",
