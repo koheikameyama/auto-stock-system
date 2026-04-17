@@ -319,7 +319,8 @@ export async function executeEntry(
       side: "buy",
       orderType: isCloseOrder ? "market" : "limit",
       strategy,
-      limitPrice: currentPrice, // gapup/weekly-break: スナップショット価格（実約定は引け値）
+      // 引け成行はlimitPriceを持たない。スナップショット価格はentrySnapshot.trigger.currentPriceで参照可能。
+      limitPrice: isCloseOrder ? null : currentPrice,
       takeProfitPrice,
       stopLossPrice,
       quantity,

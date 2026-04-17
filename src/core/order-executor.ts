@@ -44,6 +44,9 @@ export function checkOrderFill(
   const limitPrice = order.limitPrice ? Number(order.limitPrice) : null;
   const stopPrice = order.stopPrice ? Number(order.stopPrice) : null;
 
+  // 成行注文（引け成行等）はbroker約定通知を待つため疑似約定しない
+  if (order.orderType === "market") return null;
+
   // 買い指値注文
   if (order.side === "buy" && limitPrice !== null) {
     return checkBuyLimitFill(limitPrice, currentLow, currentOpen ?? currentLow);
