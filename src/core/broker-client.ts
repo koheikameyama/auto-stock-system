@@ -236,24 +236,23 @@ export class TachibanaClient {
     await prev;
 
     try {
-      const fullParams = {
+      let fullParams = {
         ...params,
         p_no: this.nextRequestNo(),
         p_sd_date: this.formatTimestamp(),
       };
+      let res = await this.fetchWithDecode(`${virtualUrl}?${this.encodeParams(fullParams)}`);
 
-      const url = `${virtualUrl}?${this.encodeParams(fullParams)}`;
-      let res = await this.fetchWithDecode(url);
-
-      // p_no順序エラー: サーバー側の最終p_noを解析してカウンターを修正し1回リトライ
-      if (this.isPNoError(res)) {
+      // p_no順序エラー: fix→retry 間に他プロセス／並行リクエストが p_no を進めると
+      // retry も同じエラーになることがあるため最大3回までリトライする。
+      for (let attempt = 0; attempt < 3 && this.isPNoError(res); attempt += 1) {
         this.fixPNoCounter(res);
-        const retryParams = {
+        fullParams = {
           ...params,
           p_no: this.nextRequestNo(),
           p_sd_date: this.formatTimestamp(),
         };
-        res = await this.fetchWithDecode(`${virtualUrl}?${this.encodeParams(retryParams)}`);
+        res = await this.fetchWithDecode(`${virtualUrl}?${this.encodeParams(fullParams)}`);
       }
 
       if (!["0", "2"].includes(res.sResultCode)) {
@@ -307,23 +306,23 @@ export class TachibanaClient {
   private async fetchPriceWithRetry(
     params: TachibanaRequestParams,
   ): Promise<TachibanaResponse> {
-    const fullParams = {
+    let fullParams = {
       ...params,
       p_no: this.nextRequestNo(),
       p_sd_date: this.formatTimestamp(),
     };
-    const url = `${this.session!.urlPrice}?${this.encodeParams(fullParams)}`;
-    let res = await this.fetchWithDecode(url);
+    let res = await this.fetchWithDecode(`${this.session!.urlPrice}?${this.encodeParams(fullParams)}`);
 
-    // p_no順序エラー: カウンターを修正して1回リトライ
-    if (this.isPNoError(res)) {
+    // p_no順序エラー: fix→retry 間に他プロセス／並行リクエストが p_no を進めると
+    // retry も同じエラーになることがあるため最大3回までリトライする。
+    for (let attempt = 0; attempt < 3 && this.isPNoError(res); attempt += 1) {
       this.fixPNoCounter(res);
-      const retryParams = {
+      fullParams = {
         ...params,
         p_no: this.nextRequestNo(),
         p_sd_date: this.formatTimestamp(),
       };
-      res = await this.fetchWithDecode(`${this.session!.urlPrice}?${this.encodeParams(retryParams)}`);
+      res = await this.fetchWithDecode(`${this.session!.urlPrice}?${this.encodeParams(fullParams)}`);
     }
 
     if (this.isSessionError(res)) {
