@@ -134,18 +134,14 @@ def generate_ai_review(results: list[dict]) -> str:
                 "あなたはプロの株式トレーダー兼クオンツアナリストです。\n"
                 "Walk-Forward分析の結果を評価し、運用判断の助言を行います。\n\n"
                 "現在の運用状況:\n"
-                "- gapup戦略で単独運用中\n"
-                "- breakout戦略はエッジ消失のためエントリー無効化中\n"
-                "- weekly-break（週足レンジブレイク）は検証中（WF堅牢判定済み）\n"
-                "- momentum（モメンタム）は検証中（WF過学習判定、トレード数不足）\n"
-                "- 月次でWFを実行し、全戦略のエッジを監視している\n\n"
+                "- gapup + PSC（高騰後押し目）の2本柱で運用中\n"
+                "- breakout・weekly-break・momentumはエッジなしで無効化済み\n"
+                "- 月次でWFを実行し、アクティブ戦略のエッジを監視している\n\n"
                 "以下の観点で評価してください:\n"
                 "1. 各戦略の健全性（PF、IS/OOS乖離、パラメータ安定性）\n"
-                "2. breakout復活の兆候があるか\n"
-                "3. gapupのエッジが維持されているか、劣化の兆候はないか\n"
-                "4. weekly-breakの運用開始可否\n"
-                "5. momentumのエッジ改善の兆候があるか\n"
-                "6. 運用上のアクション提案（パラメータ変更、戦略切替等）\n\n"
+                "2. gapupのエッジが維持されているか、劣化の兆候はないか\n"
+                "3. PSCのエッジが維持されているか、劣化の兆候はないか\n"
+                "4. 運用上のアクション提案（パラメータ変更、戦略停止等）\n\n"
                 "JSON形式で回答してください:\n"
                 '{"review": "評価テキスト（3-5文、日本語）", "action": "推奨アクション（1文）"}'
             ),
@@ -259,7 +255,7 @@ def notify_slack(results: list[dict], ai_review: str) -> None:
 
 
 def main():
-    strategies = ["breakout", "gapup", "weekly-break", "momentum"]
+    strategies = ["gapup", "psc"]
     results = []
     any_failure = False
 
