@@ -203,11 +203,14 @@ app.get("/", async (c) => {
           }
         });
 
-        // 列の表示切り替え（同じクラスを持つ要素を一括制御）
-        var colGuEls = document.querySelectorAll('.col-gu');
-        var colPscEls = document.querySelectorAll('.col-psc');
-        colGuEls.forEach(function(el) { el.style.display = tab === 'gu' ? '' : 'none'; });
-        colPscEls.forEach(function(el) { el.style.display = tab === 'psc' ? '' : 'none'; });
+        // 列の表示切り替え（col-gu / col-psc を持つ全要素を走査し、
+        // アクティブタブに該当するクラスを1つでも持てば表示）
+        var colEls = document.querySelectorAll('.col-gu, .col-psc');
+        colEls.forEach(function(el) {
+          var show = (tab === 'gu' && el.classList.contains('col-gu'))
+                  || (tab === 'psc' && el.classList.contains('col-psc'));
+          el.style.display = show ? '' : 'none';
+        });
 
         applyRowFilter(tab);
       }
