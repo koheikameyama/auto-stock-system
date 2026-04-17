@@ -15,7 +15,6 @@ import {
 } from "../backtest/breakout-simulation";
 import { precomputeGapUpDailySignals, runGapUpBacktest } from "../backtest/gapup-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "../backtest/data-fetcher";
-import { saveBacktestResult } from "../backtest/db-saver";
 import { notifyCombinedBacktest } from "../lib/slack";
 import type { GapUpBacktestConfig } from "../backtest/types";
 
@@ -74,23 +73,6 @@ export async function main(): Promise<void> {
     precomputed,
     gapupSignals,
   );
-
-  // DB保存
-  try {
-    const savedId = await saveBacktestResult(
-      {
-        config: { startDate, endDate, maxPositions: guConfig.maxPositions, initialBudget: budget },
-        trades: result.trades,
-        equityCurve: result.equityCurve,
-        metrics: result.metrics,
-      } as Parameters<typeof saveBacktestResult>[0],
-      "gapup",
-    );
-    console.log(`[run-backtest] 保存完了: ${savedId}`);
-  } catch (err) {
-    console.error("[run-backtest] DB保存失敗:", err);
-    throw err;
-  }
 
   // Slack通知
   try {

@@ -37,5 +37,3 @@ export const ROUTE_LOOKBACK_DAYS = {
   HISTORY: 30,
 } as const;
 
-// バックテスト実行履歴の最大保持件数
-export const BACKTEST_RUN_MAX_COUNT = 30;

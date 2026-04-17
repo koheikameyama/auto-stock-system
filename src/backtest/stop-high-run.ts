@@ -12,7 +12,6 @@ import { prisma } from "../lib/prisma";
 import { STOP_HIGH_BACKTEST_DEFAULTS } from "./stop-high-config";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import { runStopHighBacktest } from "./stop-high-simulation";
-import { saveBacktestResult } from "./db-saver";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import type { StopHighBacktestConfig, PerformanceMetrics } from "./types";
@@ -104,12 +103,6 @@ async function main() {
   console.log(`\n平均ポジション数: ${util.avgConcurrentPositions}`);
   console.log(`資本稼働率: ${util.capitalUtilizationPct.toFixed(1)}%`);
 
-  try {
-    const id = await saveBacktestResult(result, "stop-high");
-    console.log(`[db] BacktestRun 保存完了: ${id}`);
-  } catch (err) {
-    console.error("[db] BacktestRun 保存失敗:", err);
-  }
 
   await prisma.$disconnect();
 }

@@ -12,7 +12,6 @@ import { prisma } from "../lib/prisma";
 import { WEEKLY_BREAK_BACKTEST_DEFAULTS } from "./weekly-break-config";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import { runWeeklyBreakBacktest } from "./weekly-break-simulation";
-import { saveBacktestResult } from "./db-saver";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import type { WeeklyBreakBacktestConfig, PerformanceMetrics } from "./types";
@@ -100,13 +99,6 @@ async function main() {
   console.log(`\n平均ポジション数: ${util.avgConcurrentPositions}`);
   console.log(`資本稼働率: ${util.capitalUtilizationPct.toFixed(1)}%`);
 
-  // DBに保存
-  try {
-    const id = await saveBacktestResult(result, "weekly-break");
-    console.log(`[db] BacktestRun 保存完了: ${id}`);
-  } catch (err) {
-    console.error("[db] BacktestRun 保存失敗:", err);
-  }
 
   await prisma.$disconnect();
 }

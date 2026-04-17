@@ -1,5 +1,5 @@
 /**
- * 統合バックテスト（Breakout + GapUp 共有資金プール）
+ * 統合バックテスト（GapUp + PSC 共有資金プール）
  *
  * Usage:
  *   npm run backtest:combined
@@ -12,29 +12,21 @@
 
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
-import { BREAKOUT_BACKTEST_DEFAULTS } from "./breakout-config";
 import { GAPUP_BACKTEST_DEFAULTS } from "./gapup-config";
-import { WEEKLY_BREAK_BACKTEST_DEFAULTS } from "./weekly-break-config";
 import { PSC_BACKTEST_DEFAULTS } from "./post-surge-consolidation-config";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import {
   precomputeSimData,
-  precomputeDailySignals,
 } from "./breakout-simulation";
 import { precomputeGapUpDailySignals } from "./gapup-simulation";
-import { precomputeWeeklyBreakSignals } from "./weekly-break-simulation";
 import { precomputePSCDailySignals } from "./post-surge-consolidation-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
-import { saveBacktestResult } from "./db-saver";
 import { runCombinedSimulation, type PositionLimits } from "./combined-simulation";
 import type {
-  BreakoutBacktestConfig,
   GapUpBacktestConfig,
-  WeeklyBreakBacktestConfig,
   PostSurgeConsolidationBacktestConfig,
   PerformanceMetrics,
-  BreakdownKey,
 } from "./types";
 
 function getArg(args: string[], flag: string): string | undefined {
@@ -153,7 +145,6 @@ async function main() {
   const comparePriceTurnover = args.includes("--compare-price-turnover");
   const minPriceOverride = getArg(args, "--min-price");
   const minTurnoverOverride = getArg(args, "--min-turnover");
-  const saveResult = args.includes("--save");
   const compareEfficiency = args.includes("--compare-efficiency");
   const compareWbEntry = args.includes("--compare-wb-entry");
   const compareWbHalfsize = args.includes("--compare-wb-halfsize");
@@ -892,31 +883,6 @@ async function main() {
     printMonthlyEquitySummary(result.equityCurve, result.totalCapitalAdded, budget);
   }
 
-  // DBに保存（--save フラグがある場合のみ）
-  if (saveResult) {
-    try {
-      const id = await saveBacktestResult(
-        {
-          config: { startDate, endDate, maxPositions: defaultLimits.totalMax ?? 3, initialBudget: budget },
-          trades: result.allTrades,
-          equityCurve: result.equityCurve,
-          metrics: {
-            ...result.totalMetrics,
-            breakdown: {
-              bo: result.boMetrics,
-              gu: result.guMetrics,
-              wb: result.wbMetrics,
-              psc: result.pscMetrics,
-            } satisfies Record<BreakdownKey, PerformanceMetrics>,
-          },
-        } as unknown as Parameters<typeof saveBacktestResult>[0],
-        "combined",
-      );
-      console.log(`[db] BacktestRun 保存完了: ${id}`);
-    } catch (err) {
-      console.error("[db] BacktestRun 保存失敗:", err);
-    }
-  }
 
   await prisma.$disconnect();
 }

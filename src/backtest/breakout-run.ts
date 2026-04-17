@@ -16,7 +16,6 @@ import { runBreakoutBacktest } from "./breakout-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import type { BreakoutBacktestConfig, BreakoutBacktestResult, PerformanceMetrics, ScoreFilterConfig } from "./types";
-import { saveBacktestResult } from "./db-saver";
 import type { OHLCVData } from "../core/technical-analysis";
 import { runMonteCarloSimulation, printMonteCarloReport, runCompoundGrowthSimulation, printCompoundGrowthReport } from "./monte-carlo";
 
@@ -536,13 +535,6 @@ async function main() {
     printCompoundGrowthReport(cgResult);
   }
 
-  // DBに保存
-  try {
-    const id = await saveBacktestResult(result, "breakout");
-    console.log(`[db] BacktestRun 保存完了: ${id}`);
-  } catch (err) {
-    console.error("[db] BacktestRun 保存失敗:", err);
-  }
 
   await prisma.$disconnect();
 }

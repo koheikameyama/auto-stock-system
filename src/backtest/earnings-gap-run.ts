@@ -12,7 +12,6 @@ import { prisma } from "../lib/prisma";
 import { EARNINGS_GAP_BACKTEST_DEFAULTS } from "./earnings-gap-config";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import { runEarningsGapBacktest } from "./earnings-gap-simulation";
-import { saveBacktestResult } from "./db-saver";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB, fetchEarningsFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization } from "./metrics";
 import type { EarningsGapBacktestConfig, PerformanceMetrics } from "./types";
@@ -101,13 +100,6 @@ async function main() {
   console.log(`\n平均ポジション数: ${util.avgConcurrentPositions}`);
   console.log(`資本稼働率: ${util.capitalUtilizationPct.toFixed(1)}%`);
 
-  // DBに保存
-  try {
-    const id = await saveBacktestResult(result, "earnings-gap");
-    console.log(`[db] BacktestRun 保存完了: ${id}`);
-  } catch (err) {
-    console.error("[db] BacktestRun 保存失敗:", err);
-  }
 
   await prisma.$disconnect();
 }

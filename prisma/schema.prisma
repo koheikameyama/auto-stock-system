@@ -37,32 +37,6 @@ model BacktestDailyResult {
   @@index([date(sort: Desc)])
 }
 
-model BacktestRun {
-  id              String   @id @default(cuid())
-  runAt           DateTime
-  startDate       String
-  endDate         String
-  totalTrades     Int
-  wins            Int
-  losses          Int
-  winRate         Float
-  profitFactor    Float
-  maxDrawdown     Float
-  sharpeRatio     Float?
-  expectancy      Float
-  riskRewardRatio Float
-  netReturnPct    Float
-  totalNetPnl     Float
-  avgHoldingDays  Float
-  metricsJson     Json
-  equityCurveJson Json
-  tradesJson      Json
-  configJson      Json
-  createdAt       DateTime @default(now())
-  strategy        String   @default("breakout")
-
-  @@index([strategy, runAt(sort: Desc)])
-}
 
 model BreakoutWatchlistEntry {
   id          String   @id @default(cuid())
