@@ -4,7 +4,7 @@
 
 import { GAPUP } from "../lib/constants/gapup";
 import { STOP_LOSS, POSITION_SIZING } from "../lib/constants/scoring";
-import { BREAK_EVEN_STOP, TRAILING_STOP, TIME_STOP, SCREENING, MARKET_BREADTH } from "../lib/constants";
+import { TIME_STOP, SCREENING, MARKET_BREADTH } from "../lib/constants";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import type { GapUpBacktestConfig } from "./types";
 
@@ -17,13 +17,11 @@ export const GAPUP_BACKTEST_DEFAULTS: Omit<GapUpBacktestConfig, "startDate" | "e
   gapMinPct: GAPUP.ENTRY.GAP_MIN_PCT,           // 0.03 (3%)
   volSurgeRatio: GAPUP.ENTRY.VOL_SURGE_RATIO,   // 1.5
 
-  // ストップロス
-  atrMultiplier: GAPUP.STOP_LOSS.ATR_MULTIPLIER, // 1.0
-  maxLossPct: STOP_LOSS.MAX_LOSS_PCT,             // 0.03
-
-  // トレーリングストップ（本番定数と同一）
-  beActivationMultiplier: BREAK_EVEN_STOP.ACTIVATION_ATR_MULTIPLIER.gapup, // 0.5
-  trailMultiplier: TRAILING_STOP.TRAIL_ATR_MULTIPLIER.gapup,               // 0.3
+  // ストップロス・トレーリングストップ（GAPUP定数から参照）
+  atrMultiplier: GAPUP.STOP_LOSS.ATR_MULTIPLIER,
+  maxLossPct: STOP_LOSS.MAX_LOSS_PCT,
+  beActivationMultiplier: GAPUP.BREAK_EVEN.ACTIVATION_ATR_MULTIPLIER,
+  trailMultiplier: GAPUP.TRAILING.TRAIL_ATR_MULTIPLIER,
 
   // タイムストップ（本番定数と同一）
   maxHoldingDays: TIME_STOP.GAPUP_MAX_HOLDING_DAYS,                        // 3
@@ -56,11 +54,11 @@ export const GAPUP_BACKTEST_DEFAULTS: Omit<GapUpBacktestConfig, "startDate" | "e
   signalSortMethod: "gapvol",
 };
 
-/** 本番パラメータ（WF最適値、combined-run / AI評価で参照） */
+/** 本番パラメータ（GAPUP定数から参照、WF最適値） */
 export const GAPUP_PRODUCTION_PARAMS = {
-  atrMultiplier: GAPUP_BACKTEST_DEFAULTS.atrMultiplier,
-  beActivationMultiplier: GAPUP_BACKTEST_DEFAULTS.beActivationMultiplier,
-  trailMultiplier: GAPUP_BACKTEST_DEFAULTS.trailMultiplier,
+  atrMultiplier: GAPUP.STOP_LOSS.ATR_MULTIPLIER,
+  beActivationMultiplier: GAPUP.BREAK_EVEN.ACTIVATION_ATR_MULTIPLIER,
+  trailMultiplier: GAPUP.TRAILING.TRAIL_ATR_MULTIPLIER,
 };
 
 /** 1トレードあたりリスク（%） */

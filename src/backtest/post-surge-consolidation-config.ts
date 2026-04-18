@@ -4,7 +4,7 @@
 
 import { POST_SURGE_CONSOLIDATION } from "../lib/constants/post-surge-consolidation";
 import { STOP_LOSS, POSITION_SIZING } from "../lib/constants/scoring";
-import { BREAK_EVEN_STOP, TRAILING_STOP, SCREENING, MARKET_BREADTH } from "../lib/constants";
+import { SCREENING, MARKET_BREADTH } from "../lib/constants";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import type { PostSurgeConsolidationBacktestConfig } from "./types";
 
@@ -20,8 +20,8 @@ export const PSC_BACKTEST_DEFAULTS: Omit<PostSurgeConsolidationBacktestConfig, "
   atrMultiplier: POST_SURGE_CONSOLIDATION.STOP_LOSS.ATR_MULTIPLIER,
   maxLossPct: STOP_LOSS.MAX_LOSS_PCT,
 
-  beActivationMultiplier: BREAK_EVEN_STOP.ACTIVATION_ATR_MULTIPLIER["post-surge-consolidation"],
-  trailMultiplier: TRAILING_STOP.TRAIL_ATR_MULTIPLIER["post-surge-consolidation"],
+  beActivationMultiplier: POST_SURGE_CONSOLIDATION.BREAK_EVEN.ACTIVATION_ATR_MULTIPLIER,
+  trailMultiplier: POST_SURGE_CONSOLIDATION.TRAILING.TRAIL_ATR_MULTIPLIER,
 
   maxHoldingDays: POST_SURGE_CONSOLIDATION.TIME_STOP.MAX_HOLDING_DAYS,
   maxExtendedHoldingDays: POST_SURGE_CONSOLIDATION.TIME_STOP.MAX_EXTENDED_HOLDING_DAYS,
@@ -48,11 +48,11 @@ export const PSC_BACKTEST_DEFAULTS: Omit<PostSurgeConsolidationBacktestConfig, "
   positionCapEnabled: true,
 };
 
-/** 本番パラメータ（WF最適値、combined-run / AI評価で参照） */
+/** 本番パラメータ（PSC定数から参照、WF最適値） */
 export const PSC_PRODUCTION_PARAMS = {
-  atrMultiplier: 0.8,
-  beActivationMultiplier: 0.3,
-  trailMultiplier: 0.5,
+  atrMultiplier: POST_SURGE_CONSOLIDATION.STOP_LOSS.ATR_MULTIPLIER,
+  beActivationMultiplier: POST_SURGE_CONSOLIDATION.BREAK_EVEN.ACTIVATION_ATR_MULTIPLIER,
+  trailMultiplier: POST_SURGE_CONSOLIDATION.TRAILING.TRAIL_ATR_MULTIPLIER,
 };
 
 /** 1トレードあたりリスク（%） */

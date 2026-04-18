@@ -2,6 +2,9 @@
  * ジョブ設定
  */
 
+import { GAPUP } from "./gapup";
+import { POST_SURGE_CONSOLIDATION } from "./post-surge-consolidation";
+
 // ポジションのデフォルト利確/損切り
 export const POSITION_DEFAULTS = {
   TAKE_PROFIT_RATIO: 1.03, // 3%利確
@@ -32,14 +35,14 @@ export const JOB_CONCURRENCY = {
 export const BREAK_EVEN_STOP = {
   ACTIVATION_ATR_MULTIPLIER: {
     breakout: 1.0,   // ATR×1.0で早めに建値ロック（ブレイクアウト初動の利益を守る）
-    gapup: 0.3,      // ATR×0.3の含み益でBE発動（WF最適値: be=0.3・trail=0.3が全ウィンドウで安定）
+    gapup: GAPUP.BREAK_EVEN.ACTIVATION_ATR_MULTIPLIER,
     momentum: 1.0,
     "earnings-gap": 0.3,
     "weekly-break": 0.5,    // WF最適値: be=0.5（6窓中4窓で選択）
     "squeeze-breakout": 0.5,
     "ma-pullback": 0.5,
     "gapdown-reversal": 0.3,
-    "post-surge-consolidation": 0.5,
+    "post-surge-consolidation": POST_SURGE_CONSOLIDATION.BREAK_EVEN.ACTIVATION_ATR_MULTIPLIER,
     nr7: 0.5,
     "stop-high": 0.3,
     "early-volume-spike": 0.5,
@@ -55,14 +58,14 @@ export const TRAILING_STOP = {
   // トレール幅（最高値 - ATR×N がストップライン）
   TRAIL_ATR_MULTIPLIER: {
     breakout: 1.5,   // ATR×1.0ではノイズ（通常リトレースメント）で狩られるため1.5に拡大
-    gapup: 0.3,      // BE発動(ATR×0.3)後にATR×0.3のタイトなトレール（WF最適値）
+    gapup: GAPUP.TRAILING.TRAIL_ATR_MULTIPLIER,
     momentum: 1.0,
     "earnings-gap": 0.3,
     "weekly-break": 0.8,    // WF最適値: trail=0.8（直近2窓で安定）
     "squeeze-breakout": 0.5,
     "ma-pullback": 0.8,
     "gapdown-reversal": 0.3,
-    "post-surge-consolidation": 0.8,
+    "post-surge-consolidation": POST_SURGE_CONSOLIDATION.TRAILING.TRAIL_ATR_MULTIPLIER,
     nr7: 0.8,
     "stop-high": 0.5,
     "early-volume-spike": 0.8,

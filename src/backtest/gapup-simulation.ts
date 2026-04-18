@@ -64,7 +64,7 @@ export function precomputeGapUpDailySignals(
     | "maxPrice" | "minAtrPct" | "minAvgVolume25" | "minTurnover" | "minPrice"
     | "gapMinPct" | "volSurgeRatio"
     | "marketTrendFilter" | "marketTrendThreshold" | "indexTrendFilter"
-    | "maxLossPct" | "signalSortMethod"
+    | "atrMultiplier" | "maxLossPct" | "signalSortMethod"
     | "gapRelaxVolThreshold" | "gapMinPctRelaxed"
     | "sp500MaxReturn"
   >,
@@ -156,7 +156,7 @@ export function precomputeGapUpDailySignals(
       const sortMethod = config.signalSortMethod ?? "gapvol";
       if (sortMethod === "rr") {
         // RR比→SL%→出来高サージ（ライブスキャナーと同一ロジック）
-        const slAtrMul = 1.0; // GAPUP.STOP_LOSS.ATR_MULTIPLIER 固定
+        const slAtrMul = config.atrMultiplier;
         const maxLossPct = config.maxLossPct; // 0.03
         daySignals.sort((a, b) => {
           const aRawSL = a.entryPrice - a.atr14 * slAtrMul;

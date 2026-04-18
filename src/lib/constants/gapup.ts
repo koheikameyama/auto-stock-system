@@ -13,7 +13,15 @@ export const GAPUP = {
     GAP_MIN_PCT_RELAXED: 0.01,
   },
   STOP_LOSS: {
-    ATR_MULTIPLIER: 1.0,
+    ATR_MULTIPLIER: 0.8,
+  },
+  /** ブレイクイーブンストップ（WF最適値） */
+  BREAK_EVEN: {
+    ACTIVATION_ATR_MULTIPLIER: 0.3,
+  },
+  /** トレーリングストップ（WF最適値） */
+  TRAILING: {
+    TRAIL_ATR_MULTIPLIER: 0.3,
   },
   /** エントリーガード条件（ライブ用） */
   GUARD: {
