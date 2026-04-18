@@ -70,8 +70,9 @@ export function regimeBadge(level: string): HtmlContent {
 /** Strategy バッジ */
 export function strategyBadge(strategy: string): HtmlContent {
   const labels: Record<string, string> = {
-    breakout: "ブレイクアウト",
-    gapup: "GU（ギャップアップ）",
+    breakout: "BO",
+    gapup: "GU",
+    "post-surge-consolidation": "PSC",
   };
   return html`<span class="badge badge-${strategy}"
     >${labels[strategy] ?? strategy}</span
