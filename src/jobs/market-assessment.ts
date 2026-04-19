@@ -285,6 +285,15 @@ export async function main(): Promise<MarketAssessmentContext> {
       reasoning: assessment.reasoning,
       nikkeiChange: marketData.nikkei.changePercent,
       vix: marketData.vix.price,
+      sp500Change: marketData.sp500?.changePercent ?? null,
+      nasdaqChange: marketData.nasdaq?.changePercent ?? null,
+      dowChange: marketData.dow?.changePercent ?? null,
+      soxChange: marketData.sox?.changePercent ?? null,
+      usdjpy: marketData.usdjpy?.price ?? null,
+      cmeFuturesPrice: marketData.cmeFutures?.price ?? null,
+      cmeDivergencePct,
+      breadth: breadthValue,
+      strategy: strategyDecision.strategy,
     });
   }
 

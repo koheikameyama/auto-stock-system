@@ -71,9 +71,23 @@ export async function notifyMarketAssessment(data: {
   reasoning: string;
   nikkeiChange?: number;
   vix?: number | null;
+  sp500Change?: number | null;
+  nasdaqChange?: number | null;
+  dowChange?: number | null;
+  soxChange?: number | null;
+  usdjpy?: number | null;
+  cmeFuturesPrice?: number | null;
+  cmeDivergencePct?: number | null;
+  breadth?: number | null;
+  strategy?: string | null;
 }): Promise<void> {
   const emoji = data.shouldTrade ? "🟢" : "🔴";
   const action = data.shouldTrade ? "取引実行" : "取引見送り";
+
+  const fmtPct = (v?: number | null) =>
+    v != null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "N/A";
+  const fmtNum = (v?: number | null, decimals = 1) =>
+    v != null ? v.toFixed(decimals) : "N/A";
 
   await notifySlack({
     title: `${emoji} 市場評価: ${action}`,
@@ -81,14 +95,19 @@ export async function notifyMarketAssessment(data: {
     color: data.shouldTrade ? "good" : "warning",
     fields: [
       { title: "センチメント", value: data.sentiment, short: true },
+      { title: "戦略", value: data.strategy ?? "N/A", short: true },
+      { title: "日経変化率", value: fmtPct(data.nikkeiChange), short: true },
+      { title: "VIX", value: fmtNum(data.vix), short: true },
+      { title: "SP500", value: fmtPct(data.sp500Change), short: true },
+      { title: "NASDAQ", value: fmtPct(data.nasdaqChange), short: true },
+      { title: "ダウ", value: fmtPct(data.dowChange), short: true },
+      { title: "SOX", value: fmtPct(data.soxChange), short: true },
+      { title: "USD/JPY", value: fmtNum(data.usdjpy, 2), short: true },
+      { title: "CME先物", value: fmtNum(data.cmeFuturesPrice, 0), short: true },
+      { title: "CME乖離率", value: fmtPct(data.cmeDivergencePct), short: true },
       {
-        title: "日経変化率",
-        value: data.nikkeiChange != null ? `${data.nikkeiChange}%` : "N/A",
-        short: true,
-      },
-      {
-        title: "VIX",
-        value: data.vix != null ? `${data.vix}` : "N/A",
+        title: "ブレッド",
+        value: data.breadth != null ? `${(data.breadth * 100).toFixed(1)}%` : "N/A",
         short: true,
       },
     ],
