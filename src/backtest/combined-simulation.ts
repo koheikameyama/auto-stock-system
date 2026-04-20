@@ -63,6 +63,44 @@ export interface SimContext {
   riskPctOverride?: number;
   /** WB専用リスク%上書き（ハーフサイズ検証用。riskPctOverrideより優先） */
   wbRiskPctOverride?: number;
+  /** breadthフィルターのモード切替（省略時は precompute で既に適用済みとみなす） */
+  breadthMode?: BreadthMode;
+}
+
+/** breadthゲーティングの方式 */
+export type BreadthMode =
+  | { type: "hard"; threshold: number }
+  | { type: "ladder"; fullAbove: number; halfAbove: number }
+  | { type: "velocity"; window: number; minLevel?: number }
+  | { type: "off" };
+
+function getBreadthMultiplier(
+  mode: BreadthMode | undefined,
+  dailyBreadth: Map<string, number>,
+  today: string,
+  tradingDays: string[],
+  dayIdx: number,
+): number {
+  if (!mode || mode.type === "off") return 1.0;
+  const breadth = dailyBreadth.get(today);
+  if (breadth == null) return 0;
+  if (mode.type === "hard") {
+    return breadth < mode.threshold ? 0 : 1.0;
+  }
+  if (mode.type === "ladder") {
+    if (breadth >= mode.fullAbove) return 1.0;
+    if (breadth >= mode.halfAbove) return 0.5;
+    return 0;
+  }
+  if (mode.type === "velocity") {
+    if (mode.minLevel != null && breadth < mode.minLevel) return 0;
+    if (dayIdx < mode.window) return 1.0;
+    const pastDay = tradingDays[dayIdx - mode.window];
+    const past = dailyBreadth.get(pastDay);
+    if (past == null) return 1.0;
+    return breadth >= past ? 1.0 : 0;
+  }
+  return 1.0;
 }
 
 export interface SimResult {
@@ -399,7 +437,7 @@ export function runCombinedSimulation(
     typeof maxPositions === "number"
       ? { boMax: maxPositions, guMax: maxPositions, wbMax: maxPositions, pscMax: maxPositions, totalMax: maxPositions }
       : maxPositions;
-  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride, wbRiskPctOverride } = ctx;
+  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride, wbRiskPctOverride, breadthMode } = ctx;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
   const settlementDays = settlementDaysOpt ?? 2;
 
@@ -509,10 +547,19 @@ export function runCombinedSimulation(
       ...pscPositions.map((p) => p.ticker),
     ]);
 
+    // breadthモードによるサイズ係数（0=見送り / 0.5=半分 / 1.0=通常）
+    const breadthMul = getBreadthMultiplier(
+      breadthMode,
+      precomputed.dailyBreadth,
+      today,
+      tradingDays,
+      dayIdx,
+    );
+
     // ── 2a. Breakout エントリー ──
     const totalPositions = () => boPositions.length + guPositions.length + wbPositions.length + pscPositions.length;
     const totalUnderLimit = () => limits.totalMax === undefined || totalPositions() < limits.totalMax;
-    if (boShouldTrade && !shouldSkipByVixRegime(todayRegime, boVixSkipLevel) && boPositions.length < limits.boMax && totalUnderLimit() && cash > 0) {
+    if (boShouldTrade && breadthMul > 0 && !shouldSkipByVixRegime(todayRegime, boVixSkipLevel) && boPositions.length < limits.boMax && totalUnderLimit() && cash > 0) {
       const rawSignals = breakoutSignals?.get(today) ?? [];
       for (const signal of rawSignals) {
         if (boPositions.length >= limits.boMax || !totalUnderLimit()) break;
@@ -528,7 +575,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * ((riskPctOverride ?? RISK_PER_TRADE_PCT) / 100);
+        const riskAmount = cash * ((riskPctOverride ?? RISK_PER_TRADE_PCT) / 100) * breadthMul;
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
@@ -552,7 +599,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2b. GapUp エントリー ──
-    if (guShouldTrade && !shouldSkipByVixRegime(todayRegime, guVixSkipLevel) && guPositions.length < limits.guMax && totalUnderLimit() && cash > 0) {
+    if (guShouldTrade && breadthMul > 0 && !shouldSkipByVixRegime(todayRegime, guVixSkipLevel) && guPositions.length < limits.guMax && totalUnderLimit() && cash > 0) {
       const signals = gapupSignals.get(today) ?? [];
       for (const signal of signals) {
         if (guPositions.length >= limits.guMax || !totalUnderLimit()) break;
@@ -568,7 +615,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * ((riskPctOverride ?? GAPUP_RISK_PER_TRADE_PCT) / 100);
+        const riskAmount = cash * ((riskPctOverride ?? GAPUP_RISK_PER_TRADE_PCT) / 100) * breadthMul;
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
@@ -592,7 +639,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2c. WeeklyBreak エントリー ──
-    if (wbConfigLocal && wbShouldTrade && todayRegime !== "crisis" && wbPositions.length < wbMaxPos && totalUnderLimit() && cash > 0) {
+    if (wbConfigLocal && wbShouldTrade && breadthMul > 0 && todayRegime !== "crisis" && wbPositions.length < wbMaxPos && totalUnderLimit() && cash > 0) {
       const signals = weeklyBreakSignals?.get(today) ?? [];
       for (const signal of signals) {
         if (wbPositions.length >= wbMaxPos || !totalUnderLimit()) break;
@@ -608,7 +655,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * ((wbRiskPctOverride ?? riskPctOverride ?? WEEKLY_BREAK_RISK_PER_TRADE_PCT) / 100);
+        const riskAmount = cash * ((wbRiskPctOverride ?? riskPctOverride ?? WEEKLY_BREAK_RISK_PER_TRADE_PCT) / 100) * breadthMul;
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
@@ -632,7 +679,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2d. PSC エントリー ──
-    if (pscConfigLocal && pscSignals && guShouldTrade && todayRegime !== "crisis" && pscPositions.length < pscMaxPos && totalUnderLimit() && cash > 0) {
+    if (pscConfigLocal && pscSignals && guShouldTrade && breadthMul > 0 && todayRegime !== "crisis" && pscPositions.length < pscMaxPos && totalUnderLimit() && cash > 0) {
       const signals = pscSignals.get(today) ?? [];
       for (const signal of signals) {
         if (pscPositions.length >= pscMaxPos || !totalUnderLimit()) break;
@@ -648,7 +695,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * ((riskPctOverride ?? PSC_RISK_PER_TRADE_PCT) / 100);
+        const riskAmount = cash * ((riskPctOverride ?? PSC_RISK_PER_TRADE_PCT) / 100) * breadthMul;
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
