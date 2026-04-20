@@ -350,16 +350,53 @@ async function main() {
       { label: "E: 直近急落", from: "2026-03-01", to: "2026-04-20" },
     ];
 
-    const modes: { label: string; mode: BreadthMode }[] = [
+    type ModeSpec = { label: string; mode?: BreadthMode; modeGu?: BreadthMode; modePsc?: BreadthMode };
+    const modes: ModeSpec[] = [
+      // === ベースライン（前回の上位勢） ===
       { label: "現状 hard 55%", mode: { type: "hard", threshold: 0.55 } },
-      { label: "hard 60%(BT基準)", mode: { type: "hard", threshold: 0.60 } },
-      { label: "ladder 65/55", mode: { type: "ladder", fullAbove: 0.65, halfAbove: 0.55 } },
-      { label: "ladder 65/50", mode: { type: "ladder", fullAbove: 0.65, halfAbove: 0.50 } },
-      { label: "ladder 60/50", mode: { type: "ladder", fullAbove: 0.60, halfAbove: 0.50 } },
-      { label: "velocity 5d+55%", mode: { type: "velocity", window: 5, minLevel: 0.55 } },
+      { label: "hard 60%", mode: { type: "hard", threshold: 0.60 } },
       { label: "velocity 10d+55%", mode: { type: "velocity", window: 10, minLevel: 0.55 } },
-      { label: "velocity 5d only", mode: { type: "velocity", window: 5 } },
-      { label: "OFF", mode: { type: "off" } },
+
+      // === 異端1: Bullish band（過熱もveto） ===
+      { label: "band 55-80%", mode: { type: "band", lower: 0.55, upper: 0.80 } },
+      { label: "band 60-80%", mode: { type: "band", lower: 0.60, upper: 0.80 } },
+      { label: "band 60-75%", mode: { type: "band", lower: 0.60, upper: 0.75 } },
+
+      // === 異端2: 戦略別 threshold ===
+      // GU は個別momentum、PSCは broad strength要求 → PSC厳しめ
+      { label: "split GU50/PSC65",
+        modeGu: { type: "hard", threshold: 0.50 },
+        modePsc: { type: "hard", threshold: 0.65 } },
+      { label: "split GU55/PSC65",
+        modeGu: { type: "hard", threshold: 0.55 },
+        modePsc: { type: "hard", threshold: 0.65 } },
+      { label: "split GU50/PSC70",
+        modeGu: { type: "hard", threshold: 0.50 },
+        modePsc: { type: "hard", threshold: 0.70 } },
+
+      // === 異端3: Z-score（regime-adaptive） ===
+      { label: "zscore 60d -1σ", mode: { type: "zscore", window: 60, sigmaBelow: 1.0 } },
+      { label: "zscore 60d -0.5σ", mode: { type: "zscore", window: 60, sigmaBelow: 0.5 } },
+      { label: "zscore 30d -1σ", mode: { type: "zscore", window: 30, sigmaBelow: 1.0 } },
+
+      // === 異端4: hard 60% + velocity 10d AND ===
+      { label: "hard60 AND vel10",
+        mode: { type: "and", modes: [
+          { type: "hard", threshold: 0.60 },
+          { type: "velocity", window: 10 },
+        ] } },
+      { label: "hard55 AND vel10",
+        mode: { type: "and", modes: [
+          { type: "hard", threshold: 0.55 },
+          { type: "velocity", window: 10 },
+        ] } },
+      // 戦略別 + AND の合体技
+      { label: "split GU55/PSC60+vel",
+        modeGu: { type: "hard", threshold: 0.55 },
+        modePsc: { type: "and", modes: [
+          { type: "hard", threshold: 0.60 },
+          { type: "velocity", window: 10 },
+        ] } },
     ];
 
     // 比較時は precompute 側のbreadthフィルターを切り、simulation側で判定
@@ -371,15 +408,15 @@ async function main() {
     console.log("\n=== breadthゲーティング方式の比較 ===");
     console.log(`期間: ${startDate} → ${endDate}`);
     console.log(
-      `${"モード".padEnd(18)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"MaxDD".padStart(6)} | ${"NetRet".padStart(7)} | ${"Calmar".padStart(6)} | ${"稼働率".padStart(6)}`,
+      `${"モード".padEnd(24)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"MaxDD".padStart(6)} | ${"NetRet".padStart(7)} | ${"Calmar".padStart(6)} | ${"稼働率".padStart(6)}`,
     );
-    console.log("-".repeat(96));
+    console.log("-".repeat(102));
 
     const overallResults: { label: string; metrics: PerformanceMetrics; util: number; allTrades: SimulatedPosition[]; equityCurve: DailyEquity[] }[] = [];
 
-    for (const { label, mode } of modes) {
+    for (const { label, mode, modeGu, modePsc } of modes) {
       const result = runCombinedSimulation(
-        { ...ctx, guConfig: guCfgNoFilter, pscConfig: pscCfgNoFilter, gapupSignals: guSigOpen, pscSignals: pSigOpen, breadthMode: mode },
+        { ...ctx, guConfig: guCfgNoFilter, pscConfig: pscCfgNoFilter, gapupSignals: guSigOpen, pscSignals: pSigOpen, breadthMode: mode, breadthModeGu: modeGu, breadthModePsc: modePsc },
         defaultLimits,
       );
       const m = result.totalMetrics;
@@ -391,7 +428,7 @@ async function main() {
       const annualizedRet = years > 0 ? m.netReturnPct / years : m.netReturnPct;
       const calmar = m.maxDrawdown > 0 ? annualizedRet / m.maxDrawdown : 0;
       console.log(
-        `${label.padEnd(18)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(7)} | ${m.maxDrawdown.toFixed(1).padStart(5)}% | ${m.netReturnPct.toFixed(1).padStart(6)}% | ${calmar.toFixed(2).padStart(6)} | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+        `${label.padEnd(24)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(7)} | ${m.maxDrawdown.toFixed(1).padStart(5)}% | ${m.netReturnPct.toFixed(1).padStart(6)}% | ${calmar.toFixed(2).padStart(6)} | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
       );
       overallResults.push({ label, metrics: m, util: util.capitalUtilizationPct, allTrades: result.allTrades, equityCurve: result.equityCurve });
     }
@@ -401,9 +438,9 @@ async function main() {
     for (const regime of REGIMES) {
       console.log(`\n[${regime.label}] ${regime.from} 〜 ${regime.to}`);
       console.log(
-        `  ${"モード".padEnd(18)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"NetPnL".padStart(10)}`,
+        `  ${"モード".padEnd(24)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"NetPnL".padStart(10)}`,
       );
-      console.log("  " + "-".repeat(70));
+      console.log("  " + "-".repeat(76));
 
       for (const r of overallResults) {
         const inRange = r.allTrades.filter(
@@ -414,7 +451,7 @@ async function main() {
         const expStr = (sub.expectancy >= 0 ? "+" : "") + sub.expectancy.toFixed(2) + "%";
         const netPnlStr = (sub.totalNetPnl >= 0 ? "+" : "") + `¥${sub.totalNetPnl.toLocaleString()}`;
         console.log(
-          `  ${r.label.padEnd(18)}| ${String(sub.totalTrades).padStart(6)} | ${sub.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expStr.padStart(7)} | ${netPnlStr.padStart(10)}`,
+          `  ${r.label.padEnd(24)}| ${String(sub.totalTrades).padStart(6)} | ${sub.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expStr.padStart(7)} | ${netPnlStr.padStart(10)}`,
         );
       }
     }

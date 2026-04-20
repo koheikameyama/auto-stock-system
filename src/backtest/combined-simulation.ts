@@ -65,6 +65,10 @@ export interface SimContext {
   wbRiskPctOverride?: number;
   /** breadthフィルターのモード切替（省略時は precompute で既に適用済みとみなす） */
   breadthMode?: BreadthMode;
+  /** GapUp戦略専用 breadthモード（指定時は breadthMode より優先） */
+  breadthModeGu?: BreadthMode;
+  /** PSC戦略専用 breadthモード（指定時は breadthMode より優先） */
+  breadthModePsc?: BreadthMode;
 }
 
 /** breadthゲーティングの方式 */
@@ -72,6 +76,9 @@ export type BreadthMode =
   | { type: "hard"; threshold: number }
   | { type: "ladder"; fullAbove: number; halfAbove: number }
   | { type: "velocity"; window: number; minLevel?: number }
+  | { type: "band"; lower: number; upper: number }
+  | { type: "zscore"; window: number; sigmaBelow: number }
+  | { type: "and"; modes: BreadthMode[] }
   | { type: "off" };
 
 function getBreadthMultiplier(
@@ -99,6 +106,38 @@ function getBreadthMultiplier(
     const past = dailyBreadth.get(pastDay);
     if (past == null) return 1.0;
     return breadth >= past ? 1.0 : 0;
+  }
+  if (mode.type === "band") {
+    return breadth >= mode.lower && breadth <= mode.upper ? 1.0 : 0;
+  }
+  if (mode.type === "zscore") {
+    if (dayIdx < mode.window) return 1.0;
+    let sum = 0;
+    let sumSq = 0;
+    let n = 0;
+    for (let i = dayIdx - mode.window; i < dayIdx; i++) {
+      const v = dailyBreadth.get(tradingDays[i]);
+      if (v == null) continue;
+      sum += v;
+      sumSq += v * v;
+      n++;
+    }
+    if (n < mode.window / 2) return 1.0;
+    const mean = sum / n;
+    const variance = Math.max(0, sumSq / n - mean * mean);
+    const sigma = Math.sqrt(variance);
+    if (sigma === 0) return breadth >= mean ? 1.0 : 0;
+    const z = (breadth - mean) / sigma;
+    return z >= -mode.sigmaBelow ? 1.0 : 0;
+  }
+  if (mode.type === "and") {
+    let result = 1.0;
+    for (const m of mode.modes) {
+      const mul = getBreadthMultiplier(m, dailyBreadth, today, tradingDays, dayIdx);
+      if (mul === 0) return 0;
+      result = Math.min(result, mul);
+    }
+    return result;
   }
   return 1.0;
 }
@@ -437,7 +476,9 @@ export function runCombinedSimulation(
     typeof maxPositions === "number"
       ? { boMax: maxPositions, guMax: maxPositions, wbMax: maxPositions, pscMax: maxPositions, totalMax: maxPositions }
       : maxPositions;
-  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride, wbRiskPctOverride, breadthMode } = ctx;
+  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride, wbRiskPctOverride, breadthMode, breadthModeGu, breadthModePsc } = ctx;
+  const guBreadthMode = breadthModeGu ?? breadthMode;
+  const pscBreadthMode = breadthModePsc ?? breadthMode;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
   const settlementDays = settlementDaysOpt ?? 2;
 
@@ -548,8 +589,23 @@ export function runCombinedSimulation(
     ]);
 
     // breadthモードによるサイズ係数（0=見送り / 0.5=半分 / 1.0=通常）
+    // BO/WB は breadthMode を直接使用、GU/PSC は専用モードがあれば優先
     const breadthMul = getBreadthMultiplier(
       breadthMode,
+      precomputed.dailyBreadth,
+      today,
+      tradingDays,
+      dayIdx,
+    );
+    const breadthMulGu = getBreadthMultiplier(
+      guBreadthMode,
+      precomputed.dailyBreadth,
+      today,
+      tradingDays,
+      dayIdx,
+    );
+    const breadthMulPsc = getBreadthMultiplier(
+      pscBreadthMode,
       precomputed.dailyBreadth,
       today,
       tradingDays,
@@ -599,7 +655,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2b. GapUp エントリー ──
-    if (guShouldTrade && breadthMul > 0 && !shouldSkipByVixRegime(todayRegime, guVixSkipLevel) && guPositions.length < limits.guMax && totalUnderLimit() && cash > 0) {
+    if (guShouldTrade && breadthMulGu > 0 && !shouldSkipByVixRegime(todayRegime, guVixSkipLevel) && guPositions.length < limits.guMax && totalUnderLimit() && cash > 0) {
       const signals = gapupSignals.get(today) ?? [];
       for (const signal of signals) {
         if (guPositions.length >= limits.guMax || !totalUnderLimit()) break;
@@ -615,7 +671,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * ((riskPctOverride ?? GAPUP_RISK_PER_TRADE_PCT) / 100) * breadthMul;
+        const riskAmount = cash * ((riskPctOverride ?? GAPUP_RISK_PER_TRADE_PCT) / 100) * breadthMulGu;
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
@@ -679,7 +735,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2d. PSC エントリー ──
-    if (pscConfigLocal && pscSignals && guShouldTrade && breadthMul > 0 && todayRegime !== "crisis" && pscPositions.length < pscMaxPos && totalUnderLimit() && cash > 0) {
+    if (pscConfigLocal && pscSignals && guShouldTrade && breadthMulPsc > 0 && todayRegime !== "crisis" && pscPositions.length < pscMaxPos && totalUnderLimit() && cash > 0) {
       const signals = pscSignals.get(today) ?? [];
       for (const signal of signals) {
         if (pscPositions.length >= pscMaxPos || !totalUnderLimit()) break;
@@ -695,7 +751,7 @@ export function runCombinedSimulation(
 
         const riskPerShare = signal.entryPrice - stopLossPrice;
         if (riskPerShare <= 0) continue;
-        const riskAmount = cash * ((riskPctOverride ?? PSC_RISK_PER_TRADE_PCT) / 100) * breadthMul;
+        const riskAmount = cash * ((riskPctOverride ?? PSC_RISK_PER_TRADE_PCT) / 100) * breadthMulPsc;
         const rawQuantity = Math.floor(riskAmount / riskPerShare);
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         if (todayRegime === "elevated") quantity = Math.floor(quantity / 2 / UNIT_SHARES) * UNIT_SHARES;
