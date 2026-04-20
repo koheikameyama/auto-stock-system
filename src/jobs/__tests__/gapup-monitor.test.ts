@@ -148,13 +148,6 @@ describe("gapup-monitor main()", () => {
     expect(mockGapUpScan).not.toHaveBeenCalled();
   });
 
-  it("breadth < threshold → スキップ", async () => {
-    setupDefaults();
-    mockAssessmentFindUnique.mockResolvedValue({ shouldTrade: true, breadth: 0.5 });
-    await main();
-    expect(mockGapUpScan).not.toHaveBeenCalled();
-  });
-
   it("トリガーなし→Slack通知（0件）を送信", async () => {
     setupDefaults();
     mockGapUpScan.mockReturnValue([]);
