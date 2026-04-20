@@ -7,7 +7,7 @@
 
 import { prisma } from "../lib/prisma";
 import { getTodayForDB } from "../lib/market-date";
-import { MARKET_INDEX, MARKET_REGIME } from "../lib/constants";
+import { MARKET_INDEX, MARKET_REGIME, MARKET_BREADTH } from "../lib/constants";
 import { getCMEStatus } from "../lib/market-hours";
 import { fetchMarketData } from "../core/market-data";
 import { notifyMarketAssessment, notifyRiskAlert } from "../lib/slack";
@@ -244,11 +244,22 @@ export async function main(): Promise<MarketAssessmentContext> {
 
   if (!isShadowMode) {
     console.log("[2/2] VIXベース市場評価...");
-    assessment = {
-      shouldTrade: true,
-      sentiment: "normal" as Sentiment,
-      reasoning: `機械判定: VIX ${marketData.vix.price.toFixed(1)} — レジーム・キルスイッチで制御`,
-    };
+
+    // breadthフィルター（全戦略共通）
+    const breadthPct = breadthValue != null ? (breadthValue * 100).toFixed(1) : "N/A";
+    if (breadthValue == null || breadthValue < MARKET_BREADTH.THRESHOLD) {
+      assessment = {
+        shouldTrade: false,
+        sentiment: "normal" as Sentiment,
+        reasoning: `breadth ${breadthPct}% < ${MARKET_BREADTH.THRESHOLD * 100}%: エントリー見送り`,
+      };
+    } else {
+      assessment = {
+        shouldTrade: true,
+        sentiment: "normal" as Sentiment,
+        reasoning: `機械判定: VIX ${marketData.vix.price.toFixed(1)} — レジーム・キルスイッチで制御`,
+      };
+    }
     console.log(
       `  → shouldTrade: ${assessment.shouldTrade}, sentiment: ${assessment.sentiment}`,
     );

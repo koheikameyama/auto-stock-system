@@ -15,7 +15,7 @@ import { tachibanaFetchQuotesBatch } from "../lib/tachibana-price-client";
 import { getAllWatchlist } from "./watchlist-builder";
 import { executeEntry } from "../core/breakout/entry-executor";
 import { notifySlack } from "../lib/slack";
-import { TIMEZONE, MARKET_BREADTH } from "../lib/constants";
+import { TIMEZONE } from "../lib/constants";
 import { GAPUP } from "../lib/constants/gapup";
 import { POST_SURGE_CONSOLIDATION } from "../lib/constants/post-surge-consolidation";
 import { PostSurgeConsolidationScanner } from "../core/post-surge-consolidation/psc-scanner";
@@ -55,7 +55,12 @@ export async function main(): Promise<void> {
     where: { date: getTodayForDB() },
   });
   if (!todayAssessment || !todayAssessment.shouldTrade) {
-    console.log(`${tag} スキップ: shouldTrade=${todayAssessment?.shouldTrade ?? "未作成"}`);
+    const reason = `shouldTrade=${todayAssessment?.shouldTrade ?? "未作成"}`;
+    console.log(`${tag} スキップ: ${reason}`);
+    await notifySlack({
+      title: `[PSC] スキャンスキップ`,
+      message: reason,
+    });
     lastScanDate = today;
     return;
   }
@@ -63,6 +68,10 @@ export async function main(): Promise<void> {
   const watchlist = await getAllWatchlist();
   if (!watchlist.length) {
     console.log(`${tag} スキップ: ウォッチリスト空`);
+    await notifySlack({
+      title: `[PSC] スキャンスキップ`,
+      message: "ウォッチリスト空",
+    });
     lastScanDate = today;
     return;
   }
@@ -89,15 +98,10 @@ export async function main(): Promise<void> {
       return;
     }
 
-    // breadthフィルター（MarketAssessmentの全銘柄SMA25 breadthを使用 — バックテストと同一基準）
-    const breadth = todayAssessment.breadth != null ? Number(todayAssessment.breadth) : null;
-    console.log(`${tag} breadth=${breadth != null ? (breadth * 100).toFixed(1) + "%" : "N/A"}`);
+    // breadthフィルターはmarket-assessmentのshouldTradeに統合済み
 
-    if (breadth == null || breadth < MARKET_BREADTH.THRESHOLD) {
-      console.log(`${tag} スキップ: breadth=${breadth != null ? (breadth * 100).toFixed(1) + "%" : "N/A"} < ${MARKET_BREADTH.THRESHOLD * 100}%`);
-      lastScanDate = today;
-      return;
-    }
+    const breadth = todayAssessment.breadth != null ? Number(todayAssessment.breadth) : null;
+    console.log(`${tag} PSCスキャン開始 (breadth=${breadth != null ? (breadth * 100).toFixed(1) + "%" : "N/A"})`);
 
     // PSC用履歴データをバッチ取得（直近25営業日分）
     const historicalMap = await fetchPSCHistoricalData(tickers);
@@ -136,7 +140,7 @@ export async function main(): Promise<void> {
         : "シグナルなし";
     await notifySlack({
       title: `[PSC] スキャン完了: ${triggers.length}件`,
-      message: `スキャン対象: ${quotes.length}銘柄 / breadth: ${(breadth * 100).toFixed(1)}%\n${triggerLines}`,
+      message: `スキャン対象: ${quotes.length}銘柄 / breadth: ${breadth != null ? (breadth * 100).toFixed(1) + "%" : "N/A"}\n${triggerLines}`,
       color: triggers.length > 0 ? "good" : undefined,
     });
 

@@ -336,7 +336,7 @@ app.get("/", async (c) => {
                 if (badgeEl) {
                   var resolvedStatus = d.status;
                   if (d.status !== 'ordered' && d.status !== 'holding') {
-                    resolvedStatus = guAllMet ? 'watching' : 'not_target';
+                    resolvedStatus = (guAllMet || pscAllMetFlag) ? 'watching' : 'not_target';
                   }
                   var s = STATUS_MAP[resolvedStatus];
                   if (s) {
