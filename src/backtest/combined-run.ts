@@ -397,6 +397,18 @@ async function main() {
           { type: "hard", threshold: 0.60 },
           { type: "velocity", window: 10 },
         ] } },
+
+      // === 最終決戦: split + band の複合 ===
+      // band 55-80(Calmar 9.38) と split GU55/PSC65(NetRet 222%) の長所合わせ
+      { label: "split-band 55-80/65-80",
+        modeGu: { type: "band", lower: 0.55, upper: 0.80 },
+        modePsc: { type: "band", lower: 0.65, upper: 0.80 } },
+      { label: "split-band 50-80/65-80",
+        modeGu: { type: "band", lower: 0.50, upper: 0.80 },
+        modePsc: { type: "band", lower: 0.65, upper: 0.80 } },
+      { label: "split-band 55-80/60-80",
+        modeGu: { type: "band", lower: 0.55, upper: 0.80 },
+        modePsc: { type: "band", lower: 0.60, upper: 0.80 } },
     ];
 
     // 比較時は precompute 側のbreadthフィルターを切り、simulation側で判定
