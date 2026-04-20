@@ -312,9 +312,9 @@ async function handleMissingHolding(position: {
         }
 
         if (filledPrice > 0) {
-          // 約定価格の異常値チェック: エントリー価格の50%未満は明らかにおかしい
+          // 約定価格の異常値チェック: SL最大損失3%なので-10%超はデータ異常
           const entryPrice = Number(position.entryPrice ?? 0);
-          if (entryPrice > 0 && filledPrice < entryPrice * 0.5) {
+          if (entryPrice > 0 && filledPrice < entryPrice * 0.9) {
             console.error(
               `[broker-reconciliation] ${ticker}: SL約定価格が異常 (¥${filledPrice} << エントリー¥${entryPrice}) → 自動クローズ中止`,
             );
