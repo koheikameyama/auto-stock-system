@@ -63,7 +63,7 @@ export function precomputeGapUpDailySignals(
   config: Pick<GapUpBacktestConfig,
     | "maxPrice" | "minAtrPct" | "minAvgVolume25" | "minTurnover" | "minPrice"
     | "gapMinPct" | "volSurgeRatio"
-    | "marketTrendFilter" | "marketTrendThreshold" | "indexTrendFilter"
+    | "marketTrendFilter" | "marketTrendThreshold" | "marketTrendUpperCap" | "indexTrendFilter"
     | "atrMultiplier" | "maxLossPct" | "signalSortMethod"
     | "gapRelaxVolThreshold" | "gapMinPctRelaxed"
     | "sp500MaxReturn"
@@ -75,12 +75,17 @@ export function precomputeGapUpDailySignals(
   const result: PrecomputedGapUpSignals = new Map();
   const { tradingDays, dateIndexMap, dailyBreadth, dailyIndexAboveSma } = precomputed;
   const breadthThreshold = config.marketTrendThreshold ?? 0.5;
+  const breadthUpperCap = config.marketTrendUpperCap;
 
   for (let dayIdx = 0; dayIdx < tradingDays.length; dayIdx++) {
     const today = tradingDays[dayIdx];
 
-    // マーケットフィルター
-    if (config.marketTrendFilter && (dailyBreadth.get(today) ?? 0) < breadthThreshold) continue;
+    // マーケットフィルター（下限 + 上限）
+    if (config.marketTrendFilter) {
+      const b = dailyBreadth.get(today) ?? 0;
+      if (b < breadthThreshold) continue;
+      if (breadthUpperCap != null && b > breadthUpperCap) continue;
+    }
     if (config.indexTrendFilter && !dailyIndexAboveSma.get(today)) continue;
 
     // S&P500フィルター: 前夜のUS市場リターンが閾値を超えたらスキップ

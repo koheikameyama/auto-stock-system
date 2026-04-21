@@ -39,6 +39,7 @@ export const PSC_BACKTEST_DEFAULTS: Omit<PostSurgeConsolidationBacktestConfig, "
 
   marketTrendFilter: true,
   marketTrendThreshold: MARKET_BREADTH.THRESHOLD,
+  marketTrendUpperCap: MARKET_BREADTH.UPPER_CAP,
   indexTrendFilter: true,
   indexTrendSmaPeriod: 50,
   indexTrendOffBufferPct: 0,

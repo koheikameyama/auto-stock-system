@@ -52,7 +52,7 @@ export function precomputePSCDailySignals(
   config: Pick<PostSurgeConsolidationBacktestConfig,
     | "maxPrice" | "minAtrPct" | "minAvgVolume25" | "minTurnover" | "minPrice"
     | "volSurgeRatio"
-    | "marketTrendFilter" | "marketTrendThreshold" | "indexTrendFilter"
+    | "marketTrendFilter" | "marketTrendThreshold" | "marketTrendUpperCap" | "indexTrendFilter"
     | "maxLossPct"
     | "indexTrendOffBufferPct" | "indexTrendOnBufferPct"
   >,
@@ -62,12 +62,17 @@ export function precomputePSCDailySignals(
   const result: PrecomputedPSCSignals = new Map();
   const { tradingDays, dateIndexMap, dailyBreadth, dailyIndexAboveSma } = precomputed;
   const breadthThreshold = config.marketTrendThreshold ?? 0.5;
+  const breadthUpperCap = config.marketTrendUpperCap;
 
   for (let dayIdx = 0; dayIdx < tradingDays.length; dayIdx++) {
     const today = tradingDays[dayIdx];
 
-    // マーケットフィルター（breadth + index）
-    if (config.marketTrendFilter !== false && (dailyBreadth.get(today) ?? 0) < breadthThreshold) continue;
+    // マーケットフィルター（breadth下限 + 上限 + index）
+    if (config.marketTrendFilter !== false) {
+      const b = dailyBreadth.get(today) ?? 0;
+      if (b < breadthThreshold) continue;
+      if (breadthUpperCap != null && b > breadthUpperCap) continue;
+    }
     if (config.indexTrendFilter && !dailyIndexAboveSma.get(today)) continue;
 
     const daySignals: PrecomputedPSCSignal[] = [];
