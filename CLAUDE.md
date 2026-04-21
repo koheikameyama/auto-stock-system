@@ -79,18 +79,21 @@
 
 #### 運用戦略
 
-**breakout戦略のみで運用中。** スコアリング系コードは削除済み（git履歴で復元可能）。
+**gapup + PSC の2本柱で運用中。** breakout / weekly-break / スコアリング系は停止・削除済み（git履歴で復元可能）。
 
-- **エントリー**: watchlist-builder + breakout-monitor + entry-executor
-- **バックテスト**: `npm run backtest:breakout`（日足データでシミュレーション）
-- **パラメータ検証**: `npm run walk-forward:breakout`（6ヶ月IS / 3ヶ月OOS × 6ウィンドウ）
+- **エントリー**:
+  - gapup: `watchlist-builder` + `gapup-monitor` + `entry-executor`（平日15:24発注、翌日のクロージング前に寄り付きギャップアップを捕捉）
+  - PSC (高騰後押し目): `watchlist-builder` + `post-surge-consolidation-monitor` + `entry-executor`（同15:24発注）
+- **バックテスト**:
+  - `npm run backtest:combined`（GU + PSC を共有資金プールでシミュレーション、本番判断の主指標）
+  - `npm run backtest:gapup` / `npm run backtest:psc`（診断用の個別BT）
+- **パラメータ検証**: `npm run walk-forward:gapup` / `npm run walk-forward:psc`（6ヶ月IS / 3ヶ月OOS）
 
 #### 実装ガイドライン
 
-- エントリーは出来高サージ + 高値ブレイクの2条件が揃った場合のみ
-- 損切りは必ず設定し、例外なく実行する（最大3%）
+- 損切りは必ず設定し、例外なく実行する（ATR×0.8、最大3%）
 - 固定利確は使わない — トレーリングストップで利益を伸ばす
-- 10営業日経過でクローズ（タイムストップ）
+- タイムストップで塩漬け防止（gapup: 1〜2営業日、PSC: 5〜7営業日）
 
 ## 技術ルール
 

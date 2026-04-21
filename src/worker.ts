@@ -17,7 +17,6 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 import { main as runMonitor } from "./jobs/position-monitor";
-import { main as runWeeklyBreakMonitor } from "./jobs/weekly-break-monitor";
 import { main as runGapupMonitor } from "./jobs/gapup-monitor";
 import { main as runPSCMonitor } from "./jobs/post-surge-consolidation-monitor";
 import { main as runBrokerReconciliation } from "./jobs/broker-reconciliation";
@@ -155,10 +154,6 @@ const schedules = [
   { cron: "0 24 15 * * 1-5", job: runGapupMonitor, name: "gapup-monitor", requiresMarketDay: true },
   { cron: "20 24 15 * * 1-5", job: runGapupMonitor, name: "gapup-monitor", requiresMarketDay: true },
   { cron: "40 24 15 * * 1-5", job: runGapupMonitor, name: "gapup-monitor", requiresMarketDay: true },
-  // 15:24:00/20/40 週足ブレイク監視（内部で週末最終営業日のみ実行）
-  { cron: "0 24 15 * * 1-5", job: runWeeklyBreakMonitor, name: "weekly-break-monitor", requiresMarketDay: true },
-  { cron: "20 24 15 * * 1-5", job: runWeeklyBreakMonitor, name: "weekly-break-monitor", requiresMarketDay: true },
-  { cron: "40 24 15 * * 1-5", job: runWeeklyBreakMonitor, name: "weekly-break-monitor", requiresMarketDay: true },
   // 15:24:00/20/40 高騰後押し目監視（ENTRY_ENABLED=false の間は内部でスキップ）
   { cron: "0 24 15 * * 1-5", job: runPSCMonitor, name: "psc-monitor", requiresMarketDay: true },
   { cron: "20 24 15 * * 1-5", job: runPSCMonitor, name: "psc-monitor", requiresMarketDay: true },
