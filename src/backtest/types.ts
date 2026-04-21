@@ -256,6 +256,8 @@ export interface GapUpBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -339,6 +341,8 @@ export interface WeeklyBreakBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -399,6 +403,8 @@ export interface MomentumBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -450,6 +456,8 @@ export interface EarningsGapBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -507,6 +515,8 @@ export interface SqueezeBreakoutBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -681,6 +691,8 @@ export interface PostSurgeConsolidationBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -735,6 +747,8 @@ export interface NR7BacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -795,6 +809,8 @@ export interface StopHighBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -857,6 +873,8 @@ export interface EarlyVolumeSpikeBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;
@@ -973,6 +991,8 @@ export interface OvernightGapFadeBacktestConfig {
 
   marketTrendFilter?: boolean;
   marketTrendThreshold?: number;
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ（省略時は上限なし） */
+  marketTrendUpperCap?: number;
   indexTrendFilter?: boolean;
   indexTrendSmaPeriod?: number;
   indexTrendOffBufferPct?: number;

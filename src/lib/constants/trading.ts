@@ -55,6 +55,8 @@ export const MARKET_INDEX = {
 export const MARKET_BREADTH = {
   /** breadth閾値（全銘柄のSMA25上回り比率）— この値未満の日はエントリーをスキップ */
   THRESHOLD: 0.55,
+  /** breadth上限 — この値超過の日は過熱判定でエントリーをスキップ */
+  UPPER_CAP: 0.80,
 } as const;
 
 // CME日経先物の取引時間（JST基準）
