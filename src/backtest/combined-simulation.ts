@@ -558,8 +558,9 @@ export function runCombinedSimulation(
     // ── 1.6 ドローダウンハルト判定（全戦略に適用） ──
     const ddHalt = checkDrawdownHalt(today, dayIdx, tradingDays, equityCurve, budget);
     let boShouldTrade = ddHalt.shouldTrade;
-    const guShouldTrade = ddHalt.shouldTrade;
-    const wbShouldTrade = ddHalt.shouldTrade;
+    let guShouldTrade = ddHalt.shouldTrade;
+    let wbShouldTrade = ddHalt.shouldTrade;
+    let pscShouldTrade = ddHalt.shouldTrade;
     const { weeklyDDPct, monthlyDDPct } = ddHalt;
     if (!ddHalt.shouldTrade) {
       haltDays++;
@@ -571,12 +572,15 @@ export function runCombinedSimulation(
       }
     }
 
-    // ── 1.7 エクイティカーブフィルター（Breakoutのみ停止、GapUpは継続） ──
-    if (boShouldTrade && !checkEquityCurveFilter(dayIdx, equityCurve, equityCurveSmaPeriod)) {
+    // ── 1.7 エクイティカーブフィルター（全戦略停止） ──
+    if (ddHalt.shouldTrade && !checkEquityCurveFilter(dayIdx, equityCurve, equityCurveSmaPeriod)) {
       boShouldTrade = false;
-      if (ddHalt.shouldTrade) haltDays++; // DDハルトと重複カウントしない
+      guShouldTrade = false;
+      wbShouldTrade = false;
+      pscShouldTrade = false;
+      haltDays++; // DDハルトとは別のハルト事由なので独立カウント
       if (verbose) {
-        console.log(`  [${today}] エクイティフィルター: SMA${equityCurveSmaPeriod}下回り（BO停止/GU継続）`);
+        console.log(`  [${today}] エクイティフィルター: SMA${equityCurveSmaPeriod}下回り（全戦略停止）`);
       }
     }
 
@@ -735,7 +739,7 @@ export function runCombinedSimulation(
     }
 
     // ── 2d. PSC エントリー ──
-    if (pscConfigLocal && pscSignals && guShouldTrade && breadthMulPsc > 0 && todayRegime !== "crisis" && pscPositions.length < pscMaxPos && totalUnderLimit() && cash > 0) {
+    if (pscConfigLocal && pscSignals && pscShouldTrade && breadthMulPsc > 0 && todayRegime !== "crisis" && pscPositions.length < pscMaxPos && totalUnderLimit() && cash > 0) {
       const signals = pscSignals.get(today) ?? [];
       for (const signal of signals) {
         if (pscPositions.length >= pscMaxPos || !totalUnderLimit()) break;
