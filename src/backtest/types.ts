@@ -396,6 +396,9 @@ export interface MomentumBacktestConfig {
   minTurnover: number;
   minPrice: number;
 
+  /** 最低時価総額（億円単位、省略時はフィルターなし）。大型株universeで使用 */
+  minMarketCap?: number;
+
   costModelEnabled: boolean;
   priceLimitEnabled: boolean;
 

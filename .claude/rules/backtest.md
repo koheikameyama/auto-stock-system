@@ -585,8 +585,9 @@ npm run backtest:combined -- --compare-equity-filter --start 2024-03-01
 
 バックテスト側のみ、以下を残置（検証の再現性のため）:
 
-- `combined-simulation.ts`: `equityCurveSmaPeriod` を Breakout 限定から全戦略(GU/WB/PSC)に拡張（現状デフォルトはSMA20だが combined の通常実行では ctx で指定された値が使われる。`--compare-equity-filter` 以外では実質SMA20のまま）
+- `combined-simulation.ts`: `equityCurveSmaPeriod` を Breakout 限定から全戦略(GU/WB/PSC)に拡張
 - `combined-run.ts`: `--compare-equity-filter` モードにレジーム別内訳を追加
+- `combined-run.ts`: ctx の `equityCurveSmaPeriod` デフォルトは **0（無効）**。Phase 0拡張で全戦略に適用されるようになったため、20のままだと常時SMA20フィルターがONになり基準BTの結果も悪化する事象を確認（2026-04-22追加修正）
 
 ### 今後のレジーム適応に関する方針
 
@@ -594,6 +595,163 @@ npm run backtest:combined -- --compare-equity-filter --start 2024-03-01
 - **ローリング系スロットルは採用しない**: 短期決戦戦略では遅行指標として機能しない
 - **レジーム適応で改善したい場合の正攻法**: (1) mean-reversion 系戦略の追加による戦略多様化、または (2) 2018〜2022年のバックフィルデータで A期タイプを複数サンプル取得してから再検討
 - **今回の +¥13K → +¥13K 維持が "成功"**: Calmar 9.37 は現状で十分、余計な手を入れないことが正解
+
+## 大型株 universe 拡張 + モメンタム戦略検証（2026-04-22実施）
+
+**結論: 既存GU/PSCは中小型株(≤¥2,500)専用。大型株ではシグナル未発火または赤字。**
+**大型株モメンタム戦略はエッジ確認（単独PF 2.63, WF堅牢 ✓）、combined統合でも害なし（Calmar 7.47 → 7.46 維持、NetRet +2%）、ただし既存が強すぎて本番投入ROIは低い。**
+
+運用capacity上限（¥5-10M）突破可能性を探るため、(1) 既存戦略で大型株ユニバース拡大が機能するか、(2) 大型株向けモメンタム戦略を追加した場合の効果、の2方向を検証。
+
+### Step 1: 既存GU/PSCで大型株追加検証（却下）
+
+```bash
+npm run backtest:combined -- --compare-max-price --budget 10000000 --start 2024-03-01
+```
+
+**結果（¥10M budget, maxPrice sweep）:**
+
+| maxPrice | Trades | PF | MaxDD | NetRet | Calmar |
+|---|---:|---:|---:|---:|---:|
+| **≤2,500 (現状)** | 228 | **3.01** | 10.3% | **+71.6%** | **3.24** |
+| ≤5,000 | 186 | 2.97 | 11.1% | +54.0% | 2.27 |
+| ≤10,000 | 197 | 3.06 | 11.2% | +57.7% | 2.42 |
+| ≤20,000 〜 50,000 | 同上 | - | - | - | - |
+
+**エントリー価格帯別内訳（maxPrice=¥50,000のBT分解）:**
+
+| 価格帯 | Trades | PF | NetPnL |
+|---|---:|---:|---:|
+| ¥0-2,500 | **172** | **3.59** | **+¥6.1M** |
+| ¥2,500-5,000 | 19 | **0.54** | **-¥417K** |
+| ¥5,000-10,000 | 6 | 3.29 | +¥102K |
+| ¥10,000+ | **0** | - | ¥0 |
+
+**発見:**
+- 大型株(¥10,000+)ではGU(3%+gap)・PSC(+15%急騰)が流動性で消化され**シグナル未発火**
+- 中価格帯(¥2,500-5,000)は PF 0.54 で赤字、小型株エッジが消える遷移領域
+- 中価格帯をuniverseに追加するとポジション枠を赤字シグナルに奪われ**全体Calmar -30%**
+- **エッジは¥0-2,500の小型株帯に完全凝縮**。universe拡大は明確に却下
+
+### Step 2: 大型株モメンタム戦略の単独検証
+
+Jegadeesh-Titman 古典派生を `momentum-*.ts` に実装。
+
+```bash
+npm run backtest:momentum -- --largecap --budget 10000000 --start 2024-03-01
+```
+
+**パラメータ（`MOMENTUM_LARGECAP_PARAMS`, `momentum-config.ts`）:**
+
+| 項目 | 値 | 理由 |
+|---|---|---|
+| lookbackDays | 120日(6ヶ月) | 古典論文のエッジ最大帯 |
+| minReturnPct | +15% | "弱い上昇"を弾く |
+| topN | 3 | 上位3銘柄ロング |
+| rebalanceDays | 20日(月次) | 標準的turnover |
+| minMarketCap | ¥100B (1,000億円) | TOPIX500相当 |
+| maxPrice | ¥100,000 | 実質制限なし |
+| atrMultiplier | 3.0 | SL幅(maxLossPctでキャップ) |
+| **maxLossPct** | **0.10** | **古典モメンタムは-10%ストップ** |
+| **beActivationMultiplier** | **999** | **事実上無効(トレンド伸ばし切る)** |
+| **trailMultiplier** | **999** | **事実上無効** |
+| marketTrendFilter | **false** | 個別株の強さが本質 |
+| indexTrendFilter | true | 日経SMA50は維持 |
+
+**重要な設計判断:**
+
+- BEトレーリング無効化が最重要。デフォルトの `beActivation=1.0` だと大型株(低ATR%)では約1.5%上昇で即BE発動 → 微小な押し目で2-3日以内に損切り。初回BTで保有2.5日・PF 0.84(負け) → BE=999に変えて 保有10.2日・PF 2.61 へ劇的改善
+- 大型株モメンタムでは全市場breadthフィルターは不要。日経SMA50だけで十分(むしろ combined統合時に全市場breadth = 小型株ノイズが混入して邪魔)
+- maxLossPct=0.10 が古典論文の標準(-10〜15%)。デフォルトの0.03では大型株の通常のボラに即つかまる
+
+**検証結果（2024-03 〜 2026-04, budget ¥10M）:**
+
+| 指標 | 値 |
+|---|---:|
+| Trades | 28 |
+| 勝率 | 50.0% |
+| **PF** | **2.63** |
+| 期待値 | **+9.84%** |
+| 平均勝 | +30.00% |
+| 平均負 | -10.32% |
+| RR比 | 2.91 |
+| MaxDD | 6.3% |
+| NetRet | **+24.7%** |
+| 保有日数 | 12.8日 |
+
+### Step 3: WF検証（7ウィンドウ, largecap プリセット）
+
+```bash
+npm run walk-forward:momentum -- --largecap --budget 10000000
+```
+
+- **OOS集計PF=4.87、判定「堅牢 ✓」（IS/OOS比=0.38、OOS > IS の健全パターン）**
+- 6窓中2窓休止（IS PF<0.5）
+- パラメータ安定: atrMultiplier=2.0 が全窓最適
+- OOS総トレード10件、勝率70%（サンプル少なめ）
+- **Window 6 (2026-01-22〜04-21) OOS=0件**: 直近はシグナル不発
+
+### Step 4: combined BT 統合検証
+
+`combined-simulation.ts` に momentum を第5戦略として追加。`PositionLimits.momMax`、`SimContext.momConfig/momSignals`、exit/rotation/entry ロジックを実装。
+
+```bash
+npm run backtest:combined -- --enable-momentum --mom-max 3 --budget 10000000 --start 2024-03-01
+```
+
+**baseline比較（¥10M budget）:**
+
+| 指標 | Baseline (GU3+PSC2) | **+MOM3 (GU3+PSC2+MOM3)** | Δ |
+|---|---:|---:|---:|
+| Trades | 474 | 495 | +21 |
+| 勝率 | 45.4% | 46.5% | +1.1% |
+| PF | 3.23 | 3.01 | **-7%** |
+| 期待値 | +1.16% | +1.24% | +7% |
+| MaxDD | 10.7% | 10.9% | +0.2% |
+| **NetRet** | +171.1% | **+174.1%** | **+2%** |
+| **Calmar(年率)** | **7.47** | **7.46** | ~0 |
+| 稼働率 | 13.7% | **18.2%** | **+4.5%** |
+
+**Momentum単独寄与 (in combined):**
+
+- 16 trades, 勝率 43.8%, PF **1.97**, 期待値 **+5.39%**
+- NetPnL **+¥857K (+8.6%)**
+- 保有15.6日（単独BTと整合）
+
+### Step 5: 実装上の重要な落とし穴
+
+1. **allData の universe 分離**: `precomputeMomentumSignals` は top `topN*2` しか返さないため、combined で3,034銘柄の allData に対してランキングすると上位は小型株が独占 → 後filterで大型株ゼロ → 空集合になる。**precompute 前に `allDataForMom` (大型株のみ868銘柄)を分離して渡す必要がある**
+2. **breadth計算の universe 問題**: combined の `precomputed.dailyBreadth` は全3,034銘柄基準。momentum標準BTは868銘柄基準。同じ閾値0.5でも発火日が異なる → MOMENTUM_LARGECAP_PARAMS で `marketTrendFilter: false` に固定し副作用回避
+3. **lookback バッファ**: WF で IS startDate からの120日lookbackが必要 → `walk-forward-momentum.ts` で precompute に `isStartWithBuffer = isStart - (lookback+30)日` を渡す実装にしている
+
+### プロ視点での評価と本番判断
+
+**良い点:**
+- Momentum単独でPF 1.97・期待値+5.39% の確実なエッジ
+- 稼働率 13.7% → 18.2% で idle cash を一部解消
+- Calmar維持（害にならない）
+
+**気になる点:**
+- 全体PF -7%（Momentum自身が GU/PSC より弱い）
+- NetRet改善は +2% のみ
+- コスト負担大（gross +¥1.48M → net +¥857K、コスト42%）
+- WF勝率70% vs combined勝率43.8%（サンプル少なくばらつき大）
+
+**判定: 実装はフィーチャーフラグで残置、本番投入はPending**
+
+- **現状運用(¥500K〜¥5M)**: 不要。既存 GU/PSC で最適
+- **将来の¥10M+運用時**: idle cash対策として再評価候補
+- **追加検証必要**: 別universe(TOPIX Core30のみ / 時価総額1兆円+)、別期間(2018-2022)での頑健性確認
+
+### 実装として残したもの（本番への影響なし）
+
+- `src/lib/constants/momentum.ts`: 既存のまま
+- `src/backtest/momentum-config.ts`: `MOMENTUM_LARGECAP_PARAMS` プリセットと WFグリッド追加
+- `src/backtest/momentum-run.ts`: `--largecap` `--min-market-cap` `--lookback` `--min-return` `--max-price` フラグ追加
+- `scripts/walk-forward-momentum.ts`: `--largecap` フラグ + lookback buffer実装
+- `src/backtest/combined-simulation.ts`: momentum を第5戦略として統合（`momConfig`, `momSignals`, `PositionLimits.momMax`, rotation exit）
+- `src/backtest/combined-run.ts`: `--enable-momentum` `--mom-max` フラグ + 大型株universeロード + 分離allData
+- `src/backtest/types.ts`: `MomentumBacktestConfig.minMarketCap` 追加
 
 ## ファイル構成
 

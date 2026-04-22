@@ -23,16 +23,20 @@ import {
 } from "./breakout-simulation";
 import { precomputeGapUpDailySignals } from "./gapup-simulation";
 import { precomputePSCDailySignals } from "./post-surge-consolidation-simulation";
+import { precomputeMomentumSignals } from "./momentum-simulation";
+import { MOMENTUM_BACKTEST_DEFAULTS, MOMENTUM_LARGECAP_PARAMS } from "./momentum-config";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization, calculateMetrics } from "./metrics";
 import { runCombinedSimulation, type PositionLimits, type BreadthMode } from "./combined-simulation";
 import type {
   GapUpBacktestConfig,
   PostSurgeConsolidationBacktestConfig,
+  MomentumBacktestConfig,
   PerformanceMetrics,
   SimulatedPosition,
   DailyEquity,
 } from "./types";
+import type { PrecomputedMomentumSignal } from "./momentum-simulation";
 
 function getArg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
@@ -130,8 +134,11 @@ async function main() {
   const compareBreadth = args.includes("--compare-breadth");
   const compareBreadthModes = args.includes("--compare-breadth-modes");
   const compareBreadthZoom = args.includes("--compare-breadth-zoom");
+  const compareMaxPrice = args.includes("--compare-max-price");
+  const enableMomentum = args.includes("--enable-momentum");
+  const momMaxArg = getArg(args, "--mom-max");
 
-  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareBudget || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareBreadth || compareBreadthModes || compareBreadthZoom;
+  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareBudget || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareBreadth || compareBreadthModes || compareBreadthZoom || compareMaxPrice;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const pscConfig: PostSurgeConsolidationBacktestConfig = {
@@ -185,9 +192,14 @@ async function main() {
   const vixData = await fetchVixFromDB(startDate, endDate);
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
 
-  // budget-compare時はグリッド最大予算(20M)で銘柄をロード
+  // budget-compare時はグリッド最大予算(20M)で銘柄をロード、max-price比較時はグリッド最大値で銘柄をロード
+  // --enable-momentum 時は大型株を含むため maxPriceForData を広げる
   const maxPriceForData = compareBudget
     ? getMaxBuyablePrice(20_000_000)
+    : compareMaxPrice
+    ? 50_000
+    : enableMomentum
+    ? 100_000
     : guConfig.maxPrice;
   const allData = new Map<string, import("../core/technical-analysis").OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
@@ -210,9 +222,61 @@ async function main() {
   const gapupSignals = precomputeGapUpDailySignals(guConfig, allData, precomputed);
   const pscSignals = precomputePSCDailySignals(pscConfig, allData, precomputed);
 
-  const ctx = { guConfig, pscConfig, pscSignals, budget, verbose: !quietMode && verbose, allData, precomputed, gapupSignals, vixData: vixData.size > 0 ? vixData : undefined, monthlyAddAmount, equityCurveSmaPeriod: 20 };
+  // --enable-momentum: 大型株モメンタム戦略のシグナル計算
+  let momConfig: MomentumBacktestConfig | undefined;
+  let momSignals: Map<string, PrecomputedMomentumSignal[]> | undefined;
+  if (enableMomentum) {
+    momConfig = {
+      ...MOMENTUM_BACKTEST_DEFAULTS,
+      ...MOMENTUM_LARGECAP_PARAMS,
+      startDate,
+      endDate,
+      initialBudget: budget,
+      verbose: !quietMode && verbose,
+    };
 
-  const defaultLimits: PositionLimits = { boMax: 0, guMax: 3, pscMax: 2 };
+    // 大型株tickerをDBからロード
+    const largecapStocks = await prisma.stock.findMany({
+      where: {
+        isDelisted: false,
+        isActive: true,
+        isRestricted: false,
+        marketCap: { gte: momConfig.minMarketCap! },
+      },
+      select: { tickerCode: true },
+    });
+    const largecapTickers = new Set(largecapStocks.map((s) => s.tickerCode));
+    console.log(`[data] momentum大型株universe: ${largecapTickers.size}銘柄 (時価総額 >= ¥${(momConfig.minMarketCap! / 1_000_000_000).toLocaleString()}B)`);
+
+    // precompute前に大型株だけの allData を作って渡す（top N選択が小型株に取られないように）
+    const allDataForMom = new Map<string, import("../core/technical-analysis").OHLCVData[]>();
+    for (const [ticker, bars] of allData) {
+      if (largecapTickers.has(ticker)) allDataForMom.set(ticker, bars);
+    }
+    momSignals = precomputeMomentumSignals(momConfig, allDataForMom, precomputed);
+  }
+
+  const ctx = {
+    guConfig,
+    pscConfig,
+    pscSignals,
+    momConfig,
+    momSignals,
+    budget,
+    verbose: !quietMode && verbose,
+    allData,
+    precomputed,
+    gapupSignals,
+    vixData: vixData.size > 0 ? vixData : undefined,
+    monthlyAddAmount,
+    // equity SMA filter は Phase 0 の検証(2026-04-22)で全戦略に逆効果と判明したため既定は無効(0)
+    // --compare-equity-filter モードでのみ値を上書きして検証する
+    equityCurveSmaPeriod: 0,
+  };
+
+  const defaultLimits: PositionLimits = enableMomentum
+    ? { boMax: 0, guMax: 3, pscMax: 2, momMax: Number(momMaxArg ?? 2) }
+    : { boMax: 0, guMax: 3, pscMax: 2 };
 
   // 資金比較モード
   if (compareBudget) {
@@ -254,6 +318,88 @@ async function main() {
         `${row.label.padEnd(14)}| ${String(mp).padStart(5)} | ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(6)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(8)} | ${m.maxDrawdown.toFixed(1).padStart(6)}% | ${m.netReturnPct.toFixed(1).padStart(7)}% | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
       );
     }
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // maxPrice比較モード（大型株を含めるとエッジが残るか）
+  if (compareMaxPrice) {
+    const maxPriceGrid: { label: string; value: number }[] = [
+      { label: "≤2,500 (現状/小中型)", value: 2_500 },
+      { label: "≤5,000", value: 5_000 },
+      { label: "≤10,000", value: 10_000 },
+      { label: "≤20,000", value: 20_000 },
+      { label: "≤50,000 (実質無制限)", value: 50_000 },
+    ];
+
+    // 価格帯別内訳用のバケット
+    const priceBuckets: { label: string; min: number; max: number }[] = [
+      { label: "¥0-2,500", min: 0, max: 2_500 },
+      { label: "¥2,500-5,000", min: 2_500, max: 5_000 },
+      { label: "¥5,000-10,000", min: 5_000, max: 10_000 },
+      { label: "¥10,000-20,000", min: 10_000, max: 20_000 },
+      { label: "¥20,000+", min: 20_000, max: Infinity },
+    ];
+
+    console.log(`\n=== maxPrice比較（大型株追加でエッジが残るか） ===`);
+    console.log(`予算: ¥${budget.toLocaleString()}, 期間: ${startDate} → ${endDate}`);
+    console.log(
+      `${"maxPrice".padEnd(22)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"MaxDD".padStart(6)} | ${"NetRet".padStart(7)} | ${"Calmar".padStart(6)} | ${"稼働率".padStart(6)}`,
+    );
+    console.log("-".repeat(100));
+
+    const years = dayjs(endDate).diff(dayjs(startDate), "day") / 365;
+    const overallResults: { label: string; maxPrice: number; allTrades: SimulatedPosition[]; equityCurve: DailyEquity[] }[] = [];
+
+    for (const row of maxPriceGrid) {
+      const gc: GapUpBacktestConfig = { ...guConfig, maxPrice: row.value };
+      const pc: PostSurgeConsolidationBacktestConfig = { ...pscConfig, maxPrice: row.value };
+      const guSig = precomputeGapUpDailySignals(gc, allData, precomputed);
+      const pSig = precomputePSCDailySignals(pc, allData, precomputed);
+      const result = runCombinedSimulation(
+        { ...ctx, guConfig: gc, pscConfig: pc, gapupSignals: guSig, pscSignals: pSig },
+        defaultLimits,
+      );
+      const m = result.totalMetrics;
+      const util = calculateCapitalUtilization(result.equityCurve);
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      const annualizedRet = years > 0 ? m.netReturnPct / years : m.netReturnPct;
+      const calmar = m.maxDrawdown > 0 ? annualizedRet / m.maxDrawdown : 0;
+      console.log(
+        `${row.label.padEnd(22)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(7)} | ${m.maxDrawdown.toFixed(1).padStart(5)}% | ${m.netReturnPct.toFixed(1).padStart(6)}% | ${calmar.toFixed(2).padStart(6)} | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+      overallResults.push({ label: row.label, maxPrice: row.value, allTrades: result.allTrades, equityCurve: result.equityCurve });
+    }
+
+    // エントリー価格帯別内訳（新帯域の玉にエッジがあるか検証）
+    console.log(`\n=== エントリー価格帯別内訳 (maxPrice=${maxPriceGrid[maxPriceGrid.length - 1].value.toLocaleString()} のBTから分割) ===`);
+    const lastResult = overallResults[overallResults.length - 1];
+    console.log(
+      `${"価格帯".padEnd(18)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"AvgPnL%".padStart(7)} | ${"NetPnL".padStart(12)}`,
+    );
+    console.log("-".repeat(82));
+
+    for (const bucket of priceBuckets) {
+      const inBucket = lastResult.allTrades.filter(
+        (t) => t.entryPrice >= bucket.min && t.entryPrice < bucket.max,
+      );
+      if (inBucket.length === 0) {
+        console.log(`${bucket.label.padEnd(18)}| ${"0".padStart(6)} | ${"-".padStart(5)} | ${"-".padStart(5)} | ${"-".padStart(7)} | ${"-".padStart(7)} | ${"¥0".padStart(12)}`);
+        continue;
+      }
+      const sub = calculateMetrics(inBucket, lastResult.equityCurve, budget);
+      const pfStr = sub.profitFactor === Infinity ? "∞" : sub.profitFactor.toFixed(2);
+      const expStr = (sub.expectancy >= 0 ? "+" : "") + sub.expectancy.toFixed(2) + "%";
+      const avgPnlPct = inBucket.reduce((sum, t) => sum + (t.pnlPct ?? 0), 0) / inBucket.length;
+      const avgPnlStr = (avgPnlPct >= 0 ? "+" : "") + avgPnlPct.toFixed(2) + "%";
+      const netPnlStr = (sub.totalNetPnl >= 0 ? "+" : "") + `¥${sub.totalNetPnl.toLocaleString()}`;
+      console.log(
+        `${bucket.label.padEnd(18)}| ${String(sub.totalTrades).padStart(6)} | ${sub.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expStr.padStart(7)} | ${avgPnlStr.padStart(7)} | ${netPnlStr.padStart(12)}`,
+      );
+    }
+
     console.log("");
     await prisma.$disconnect();
     return;
@@ -835,7 +981,10 @@ async function main() {
   }
 
   // 通常実行
-  console.log(`ポジション枠: GU${defaultLimits.guMax} + PSC${defaultLimits.pscMax ?? 0}`);
+  const slotsLabel = enableMomentum
+    ? `GU${defaultLimits.guMax} + PSC${defaultLimits.pscMax ?? 0} + MOM${defaultLimits.momMax ?? 0}`
+    : `GU${defaultLimits.guMax} + PSC${defaultLimits.pscMax ?? 0}`;
+  console.log(`ポジション枠: ${slotsLabel}`);
   const result = runCombinedSimulation(ctx, defaultLimits);
 
   console.log("\n" + "=".repeat(60));
@@ -850,6 +999,9 @@ async function main() {
 
   printMetrics(result.guMetrics, "GapUp");
   printMetrics(result.pscMetrics, "PostSurgeConsolidation");
+  if (enableMomentum) {
+    printMetrics(result.momMetrics, "Momentum (大型株)");
+  }
 
   const exitReasons = new Map<string, number>();
   for (const t of result.allTrades) {

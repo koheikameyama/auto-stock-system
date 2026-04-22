@@ -5,11 +5,13 @@
  *   npm run backtest:momentum
  *   npm run backtest:momentum -- --start 2025-04-01 --end 2026-03-25
  *   npm run backtest:momentum -- --verbose
+ *   npm run backtest:momentum -- --largecap --budget 10000000 --start 2024-03-01
+ *   npm run backtest:momentum -- --min-market-cap 100000000000 --lookback 120 --min-return 15 --budget 10000000
  */
 
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
-import { MOMENTUM_BACKTEST_DEFAULTS } from "./momentum-config";
+import { MOMENTUM_BACKTEST_DEFAULTS, MOMENTUM_LARGECAP_PARAMS } from "./momentum-config";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import { runMomentumBacktest } from "./momentum-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
@@ -47,39 +49,63 @@ async function main() {
   const budget = Number(getArg(args, "--budget") ?? MOMENTUM_BACKTEST_DEFAULTS.initialBudget);
   const verbose = args.includes("--verbose");
   const noPositionCap = args.includes("--no-position-cap");
+  const largecapPreset = args.includes("--largecap");
+
+  // 個別オーバーライド
+  const minMarketCapArg = getArg(args, "--min-market-cap");
+  const lookbackArg = getArg(args, "--lookback");
+  const minReturnArg = getArg(args, "--min-return");
+  const maxPriceArg = getArg(args, "--max-price");
+
+  // preset適用後に個別オーバーライド
+  const presetOverrides: Partial<MomentumBacktestConfig> = largecapPreset ? { ...MOMENTUM_LARGECAP_PARAMS } : {};
+  if (minMarketCapArg !== undefined) presetOverrides.minMarketCap = Number(minMarketCapArg);
+  if (lookbackArg !== undefined) presetOverrides.lookbackDays = Number(lookbackArg);
+  if (minReturnArg !== undefined) presetOverrides.minReturnPct = Number(minReturnArg);
+  if (maxPriceArg !== undefined) presetOverrides.maxPrice = Number(maxPriceArg);
 
   console.log("=".repeat(60));
-  console.log("モメンタム バックテスト");
+  console.log(`モメンタム バックテスト${largecapPreset ? "（大型株プリセット）" : ""}`);
   console.log("=".repeat(60));
   console.log(`期間: ${startDate} → ${endDate}`);
   console.log(`初期資金: ¥${budget.toLocaleString()}`);
-  console.log(`ルックバック: ${MOMENTUM_BACKTEST_DEFAULTS.lookbackDays}日, TopN: ${MOMENTUM_BACKTEST_DEFAULTS.topN}, リバランス: ${MOMENTUM_BACKTEST_DEFAULTS.rebalanceDays}日`);
 
-  // データ取得
+  // データ取得（時価総額フィルター付き）
+  const effectiveMinMarketCap = presetOverrides.minMarketCap;
   const stocks = await prisma.stock.findMany({
-    where: { isDelisted: false, isActive: true, isRestricted: false },
-    select: { tickerCode: true },
+    where: {
+      isDelisted: false,
+      isActive: true,
+      isRestricted: false,
+      ...(effectiveMinMarketCap != null ? { marketCap: { gte: effectiveMinMarketCap } } : {}),
+    },
+    select: { tickerCode: true, marketCap: true },
   });
   const tickerCodes = stocks.map((s) => s.tickerCode);
-  console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
+  if (effectiveMinMarketCap != null) {
+    console.log(`[data] 時価総額 >= ¥${(effectiveMinMarketCap / 1_000_000_000).toLocaleString()}B: ${tickerCodes.length}銘柄`);
+  } else {
+    console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
+  }
 
   const rawData = await fetchHistoricalFromDB(tickerCodes, startDate, endDate);
   const vixData = await fetchVixFromDB(startDate, endDate);
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
   console.log(`[data] ${rawData.size}銘柄, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
-  // 事前フィルタ
-  const maxPrice = getMaxBuyablePrice(budget);
+  // 事前フィルタ（maxPriceベース）
+  const maxPrice = presetOverrides.maxPrice ?? getMaxBuyablePrice(budget);
   const allData = new Map<string, OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
     if (bars.some((b) => b.close <= maxPrice && b.close > 0)) {
       allData.set(ticker, bars);
     }
   }
-  console.log(`[data] ${allData.size}銘柄（フィルタ後）`);
+  console.log(`[data] ${allData.size}銘柄（価格フィルタ後）`);
 
   const baseConfig: MomentumBacktestConfig = {
     ...MOMENTUM_BACKTEST_DEFAULTS,
+    ...presetOverrides,
     startDate,
     endDate,
     initialBudget: budget,
@@ -87,6 +113,8 @@ async function main() {
     verbose,
     positionCapEnabled: !noPositionCap,
   };
+
+  console.log(`ルックバック: ${baseConfig.lookbackDays}日, TopN: ${baseConfig.topN}, リバランス: ${baseConfig.rebalanceDays}日, 最低リターン: +${baseConfig.minReturnPct}%`);
 
   const vixArg = vixData.size > 0 ? vixData : undefined;
   const indexArg = indexData.size > 0 ? indexData : undefined;
