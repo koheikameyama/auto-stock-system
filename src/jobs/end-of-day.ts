@@ -403,9 +403,13 @@ export async function main() {
   await fillNextDayOpen();
 
   // 10. 翌日エントリー可否通知（今日の終値ベースのbreadth）
-  const tomorrowBreadth = await calculateMarketBreadth().catch(() => null);
+  const tomorrowBreadth = await calculateMarketBreadth(getTodayForDB()).catch((e) => {
+    console.warn("翌日breadth計算に失敗:", e);
+    return null;
+  });
   if (tomorrowBreadth) {
     const pct = (tomorrowBreadth.breadth * 100).toFixed(1);
+    const asOf = tomorrowBreadth.asOfDate.toISOString().slice(0, 10);
     const isEntryOk = tomorrowBreadth.breadth >= MARKET_BREADTH.THRESHOLD && tomorrowBreadth.breadth <= MARKET_BREADTH.UPPER_CAP;
     const reason = tomorrowBreadth.breadth < MARKET_BREADTH.THRESHOLD
       ? `${pct}% — ${(MARKET_BREADTH.THRESHOLD * 100).toFixed(0)}%未満につきスキップ`
@@ -418,6 +422,7 @@ export async function main() {
       color: isEntryOk ? "good" : "warning",
       fields: [
         { title: "SMA25超え", value: `${tomorrowBreadth.above}/${tomorrowBreadth.total}銘柄`, short: true },
+        { title: "基準日", value: asOf, short: true },
       ],
     });
   }
