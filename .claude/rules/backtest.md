@@ -986,6 +986,65 @@ npm run backtest:combined -- --compare-vix-risk --start 2024-03-01
 
 本番コード(trading-*.ts / watchlist-builder / entry-executor)は BT側から独立しており、本変更の影響を受けない。運用側でも同様のレジーム別scalingを適用したい場合は別途実装が必要(本変更はBTのみ)。
 
+## 連敗スロットル(B3)検証（2026-04-22実施、不採用）
+
+**結論: 不採用。Phase 0のエクイティSMAフィルターと同じ失敗パターン。全パターンで Calmar 悪化。**
+**GU/PSC の短期決戦では、決済済みトレードWinRateベースのsoft reductionも遅行指標として機能しないことが確定。**
+
+CLAUDE.md の運用示唆「月次WinRate<40%でサイズ縮小」を実装版で検証。Phase 0 ではエクイティSMAの binary halt が逆効果だったが、本検証は **トレードベース(決済済みのみ)の soft reduction(halt ではなく縮小)** で挙動が改善するかを確認。
+
+### 実装
+
+- `SimContext.loseStreakScaling?: { window, threshold, scale, minSample }` を追加
+- `getStreakScale()` ヘルパー: 直近N件の全戦略合算 WinRate が threshold未満なら scale倍で縮小
+- 5戦略の entry quantity 計算で `regimeScale × streakScale` を合成
+
+### 検証
+
+```bash
+npm run backtest:combined -- --compare-streak --start 2024-03-01
+```
+
+| 設定 | Trades | PF | MaxDD | NetRet | **Calmar** |
+|---|---:|---:|---:|---:|---:|
+| **OFF (現状)** | 289 | **3.66** | 9.0% | **+180.3%** | **9.37** |
+| w20 t40% s0.5 | 294 | 3.15 | 8.6% | +133.3% | 7.28 |
+| w30 t40% s0.5 | 294 | 3.16 | 11.3% | +139.8% | 5.75 |
+| w20 t40% s0.25 | 299 | 3.27 | 9.0% | +134.8% | 6.99 |
+| **w20 t45% s0.5** | 314 | 3.34 | **7.9%** | +135.3% | 7.99 |
+| w20 t35% s0.5 | 284 | 3.50 | 12.1% | +172.5% | 6.66 |
+
+### レジーム別結果（要点）
+
+- A期(平穏ボックス): OFF +¥13K が最良、**スロットル入れると最悪 -¥16K**
+- D期(大強気): OFF +¥724K が最良、**スロットル全パターンで -28%以上**
+- B/C期: 影響軽微
+- E期(直近): OFF +¥276 が最良、全スロットルで負け
+
+### Phase 0 と B3 で共通する失敗構造
+
+1. **遅行指標でエッジを削る**: 連敗期はすぐに回復するが、スロットルが発動するのは回復後
+2. **GU/PSC は1-2日ホールド** なので、20件分WinRateは"数週間前の情報"で時代遅れ
+3. **縮小すべき期はスロットル前に終わる**(最悪のタイミング後手)
+4. A期の不調時にスロットルが作動 → 翌週の回復局面で縮小サイズ → 回復エッジ取り逃し
+
+### 興味深い副次発見
+
+**w20 t45% s0.5 で MaxDD 7.9%(現状 9.0% から-12%)と最低を記録**。NetRet が-25%の代償。Calmar KPI では不採用だが、**MaxDD最小化を優先する運用スタイル**(例: 絶対リスク重視の個人投資家)では選択肢になり得る。
+
+### 実装として残したもの（本番影響なし、運用スタイル変更時の選択肢）
+
+- `src/backtest/combined-simulation.ts`: `SimContext.loseStreakScaling` オプション + `getStreakScale()` ヘルパー + 5戦略の quantity に regimeScale × streakScale 合成
+- `src/backtest/combined-run.ts`: `--compare-streak` 比較モード
+
+### 今後の方針
+
+**Phase 0 + B3 の2回の検証で「遅行指標系スロットルは GU/PSC に効かない」が確定。**
+
+- ローリング勝率・エクイティSMAなど時間遅れの指標はすべて却下
+- 今後同種のアイデアが出た場合、本検証を根拠に即却下可能
+- レジーム適応で改善したい場合は先行指標(breadth・VIX・Index SMA)を使うこと(既に実装済み)
+
 ## ファイル構成
 
 ### breakout

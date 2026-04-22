@@ -81,6 +81,18 @@ export interface SimContext {
    * 省略時の既定: { elevated: 0.5, crisis: 0 }（normal/high=1.0）= 既存挙動
    */
   riskScaleByRegime?: Partial<Record<RegimeLevel, number>>;
+  /**
+   * 連敗スロットル: 直近 window 件の決済済みトレード全戦略合算で WinRate を算出し、
+   * threshold を下回ったら scale 倍でサイズ縮小。minSample 件未満は判定を保留。
+   * 省略時は無効。
+   * CLAUDE.md の「月次WinRate<40%でサイズ縮小」運用示唆の実装版。
+   */
+  loseStreakScaling?: {
+    window: number;
+    threshold: number;
+    scale: number;
+    minSample: number;
+  };
 }
 
 /** breadthゲーティングの方式 */
@@ -197,6 +209,25 @@ function getRegimeRiskScale(
   if (regime === "high") return 0.25;
   if (regime === "crisis") return 0;
   return 1.0;
+}
+
+// ──────────────────────────────────────────
+// 連敗スロットル: 直近Nトレードの勝率が閾値未満ならサイズ縮小
+//
+// Phase 0(2026-04-22) では エクイティSMAフィルターが全戦略で逆効果と判明したが、
+// B3はトレードベース(決済済み勝敗のみ)で、soft reduction(halt ではなく縮小)の
+// 違いでそれが改善するかを検証する。
+// ──────────────────────────────────────────
+function getStreakScale(
+  allClosedTradesSorted: SimulatedPosition[],
+  config: { window: number; threshold: number; scale: number; minSample: number } | undefined,
+): number {
+  if (!config) return 1.0;
+  const recent = allClosedTradesSorted.slice(-config.window);
+  if (recent.length < config.minSample) return 1.0;
+  const wins = recent.filter((t) => (t.netPnl ?? t.pnl ?? 0) > 0).length;
+  const winRate = wins / recent.length;
+  return winRate < config.threshold ? config.scale : 1.0;
 }
 
 // ──────────────────────────────────────────
@@ -513,7 +544,7 @@ export function runCombinedSimulation(
     typeof maxPositions === "number"
       ? { boMax: maxPositions, guMax: maxPositions, wbMax: maxPositions, pscMax: maxPositions, momMax: maxPositions, totalMax: maxPositions }
       : maxPositions;
-  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, momConfig, momSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride, wbRiskPctOverride, breadthMode, breadthModeGu, breadthModePsc, tickerSectorMap, riskScaleByRegime } = ctx;
+  const { boConfig, guConfig, wbConfig, pscConfig, pscSignals, momConfig, momSignals, budget, verbose, allData, precomputed, breakoutSignals, gapupSignals, weeklyBreakSignals, vixData, monthlyAddAmount, equityCurveSmaPeriod, boVixSkipLevel, guVixSkipLevel, settlementDays: settlementDaysOpt, riskPctOverride, wbRiskPctOverride, breadthMode, breadthModeGu, breadthModePsc, tickerSectorMap, riskScaleByRegime, loseStreakScaling } = ctx;
   const guBreadthMode = breadthModeGu ?? breadthMode;
   const pscBreadthMode = breadthModePsc ?? breadthMode;
   const { tradingDays, tradingDayIndex, dateIndexMap } = precomputed;
@@ -695,6 +726,14 @@ export function runCombinedSimulation(
     // ── 2a. Breakout エントリー ──
     const totalPositions = () => boPositions.length + guPositions.length + wbPositions.length + pscPositions.length + momPositions.length;
     const totalUnderLimit = () => limits.totalMax === undefined || totalPositions() < limits.totalMax;
+    // 連敗スロットル: 直近Nトレード全戦略合算のWinRateが閾値を下回ったらサイズ縮小
+    let streakScale = 1.0;
+    if (loseStreakScaling) {
+      const allClosedSorted = [
+        ...boClosedTrades, ...guClosedTrades, ...wbClosedTrades, ...pscClosedTrades, ...momClosedTrades,
+      ].sort((a, b) => (a.exitDate ?? "").localeCompare(b.exitDate ?? ""));
+      streakScale = getStreakScale(allClosedSorted, loseStreakScaling);
+    }
     // 同セクター保有数チェック（全戦略横断）
     const isSectorAtLimit = (ticker: string): boolean => {
       if (limits.maxPerSector === undefined || !tickerSectorMap) return false;
@@ -728,7 +767,8 @@ export function runCombinedSimulation(
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         {
           const regimeScale = getRegimeRiskScale(todayRegime, riskScaleByRegime);
-          if (regimeScale < 1.0) quantity = Math.floor((quantity * regimeScale) / UNIT_SHARES) * UNIT_SHARES;
+          const combinedScale = regimeScale * streakScale;
+          if (combinedScale < 1.0) quantity = Math.floor((quantity * combinedScale) / UNIT_SHARES) * UNIT_SHARES;
         }
         if (quantity <= 0) continue;
         if (signal.entryPrice * quantity > cash) continue;
@@ -772,7 +812,8 @@ export function runCombinedSimulation(
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         {
           const regimeScale = getRegimeRiskScale(todayRegime, riskScaleByRegime);
-          if (regimeScale < 1.0) quantity = Math.floor((quantity * regimeScale) / UNIT_SHARES) * UNIT_SHARES;
+          const combinedScale = regimeScale * streakScale;
+          if (combinedScale < 1.0) quantity = Math.floor((quantity * combinedScale) / UNIT_SHARES) * UNIT_SHARES;
         }
         if (quantity <= 0) continue;
         if (signal.entryPrice * quantity > cash) continue;
@@ -816,7 +857,8 @@ export function runCombinedSimulation(
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         {
           const regimeScale = getRegimeRiskScale(todayRegime, riskScaleByRegime);
-          if (regimeScale < 1.0) quantity = Math.floor((quantity * regimeScale) / UNIT_SHARES) * UNIT_SHARES;
+          const combinedScale = regimeScale * streakScale;
+          if (combinedScale < 1.0) quantity = Math.floor((quantity * combinedScale) / UNIT_SHARES) * UNIT_SHARES;
         }
         if (quantity <= 0) continue;
         if (signal.entryPrice * quantity > cash) continue;
@@ -860,7 +902,8 @@ export function runCombinedSimulation(
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         {
           const regimeScale = getRegimeRiskScale(todayRegime, riskScaleByRegime);
-          if (regimeScale < 1.0) quantity = Math.floor((quantity * regimeScale) / UNIT_SHARES) * UNIT_SHARES;
+          const combinedScale = regimeScale * streakScale;
+          if (combinedScale < 1.0) quantity = Math.floor((quantity * combinedScale) / UNIT_SHARES) * UNIT_SHARES;
         }
         if (quantity <= 0) continue;
         if (signal.entryPrice * quantity > cash) continue;
@@ -911,7 +954,8 @@ export function runCombinedSimulation(
         let quantity = Math.floor(rawQuantity / UNIT_SHARES) * UNIT_SHARES;
         {
           const regimeScale = getRegimeRiskScale(todayRegime, riskScaleByRegime);
-          if (regimeScale < 1.0) quantity = Math.floor((quantity * regimeScale) / UNIT_SHARES) * UNIT_SHARES;
+          const combinedScale = regimeScale * streakScale;
+          if (combinedScale < 1.0) quantity = Math.floor((quantity * combinedScale) / UNIT_SHARES) * UNIT_SHARES;
         }
         if (quantity <= 0) continue;
         if (signal.currentPrice * quantity > cash) continue;
