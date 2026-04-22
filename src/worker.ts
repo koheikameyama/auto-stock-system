@@ -147,10 +147,12 @@ const schedules = [
   { cron: "0-59 9 * * 1-5", job: runPositionMonitorTick, name: "position-monitor-tick", requiresMarketDay: false },
   { cron: "* 10 * * 1-5", job: runPositionMonitorTick, name: "position-monitor-tick", requiresMarketDay: false },
   { cron: "0-30 11 * * 1-5", job: runPositionMonitorTick, name: "position-monitor-tick", requiresMarketDay: false },
-  // 前場のみ: intraday-ma-scanner（9:00-11:30）
-  { cron: "0-59 9 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
-  { cron: "* 10 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
-  { cron: "0-30 11 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
+  // 前場のみ: intraday-ma-scanner（9:00-11:30、5分おき）
+  // 立花API高負荷警告対応: 毎分 → 5分おきに削減（~80%削減）。
+  // シグナル側に「前回タッチから5分以上」の間隔制約があり5分おきで情報量は維持される。
+  { cron: "*/5 9 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
+  { cron: "*/5 10 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
+  { cron: "0,5,10,15,20,25,30 11 * * 1-5", job: runAMTick, name: "intraday-ma-scanner", requiresMarketDay: true },
   { cron: "30-59 12 * * 1-5", job: runPositionMonitorTick, name: "position-monitor-tick", requiresMarketDay: false },
   { cron: "* 13-14 * * 1-5", job: runPositionMonitorTick, name: "position-monitor-tick", requiresMarketDay: false },
   { cron: "0-30 15 * * 1-5", job: runPositionMonitorTick, name: "position-monitor-tick", requiresMarketDay: false },
