@@ -25,6 +25,8 @@ import { precomputeGapUpDailySignals } from "./gapup-simulation";
 import { precomputePSCDailySignals } from "./post-surge-consolidation-simulation";
 import { precomputeMomentumSignals } from "./momentum-simulation";
 import { MOMENTUM_BACKTEST_DEFAULTS, MOMENTUM_LARGECAP_PARAMS } from "./momentum-config";
+import { precomputeWeeklyBreakSignals } from "./weekly-break-simulation";
+import { WEEKLY_BREAK_BACKTEST_DEFAULTS, WEEKLY_BREAK_LARGECAP_PARAMS } from "./weekly-break-config";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization, calculateMetrics } from "./metrics";
 import { runCombinedSimulation, type PositionLimits, type BreadthMode } from "./combined-simulation";
@@ -32,11 +34,13 @@ import type {
   GapUpBacktestConfig,
   PostSurgeConsolidationBacktestConfig,
   MomentumBacktestConfig,
+  WeeklyBreakBacktestConfig,
   PerformanceMetrics,
   SimulatedPosition,
   DailyEquity,
 } from "./types";
 import type { PrecomputedMomentumSignal } from "./momentum-simulation";
+import type { PrecomputedWeeklyBreakSignals } from "./weekly-break-simulation";
 
 function getArg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
@@ -137,6 +141,8 @@ async function main() {
   const compareMaxPrice = args.includes("--compare-max-price");
   const enableMomentum = args.includes("--enable-momentum");
   const momMaxArg = getArg(args, "--mom-max");
+  const enableWbLargecap = args.includes("--enable-wb-largecap");
+  const wbMaxArg = getArg(args, "--wb-max");
 
   const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareBudget || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareBreadth || compareBreadthModes || compareBreadthZoom || compareMaxPrice;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
@@ -193,12 +199,12 @@ async function main() {
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
 
   // budget-compare時はグリッド最大予算(20M)で銘柄をロード、max-price比較時はグリッド最大値で銘柄をロード
-  // --enable-momentum 時は大型株を含むため maxPriceForData を広げる
+  // --enable-momentum / --enable-wb-largecap 時は大型株を含むため maxPriceForData を広げる
   const maxPriceForData = compareBudget
     ? getMaxBuyablePrice(20_000_000)
     : compareMaxPrice
     ? 50_000
-    : enableMomentum
+    : (enableMomentum || enableWbLargecap)
     ? 100_000
     : guConfig.maxPrice;
   const allData = new Map<string, import("../core/technical-analysis").OHLCVData[]>();
@@ -221,6 +227,38 @@ async function main() {
 
   const gapupSignals = precomputeGapUpDailySignals(guConfig, allData, precomputed);
   const pscSignals = precomputePSCDailySignals(pscConfig, allData, precomputed);
+
+  // --enable-wb-largecap: 大型株WB戦略のシグナル計算
+  let wbConfig: WeeklyBreakBacktestConfig | undefined;
+  let weeklyBreakSignals: PrecomputedWeeklyBreakSignals | undefined;
+  if (enableWbLargecap) {
+    wbConfig = {
+      ...WEEKLY_BREAK_BACKTEST_DEFAULTS,
+      ...WEEKLY_BREAK_LARGECAP_PARAMS,
+      startDate,
+      endDate,
+      initialBudget: budget,
+      verbose: !quietMode && verbose,
+    };
+
+    const wbLargecapStocks = await prisma.stock.findMany({
+      where: {
+        isDelisted: false,
+        isActive: true,
+        isRestricted: false,
+        marketCap: { gte: wbConfig.minMarketCap! },
+      },
+      select: { tickerCode: true },
+    });
+    const wbLargecapTickers = new Set(wbLargecapStocks.map((s) => s.tickerCode));
+    console.log(`[data] WB大型株universe: ${wbLargecapTickers.size}銘柄 (時価総額 >= ¥${(wbConfig.minMarketCap! / 1_000_000_000).toLocaleString()}B)`);
+
+    const allDataForWb = new Map<string, import("../core/technical-analysis").OHLCVData[]>();
+    for (const [ticker, bars] of allData) {
+      if (wbLargecapTickers.has(ticker)) allDataForWb.set(ticker, bars);
+    }
+    weeklyBreakSignals = precomputeWeeklyBreakSignals(wbConfig, allDataForWb, precomputed);
+  }
 
   // --enable-momentum: 大型株モメンタム戦略のシグナル計算
   let momConfig: MomentumBacktestConfig | undefined;
@@ -260,6 +298,8 @@ async function main() {
     guConfig,
     pscConfig,
     pscSignals,
+    wbConfig,
+    weeklyBreakSignals,
     momConfig,
     momSignals,
     budget,
@@ -274,9 +314,13 @@ async function main() {
     equityCurveSmaPeriod: 0,
   };
 
-  const defaultLimits: PositionLimits = enableMomentum
-    ? { boMax: 0, guMax: 3, pscMax: 2, momMax: Number(momMaxArg ?? 2) }
-    : { boMax: 0, guMax: 3, pscMax: 2 };
+  const defaultLimits: PositionLimits = {
+    boMax: 0,
+    guMax: 3,
+    pscMax: 2,
+    ...(enableMomentum ? { momMax: Number(momMaxArg ?? 2) } : {}),
+    ...(enableWbLargecap ? { wbMax: Number(wbMaxArg ?? 2) } : {}),
+  };
 
   // 資金比較モード
   if (compareBudget) {
@@ -981,10 +1025,10 @@ async function main() {
   }
 
   // 通常実行
-  const slotsLabel = enableMomentum
-    ? `GU${defaultLimits.guMax} + PSC${defaultLimits.pscMax ?? 0} + MOM${defaultLimits.momMax ?? 0}`
-    : `GU${defaultLimits.guMax} + PSC${defaultLimits.pscMax ?? 0}`;
-  console.log(`ポジション枠: ${slotsLabel}`);
+  const slotsParts = [`GU${defaultLimits.guMax}`, `PSC${defaultLimits.pscMax ?? 0}`];
+  if (enableWbLargecap) slotsParts.push(`WB${defaultLimits.wbMax ?? 0}`);
+  if (enableMomentum) slotsParts.push(`MOM${defaultLimits.momMax ?? 0}`);
+  console.log(`ポジション枠: ${slotsParts.join(" + ")}`);
   const result = runCombinedSimulation(ctx, defaultLimits);
 
   console.log("\n" + "=".repeat(60));
@@ -999,6 +1043,9 @@ async function main() {
 
   printMetrics(result.guMetrics, "GapUp");
   printMetrics(result.pscMetrics, "PostSurgeConsolidation");
+  if (enableWbLargecap) {
+    printMetrics(result.wbMetrics, "WeeklyBreak (大型株)");
+  }
   if (enableMomentum) {
     printMetrics(result.momMetrics, "Momentum (大型株)");
   }

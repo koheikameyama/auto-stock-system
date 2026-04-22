@@ -14,7 +14,14 @@ import { prisma } from "../src/lib/prisma";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "../src/backtest/data-fetcher";
 import { precomputeSimData } from "../src/backtest/breakout-simulation";
 import { runWeeklyBreakBacktest, precomputeWeeklyBreakSignals } from "../src/backtest/weekly-break-simulation";
-import { WEEKLY_BREAK_BACKTEST_DEFAULTS, generateWeeklyBreakParameterCombinations, WEEKLY_BREAK_PARAMETER_GRID } from "../src/backtest/weekly-break-config";
+import {
+  WEEKLY_BREAK_BACKTEST_DEFAULTS,
+  WEEKLY_BREAK_LARGECAP_PARAMS,
+  generateWeeklyBreakParameterCombinations,
+  generateLargecapWeeklyBreakParameterCombinations,
+  WEEKLY_BREAK_PARAMETER_GRID,
+  WEEKLY_BREAK_LARGECAP_PARAMETER_GRID,
+} from "../src/backtest/weekly-break-config";
 import type { WeeklyBreakBacktestConfig, PerformanceMetrics } from "../src/backtest/types";
 import type { OHLCVData } from "../src/core/technical-analysis";
 
@@ -46,6 +53,15 @@ function paramComboKey(params: Partial<WeeklyBreakBacktestConfig>): string {
   return `${params.atrMultiplier}_${params.beActivationMultiplier}_${params.trailMultiplier}`;
 }
 
+function paramComboKeyLargecap(params: Partial<WeeklyBreakBacktestConfig>): string {
+  return `atr_${params.atrMultiplier}`;
+}
+
+function getArg(args: string[], flag: string): string | undefined {
+  const idx = args.indexOf(flag);
+  return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : undefined;
+}
+
 function calcMedian(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -65,8 +81,13 @@ function selectByMaxPF(comboResults: Map<string, ComboResult>): ComboResult | nu
   return best;
 }
 
-function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult | null {
-  const gridArrays: number[][] = [
+function selectByRobustness(
+  comboResults: Map<string, ComboResult>,
+  largecap: boolean,
+): ComboResult | null {
+  const gridArrays: number[][] = largecap
+    ? [[...WEEKLY_BREAK_LARGECAP_PARAMETER_GRID.atrMultiplier]]
+    : [
     [...WEEKLY_BREAK_PARAMETER_GRID.atrMultiplier],
     [...WEEKLY_BREAK_PARAMETER_GRID.beActivationMultiplier],
     [...WEEKLY_BREAK_PARAMETER_GRID.trailMultiplier],
@@ -78,11 +99,13 @@ function selectByRobustness(comboResults: Map<string, ComboResult>): ComboResult
 
   for (const result of comboResults.values()) {
     const p = result.params;
-    const indices = [
-      gridArrays[0].indexOf(p.atrMultiplier!),
-      gridArrays[1].indexOf(p.beActivationMultiplier!),
-      gridArrays[2].indexOf(p.trailMultiplier!),
-    ];
+    const indices = largecap
+      ? [gridArrays[0].indexOf(p.atrMultiplier!)]
+      : [
+          gridArrays[0].indexOf(p.atrMultiplier!),
+          gridArrays[1].indexOf(p.beActivationMultiplier!),
+          gridArrays[2].indexOf(p.trailMultiplier!),
+        ];
 
     const neighborPFs: number[] = [];
     const ranges = indices.map((idx, dim) => {
@@ -148,38 +171,61 @@ function padPF(pf: number): string {
 async function main() {
   const args = process.argv.slice(2);
   const useRobust = !args.includes("--max-pf");
+  const largecap = args.includes("--largecap");
+  const budget = Number(getArg(args, "--budget") ?? (largecap ? 10_000_000 : WEEKLY_BREAK_BACKTEST_DEFAULTS.initialBudget));
   const maxDailyEntriesArg = args.find((a) => a.startsWith("--max-daily-entries="));
   const maxDailyEntries = maxDailyEntriesArg ? parseInt(maxDailyEntriesArg.split("=")[1], 10) : undefined;
   const endDate = dayjs().format("YYYY-MM-DD");
   const startDate = dayjs().subtract(TOTAL_MONTHS, "month").format("YYYY-MM-DD");
 
+  const baseConfig: WeeklyBreakBacktestConfig = {
+    ...WEEKLY_BREAK_BACKTEST_DEFAULTS,
+    ...(largecap ? WEEKLY_BREAK_LARGECAP_PARAMS : {}),
+    startDate,
+    endDate,
+    initialBudget: budget,
+    verbose: false,
+  };
+
   console.log("=".repeat(70));
-  console.log("週足レンジブレイク Walk-Forward 分析");
+  console.log(`週足レンジブレイク Walk-Forward 分析${largecap ? "（大型株プリセット）" : ""}`);
   console.log("=".repeat(70));
   console.log(`分析期間: ${startDate} → ${endDate} (${TOTAL_MONTHS}ヶ月)`);
   console.log(`IS: ${IS_MONTHS}ヶ月 / OOS: ${OOS_MONTHS}ヶ月 / スライド: ${SLIDE_MONTHS}ヶ月`);
   console.log(`ウィンドウ数: ${NUM_WINDOWS}`);
   console.log(`選択方式: ${useRobust ? "ロバスト（近傍中央値PF）" : "最大PF"}`);
+  console.log(`予算: ¥${budget.toLocaleString()}, 13週高値: ${baseConfig.weeklyHighLookback}週, VolSurge: ${baseConfig.weeklyVolSurgeRatio}x`);
   if (maxDailyEntries != null) console.log(`1日最大エントリー: ${maxDailyEntries}件`);
 
-  const paramCombos = generateWeeklyBreakParameterCombinations();
+  const paramCombos = largecap
+    ? generateLargecapWeeklyBreakParameterCombinations()
+    : generateWeeklyBreakParameterCombinations();
   console.log(`パラメータ組み合わせ: ${paramCombos.length}通り`);
   console.log("");
 
-  // データ取得
+  // データ取得（largecap時は時価総額フィルター）
   const stocks = await prisma.stock.findMany({
-    where: { isDelisted: false, isActive: true, isRestricted: false },
+    where: {
+      isDelisted: false,
+      isActive: true,
+      isRestricted: false,
+      ...(largecap && baseConfig.minMarketCap != null ? { marketCap: { gte: baseConfig.minMarketCap } } : {}),
+    },
     select: { tickerCode: true },
   });
   const tickerCodes = stocks.map((s) => s.tickerCode);
-  console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
+  if (largecap && baseConfig.minMarketCap != null) {
+    console.log(`[data] 時価総額 >= ¥${(baseConfig.minMarketCap / 1_000_000_000).toLocaleString()}B: ${tickerCodes.length}銘柄`);
+  } else {
+    console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
+  }
 
   const rawData = await fetchHistoricalFromDB(tickerCodes, startDate, endDate);
   const vixData = await fetchVixFromDB(startDate, endDate);
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
   console.log(`[data] ${rawData.size}銘柄（raw）, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
-  const maxPrice = WEEKLY_BREAK_BACKTEST_DEFAULTS.maxPrice;
+  const maxPrice = baseConfig.maxPrice;
   const allData = new Map<string, OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
     if (bars.some((b) => b.close <= maxPrice && b.close > 0)) {
@@ -190,7 +236,7 @@ async function main() {
   console.log("");
 
   const windows = generateWindows(startDate);
-  const filterCfg = WEEKLY_BREAK_BACKTEST_DEFAULTS;
+  const filterCfg = baseConfig;
   const vixArg = vixData.size > 0 ? vixData : undefined;
   const indexArg = indexData.size > 0 ? indexData : undefined;
 
@@ -221,7 +267,7 @@ async function main() {
 
     for (const params of paramCombos) {
       const config: WeeklyBreakBacktestConfig = {
-        ...WEEKLY_BREAK_BACKTEST_DEFAULTS,
+        ...baseConfig,
         ...params,
         startDate: isStart,
         endDate: isEnd,
@@ -230,10 +276,11 @@ async function main() {
       };
       const result = runWeeklyBreakBacktest(config, allData, vixArg, indexArg, isPrecomputed, isSignals);
       if (result.metrics.totalTrades < 3) continue;
-      comboResults.set(paramComboKey(params), { params, metrics: result.metrics });
+      const key = largecap ? paramComboKeyLargecap(params) : paramComboKey(params);
+      comboResults.set(key, { params, metrics: result.metrics });
     }
 
-    const selected = useRobust ? selectByRobustness(comboResults) : selectByMaxPF(comboResults);
+    const selected = useRobust ? selectByRobustness(comboResults, largecap) : selectByMaxPF(comboResults);
 
     if (!selected) {
       console.log("  ⚠ IS期間でトレードが発生しなかったためスキップ");
@@ -271,7 +318,7 @@ async function main() {
     const oosSignals = precomputeWeeklyBreakSignals(filterCfg, allData, oosPrecomputed);
 
     const oosConfig: WeeklyBreakBacktestConfig = {
-      ...WEEKLY_BREAK_BACKTEST_DEFAULTS,
+      ...baseConfig,
       ...bestParams,
       startDate: oosStart,
       endDate: oosEnd,

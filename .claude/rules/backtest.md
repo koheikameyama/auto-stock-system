@@ -753,6 +753,134 @@ npm run backtest:combined -- --enable-momentum --mom-max 3 --budget 10000000 --s
 - `src/backtest/combined-run.ts`: `--enable-momentum` `--mom-max` フラグ + 大型株universeロード + 分離allData
 - `src/backtest/types.ts`: `MomentumBacktestConfig.minMarketCap` 追加
 
+## 大型株 週足レンジブレイク (WB) 検証（2026-04-22実施）
+
+**結論: 単独・WF・combined全てパス（WF堅牢✓、combined MaxDD改善-10%）。ただしCalmar劣化(7.47→5.67〜6.59)で本番投入はPending扱い。**
+**momentumと組合せると両戦略のPF/期待値が相互改善する「WB+MOMシナジー」を確認。**
+
+momentum検証の流れを踏襲。既存 weekly-break は小型株WFで PF 3.12 堅牢だったが「保有3-5日の資金拘束が gapup と比べ効率悪い」で本番見送り。**大型株ユニバースなら1トレードあたり金額が大きく効率改善**の仮説を検証。
+
+### Step 1: 単独BT（BE/trail無効化が最重要）
+
+初回（WF最適の atr=1.0, be=0.5, trail=0.8 を大型株に転用）は momentum 初回と同じく BE早期発動で壊滅:
+
+- 185 trades, PF 1.13, **MaxDD 21.2%**, 保有1.4日, NetPnL **-¥656K**
+
+BE=0.5×ATR は大型株の低ATR%(約1.5%)だと +2%上昇で即発動 → 微小押し目で2-3日損切り。
+BE/trail=999(無効化) + maxLossPct=0.10(-10%) + atr=2.0 で再試行:
+
+```bash
+npm run backtest:weekly-break -- --largecap --budget 10000000 --start 2024-03-01
+```
+
+| 指標 | 初回(BE=0.5) | **修正後(BE=999)** |
+|---|---:|---:|
+| Trades | 185 | 71 |
+| 勝率 | 37.8% | 40.9% |
+| **PF** | 1.13 | **1.38** |
+| 期待値 | +0.00% | **+1.57%** |
+| 平均勝 | +3.65% | **+14.17%** |
+| RR比 | 1.64 | **1.99** |
+| MaxDD | 21.2% | **13.0%** |
+| 保有日数 | 1.4日 | **11.8日** |
+| NetRet | -6.6% | **+3.8%** |
+| 稼働率 | 9.5% | **23.1%** |
+
+### Step 2: WF検証（3パラメータグリッド、IS6/OOS3/6窓）
+
+```bash
+npm run walk-forward:weekly-break -- --largecap --budget 10000000
+```
+
+| Window | IS PF | OOS PF | OOS件数 | OOS勝率 |
+|---|---:|---:|---:|---:|
+| 1 | 0.70 | 4.95 | 7 | 57.1% |
+| 2 | 1.90 | **0.00** | 6 | 0% |
+| 3 | 1.74 | 1.65 | 10 | 40% |
+| 4 | 0.59 | 1.99 | 16 | 43.8% |
+| 5 | 1.95 | 2.27 | 19 | 36.8% |
+| 6 | 2.27 | 2.50 | 13 | 38.5% |
+
+**集計: OOS集計PF 1.96, IS/OOS比 0.68, 全窓アクティブ, パラメータ安定(atr=1.5)**
+**判定: 堅牢 ✓**
+
+Window 2 が 0件で全敗している点は懸念だが、残り5窓で安定。
+
+### Momentum LC との比較（単独WFレベル）
+
+| 指標 | Momentum LC | **WB LC** |
+|---|---:|---:|
+| OOS集計PF | 4.87 | 1.96 |
+| OOS総trades | 10 | **71 (×7)** |
+| OOS勝率 | 70% | 38% |
+| 休止窓 | 2/6 | **0/6** |
+| 直近Window OOS | 0件 | **13件 PF 2.50** |
+
+**特徴: WBはmomentumより質は低いが量は7倍、全窓稼働で継続性が高い**
+
+### Step 3: combined BT 統合（4パターン比較）
+
+`weekly-break-config.ts` に `WEEKLY_BREAK_LARGECAP_PARAMS` + `generateLargecapWeeklyBreakParameterCombinations` 追加。`combined-run.ts` に `--enable-wb-largecap` `--wb-max` フラグ追加（既存 `wbConfig` サポートを活用）。
+
+```bash
+# baseline
+npm run backtest:combined -- --budget 10000000 --start 2024-03-01
+# + WB のみ
+npm run backtest:combined -- --enable-wb-largecap --wb-max 2 --budget 10000000 --start 2024-03-01
+# + MOM のみ（参考）
+npm run backtest:combined -- --enable-momentum --mom-max 3 --budget 10000000 --start 2024-03-01
+# + WB + MOM
+npm run backtest:combined -- --enable-wb-largecap --wb-max 2 --enable-momentum --mom-max 3 --budget 10000000 --start 2024-03-01
+```
+
+| 構成 | Trades | PF | **MaxDD** | **NetRet** | **Calmar** | 稼働率 |
+|---|---:|---:|---:|---:|---:|---:|
+| **Baseline (GU3+PSC2)** | 474 | **3.23** | 10.7% | **+171.1%** | **7.47** | 13.7% |
+| +MOM3 | 495 | 3.01 | 10.9% | +174.1% | 7.46 | 18.2% |
+| **+WB2** | 544 | 2.67 | **9.7%** | +117.7% | 5.67 | 24.0% |
+| **+WB2+MOM3** | 559 | 2.66 | **9.6%** | +135.5% | 6.59 | **25.6%** |
+
+**各戦略単独寄与 (in combined):**
+
+| 戦略 | Trades | PF | NetPnL | 期待値 |
+|---|---:|---:|---:|---:|
+| WB LC (in +WB) | 41 | 1.45 | +¥335K | +0.44% |
+| **WB LC (in +WB+MOM)** | 39 | **1.74** | +¥728K | +1.46% |
+| MOM LC (in +MOM) | 16 | 1.97 | +¥857K | +5.39% |
+| **MOM LC (in +WB+MOM)** | 17 | **2.05** | +¥769K | +4.48% |
+
+### 発見
+
+- **MaxDD 最大改善**: baseline 10.7% → +WB で **9.7%**(-10%)、+WB+MOM で **9.6%**(-10%)。ヘッジ効果あり
+- **NetRet 大幅低下**: +WB単体で-31%(171→118%)、+WB+MOM で-21%(171→135%)。WB保有12.8日がGU/PSCの高期待値トレードを資金競合で食う
+- **Calmar劣化**: 主KPI Calmar(年率)は baseline 最良。大型株追加系はいずれも劣化
+- **稼働率はほぼ倍増**: 13.7% → 25.6%。idle cash解消効果は最大
+- **WB+MOMシナジー**: 両方入れると両戦略ともPF/期待値向上。理由: MOM保有14.8日 > WB保有13.0日 で時間軸がずれ、資金競合しない
+
+### プロ視点での本番判断
+
+| 評価軸 | 推奨構成 |
+|---|---|
+| **Calmar最大化**(CLAUDE.md主KPI) | **Baseline(GU3+PSC2)** |
+| MaxDD最小化 | +WB2 or +WB2+MOM3 |
+| 稼働率最大化(大資金運用時) | +WB2+MOM3 |
+
+**結論: 実装はフィーチャーフラグで残置、本番投入はPending**
+
+- **現状運用(¥500K〜¥5M)**: 追加しない、baselineが最良
+- **¥10M超運用時**: MaxDD -10% + 稼働率倍増が活きる可能性。再評価候補
+- **MaxDD重視運用への切替時**: +WB+MOM が選択肢(ただしCalmar代償-12%)
+
+### 実装として残したもの（本番への影響なし）
+
+- `src/backtest/weekly-break-config.ts`: `WEEKLY_BREAK_LARGECAP_PARAMS` + `WEEKLY_BREAK_LARGECAP_PARAMETER_GRID` + `generateLargecapWeeklyBreakParameterCombinations`
+- `src/backtest/weekly-break-run.ts`: `--largecap` `--min-market-cap` `--max-price` `--vol-surge` フラグ追加
+- `scripts/walk-forward-weekly-break.ts`: `--largecap` フラグ + 大型株グリッド対応
+- `src/backtest/combined-run.ts`: `--enable-wb-largecap` `--wb-max` フラグ + WB大型株universe分離
+- `src/backtest/types.ts`: `WeeklyBreakBacktestConfig.minMarketCap` 追加
+
+`combined-simulation.ts` は既存 `wbConfig` / `weeklyBreakSignals` / `PositionLimits.wbMax` サポートをそのまま活用。追加変更なし。
+
 ## ファイル構成
 
 ### breakout

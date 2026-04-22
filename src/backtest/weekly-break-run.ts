@@ -9,7 +9,7 @@
 
 import dayjs from "dayjs";
 import { prisma } from "../lib/prisma";
-import { WEEKLY_BREAK_BACKTEST_DEFAULTS } from "./weekly-break-config";
+import { WEEKLY_BREAK_BACKTEST_DEFAULTS, WEEKLY_BREAK_LARGECAP_PARAMS } from "./weekly-break-config";
 import { getMaxBuyablePrice } from "../core/risk-manager";
 import { runWeeklyBreakBacktest } from "./weekly-break-simulation";
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
@@ -47,38 +47,60 @@ async function main() {
   const budget = Number(getArg(args, "--budget") ?? WEEKLY_BREAK_BACKTEST_DEFAULTS.initialBudget);
   const verbose = args.includes("--verbose");
   const noPositionCap = args.includes("--no-position-cap");
+  const largecapPreset = args.includes("--largecap");
+
+  // 個別オーバーライド
+  const minMarketCapArg = getArg(args, "--min-market-cap");
+  const maxPriceArg = getArg(args, "--max-price");
+  const volSurgeArg = getArg(args, "--vol-surge");
+
+  const presetOverrides: Partial<WeeklyBreakBacktestConfig> = largecapPreset ? { ...WEEKLY_BREAK_LARGECAP_PARAMS } : {};
+  if (minMarketCapArg !== undefined) presetOverrides.minMarketCap = Number(minMarketCapArg);
+  if (maxPriceArg !== undefined) presetOverrides.maxPrice = Number(maxPriceArg);
+  if (volSurgeArg !== undefined) presetOverrides.weeklyVolSurgeRatio = Number(volSurgeArg);
 
   console.log("=".repeat(60));
-  console.log("週足レンジブレイク バックテスト");
+  console.log(`週足レンジブレイク バックテスト${largecapPreset ? "（大型株プリセット）" : ""}`);
   console.log("=".repeat(60));
   console.log(`期間: ${startDate} → ${endDate}`);
   console.log(`初期資金: ¥${budget.toLocaleString()}`);
 
-  // データ取得
+  // データ取得（時価総額フィルター付き）
+  const effectiveMinMarketCap = presetOverrides.minMarketCap;
   const stocks = await prisma.stock.findMany({
-    where: { isDelisted: false, isActive: true, isRestricted: false },
+    where: {
+      isDelisted: false,
+      isActive: true,
+      isRestricted: false,
+      ...(effectiveMinMarketCap != null ? { marketCap: { gte: effectiveMinMarketCap } } : {}),
+    },
     select: { tickerCode: true },
   });
   const tickerCodes = stocks.map((s) => s.tickerCode);
-  console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
+  if (effectiveMinMarketCap != null) {
+    console.log(`[data] 時価総額 >= ¥${(effectiveMinMarketCap / 1_000_000_000).toLocaleString()}B: ${tickerCodes.length}銘柄`);
+  } else {
+    console.log(`[data] ${tickerCodes.length}銘柄のデータ取得中...`);
+  }
 
   const rawData = await fetchHistoricalFromDB(tickerCodes, startDate, endDate);
   const vixData = await fetchVixFromDB(startDate, endDate);
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
   console.log(`[data] ${rawData.size}銘柄, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
-  // 事前フィルタ
-  const maxPrice = getMaxBuyablePrice(budget);
+  // 事前フィルタ（maxPriceベース）
+  const maxPrice = presetOverrides.maxPrice ?? getMaxBuyablePrice(budget);
   const allData = new Map<string, OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
     if (bars.some((b) => b.close <= maxPrice && b.close > 0)) {
       allData.set(ticker, bars);
     }
   }
-  console.log(`[data] ${allData.size}銘柄（フィルタ後）`);
+  console.log(`[data] ${allData.size}銘柄（価格フィルタ後）`);
 
   const baseConfig: WeeklyBreakBacktestConfig = {
     ...WEEKLY_BREAK_BACKTEST_DEFAULTS,
+    ...presetOverrides,
     startDate,
     endDate,
     initialBudget: budget,
@@ -86,6 +108,8 @@ async function main() {
     verbose,
     positionCapEnabled: !noPositionCap,
   };
+
+  console.log(`13週高値: ${baseConfig.weeklyHighLookback}週, VolSurge: ${baseConfig.weeklyVolSurgeRatio}x, atr=${baseConfig.atrMultiplier}, be=${baseConfig.beActivationMultiplier}, trail=${baseConfig.trailMultiplier}`);
 
   const vixArg = vixData.size > 0 ? vixData : undefined;
   const indexArg = indexData.size > 0 ? indexData : undefined;
