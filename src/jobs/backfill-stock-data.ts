@@ -1,21 +1,21 @@
 /**
  * 株価データバックフィル — Stock Data
  *
- * 1. 各銘柄の最新クォート（株価・出来高・ファンダメンタルズ）を取得
- * 2. ヒストリカルOHLCVをバッチ取得 → StockDailyBar に保存 + ATR/volatility計算
- * 3. 古いOHLCVデータのprune
+ * 1. ヒストリカルOHLCVをバッチ取得（yf.download 一括）
+ * 2. 最新バーから price/volume/change% を導出し Stock テーブル更新
+ * 3. StockDailyBar にバルク保存 + ATR/volatility/weekChange 計算
+ * 4. 古いOHLCVデータのprune
  *
  * 注: 銘柄マスタ登録は jpx-csv-sync.ts が担当
+ * 注: ファンダメンタルズ（PER/PBR/EPS/marketCap）は backfill-fundamentals.ts が担当
  */
 
 import dayjs from "dayjs";
 
 import { prisma } from "../lib/prisma";
-import { YAHOO_FINANCE, STOCK_FETCH, TECHNICAL_MIN_DATA } from "../lib/constants";
+import { STOCK_FETCH, TECHNICAL_MIN_DATA } from "../lib/constants";
 import { fetchHistoricalDataBatch } from "../core/market-data";
-import { yfFetchQuotesBatch, type YfQuoteResult } from "../lib/yfinance-client";
 import { analyzeTechnicals } from "../core/technical-analysis";
-import { sleep } from "../lib/retry-utils";
 import { clampDecimal, incrementFailAndMarkDelisted } from "../lib/decimal-utils";
 
 /** OHLCV保持日数（これより古いバーをpruneする）— walk-forward分析に7ウィンドウ(27ヶ月)＋バッファで30ヶ月必要 */
@@ -36,42 +36,23 @@ export async function main() {
   console.log(`  対象銘柄: ${allStocks.length}件`);
 
   // ================================================================
-  // [1/3] クォート更新（バッチ取得）
+  // [1/3] ヒストリカルOHLCV取得（yf.download 一括）
   // ================================================================
-  console.log("[1/3] クォート更新中...");
-  const quoteMap = new Map<string, YfQuoteResult>();
-  let quotesFailed = 0;
+  console.log("[1/3] ヒストリカルOHLCV取得中...");
+  const allTickers = allStocks.map((s) => s.tickerCode);
+  const historicalMap = await fetchHistoricalDataBatch(allTickers);
 
-  const totalBatches = Math.ceil(allStocks.length / YAHOO_FINANCE.BATCH_SIZE);
-  for (let i = 0; i < allStocks.length; i += YAHOO_FINANCE.BATCH_SIZE) {
-    const batchNum = Math.floor(i / YAHOO_FINANCE.BATCH_SIZE) + 1;
-    const batch = allStocks.slice(i, i + YAHOO_FINANCE.BATCH_SIZE);
-    const tickers = batch.map((s) => s.tickerCode);
-    console.log(`  バッチ ${batchNum}/${totalBatches}（${tickers.length}件）`);
-    const batchResult = await yfFetchQuotesBatch(tickers);
-    for (const result of batchResult) {
-      if (result && result.tickerCode) {
-        quoteMap.set(result.tickerCode, result);
-      }
-    }
-    if (i + YAHOO_FINANCE.BATCH_SIZE < allStocks.length) {
-      await sleep(YAHOO_FINANCE.RATE_LIMIT_DELAY_MS);
-    }
-  }
+  console.log(`  ヒストリカル取得: ${historicalMap.size}/${allTickers.length}銘柄`);
 
-  // クォート失敗銘柄の fetchFailCount を一括更新 & 廃止判定
+  // 取得失敗銘柄の判定 — 最新バーの close が正の数なら成功
   const failedStocks = allStocks.filter((s) => {
-    const q = quoteMap.get(s.tickerCode);
-    return !q || !Number.isFinite(q.price) || q.price <= 0;
+    const bars = historicalMap.get(s.tickerCode);
+    return !bars || bars.length === 0 || !(bars[0].close > 0);
   });
-  quotesFailed = failedStocks.length;
-
-  // 失敗率が閾値を超えた場合はサイドカー障害（タイムアウト等）とみなす。
-  // 全銘柄を誤って廃止候補にしないよう incrementFailAndMarkDelisted をスキップし、ジョブをエラー終了する。
-  const failureRate = allStocks.length > 0 ? quotesFailed / allStocks.length : 0;
+  const failureRate = allStocks.length > 0 ? failedStocks.length / allStocks.length : 0;
   if (failureRate >= STOCK_FETCH.QUOTE_FAILURE_THRESHOLD) {
     throw new Error(
-      `クォート取得の失敗率が高すぎます（${quotesFailed}/${allStocks.length} = ${(failureRate * 100).toFixed(1)}%）。` +
+      `ヒストリカル取得の失敗率が高すぎます（${failedStocks.length}/${allStocks.length} = ${(failureRate * 100).toFixed(1)}%）。` +
         `yfinanceサイドカーのタイムアウトまたは接続エラーの可能性があります。`,
     );
   }
@@ -84,25 +65,17 @@ export async function main() {
     );
   }
 
-  console.log(`  クォート取得: ${quoteMap.size}件, 失敗: ${quotesFailed}件`);
-
-  // クォート成功銘柄のみを対象にする
   const validStocks = allStocks.filter((s) => {
-    const q = quoteMap.get(s.tickerCode);
-    return q && Number.isFinite(q.price) && q.price > 0;
+    const bars = historicalMap.get(s.tickerCode);
+    return bars && bars.length > 0 && bars[0].close > 0;
   });
 
-  // ================================================================
-  // [2/3] ヒストリカルOHLCV取得 → StockDailyBar保存 + ATR/volatility計算
-  // ================================================================
-  console.log("[2/3] ヒストリカルOHLCV取得 + DB保存中...");
-  const validTickers = validStocks.map((s) => s.tickerCode);
-  const historicalMap = await fetchHistoricalDataBatch(validTickers);
+  console.log(`  有効銘柄: ${validStocks.length}件, 失敗: ${failedStocks.length}件`);
 
-  console.log(`  ヒストリカル取得: ${historicalMap.size}/${validTickers.length}銘柄`);
-
-  // StockDailyBar にバルク保存
-  console.log("  [2a] StockDailyBar upsert（最新5日分）...");
+  // ================================================================
+  // [2/3] StockDailyBar保存 + Stock テーブル更新（ATR/volatility/weekChange/最新価格）
+  // ================================================================
+  console.log("[2/3] StockDailyBar upsert（最新5日分）+ 古バー一括保存...");
   const allUpserts = [];
   const allOlderBars: { tickerCode: string; date: Date; open: number; high: number; low: number; close: number; volume: bigint }[] = [];
   let barsSaved = 0;
@@ -170,7 +143,7 @@ export async function main() {
 
   // 古いバーは一括 createMany（skipDuplicates）
   if (allOlderBars.length > 0) {
-    console.log(`  [2b] olderBars一括保存: ${allOlderBars.length}件...`);
+    console.log(`  古バー一括保存: ${allOlderBars.length}件...`);
     const CREATE_BATCH = 1000;
     for (let i = 0; i < allOlderBars.length; i += CREATE_BATCH) {
       await prisma.stockDailyBar.createMany({
@@ -182,49 +155,49 @@ export async function main() {
 
   console.log(`  StockDailyBar保存完了: 約${barsSaved}バー`);
 
-  // Stock テーブルの ATR/volatility/weekChange を一括更新
-  console.log("  [2c] Stock テーブル更新中...");
+  // Stock テーブルを一括更新（最新価格・出来高・ATR/volatility/weekChange）
+  console.log("  Stock テーブル更新中...");
   const now = new Date();
   const stockUpdateOps = validStocks.map((stock) => {
-    const quote = quoteMap.get(stock.tickerCode)!;
-    const historical = historicalMap.get(stock.tickerCode);
+    const historical = historicalMap.get(stock.tickerCode)!;
+    const latest = historical[0];
+    const prev = historical[1]; // 前日終値（日次変化率計算用）
+
+    const price = latest.close;
+    const volume = Math.round(latest.volume);
+    const dailyChangePct =
+      prev && prev.close > 0 ? ((price - prev.close) / prev.close) * 100 : null;
 
     let atr14: number | null = null;
     let weekChange: number | null = null;
     let volatility: number | null = null;
 
-    if (historical && historical.length >= TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) {
+    if (historical.length >= TECHNICAL_MIN_DATA.SCANNER_MIN_BARS) {
       const summary = analyzeTechnicals(historical);
       atr14 = summary.atr14;
 
       if (historical.length >= STOCK_FETCH.WEEKLY_CHANGE_MIN_DAYS) {
-        const current = historical[0].close;
         const weekAgo = historical[4].close;
-        weekChange = Math.round(((current - weekAgo) / weekAgo) * 10000) / 100;
+        weekChange = Math.round(((price - weekAgo) / weekAgo) * 10000) / 100;
       }
 
-      if (atr14 && quote.price > 0) {
-        volatility = Math.round((atr14 / quote.price) * 10000) / 100;
+      if (atr14 && price > 0) {
+        volatility = Math.round((atr14 / price) * 10000) / 100;
       }
     }
 
     return prisma.stock.update({
       where: { id: stock.id },
       data: {
-        latestPrice: quote.price,
-        latestVolume: BigInt(quote.volume),
-        dailyChangeRate: clampDecimal(quote.changePercent, "8,2"),
+        latestPrice: price,
+        latestVolume: BigInt(volume),
+        dailyChangeRate: clampDecimal(dailyChangePct, "8,2"),
         weekChangeRate: clampDecimal(weekChange, "8,2"),
         volatility: clampDecimal(volatility, "8,2"),
         atr14,
         latestPriceDate: now,
         priceUpdatedAt: now,
         fetchFailCount: 0,
-        // ファンダメンタルズがnullの場合は既存DB値を保持
-        ...(quote.per != null ? { per: clampDecimal(quote.per, "8,2") } : {}),
-        ...(quote.pbr != null ? { pbr: clampDecimal(quote.pbr, "8,2") } : {}),
-        ...(quote.eps != null && Number.isFinite(quote.eps) ? { eps: quote.eps, isProfitable: quote.eps > 0 } : {}),
-        ...(quote.marketCap != null && Number.isFinite(quote.marketCap) ? { marketCap: quote.marketCap } : {}),
       },
     });
   });

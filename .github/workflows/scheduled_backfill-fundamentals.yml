@@ -1,15 +1,14 @@
-name: "[Reusable] Backfill Stock Data"
+name: "[Scheduled] Backfill Fundamentals"
 
 on:
+  schedule:
+    # 日曜 18:00 JST = 09:00 UTC（週1、低負荷帯）
+    - cron: "0 9 * * 0"
   workflow_dispatch:
-  workflow_call:
-    secrets:
-      DATABASE_URL:
-        required: true
-      SLACK_WEBHOOK_URL:
-        required: true
-      YFINANCE_PROXY:
-        required: false
+
+concurrency:
+  group: backfill-fundamentals
+  cancel-in-progress: false
 
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -29,7 +28,7 @@ jobs:
       - run: npx prisma generate
       - name: Start yfinance sidecar
         uses: ./.github/actions/start-yfinance
-      - run: npm run backfill:stock-data
+      - run: npm run backfill:fundamentals
 
   notify-success:
     needs: run
@@ -40,8 +39,8 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "Backfill Stock Data 完了"
-          SLACK_MESSAGE: "株価・OHLCV日足データのバックフィルが完了しました"
+          SLACK_TITLE: "Backfill Fundamentals 完了"
+          SLACK_MESSAGE: "ファンダメンタルズ（PER/PBR/EPS/marketCap）のバックフィルが完了しました"
           SLACK_COLOR: good
           SLACK_FOOTER: "Auto Stock Trader"
 
@@ -54,9 +53,9 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "Backfill Stock Data 失敗"
+          SLACK_TITLE: "Backfill Fundamentals 失敗"
           SLACK_MESSAGE: |
-            株価バックフィルが失敗しました。
+            ファンダメンタルズバックフィルが失敗しました。
             詳細はGitHub Actionsログを確認してください。
           SLACK_COLOR: danger
           SLACK_FOOTER: "Auto Stock Trader"
