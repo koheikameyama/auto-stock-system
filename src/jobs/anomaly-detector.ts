@@ -125,3 +125,15 @@ export async function main(): Promise<void> {
     color: "danger",
   });
 }
+
+const isDirectRun = process.argv[1]?.includes("anomaly-detector");
+if (isDirectRun) {
+  main()
+    .catch((error) => {
+      console.error("Anomaly Detector エラー:", error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
