@@ -140,12 +140,20 @@ export async function closePosition(
   positionId: string,
   exitPrice: number,
   exitSnapshot?: object,
+  referencePrice?: number | null,
 ): Promise<TradingPosition> {
   const position = await prisma.tradingPosition.findUniqueOrThrow({
     where: { id: positionId },
   });
 
   const pnl = getPositionPnl({ entryPrice: position.entryPrice, exitPrice, quantity: position.quantity });
+
+  // 売り側slippage: 想定決済価格(referencePrice)がある場合のみ記録
+  // sell で (exitPrice - reference)/reference < 0 = 不利（想定より安く約定）
+  const slippageBps =
+    referencePrice && referencePrice > 0 && exitPrice > 0
+      ? Math.round(((exitPrice - referencePrice) / referencePrice) * 10000)
+      : null;
 
   return prisma.$transaction(async (tx) => {
     const closedPosition = await tx.tradingPosition.update({
@@ -172,6 +180,8 @@ export async function closePosition(
         filledAt: new Date(),
         reasoning: `ポジション決済（損益: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(0)}円）`,
         positionId,
+        referencePrice: referencePrice ?? null,
+        slippageBps,
         updatedAt: new Date(),
       },
     });

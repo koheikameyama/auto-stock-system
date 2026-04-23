@@ -337,12 +337,22 @@ async function handleSellFill(
   let exitReason: string | undefined;
 
   if (order.positionId) {
-    // エントリー価格を取得
+    // エントリー価格 + SL/trailing想定決済価格を取得（sell slippage 記録用）
     const position = await prisma.tradingPosition.findUnique({
       where: { id: order.positionId },
-      select: { entryPrice: true, exitSnapshot: true },
+      select: {
+        entryPrice: true,
+        exitSnapshot: true,
+        stopLossPrice: true,
+        trailingStopPrice: true,
+      },
     });
     entryPrice = position ? Number(position.entryPrice) : undefined;
+
+    // ブローカーSL発動時の想定決済価格 = trailing 優先、なければ stopLoss
+    const referencePrice = position
+      ? Number(position.trailingStopPrice ?? position.stopLossPrice ?? 0) || null
+      : null;
 
     // ポジションをクローズ
     const exitSnapshot = {
@@ -355,6 +365,7 @@ async function handleSellFill(
       order.positionId,
       filledPrice,
       exitSnapshot as object,
+      referencePrice,
     );
     pnl = getPositionPnl(closed);
 

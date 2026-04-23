@@ -285,12 +285,62 @@ describe("handleBrokerFill", () => {
         "pos-456",
         1000,
         expect.any(Object),
+        null, // referencePrice: SL/trailingStop未設定時は null
       );
       expect(mockNotifyOrderFilled).toHaveBeenCalledWith(
         expect.objectContaining({
           side: "sell",
           pnl: expect.any(Number),
         }),
+      );
+    });
+
+    it("trailingStopPriceがある場合は referencePrice として渡す", async () => {
+      mockPrisma.tradingOrder.findFirst.mockResolvedValue(
+        makeOrder({ side: "sell", positionId: "pos-500" }) as never,
+      );
+      mockPrisma.tradingPosition.findUnique.mockResolvedValue(
+        {
+          entryPrice: 1000,
+          exitSnapshot: null,
+          stopLossPrice: 950,
+          trailingStopPrice: 970,
+        } as never,
+      );
+      mockGetOrderDetail.mockResolvedValue(makeOrderDetail() as never);
+
+      await handleBrokerFill(makeEvent());
+
+      // trailingStop=970 を referencePrice として closePosition に渡す
+      expect(mockClosePosition).toHaveBeenCalledWith(
+        "pos-500",
+        1000,
+        expect.any(Object),
+        970,
+      );
+    });
+
+    it("trailingStopPriceがnullの場合は stopLossPrice を referencePrice として渡す", async () => {
+      mockPrisma.tradingOrder.findFirst.mockResolvedValue(
+        makeOrder({ side: "sell", positionId: "pos-501" }) as never,
+      );
+      mockPrisma.tradingPosition.findUnique.mockResolvedValue(
+        {
+          entryPrice: 1000,
+          exitSnapshot: null,
+          stopLossPrice: 950,
+          trailingStopPrice: null,
+        } as never,
+      );
+      mockGetOrderDetail.mockResolvedValue(makeOrderDetail() as never);
+
+      await handleBrokerFill(makeEvent());
+
+      expect(mockClosePosition).toHaveBeenCalledWith(
+        "pos-501",
+        1000,
+        expect.any(Object),
+        950,
       );
     });
 
