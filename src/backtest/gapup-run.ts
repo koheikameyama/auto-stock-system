@@ -151,6 +151,11 @@ async function main() {
   const noPositionCap = args.includes("--no-position-cap");
   const gapMinPctArg = getArg(args, "--gap-min-pct");
   const gapMinPct = gapMinPctArg != null ? parseFloat(gapMinPctArg) / 100 : undefined;
+  const maxPriceArg = getArg(args, "--max-price");
+  const tickersArg = getArg(args, "--tickers");
+  const noMarketFilter = args.includes("--no-market-filter");
+  const minAtrPctArg = getArg(args, "--min-atr-pct");
+  const minTurnoverArg = getArg(args, "--min-turnover");
 
   console.log("=".repeat(60));
   console.log("GU（ギャップアップ）バックテスト");
@@ -158,9 +163,12 @@ async function main() {
   console.log(`期間: ${startDate} → ${endDate}`);
   console.log(`初期資金: ¥${budget.toLocaleString()}`);
 
-  // データ取得
+  // データ取得（--tickers 指定時は universe を限定）
+  const tickerFilter = tickersArg ? tickersArg.split(",").map((t) => t.trim()) : null;
   const stocks = await prisma.stock.findMany({
-    where: { isDelisted: false, isActive: true, isRestricted: false },
+    where: tickerFilter
+      ? { tickerCode: { in: tickerFilter } }
+      : { isDelisted: false, isActive: true, isRestricted: false },
     select: { tickerCode: true },
   });
   const tickerCodes = stocks.map((s) => s.tickerCode);
@@ -172,14 +180,14 @@ async function main() {
   console.log(`[data] ${rawData.size}銘柄, VIX ${vixData.size}日, N225 ${indexData.size}日`);
 
   // 事前フィルタ: maxPrice以下のバーが1つ以上ある銘柄のみ
-  const maxPrice = getMaxBuyablePrice(budget);
+  const maxPrice = maxPriceArg != null ? Number(maxPriceArg) : getMaxBuyablePrice(budget);
   const allData = new Map<string, OHLCVData[]>();
   for (const [ticker, bars] of rawData) {
     if (bars.some((b) => b.close <= maxPrice && b.close > 0)) {
       allData.set(ticker, bars);
     }
   }
-  console.log(`[data] ${allData.size}銘柄（フィルタ後）`);
+  console.log(`[data] ${allData.size}銘柄（maxPrice=¥${maxPrice.toLocaleString()} フィルタ後）`);
 
   const baseConfig: GapUpBacktestConfig = {
     ...GAPUP_BACKTEST_DEFAULTS,
@@ -190,6 +198,9 @@ async function main() {
     verbose,
     positionCapEnabled: !noPositionCap,
     ...(gapMinPct != null ? { gapMinPct } : {}),
+    ...(noMarketFilter ? { marketTrendFilter: false, indexTrendFilter: false } : {}),
+    ...(minAtrPctArg != null ? { minAtrPct: Number(minAtrPctArg) } : {}),
+    ...(minTurnoverArg != null ? { minTurnover: Number(minTurnoverArg) } : {}),
   };
 
   const vixArg = vixData.size > 0 ? vixData : undefined;

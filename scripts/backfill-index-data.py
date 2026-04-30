@@ -36,6 +36,12 @@ if not DATABASE_URL:
 
 SKIP_CONFIRM = "--yes" in sys.argv
 
+# --period フラグでoverride可能
+PERIOD = "2y"
+for i, arg in enumerate(sys.argv):
+    if arg == "--period" and i + 1 < len(sys.argv):
+        PERIOD = sys.argv[i + 1]
+
 if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
     print(f"本番DB に接続します: {DATABASE_URL[:50]}...")
     if not SKIP_CONFIRM:
@@ -51,7 +57,6 @@ INDEX_TICKERS = [
     ("^N225", "日経225"),
     ("^VIX", "VIX恐怖指数"),
 ]
-PERIOD = "2y"
 
 
 def fetch_index_data(ticker: str) -> list[tuple]:
