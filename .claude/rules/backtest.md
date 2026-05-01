@@ -55,6 +55,39 @@
 - **機械的分散リスク管理は逆効果**: セクター上限は勝ち筋を削るだけ、シグナル品質の高い戦略では不要
 - **集中が起きる時は"便乗すべき時"**: 強いセクターに機械的制限をかけない
 
+## 月次戦略ヘルスチェック (2026-05-01〜)
+
+GitHub Actions の `scheduled_monthly-strategy-health.yml` が毎月第1土曜 11:00 JST に自動実行する。
+
+### 監視対象 (3階層分類)
+
+| 階層 | 戦略 | チェック内容 | 通知トリガー |
+|---|---|---|---|
+| **A: 現役** | gapup, psc | 月次WF、 active戦略の劣化検知 | 直近3窓のOOS PFが全て<1.0 → ⚠️ ENTRY_ENABLED=false 提案 |
+| **B: 復活候補** | weekly-break(--largecap), momentum(--largecap), squeeze-breakout | 月次WF + 月次combined比較 | 全体判定「堅牢」かつ直近2窓OOS PF≥1.5 → ⚠️ 復活検討提案 |
+| **C: 構造的却下** | breakout, nr7, gapdown-reversal, ma-pullback, ddr, evs, ogf, earnings-gap, stop-high | 対象外 (年1回手動見直し) | - |
+
+### ジョブ構成
+
+1. **walk-forward** (5戦略×WF, ~60-70分): `scripts/run_monthly_walk_forward.py`
+2. **combined-compare** (4構成比較, ~10分): `scripts/run_monthly_combined_compare.py`
+   - baseline (GU3+PSC2) / +WB / +MOM / +WB+MOM の Calmar 比較
+   - suspended構成が baseline を Calmar で超過したら ⚠️ 通知
+
+### 復活判定の論理
+
+WFで「堅牢」が出ただけでは本番投入しない (個別BTは資金無限の理想値)。**最終判断は combined-compare の Calmar 改善**:
+
+- WF堅牢化 → "再評価のトリガー" (相場局面の変化を検知)
+- combined Calmar > baseline → "本番投入候補"
+- 両方揃って初めて手動で `combined-run.ts` の defaultLimits 変更を検討
+
+### C階層を回さない理由
+
+- `breakout / nr7 / gapdown-reversal / ma-pullback / ddr / evs / ogf` は **戦略構造そのものの欠陥** (相場局面に依存しないPF<1.0)
+- `earnings-gap` はデータ不足で常に「検証不能」 → ノイズになる
+- `stop-high` は除外 (要評価ならStrategy順次追加)
+
 ## バックテストの基本方針
 
 **combinedバックテストが主。個別バックテストは診断用。**

@@ -1,8 +1,12 @@
 """
 Monthly Walk-Forward Analysis Runner
 
-breakout / gapup 両戦略の walk-forward 分析を実行し、
-結果を解析して AI 評価 + Slack 通知する。
+A階層(現役): gapup, psc → 劣化検知 (停止提案)
+B階層(復活候補): weekly-break(--largecap), momentum(--largecap), squeeze-breakout
+                → 堅牢化検知 (復活検討提案)
+
+C階層(構造的却下: breakout/nr7/gapdown-reversal/ma-pullback/ddr/evs/ogf/earnings-gap/stop-high)
+は対象外。年1回手動見直し。
 
 Usage:
   python scripts/run_monthly_walk_forward.py
@@ -20,18 +24,36 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 
-def run_walk_forward(strategy: str) -> tuple[int, str]:
+# 監視対象戦略の定義
+# tier: "active"   = 本番稼働中 → 劣化したら ENTRY_ENABLED=false 提案
+#       "suspended" = combined資金競合等で本番停止中 → 堅牢化したら復活検討提案
+STRATEGIES: list[dict] = [
+    {"name": "gapup", "tier": "active", "extra_args": []},
+    {"name": "psc", "tier": "active", "extra_args": []},
+    {"name": "weekly-break", "tier": "suspended", "extra_args": ["--largecap"]},
+    {"name": "momentum", "tier": "suspended", "extra_args": ["--largecap"]},
+    {"name": "squeeze-breakout", "tier": "suspended", "extra_args": []},
+]
+
+
+def run_walk_forward(strategy: str, extra_args: list[str]) -> tuple[int, str]:
     """Walk-forward スクリプトを実行し、(returncode, stdout) を返す"""
     cmd = f"walk-forward:{strategy}"
+    label = strategy + (f" {' '.join(extra_args)}" if extra_args else "")
     print(f"\n{'='*60}")
-    print(f"  {strategy} walk-forward 実行開始")
+    print(f"  {label} walk-forward 実行開始")
     print(f"{'='*60}\n")
 
+    npm_args = ["npm", "run", cmd]
+    if extra_args:
+        npm_args.append("--")
+        npm_args.extend(extra_args)
+
     result = subprocess.run(
-        ["npm", "run", cmd],
+        npm_args,
         capture_output=True,
         text=True,
-        timeout=600,  # 10分タイムアウト
+        timeout=900,  # 15分タイムアウト (largecap時に時間がかかる戦略があるため)
     )
 
     # stdoutをそのまま表示（GitHub Actionsログ用）
@@ -78,6 +100,29 @@ def detect_disable_proposal(oos_pfs: list[float | None], threshold: float = 1.0,
         return None
     recent = active[-lookback:]
     if all(p < threshold for p in recent):
+        return {
+            "lookback": lookback,
+            "threshold": threshold,
+            "recent_pfs": recent,
+        }
+    return None
+
+
+def detect_revival_proposal(judgment: str, oos_pfs: list[float | None], threshold: float = 1.5, lookback: int = 2) -> dict | None:
+    """suspended 戦略向け: 全体判定が「堅牢」かつ直近OOS窓 lookback 個 (休止を除く) が
+    全て threshold 以上なら本番復活検討の提案を返す。
+
+    threshold=1.5 は「OOS PF >= 1.5 が継続的に出ている」という強めの条件。
+    本番投入は combined BT で Calmar 改善が確認できた時に最終判断するため、
+    ここは "再評価のトリガー" の役割。
+    """
+    if "堅牢" not in judgment:
+        return None
+    active = [p for p in oos_pfs if p is not None]
+    if len(active) < lookback:
+        return None
+    recent = active[-lookback:]
+    if all(p >= threshold for p in recent):
         return {
             "lookback": lookback,
             "threshold": threshold,
@@ -151,9 +196,11 @@ def parse_wf_result(stdout: str) -> dict:
     if m:
         info["production_params"] = m.group(1).strip()
 
-    # 窓別 OOS PF + 停止提案判定
+    # 窓別 OOS PF + 提案判定
+    # disable_proposal / revival_proposal は呼び出し側で tier に応じて参照する
     info["window_oos_pfs"] = parse_window_oos_pfs(stdout)
     info["disable_proposal"] = detect_disable_proposal(info["window_oos_pfs"])
+    info["revival_proposal"] = detect_revival_proposal(info["judgment"], info["window_oos_pfs"])
 
     return info
 
@@ -250,16 +297,19 @@ def notify_slack(results: list[dict], ai_review: str) -> None:
     fields = []
     has_failure = False
     disable_proposals: list[str] = []
+    revival_proposals: list[str] = []
 
     for r in results:
         strategy = r["strategy"]
+        tier = r["tier"]
         info = r["info"]
         success = r["success"]
+        tier_label = "[現役]" if tier == "active" else "[停止中]"
 
         if not success:
             has_failure = True
             fields.append({
-                "title": f"{strategy}",
+                "title": f"{tier_label} {strategy}",
                 "value": "実行失敗",
                 "short": True,
             })
@@ -269,7 +319,7 @@ def notify_slack(results: list[dict], ai_review: str) -> None:
         emoji = "" if is_robust else ""
 
         fields.append({
-            "title": f"{strategy} {emoji}",
+            "title": f"{tier_label} {strategy} {emoji}",
             "value": (
                 f"判定: {info['judgment']}\n"
                 f"OOS PF: {info['oos_pf']} / IS/OOS比: {info['is_oos_ratio']}\n"
@@ -278,20 +328,42 @@ def notify_slack(results: list[dict], ai_review: str) -> None:
             "short": False,
         })
 
-        proposal = info.get("disable_proposal")
-        if proposal:
-            recent_str = " → ".join(f"{p:.2f}" for p in proposal["recent_pfs"])
-            disable_proposals.append(
-                f"*{strategy}*: 直近{proposal['lookback']}窓のOOS PF が全て{proposal['threshold']}未満 ({recent_str})"
-            )
+        # active戦略のみ disable提案を見る
+        if tier == "active":
+            proposal = info.get("disable_proposal")
+            if proposal:
+                recent_str = " → ".join(f"{p:.2f}" for p in proposal["recent_pfs"])
+                disable_proposals.append(
+                    f"*{strategy}*: 直近{proposal['lookback']}窓のOOS PF が全て{proposal['threshold']}未満 ({recent_str})"
+                )
+
+        # suspended戦略のみ revival提案を見る
+        if tier == "suspended":
+            proposal = info.get("revival_proposal")
+            if proposal:
+                recent_str = " → ".join(f"{p:.2f}" for p in proposal["recent_pfs"])
+                revival_proposals.append(
+                    f"*{strategy}*: 全体判定「堅牢」かつ直近{proposal['lookback']}窓のOOS PF が全て{proposal['threshold']}以上 ({recent_str})"
+                )
 
     if disable_proposals:
         fields.append({
-            "title": ":octagonal_sign: ENTRY_ENABLED=false 提案",
+            "title": ":octagonal_sign: ENTRY_ENABLED=false 提案 (active戦略の劣化)",
             "value": (
                 "以下の戦略で OOS の継続劣化を検知。本番停止を検討してください:\n"
                 + "\n".join(disable_proposals)
                 + "\n\n判断は手動。承認後 `lib/constants/<strategy>.ts` の ENTRY_ENABLED を false に変更"
+            ),
+            "short": False,
+        })
+
+    if revival_proposals:
+        fields.append({
+            "title": ":sparkles: 復活検討提案 (suspended戦略の堅牢化)",
+            "value": (
+                "以下の停止中戦略で OOS が継続的に堅牢化。combined BT で Calmar 改善を確認の上、本番投入を検討してください:\n"
+                + "\n".join(revival_proposals)
+                + "\n\n次ステップ: `npm run backtest:combined -- --enable-wb-largecap` 等で Calmar 比較 (combined-compare ジョブの結果も参照)"
             ),
             "short": False,
         })
@@ -303,7 +375,14 @@ def notify_slack(results: list[dict], ai_review: str) -> None:
             "short": False,
         })
 
-    color = "danger" if has_failure else ("warning" if disable_proposals else "good")
+    if has_failure:
+        color = "danger"
+    elif disable_proposals:
+        color = "danger"  # active劣化は高優先
+    elif revival_proposals:
+        color = "warning"
+    else:
+        color = "good"
     title = "Monthly Walk-Forward 結果"
 
     payload = {
@@ -330,13 +409,15 @@ def notify_slack(results: list[dict], ai_review: str) -> None:
 
 
 def main():
-    strategies = ["gapup", "psc"]
     results = []
     any_failure = False
 
-    for strategy in strategies:
+    for s in STRATEGIES:
+        strategy = s["name"]
+        tier = s["tier"]
+        extra_args = s["extra_args"]
         try:
-            returncode, stdout = run_walk_forward(strategy)
+            returncode, stdout = run_walk_forward(strategy, extra_args)
             success = returncode == 0
             info = parse_wf_result(stdout) if success else {}
         except subprocess.TimeoutExpired:
@@ -353,6 +434,8 @@ def main():
 
         results.append({
             "strategy": strategy,
+            "tier": tier,
+            "extra_args": extra_args,
             "success": success,
             "info": info,
         })
@@ -371,7 +454,8 @@ def main():
         status = "OK" if r["success"] else "FAIL"
         judgment = r["info"].get("judgment", "N/A") if r["success"] else "実行失敗"
         pf = r["info"].get("oos_pf", "N/A") if r["success"] else "N/A"
-        print(f"  {r['strategy']:12s} [{status}] 判定: {judgment}  OOS PF: {pf}")
+        tier_label = "active" if r["tier"] == "active" else "suspended"
+        print(f"  [{tier_label:9s}] {r['strategy']:18s} [{status}] 判定: {judgment}  OOS PF: {pf}")
 
     if any_failure:
         sys.exit(1)
