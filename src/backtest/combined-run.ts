@@ -12,6 +12,7 @@
  *   npm run backtest:combined -- --compare-breadth
  *   npm run backtest:combined -- --compare-breadth-modes --start 2024-03-01
  *   npm run backtest:combined -- --compare-breadth-zoom --start 2024-03-01
+ *   npm run backtest:combined -- --compare-strategy-mix --start 2024-03-01
  */
 
 import dayjs from "dayjs";
@@ -260,9 +261,10 @@ async function main() {
   const compareStreak = args.includes("--compare-streak");
   const compareCooldown = args.includes("--compare-cooldown");
   const compareSlippage = args.includes("--compare-slippage");
+  const compareStrategyMix = args.includes("--compare-strategy-mix");
   const corrReport = args.includes("--corr-report");
 
-  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareBudget || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareBreadth || compareBreadthModes || compareBreadthZoom || compareMaxPrice || compareSector || compareVixRisk || compareStreak || compareCooldown || compareSlippage || corrReport;
+  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareBudget || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareBreadth || compareBreadthModes || compareBreadthZoom || compareMaxPrice || compareSector || compareVixRisk || compareStreak || compareCooldown || compareSlippage || compareStrategyMix || corrReport;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const pscConfig: PostSurgeConsolidationBacktestConfig = {
@@ -317,12 +319,12 @@ async function main() {
   const indexData = await fetchIndexFromDB("^N225", startDate, endDate);
 
   // budget-compare時はグリッド最大予算(20M)で銘柄をロード、max-price比較時はグリッド最大値で銘柄をロード
-  // --enable-momentum / --enable-wb-largecap 時は大型株を含むため maxPriceForData を広げる
+  // --enable-momentum / --enable-wb-largecap / --compare-strategy-mix 時は大型株を含むため maxPriceForData を広げる
   const maxPriceForData = compareBudget
     ? getMaxBuyablePrice(20_000_000)
     : compareMaxPrice
     ? 50_000
-    : (enableMomentum || enableWbLargecap)
+    : (enableMomentum || enableWbLargecap || compareStrategyMix)
     ? 100_000
     : guConfig.maxPrice;
   const allData = new Map<string, import("../core/technical-analysis").OHLCVData[]>();
@@ -360,10 +362,10 @@ async function main() {
     console.log(`[data] sectorマップ: ${tickerSectorMap.size}銘柄`);
   }
 
-  // --enable-wb-largecap: 大型株WB戦略のシグナル計算
+  // --enable-wb-largecap / --compare-strategy-mix: 大型株WB戦略のシグナル計算
   let wbConfig: WeeklyBreakBacktestConfig | undefined;
   let weeklyBreakSignals: PrecomputedWeeklyBreakSignals | undefined;
-  if (enableWbLargecap) {
+  if (enableWbLargecap || compareStrategyMix) {
     wbConfig = {
       ...WEEKLY_BREAK_BACKTEST_DEFAULTS,
       ...WEEKLY_BREAK_LARGECAP_PARAMS,
@@ -392,10 +394,10 @@ async function main() {
     weeklyBreakSignals = precomputeWeeklyBreakSignals(wbConfig, allDataForWb, precomputed);
   }
 
-  // --enable-momentum: 大型株モメンタム戦略のシグナル計算
+  // --enable-momentum / --compare-strategy-mix: 大型株モメンタム戦略のシグナル計算
   let momConfig: MomentumBacktestConfig | undefined;
   let momSignals: Map<string, PrecomputedMomentumSignal[]> | undefined;
-  if (enableMomentum) {
+  if (enableMomentum || compareStrategyMix) {
     momConfig = {
       ...MOMENTUM_BACKTEST_DEFAULTS,
       ...MOMENTUM_LARGECAP_PARAMS,
@@ -576,6 +578,95 @@ async function main() {
       console.log(
         `${bucket.label.padEnd(18)}| ${String(sub.totalTrades).padStart(6)} | ${sub.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expStr.padStart(7)} | ${avgPnlStr.padStart(7)} | ${netPnlStr.padStart(12)}`,
       );
+    }
+
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // suspended戦略の本番投入候補比較モード
+  // baseline (GU3+PSC2) vs +WB / +MOM / +WB+MOM の Calmar 比較
+  // 月次 strategy-health workflow から呼ばれる
+  if (compareStrategyMix) {
+    const grid: { label: string; mode: "baseline" | "wb" | "mom" | "wb+mom" }[] = [
+      { label: "baseline (GU3+PSC2)", mode: "baseline" },
+      { label: "+WB largecap", mode: "wb" },
+      { label: "+MOM largecap", mode: "mom" },
+      { label: "+WB+MOM", mode: "wb+mom" },
+    ];
+
+    const wbMax = Number(wbMaxArg ?? 2);
+    const momMax = Number(momMaxArg ?? 3);
+
+    console.log("\n=== Strategy Mix 比較（suspended戦略の本番投入候補） ===");
+    console.log(`期間: ${startDate} → ${endDate} / 初期資金: ¥${budget.toLocaleString()}`);
+    console.log(`WB枠: ${wbMax} / MOM枠: ${momMax}`);
+    console.log(
+      `${"構成".padEnd(22)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"MaxDD".padStart(6)} | ${"NetRet".padStart(7)} | ${"Calmar".padStart(6)} | ${"稼働率".padStart(6)}`,
+    );
+    console.log("-".repeat(96));
+
+    const years = dayjs(endDate).diff(dayjs(startDate), "day") / 365;
+    const rowResults: { label: string; mode: string; calmar: number; netRet: number; maxDd: number; pf: number }[] = [];
+
+    for (const row of grid) {
+      const useWb = row.mode === "wb" || row.mode === "wb+mom";
+      const useMom = row.mode === "mom" || row.mode === "wb+mom";
+      const limits: PositionLimits = {
+        boMax: 0,
+        guMax: 3,
+        pscMax: 2,
+        ...(useMom ? { momMax } : {}),
+        ...(useWb ? { wbMax } : {}),
+      };
+      const rowCtx = {
+        ...ctx,
+        wbConfig: useWb ? wbConfig : undefined,
+        weeklyBreakSignals: useWb ? weeklyBreakSignals : undefined,
+        momConfig: useMom ? momConfig : undefined,
+        momSignals: useMom ? momSignals : undefined,
+      };
+      const result = runCombinedSimulation(rowCtx, limits);
+      const m = result.totalMetrics;
+      const util = calculateCapitalUtilization(result.equityCurve);
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      const annualizedRet = years > 0 ? m.netReturnPct / years : m.netReturnPct;
+      const calmar = m.maxDrawdown > 0 ? annualizedRet / m.maxDrawdown : 0;
+      console.log(
+        `${row.label.padEnd(22)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(7)} | ${m.maxDrawdown.toFixed(1).padStart(5)}% | ${m.netReturnPct.toFixed(1).padStart(6)}% | ${calmar.toFixed(2).padStart(6)} | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+      rowResults.push({
+        label: row.label,
+        mode: row.mode,
+        calmar,
+        netRet: m.netReturnPct,
+        maxDd: m.maxDrawdown,
+        pf: m.profitFactor === Infinity ? 999 : m.profitFactor,
+      });
+    }
+
+    // 結果サマリー（python側でパースして revival検討の判断に使う）
+    const baseline = rowResults.find((r) => r.mode === "baseline");
+    if (baseline) {
+      console.log("\n[baseline比較サマリー]");
+      console.log(
+        `${"構成".padEnd(22)}| ${"Calmar差分".padStart(11)} | ${"NetRet差分".padStart(11)} | ${"MaxDD差分".padStart(10)}`,
+      );
+      console.log("-".repeat(60));
+      for (const r of rowResults) {
+        if (r.mode === "baseline") continue;
+        const calmarDiff = r.calmar - baseline.calmar;
+        const netRetDiff = r.netRet - baseline.netRet;
+        const maxDdDiff = r.maxDd - baseline.maxDd;
+        const calmarSign = calmarDiff >= 0 ? "+" : "";
+        const netRetSign = netRetDiff >= 0 ? "+" : "";
+        const maxDdSign = maxDdDiff >= 0 ? "+" : "";
+        console.log(
+          `${r.label.padEnd(22)}| ${(calmarSign + calmarDiff.toFixed(2)).padStart(11)} | ${(netRetSign + netRetDiff.toFixed(1) + "%").padStart(11)} | ${(maxDdSign + maxDdDiff.toFixed(1) + "%").padStart(10)}`,
+        );
+      }
     }
 
     console.log("");
