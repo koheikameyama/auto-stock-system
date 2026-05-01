@@ -174,14 +174,15 @@ jobs:
     needs: [check-market-day, news-collect, market-assessment, watchlist-builder]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
-      - name: Notify Slack on failure
-        uses: rtCamp/action-slack-notify@v2
+      - uses: actions/checkout@v5
+      - name: Notify Slack with failure detail
         env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_TITLE: "Morning Analysis 失敗"
-          SLACK_MESSAGE: |
-            朝の分析ジョブが失敗しました。
-            詳細はGitHub Actionsログを確認してください。
-          SLACK_COLOR: danger
-          SLACK_FOOTER: "Auto Stock Trader"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_ID: ${{ github.run_id }}
+        run: python scripts/check_morning_analysis_status.py
