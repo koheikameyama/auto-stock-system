@@ -22,6 +22,15 @@ from typing import Optional
 
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 
+# baseline絶対値劣化検知の閾値
+# 根拠: 2026-04-22検証時 baseline Calmar=9.37, MaxDD=10.0%
+# warning = 通常運用範囲を逸脱、要観察
+# danger  = 本番運用見直しを検討すべき水準
+BASELINE_CALMAR_WARNING = 7.0   # 現状から -25%
+BASELINE_CALMAR_DANGER = 5.0    # 現状から -47%
+BASELINE_MAXDD_WARNING = 13.0   # 通常 ~10% から +30%
+BASELINE_MAXDD_DANGER = 18.0    # 通常 ~10% から +80%
+
 # baseline 比較サマリー行のパース正規表現
 # 例: "+WB largecap          |       +0.82 |      +12.3% |     -1.2%"
 BASELINE_DIFF_LINE = re.compile(
@@ -126,7 +135,53 @@ def detect_revival_candidates(parsed: dict) -> list[dict]:
     return candidates
 
 
-def notify_slack(parsed: dict, candidates: list[dict], success: bool) -> None:
+def detect_baseline_degradation(parsed: dict) -> dict | None:
+    """baseline (GU3+PSC2) の絶対値劣化を検知する。
+
+    Returns None if baseline is healthy. Otherwise returns dict with:
+    - severity: "warning" or "danger"
+    - alerts: list of human-readable strings
+    """
+    baseline = parsed["rows"].get("baseline (GU3+PSC2)")
+    if not baseline:
+        return None
+
+    calmar = baseline.get("calmar")
+    max_dd = baseline.get("max_dd")
+    if calmar is None or max_dd is None:
+        return None
+
+    alerts: list[str] = []
+    severity = "ok"
+
+    if calmar < BASELINE_CALMAR_DANGER:
+        alerts.append(f"Calmar {calmar} < {BASELINE_CALMAR_DANGER} (danger閾値)")
+        severity = "danger"
+    elif calmar < BASELINE_CALMAR_WARNING:
+        alerts.append(f"Calmar {calmar} < {BASELINE_CALMAR_WARNING} (warning閾値)")
+        if severity == "ok":
+            severity = "warning"
+
+    if max_dd > BASELINE_MAXDD_DANGER:
+        alerts.append(f"MaxDD {max_dd}% > {BASELINE_MAXDD_DANGER}% (danger閾値)")
+        severity = "danger"
+    elif max_dd > BASELINE_MAXDD_WARNING:
+        alerts.append(f"MaxDD {max_dd}% > {BASELINE_MAXDD_WARNING}% (warning閾値)")
+        if severity == "ok":
+            severity = "warning"
+
+    if not alerts:
+        return None
+
+    return {
+        "severity": severity,
+        "alerts": alerts,
+        "baseline_calmar": calmar,
+        "baseline_max_dd": max_dd,
+    }
+
+
+def notify_slack(parsed: dict, candidates: list[dict], degradation: dict | None, success: bool) -> None:
     if not SLACK_WEBHOOK_URL:
         print("SLACK_WEBHOOK_URL 未設定、Slack通知をスキップ")
         return
@@ -140,6 +195,25 @@ def notify_slack(parsed: dict, candidates: list[dict], success: bool) -> None:
             "short": False,
         })
     else:
+        # baseline 絶対値劣化アラート (最優先で表示)
+        if degradation:
+            severity_label = "danger" if degradation["severity"] == "danger" else "warning"
+            emoji = ":octagonal_sign:" if degradation["severity"] == "danger" else ":warning:"
+            fields.append({
+                "title": f"{emoji} baseline 劣化検知 ({severity_label})",
+                "value": (
+                    "baseline (GU3+PSC2) の絶対値指標が警戒水準を超過しました:\n"
+                    + "\n".join(f"- {a}" for a in degradation["alerts"])
+                    + (
+                        "\n\n*danger水準*: 本番運用見直しを検討。原因調査 (相場レジーム変化 / 戦略劣化 / データ品質) の上、"
+                        "必要なら一時停止も検討してください。"
+                        if degradation["severity"] == "danger"
+                        else "\n\n*warning水準*: 通常運用範囲を逸脱。次月の数値も併せて観察してください。"
+                    )
+                ),
+                "short": False,
+            })
+
         # 各構成のサマリーを1フィールドにまとめる
         rows = parsed["rows"]
         baseline = rows.get("baseline (GU3+PSC2)", {})
@@ -179,15 +253,20 @@ def notify_slack(parsed: dict, candidates: list[dict], success: bool) -> None:
                 ),
                 "short": False,
             })
-        else:
+        elif not degradation:
             fields.append({
                 "title": "結論",
                 "value": "baseline (GU3+PSC2) が Calmar で最良。suspended戦略の本番投入は不要。",
                 "short": False,
             })
 
+    # 色: baseline danger > 実行失敗 > baseline warning > 候補あり > 正常
     if not success:
         color = "danger"
+    elif degradation and degradation["severity"] == "danger":
+        color = "danger"
+    elif degradation and degradation["severity"] == "warning":
+        color = "warning"
     elif candidates:
         color = "warning"
     else:
@@ -231,8 +310,9 @@ def main():
 
     parsed = parse_results(stdout) if success else {"rows": {}, "diffs": {}}
     candidates = detect_revival_candidates(parsed) if success else []
+    degradation = detect_baseline_degradation(parsed) if success else None
 
-    notify_slack(parsed, candidates, success)
+    notify_slack(parsed, candidates, degradation, success)
 
     print(f"\n{'='*60}")
     print("  サマリー")
@@ -242,6 +322,12 @@ def main():
         print(f"  本番投入候補: {len(candidates)}件")
         for c in candidates:
             print(f"    - {c['label']}: Calmar {c['calmar']} ({c['calmar_diff']:+.2f} vs baseline)")
+        if degradation:
+            print(f"  baseline 劣化検知: severity={degradation['severity']}")
+            for a in degradation["alerts"]:
+                print(f"    - {a}")
+        else:
+            print(f"  baseline 劣化検知: なし (健全)")
     else:
         print("  実行失敗")
 
