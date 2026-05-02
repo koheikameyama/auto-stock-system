@@ -122,7 +122,8 @@ export async function main(): Promise<void> {
       message:
         `GU監視対象: *${guStats.passed}銘柄*\n` +
         `対象: ${guStats.totalStocks} → OHLCV: ${guStats.historicalLoaded}\n` +
-        `データ不足: -${guStats.skipInsufficientData} / ゲート落ち: -${guStats.skipGate}\n` +
+        `データ不足: -${guStats.skipInsufficientData} / ゲート落ち: -${guStats.skipGate} ` +
+        `(決算前=${guStats.skipGateEarnings}, 決算後=${guStats.skipGateEarningsRecent})\n` +
         `週足下降: -${guStats.skipWeeklyTrend} / モメンタム不足: -${guStats.skipMomentum}`,
       color: "good",
     });
