@@ -3,8 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ----------------------------------------
 // Mock definitions (hoisted so vi.mock can reference them)
 // ----------------------------------------
-const { mockStockFindMany, mockReadHistoricalFromDB, mockGetEffectiveCapital } = vi.hoisted(() => ({
+const {
+  mockStockFindMany,
+  mockEarningsDateFindMany,
+  mockReadHistoricalFromDB,
+  mockGetEffectiveCapital,
+} = vi.hoisted(() => ({
   mockStockFindMany: vi.fn(),
+  mockEarningsDateFindMany: vi.fn(),
   mockReadHistoricalFromDB: vi.fn(),
   mockGetEffectiveCapital: vi.fn(),
 }));
@@ -12,6 +18,7 @@ const { mockStockFindMany, mockReadHistoricalFromDB, mockGetEffectiveCapital } =
 vi.mock("../../../lib/prisma", () => ({
   prisma: {
     stock: { findMany: mockStockFindMany },
+    earningsDate: { findMany: mockEarningsDateFindMany },
   },
 }));
 
@@ -120,6 +127,8 @@ describe("buildGuWatchlist", () => {
     vi.clearAllMocks();
     // デフォルト: 十分な資金があると仮定
     mockGetEffectiveCapital.mockResolvedValue(10_000_000);
+    // デフォルト: 直近の決算日データなし
+    mockEarningsDateFindMany.mockResolvedValue([]);
   });
 
   it("直近5日リターンがプラスの銘柄を候補にする", async () => {
@@ -165,6 +174,57 @@ describe("buildGuWatchlist", () => {
     expect(entries[0].ticker).toBe("2222");
     expect(entries[0].momentum5d).toBeLessThan(0);
     expect(stats.skipMomentum).toBe(0);
+  });
+
+  it("決算予定日が EARNINGS_DAYS_BEFORE 以内の銘柄は除外する", async () => {
+    const bars = makeBars(80, {
+      override: (i) => {
+        if (i === 0) return { close: 1050, open: 1040, high: 1060, low: 1035 };
+        if (i === 4) return { close: 1000, open: 990, high: 1010, low: 985 };
+        return {};
+      },
+    });
+
+    // 3日後に決算予定 → EARNINGS_DAYS_BEFORE (5日) 以内 → 除外
+    const nextEarnings = new Date();
+    nextEarnings.setDate(nextEarnings.getDate() + 3);
+    mockStockFindMany.mockResolvedValue([
+      makeStock("4444", { latestPrice: 1050, nextEarningsDate: nextEarnings }),
+    ]);
+    mockReadHistoricalFromDB.mockResolvedValue(new Map([["4444", bars]]));
+
+    const { entries, stats } = await buildGuWatchlist();
+
+    expect(entries.length).toBe(0);
+    expect(stats.skipGate).toBe(1);
+    expect(stats.skipGateEarnings).toBe(1);
+    expect(stats.skipGateEarningsRecent).toBe(0);
+  });
+
+  it("直近 EARNINGS_DAYS_AFTER 日以内に決算発表があった銘柄は除外する（決算後ギャップ veto）", async () => {
+    const bars = makeBars(80, {
+      override: (i) => {
+        if (i === 0) return { close: 1050, open: 1040, high: 1060, low: 1035 };
+        if (i === 4) return { close: 1000, open: 990, high: 1010, low: 985 };
+        return {};
+      },
+    });
+
+    // 1日前に決算発表 → EARNINGS_DAYS_AFTER (2日) 以内 → 除外
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    mockStockFindMany.mockResolvedValue([makeStock("5555", { latestPrice: 1050 })]);
+    mockReadHistoricalFromDB.mockResolvedValue(new Map([["5555", bars]]));
+    mockEarningsDateFindMany.mockResolvedValue([
+      { tickerCode: "5555", date: yesterday },
+    ]);
+
+    const { entries, stats } = await buildGuWatchlist();
+
+    expect(entries.length).toBe(0);
+    expect(stats.skipGate).toBe(1);
+    expect(stats.skipGateEarningsRecent).toBe(1);
+    expect(stats.skipGateEarnings).toBe(0);
   });
 
   it("high20フィルターは適用しない（high20を超えている銘柄も候補にする）", async () => {

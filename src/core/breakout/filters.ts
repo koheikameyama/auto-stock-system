@@ -13,6 +13,8 @@ interface GateInput {
   avgVolume25: number | null;
   atrPct: number | null;
   nextEarningsDate: Date | null;
+  /** 直近の過去決算日（EarningsDate テーブルから取得した最新日付）。 */
+  recentEarningsDate?: Date | null;
   exDividendDate: Date | null;
   today: Date;
   /** 資金連動の最大株価（getMaxBuyablePrice で算出） */
@@ -24,7 +26,7 @@ interface GateInput {
  * 流動性・価格・ATR・決算・権利落ち日の条件を満たさない銘柄を除外する
  */
 export function checkGates(input: GateInput): { passed: boolean; reason?: string } {
-  const { latestPrice, avgVolume25, atrPct, nextEarningsDate, exDividendDate, today, maxPrice } = input;
+  const { latestPrice, avgVolume25, atrPct, nextEarningsDate, recentEarningsDate, exDividendDate, today, maxPrice } = input;
 
   if (!avgVolume25 || avgVolume25 < SCORING.GATES.MIN_AVG_VOLUME_25) {
     return { passed: false, reason: "volume" };
@@ -52,6 +54,15 @@ export function checkGates(input: GateInput): { passed: boolean; reason?: string
     );
     if (daysUntil >= 0 && daysUntil <= SCORING.GATES.EARNINGS_DAYS_BEFORE) {
       return { passed: false, reason: "earnings" };
+    }
+  }
+
+  if (recentEarningsDate) {
+    const daysSince = Math.floor(
+      (today.getTime() - recentEarningsDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (daysSince >= 0 && daysSince <= SCORING.GATES.EARNINGS_DAYS_AFTER) {
+      return { passed: false, reason: "earnings_recent" };
     }
   }
 

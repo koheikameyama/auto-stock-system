@@ -18,6 +18,7 @@
 import { prisma } from "../../lib/prisma";
 import { TECHNICAL_MIN_DATA } from "../../lib/constants";
 import { STOP_LOSS, POSITION_SIZING, UNIT_SHARES } from "../../lib/constants";
+import { SCORING } from "../../lib/constants/scoring";
 import { readHistoricalFromDB } from "../market-data";
 import { analyzeTechnicals } from "../technical-analysis";
 import { checkGates, computeScoringIntermediates } from "../breakout/filters";
@@ -42,6 +43,10 @@ export interface GuWatchlistFilterStats {
   skipInsufficientData: number;
   /** ゲート落ち */
   skipGate: number;
+  /** ゲート落ちのうち決算前の veto 件数 */
+  skipGateEarnings: number;
+  /** ゲート落ちのうち決算後の veto 件数 */
+  skipGateEarningsRecent: number;
   /** 週足下降トレンドで除外 */
   skipWeeklyTrend: number;
   /** モメンタム不足（直近5日リターン <= 0）で除外 */
@@ -139,6 +144,8 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
         historicalLoaded: 0,
         skipInsufficientData: 0,
         skipGate: 0,
+        skipGateEarnings: 0,
+        skipGateEarningsRecent: 0,
         skipAffordability: 0,
         skipWeeklyTrend: 0,
         skipMomentum: 0,
@@ -151,6 +158,12 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
   }
 
   const allTickerCodes = stocks.map((s) => s.tickerCode);
+
+  // 直近の決算日を取得（過去 EARNINGS_DAYS_AFTER 日以内）。決算後のギャップ veto に使う。
+  const recentEarningsDateMap = await fetchRecentEarningsDateMap(
+    allTickerCodes,
+    SCORING.GATES.EARNINGS_DAYS_AFTER,
+  );
 
   // 2. 実効資金を取得（余力フィルター用、1回だけ）
   const effectiveCapital = await getEffectiveCapital();
@@ -167,6 +180,8 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
   // フィルター別カウンター
   let skipInsufficientData = 0;
   let skipGate = 0;
+  let skipGateEarnings = 0;
+  let skipGateEarningsRecent = 0;
   let skipAffordability = 0;
   let skipWeeklyTrend = 0;
   let skipMomentum = 0;
@@ -201,6 +216,7 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
         avgVolume25,
         atrPct,
         nextEarningsDate: stock.nextEarningsDate ?? null,
+        recentEarningsDate: recentEarningsDateMap.get(stock.tickerCode) ?? null,
         exDividendDate: stock.exDividendDate ?? null,
         today,
         maxPrice,
@@ -208,6 +224,8 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
 
       if (!gate.passed) {
         skipGate++;
+        if (gate.reason === "earnings") skipGateEarnings++;
+        else if (gate.reason === "earnings_recent") skipGateEarningsRecent++;
         continue;
       }
 
@@ -273,6 +291,8 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
     historicalLoaded: historicalMap.size,
     skipInsufficientData,
     skipGate,
+    skipGateEarnings,
+    skipGateEarningsRecent,
     skipAffordability,
     skipWeeklyTrend,
     skipMomentum,
@@ -284,11 +304,43 @@ export async function buildGuWatchlist(): Promise<GuWatchlistBuildResult> {
 
   console.log(
     `[gu-watchlist-builder] フィルター結果: ` +
-      `データ不足=${skipInsufficientData}, ゲート落ち=${skipGate}, ` +
+      `データ不足=${skipInsufficientData}, ゲート落ち=${skipGate} ` +
+      `(うち決算前=${skipGateEarnings}, 決算後=${skipGateEarningsRecent}), ` +
       `余力不足=${skipAffordability}, 週足下降=${skipWeeklyTrend}, ` +
       `モメンタム不足=${skipMomentum}, ATR欠損=${skipAtr}, 出来高欠損=${skipAvgVolume}, ` +
       `エラー=${skipError} → 通過=${entries.length}銘柄`
   );
 
   return { entries, stats };
+}
+
+/**
+ * EarningsDate テーブルから直近 N 日以内に決算発表があった銘柄の最新決算日を取得する。
+ * 決算後ギャップを veto するための補助マップ。
+ */
+async function fetchRecentEarningsDateMap(
+  tickerCodes: string[],
+  daysAfter: number,
+): Promise<Map<string, Date>> {
+  if (tickerCodes.length === 0 || daysAfter < 0) return new Map();
+
+  const today = new Date();
+  const sinceDate = new Date(today.getTime() - (daysAfter + 1) * 24 * 60 * 60 * 1000);
+
+  const rows = await prisma.earningsDate.findMany({
+    where: {
+      tickerCode: { in: tickerCodes },
+      date: { gte: sinceDate, lte: today },
+    },
+    select: { tickerCode: true, date: true },
+  });
+
+  const map = new Map<string, Date>();
+  for (const row of rows) {
+    const existing = map.get(row.tickerCode);
+    if (!existing || row.date > existing) {
+      map.set(row.tickerCode, row.date);
+    }
+  }
+  return map;
 }
