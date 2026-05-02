@@ -114,15 +114,18 @@ async function main() {
   console.log(`パラメータ組み合わせ: ${paramCombos.length}通り`);
   console.log("");
 
-  // データ取得（Stockテーブルが空の場合はStockDailyBarから直接取得）
+  // データ取得（Stockテーブルが薄い場合はStockDailyBarから直接取得）
   const stocks = await prisma.stock.findMany({
     where: { isDelisted: false, isActive: true, isRestricted: false },
     select: { tickerCode: true },
   });
   let tickerCodes: string[];
-  if (stocks.length > 0) {
+  if (stocks.length >= 100) {
     tickerCodes = stocks.map((s) => s.tickerCode);
   } else {
+    if (stocks.length > 0) {
+      console.log(`[data] ⚠ Stock テーブルが${stocks.length}件のみ → StockDailyBar にフォールバック`);
+    }
     const distinctTickers = await prisma.stockDailyBar.findMany({
       where: { market: "JP" },
       distinct: ["tickerCode"],
