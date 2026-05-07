@@ -32,6 +32,7 @@ import { WEEKLY_BREAK_BACKTEST_DEFAULTS, WEEKLY_BREAK_LARGECAP_PARAMS } from "./
 import { fetchHistoricalFromDB, fetchVixFromDB, fetchIndexFromDB } from "./data-fetcher";
 import { calculateCapitalUtilization, calculateMetrics } from "./metrics";
 import { runCombinedSimulation, type PositionLimits, type BreadthMode } from "./combined-simulation";
+import { MARKET_BREADTH, VIX_THRESHOLDS } from "../lib/constants";
 import type {
   GapUpBacktestConfig,
   PostSurgeConsolidationBacktestConfig,
@@ -145,87 +146,201 @@ function pearsonCorrelation(xs: number[], ys: number[]): number {
   return den === 0 ? 0 : num / den;
 }
 
+/**
+ * 共通市場フィルター発火による「両戦略同時halt」を 1日 1原因で分類する。
+ * GU/PSC は marketTrendFilter / indexTrendFilter / VIX crisis を全て共有しているため、
+ * いずれかが発火すると両戦略のエントリーが停止する＝構造的な共相関源。
+ *
+ * 優先度（重複日は最も "強い" 原因にカウント）:
+ *   vix_crisis > index_below_sma > breadth_lower > breadth_upper > none
+ */
+type HaltReason = "vix_crisis" | "index_below_sma" | "breadth_lower" | "breadth_upper" | "none";
+
+function classifyDayHalt(
+  date: string,
+  dailyBreadth: Map<string, number>,
+  dailyIndexAboveSma: Map<string, boolean>,
+  vixData: Map<string, number> | undefined,
+): HaltReason {
+  const vix = vixData?.get(date);
+  if (vix != null && vix > VIX_THRESHOLDS.HIGH) return "vix_crisis";
+  // dailyIndexAboveSma が空 = フィルターOFFで計算されていない。空の場合は判定不可とする。
+  if (dailyIndexAboveSma.size > 0 && dailyIndexAboveSma.get(date) === false) return "index_below_sma";
+  const breadth = dailyBreadth.get(date);
+  if (breadth != null) {
+    if (breadth < MARKET_BREADTH.THRESHOLD) return "breadth_lower";
+    if (breadth > MARKET_BREADTH.UPPER_CAP) return "breadth_upper";
+  }
+  return "none";
+}
+
 function printCorrelationReport(
   guTrades: SimulatedPosition[],
   pscTrades: SimulatedPosition[],
   startDate: string,
   endDate: string,
+  tradingDays: string[],
+  dailyBreadth: Map<string, number>,
+  dailyIndexAboveSma: Map<string, boolean>,
+  vixData: Map<string, number> | undefined,
 ): void {
   const guByDate = buildDailyPnlSeries(guTrades);
   const pscByDate = buildDailyPnlSeries(pscTrades);
 
-  // 全期間: GU決済日 ∪ PSC決済日 を union として扱う
-  const allDates = new Set<string>([...guByDate.keys(), ...pscByDate.keys()]);
-  const dates = [...allDates].sort();
-  const guSeries = dates.map((d) => guByDate.get(d) ?? 0);
-  const pscSeries = dates.map((d) => pscByDate.get(d) ?? 0);
+  // ───── 戦略間相関（2系統） ─────
+  // (A) 両アクティブ日のみ: GU決済日 ∩ PSC決済日 → "両戦略が動いた日の" 相関
+  const bothActiveDates: string[] = [];
+  for (const d of guByDate.keys()) {
+    if (pscByDate.has(d)) bothActiveDates.push(d);
+  }
+  bothActiveDates.sort();
+  const guActive = bothActiveDates.map((d) => guByDate.get(d) ?? 0);
+  const pscActive = bothActiveDates.map((d) => pscByDate.get(d) ?? 0);
+  const bothActiveCorr = pearsonCorrelation(guActive, pscActive);
 
-  const overallCorr = pearsonCorrelation(guSeries, pscSeries);
+  // (B) 全営業日ベース: 営業日全てを 0 埋めで含める → "ポートフォリオ全体の" 実態相関
+  // halt日や両idle日も "両方0" として参加するため、共通フィルター起因の同期も反映される
+  const guAllDays = tradingDays.map((d) => guByDate.get(d) ?? 0);
+  const pscAllDays = tradingDays.map((d) => pscByDate.get(d) ?? 0);
+  const fullDayCorr = pearsonCorrelation(guAllDays, pscAllDays);
 
-  // 同日両方発生したケースの統計
-  let bothActiveDays = 0;
+  // (C) union (旧実装互換): GU決済日 ∪ PSC決済日 — 比較用に残す
+  const unionDates = new Set<string>([...guByDate.keys(), ...pscByDate.keys()]);
+  const unionSorted = [...unionDates].sort();
+  const guUnion = unionSorted.map((d) => guByDate.get(d) ?? 0);
+  const pscUnion = unionSorted.map((d) => pscByDate.get(d) ?? 0);
+  const unionCorr = pearsonCorrelation(guUnion, pscUnion);
+
+  // ───── 同日決済の勝敗内訳 ─────
   let bothLossDays = 0;
   let bothWinDays = 0;
   let oppositeDirDays = 0;
-  for (let i = 0; i < dates.length; i++) {
-    const g = guByDate.get(dates[i]);
-    const p = pscByDate.get(dates[i]);
-    if (g != null && p != null) {
-      bothActiveDays++;
-      if (g < 0 && p < 0) bothLossDays++;
-      if (g > 0 && p > 0) bothWinDays++;
-      if ((g < 0 && p > 0) || (g > 0 && p < 0)) oppositeDirDays++;
-    }
+  for (const d of bothActiveDates) {
+    const g = guByDate.get(d)!;
+    const p = pscByDate.get(d)!;
+    if (g < 0 && p < 0) bothLossDays++;
+    else if (g > 0 && p > 0) bothWinDays++;
+    else if ((g < 0 && p > 0) || (g > 0 && p < 0)) oppositeDirDays++;
   }
 
-  // 月次相関
+  // ───── 全営業日カバレッジ ─────
+  // 各営業日を以下に分類:
+  //   both-active   : GU決済 AND PSC決済（既存と同じ）
+  //   one-active    : 片方のみ決済
+  //   both-halt-*   : 共通フィルター発火で両戦略がエントリー不可だった日
+  //   both-idle     : フィルターは通過したが決済発生なし（純粋な無シグナル日）
+  const totalDays = tradingDays.length;
+  let bothActiveDays = 0;
+  let oneActiveDays = 0;
+  let bothIdleActiveDays = 0; // フィルター通過だが両戦略無決済
+  const haltCounts: Record<HaltReason, number> = {
+    vix_crisis: 0,
+    index_below_sma: 0,
+    breadth_lower: 0,
+    breadth_upper: 0,
+    none: 0,
+  };
+  for (const d of tradingDays) {
+    const haltReason = classifyDayHalt(d, dailyBreadth, dailyIndexAboveSma, vixData);
+    if (haltReason !== "none") {
+      haltCounts[haltReason]++;
+      continue;
+    }
+    const guHas = guByDate.has(d);
+    const pscHas = pscByDate.has(d);
+    if (guHas && pscHas) bothActiveDays++;
+    else if (guHas || pscHas) oneActiveDays++;
+    else bothIdleActiveDays++;
+  }
+  const totalHaltDays = haltCounts.vix_crisis + haltCounts.index_below_sma + haltCounts.breadth_lower + haltCounts.breadth_upper;
+
+  // ───── 月次相関（営業日ベース、N≥10で参考値） ─────
   const monthlyMap = new Map<string, { guVals: number[]; pscVals: number[] }>();
-  for (const d of dates) {
+  for (const d of tradingDays) {
     const month = d.substring(0, 7);
     const entry = monthlyMap.get(month) ?? { guVals: [], pscVals: [] };
     entry.guVals.push(guByDate.get(d) ?? 0);
     entry.pscVals.push(pscByDate.get(d) ?? 0);
     monthlyMap.set(month, entry);
   }
-  const monthlyCorrs: { month: string; corr: number; n: number }[] = [];
+  const monthlyCorrs: { month: string; corr: number; n: number; reliable: boolean }[] = [];
   for (const [month, { guVals, pscVals }] of monthlyMap) {
     const c = pearsonCorrelation(guVals, pscVals);
-    monthlyCorrs.push({ month, corr: c, n: guVals.length });
+    // n は "両アクティブだった日数" を別途集計（信頼性指標）
+    let activeN = 0;
+    for (let i = 0; i < guVals.length; i++) {
+      if (guVals[i] !== 0 && pscVals[i] !== 0) activeN++;
+    }
+    monthlyCorrs.push({ month, corr: c, n: activeN, reliable: activeN >= 10 });
   }
   monthlyCorrs.sort((a, b) => a.month.localeCompare(b.month));
+
+  // ───── 出力 ─────
+  const pct = (n: number, total: number) => total > 0 ? `${((n / total) * 100).toFixed(1)}%` : "-";
 
   console.log("=".repeat(60));
   console.log("GU/PSC Daily PnL Correlation Report");
   console.log("=".repeat(60));
   console.log(`期間: ${startDate} → ${endDate}`);
+  console.log(`営業日数: ${totalDays}日`);
   console.log(`GU決済日数: ${guByDate.size} / PSC決済日数: ${pscByDate.size}`);
   console.log("");
-  console.log("[全期間統計]");
-  console.log(`  Pearson相関係数(全union日): ${overallCorr.toFixed(3)}`);
-  console.log(`  両戦略同日決済: ${bothActiveDays}日`);
+
+  console.log("[戦略間相関]");
+  console.log(`  両アクティブ日のみ (n=${bothActiveDates.length}): ${bothActiveCorr.toFixed(3)}`);
+  console.log(`  全営業日ベース   (n=${totalDays}, halt/idle日を0埋め): ${fullDayCorr.toFixed(3)}`);
+  console.log(`  union(参考・旧実装) (n=${unionSorted.length}): ${unionCorr.toFixed(3)}`);
+  console.log("");
+
+  console.log("[同日決済の内訳]");
+  console.log(`  両戦略同日決済: ${bothActiveDates.length}日`);
   console.log(`    両方プラス: ${bothWinDays}日`);
   console.log(`    両方マイナス(共倒れ): ${bothLossDays}日`);
   console.log(`    逆方向(片勝ち片負け): ${oppositeDirDays}日`);
   console.log("");
-  console.log("[月次相関]");
-  console.log(`  ${"月".padEnd(8)} | ${"相関".padStart(7)} | ${"日数".padStart(5)}`);
-  console.log("  " + "-".repeat(28));
+
+  console.log(`[全営業日カバレッジ] ${totalDays}日`);
+  console.log(`  両戦略同日決済: ${bothActiveDays}日 (${pct(bothActiveDays, totalDays)})`);
+  console.log(`  片戦略のみ決済: ${oneActiveDays}日 (${pct(oneActiveDays, totalDays)})`);
+  console.log(`  両戦略アクティブ可・無決済: ${bothIdleActiveDays}日 (${pct(bothIdleActiveDays, totalDays)})`);
+  console.log(`  両戦略halt(共通フィルター発火): ${totalHaltDays}日 (${pct(totalHaltDays, totalDays)})`);
+  console.log(`    └ breadth < ${(MARKET_BREADTH.THRESHOLD * 100).toFixed(0)}% (下限veto): ${haltCounts.breadth_lower}日 (${pct(haltCounts.breadth_lower, totalDays)})`);
+  console.log(`    └ breadth > ${(MARKET_BREADTH.UPPER_CAP * 100).toFixed(0)}% (上限veto): ${haltCounts.breadth_upper}日 (${pct(haltCounts.breadth_upper, totalDays)})`);
+  console.log(`    └ 日経 < SMA50: ${haltCounts.index_below_sma}日 (${pct(haltCounts.index_below_sma, totalDays)})`);
+  console.log(`    └ VIX > ${VIX_THRESHOLDS.HIGH} (crisis): ${haltCounts.vix_crisis}日 (${pct(haltCounts.vix_crisis, totalDays)})`);
+  console.log(`    ※ 重複日は優先度順(VIX>SMA>breadth下限>breadth上限)で1日1原因にカウント`);
+  console.log("");
+
+  console.log("[月次相関] ※ n は両アクティブ日数。n<10 は参考値 (✓=n≥10)");
+  console.log(`  ${"月".padEnd(8)} | ${"相関(全営業日)".padStart(13)} | ${"両Active日".padStart(10)} | 信頼性`);
+  console.log("  " + "-".repeat(50));
   for (const m of monthlyCorrs) {
     const corrStr = m.corr.toFixed(3).padStart(6);
-    console.log(`  ${m.month.padEnd(8)} | ${corrStr} | ${m.n.toString().padStart(5)}`);
+    const flag = m.reliable ? "✓" : " ";
+    console.log(`  ${m.month.padEnd(8)} | ${corrStr.padStart(13)} | ${m.n.toString().padStart(10)} | ${flag}`);
   }
 
-  // アラート判定
-  const ALERT_OVERALL_CORR = 0.5;
-  const recentMonths = monthlyCorrs.slice(-3);
-  const recentHighCorrCount = recentMonths.filter((m) => m.corr > ALERT_OVERALL_CORR).length;
+  // ───── アラート判定 ─────
+  const ALERT_FULLDAY_CORR = 0.5;
+  const ALERT_HALT_RATIO = 0.4; // 営業日の40%以上がhalt → 稼働率懸念
+  const reliableRecent = monthlyCorrs.slice(-3).filter((m) => m.reliable);
+  const recentHighCorrCount = reliableRecent.filter((m) => m.corr > ALERT_FULLDAY_CORR).length;
   console.log("");
   console.log("[判定]");
-  console.log(`  全期間相関 ${overallCorr.toFixed(3)} ${overallCorr > ALERT_OVERALL_CORR ? "✗ 警告(>0.5: 戦略間で独立性が低い)" : "✓ 健全(独立性確保)"}`);
-  if (recentHighCorrCount >= 2) {
-    console.log(`  直近3ヶ月のうち${recentHighCorrCount}ヶ月で相関>0.5 ✗ 警告`);
+  const corrJudge = fullDayCorr > ALERT_FULLDAY_CORR ? "✗ 警告(>0.5: 戦略間で独立性が低い)" : "✓ 健全(独立性確保)";
+  console.log(`  全営業日相関 ${fullDayCorr.toFixed(3)} ${corrJudge}`);
+  if (reliableRecent.length === 0) {
+    console.log(`  直近3ヶ月の相関安定性: 信頼サンプル(n≥10)なし`);
+  } else if (recentHighCorrCount >= 2) {
+    console.log(`  直近3ヶ月のうち${recentHighCorrCount}/${reliableRecent.length}ヶ月で相関>0.5 ✗ 警告`);
   } else {
-    console.log(`  直近3ヶ月の相関安定性 ✓`);
+    console.log(`  直近3ヶ月の相関安定性 ✓ (信頼サンプル ${reliableRecent.length}/3)`);
+  }
+  const haltRatio = totalDays > 0 ? totalHaltDays / totalDays : 0;
+  if (haltRatio > ALERT_HALT_RATIO) {
+    console.log(`  halt比率 ${(haltRatio * 100).toFixed(1)}% (>${(ALERT_HALT_RATIO * 100).toFixed(0)}%) ✗ 警告(共通フィルターで稼働率が低い)`);
+  } else {
+    console.log(`  halt比率 ${(haltRatio * 100).toFixed(1)}% ✓ (稼働率許容範囲)`);
   }
 }
 
@@ -1967,7 +2082,16 @@ async function main() {
   // GU/PSC 相関レポート
   if (corrReport) {
     const result = runCombinedSimulation(ctx, defaultLimits);
-    printCorrelationReport(result.guTrades, result.pscTrades, startDate, endDate);
+    printCorrelationReport(
+      result.guTrades,
+      result.pscTrades,
+      startDate,
+      endDate,
+      precomputed.tradingDays,
+      precomputed.dailyBreadth,
+      precomputed.dailyIndexAboveSma,
+      vixData,
+    );
     await prisma.$disconnect();
     return;
   }
