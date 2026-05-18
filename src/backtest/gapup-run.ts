@@ -151,6 +151,8 @@ async function main() {
   const noPositionCap = args.includes("--no-position-cap");
   const gapMinPctArg = getArg(args, "--gap-min-pct");
   const gapMinPct = gapMinPctArg != null ? parseFloat(gapMinPctArg) / 100 : undefined;
+  const volSurgeArg = getArg(args, "--vol-surge");
+  const volSurgeRatio = volSurgeArg != null ? parseFloat(volSurgeArg) : undefined;
   const maxPriceArg = getArg(args, "--max-price");
   const tickersArg = getArg(args, "--tickers");
   const noMarketFilter = args.includes("--no-market-filter");
@@ -198,6 +200,7 @@ async function main() {
     verbose,
     positionCapEnabled: !noPositionCap,
     ...(gapMinPct != null ? { gapMinPct } : {}),
+    ...(volSurgeRatio != null ? { volSurgeRatio } : {}),
     ...(noMarketFilter ? { marketTrendFilter: false, indexTrendFilter: false } : {}),
     ...(minAtrPctArg != null ? { minAtrPct: Number(minAtrPctArg) } : {}),
     ...(minTurnoverArg != null ? { minTurnover: Number(minTurnoverArg) } : {}),
