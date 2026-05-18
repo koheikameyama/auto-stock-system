@@ -39,6 +39,7 @@
 | 11 | RSI Oversold Bounce (mean-reversion 大型株) | 2026-05-02 | 全パターンPF 0.13〜0.25、勝率17〜31%、緩めるほど負ける |
 | 12 | PSC trailMultiplier 0.5→0.8変更 | 2026-05-02 | combined単発BTでCalmar +31%だったがWFで5/7窓で 0.5 が選ばれ再現性なし |
 | 13 | GU gapMinPct 3.0%→2.5% (vol=1.5固定) | 2026-05-02 | combined単発BTでCalmar +20%だったがWF mini で候補2勝/現状4勝、累計NetPnL -¥48K |
+| 14 | Zweig Breadth Thrust (ZBT) | 2026-05-17 | 発生頻度過少(米国80年で十数回)でBT検証不能、10日EMA基準で遅行指標、既存 breadth band 55-80% と役割重複かつ方向逆 |
 
 ### 検証済み・保留中(条件付き採用候補)
 
