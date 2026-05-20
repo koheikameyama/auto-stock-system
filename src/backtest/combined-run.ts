@@ -380,11 +380,12 @@ async function main() {
   const compareGuGapvol = args.includes("--compare-gu-gapvol");
   const wfMiniGuGapvol = args.includes("--wf-mini-gu-gapvol");
   const wfMiniSectorRotation = args.includes("--wf-mini-sector-rotation");
+  const compareBreadthSectorTradeoff = args.includes("--compare-breadth-sector-tradeoff");
   const compareSlippage = args.includes("--compare-slippage");
   const compareStrategyMix = args.includes("--compare-strategy-mix");
   const corrReport = args.includes("--corr-report");
 
-  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareBudget || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareBreadth || compareBreadthModes || compareBreadthZoom || compareMaxPrice || compareSector || compareSectorRotation || compareVixRisk || compareStreak || compareCooldown || comparePscTrail || compareGuGapvol || wfMiniGuGapvol || wfMiniSectorRotation || compareSlippage || compareStrategyMix || corrReport;
+  const quietMode = comparePositions || compareSplitPositions || compareEquityFilter || compareBudget || compareTurnover || comparePrice || comparePriceTurnover || compareEfficiency || compareBreadth || compareBreadthModes || compareBreadthZoom || compareMaxPrice || compareSector || compareSectorRotation || compareVixRisk || compareStreak || compareCooldown || comparePscTrail || compareGuGapvol || wfMiniGuGapvol || wfMiniSectorRotation || compareBreadthSectorTradeoff || compareSlippage || compareStrategyMix || corrReport;
   const dynamicMaxPrice = getMaxBuyablePrice(budget);
   const guConfig: GapUpBacktestConfig = { ...GAPUP_BACKTEST_DEFAULTS, startDate, endDate, initialBudget: budget, maxPrice: dynamicMaxPrice, verbose: !quietMode && verbose };
   const pscConfig: PostSurgeConsolidationBacktestConfig = {
@@ -470,7 +471,7 @@ async function main() {
 
   // セクターマップをロード（--max-per-sector / --compare-sector で使用）
   let tickerSectorMap: Map<string, string> | undefined;
-  if (maxPerSectorArg !== undefined || compareSector || compareSectorRotation || wfMiniSectorRotation) {
+  if (maxPerSectorArg !== undefined || compareSector || compareSectorRotation || wfMiniSectorRotation || compareBreadthSectorTradeoff) {
     const stocksWithSector = await prisma.stock.findMany({
       where: { isDelisted: false, isActive: true, isRestricted: false, sector: { not: null } },
       select: { tickerCode: true, sector: true },
@@ -1408,6 +1409,105 @@ async function main() {
         const netPnlStr = (sub.totalNetPnl >= 0 ? "+" : "") + `¥${sub.totalNetPnl.toLocaleString()}`;
         console.log(
           `  ${r.label.padEnd(20)}| ${String(sub.totalTrades).padStart(6)} | ${sub.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expStr.padStart(7)} | ${netPnlStr.padStart(10)}`,
+        );
+      }
+    }
+
+    console.log("");
+    await prisma.$disconnect();
+    return;
+  }
+
+  // breadth × sector rotation トレードオフ比較
+  if (compareBreadthSectorTradeoff) {
+    const { precomputeSectorMomentum } = await import("./sector-rotation");
+    const REGIMES: { label: string; from: string; to: string }[] = [
+      { label: "A: 平穏ボックス", from: "2024-03-01", to: "2024-07-31" },
+      { label: "B: ブラマン+余震", from: "2024-08-01", to: "2024-12-31" },
+      { label: "C: 関税ショック", from: "2025-02-01", to: "2025-04-30" },
+      { label: "D: 大強気相場", from: "2025-05-01", to: "2026-02-28" },
+      { label: "E: 直近急落", from: "2026-03-01", to: "2026-04-20" },
+    ];
+
+    if (!tickerSectorMap) {
+      console.error("tickerSectorMap が必要です");
+      await prisma.$disconnect();
+      return;
+    }
+
+    console.log("\n=== セクター・モメンタム precompute (lookback=20日) ===");
+    const momentumMap = precomputeSectorMomentum(allData, tickerSectorMap, 20);
+    console.log(`  ${momentumMap.size}営業日分`);
+
+    type BreadthMode = { type: "band"; lower: number; upper: number } | { type: "none" };
+    const grid: { label: string; breadth: BreadthMode; rotTopPct: number | undefined }[] = [
+      { label: "現状 (54-80%, no-rot)", breadth: { type: "band", lower: 0.54, upper: 0.80 }, rotTopPct: undefined },
+      { label: "54-80% + Top50%", breadth: { type: "band", lower: 0.54, upper: 0.80 }, rotTopPct: 0.5 },
+      { label: "50-80% + Top50%", breadth: { type: "band", lower: 0.50, upper: 0.80 }, rotTopPct: 0.5 },
+      { label: "40-80% + Top50%", breadth: { type: "band", lower: 0.40, upper: 0.80 }, rotTopPct: 0.5 },
+      { label: "40-80% + Top30%", breadth: { type: "band", lower: 0.40, upper: 0.80 }, rotTopPct: 0.3 },
+      { label: "30-80% + Top30%", breadth: { type: "band", lower: 0.30, upper: 0.80 }, rotTopPct: 0.3 },
+      { label: "30-80% + Top20%", breadth: { type: "band", lower: 0.30, upper: 0.80 }, rotTopPct: 0.2 },
+      { label: "no-filter + Top20%", breadth: { type: "none" }, rotTopPct: 0.2 },
+      { label: "no-filter + Top10%", breadth: { type: "none" }, rotTopPct: 0.1 },
+    ];
+
+    // 比較時は precompute 側の breadthフィルターを切る
+    const guCfgNoFilter: GapUpBacktestConfig = { ...guConfig, marketTrendFilter: false };
+    const pscCfgNoFilter: PostSurgeConsolidationBacktestConfig = { ...pscConfig, marketTrendFilter: false };
+    const guSigOpen = precomputeGapUpDailySignals(guCfgNoFilter, allData, precomputed);
+    const pSigOpen = precomputePSCDailySignals(pscCfgNoFilter, allData, precomputed);
+
+    console.log("\n=== breadth × sector rotation トレードオフ比較 ===");
+    console.log(`期間: ${startDate} → ${endDate}, 予算: ¥${budget.toLocaleString()}`);
+    console.log(
+      `${"設定".padEnd(24)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"MaxDD".padStart(6)} | ${"NetRet".padStart(7)} | ${"Calmar".padStart(6)} | ${"稼働率".padStart(6)}`,
+    );
+    console.log("-".repeat(104));
+
+    const years = dayjs(endDate).diff(dayjs(startDate), "day") / 365;
+    const overallResults: { label: string; allTrades: SimulatedPosition[]; equityCurve: DailyEquity[] }[] = [];
+
+    for (const row of grid) {
+      const breadthMode = row.breadth.type === "band" ? { type: "band" as const, lower: row.breadth.lower, upper: row.breadth.upper } : undefined;
+      const ctxRow: typeof ctx = {
+        ...ctx,
+        guConfig: guCfgNoFilter, pscConfig: pscCfgNoFilter,
+        gapupSignals: guSigOpen, pscSignals: pSigOpen,
+        breadthMode,
+        ...(row.rotTopPct != null ? { sectorRotation: { momentumMap, topPct: row.rotTopPct } } : {}),
+      };
+      const result = runCombinedSimulation(ctxRow, defaultLimits);
+      const m = result.totalMetrics;
+      const util = calculateCapitalUtilization(result.equityCurve);
+      const expectStr = (m.expectancy >= 0 ? "+" : "") + m.expectancy.toFixed(2) + "%";
+      const pfStr = m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2);
+      const annualizedRet = years > 0 ? m.netReturnPct / years : m.netReturnPct;
+      const calmar = m.maxDrawdown > 0 ? annualizedRet / m.maxDrawdown : 0;
+      console.log(
+        `${row.label.padEnd(24)}| ${String(m.totalTrades).padStart(6)} | ${m.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expectStr.padStart(7)} | ${m.maxDrawdown.toFixed(1).padStart(5)}% | ${m.netReturnPct.toFixed(1).padStart(6)}% | ${calmar.toFixed(2).padStart(6)} | ${util.capitalUtilizationPct.toFixed(1).padStart(5)}%`,
+      );
+      overallResults.push({ label: row.label, allTrades: result.allTrades, equityCurve: result.equityCurve });
+    }
+
+    console.log("\n=== レジーム別トレード指標 ===");
+    for (const regime of REGIMES) {
+      console.log(`\n[${regime.label}] ${regime.from} 〜 ${regime.to}`);
+      console.log(
+        `  ${"設定".padEnd(24)}| ${"Trades".padStart(6)} | ${"WinR".padStart(5)} | ${"PF".padStart(5)} | ${"Expect".padStart(7)} | ${"NetPnL".padStart(10)}`,
+      );
+      console.log("  " + "-".repeat(76));
+
+      for (const r of overallResults) {
+        const inRange = r.allTrades.filter(
+          (t) => t.entryDate >= regime.from && t.entryDate <= regime.to,
+        );
+        const sub = calculateMetrics(inRange, r.equityCurve, budget);
+        const pfStr = sub.profitFactor === Infinity ? "∞" : sub.profitFactor.toFixed(2);
+        const expStr = (sub.expectancy >= 0 ? "+" : "") + sub.expectancy.toFixed(2) + "%";
+        const netPnlStr = (sub.totalNetPnl >= 0 ? "+" : "") + `¥${sub.totalNetPnl.toLocaleString()}`;
+        console.log(
+          `  ${r.label.padEnd(24)}| ${String(sub.totalTrades).padStart(6)} | ${sub.winRate.toFixed(1).padStart(4)}% | ${pfStr.padStart(5)} | ${expStr.padStart(7)} | ${netPnlStr.padStart(10)}`,
         );
       }
     }
