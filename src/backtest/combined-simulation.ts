@@ -83,6 +83,11 @@ export interface SimContext {
     momentumMap: Map<string, Map<string, number>>;
     /** 上位何%のセクターを通すか (0.0-1.0) */
     topPct: number;
+    /**
+     * 条件付き発動: 当日 breadth がこの値未満のときのみ sector filter を適用、
+     * それ以上は filter 通す（強い相場では制限なし）。省略時は常時適用。
+     */
+    applyOnlyWhenBreadthBelow?: number;
   };
   /**
    * VIXレジーム別リスク倍率。quantity に掛ける係数。
@@ -772,8 +777,17 @@ export function runCombinedSimulation(
       return count >= limits.maxPerSector;
     };
     // セクター・ローテーション: ticker のセクターが当日 top N% に入っているか
+    // 条件付き発動 (applyOnlyWhenBreadthBelow) が設定されている場合、
+    // 当日 breadth がそれ以上なら filter を通す（強い相場では制限なし）。
     const isInRotationTop = (ticker: string): boolean => {
       if (!sectorRotation || !tickerSectorMap) return true;
+      // 条件付き発動チェック
+      if (sectorRotation.applyOnlyWhenBreadthBelow != null) {
+        const dayBreadth = precomputed.dailyBreadth.get(today);
+        if (dayBreadth != null && dayBreadth >= sectorRotation.applyOnlyWhenBreadthBelow) {
+          return true; // 強い相場では filter なし
+        }
+      }
       const sector = tickerSectorMap.get(ticker);
       if (!sector) return true; // sector 不明は通す
       const scores = sectorRotation.momentumMap.get(today);
